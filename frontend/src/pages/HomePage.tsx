@@ -58,13 +58,24 @@ function HomePage() {
 
   const batchDelete = async () => {
     if (selected.size === 0) return
-    const ok = await modal.confirm(`确认删除选中的 ${selected.size} 个项目？此操作不可撤销。`)
+    const ids = [...selected]
+    const lockedNames = projects.filter(p => ids.includes(p.id) && p.is_locked).map(p => p.name)
+    const unlockedCount = ids.length - lockedNames.length
+    if (unlockedCount === 0) {
+      modal.toast('所选项目均已锁定，无法删除', 'error')
+      return
+    }
+    let msg = `确认删除 ${unlockedCount} 个项目？`
+    if (lockedNames.length > 0) {
+      msg += `\n${lockedNames.length} 个已锁定将跳过：${lockedNames.join('、')}`
+    }
+    const ok = await modal.confirm(msg)
     if (!ok) return
     try {
-      const resp = await api.batchDeleteProjects([...selected])
+      const resp = await api.batchDeleteProjects(ids)
       setSelected(new Set())
       loadProjects(page)
-      modal.toast((resp as any).message || `已删除 ${selected.size} 个项目`, 'success')
+      modal.toast((resp as any).message || `已删除 ${unlockedCount} 个项目`, 'success')
     } catch (err: any) {
       modal.toast('批量删除失败：' + err.message, 'error')
     }
