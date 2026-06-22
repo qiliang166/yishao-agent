@@ -2,8 +2,9 @@ import os
 import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from database import init_db, get_db
-from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest
+from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest
 import json
 from services.llm_service import test_connection, generate, refine
 from services.prompt_service import (
@@ -22,6 +23,10 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
+EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
+os.makedirs(EXPORT_DIR, exist_ok=True)
 
 # ── Health check ──
 
@@ -332,6 +337,82 @@ def api_set_default(prompt_id: str):
     return {"ok": True}
 
 
+# ── Templates ──
+
+class TemplateCreate(BaseModel):
+    name: str
+    type: str  # "ppt" or "sop"
+    file_path: str = ""
+    linked_skill_id: str = ""
+    branding_config: str = "{}"
+
+
+@app.get("/api/templates")
+def list_templates(type: str = None):
+    db = get_db()
+    try:
+        if type:
+            rows = db.execute("SELECT * FROM templates WHERE type = ? ORDER BY created_at DESC", (type,)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM templates ORDER BY type, created_at DESC").fetchall()
+        return {"templates": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/templates")
+def create_template(req: TemplateCreate):
+    tid = uuid.uuid4().hex[:8]
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO templates (id, name, type, file_path, linked_skill_id, branding_config) VALUES (?, ?, ?, ?, ?, ?)",
+            (tid, req.name, req.type, req.file_path, req.linked_skill_id, req.branding_config))
+        db.commit()
+        return {"id": tid, "name": req.name}
+    finally:
+        db.close()
+
+
+@app.put("/api/templates/{template_id}")
+def update_template(template_id: str, req: TemplateCreate):
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE templates SET name=?, type=?, file_path=?, linked_skill_id=?, branding_config=? WHERE id=?",
+            (req.name, req.type, req.file_path, req.linked_skill_id, req.branding_config, template_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/templates/{template_id}")
+def delete_template(template_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/templates/{template_id}/set-default")
+def set_template_default(template_id: str):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Template not found")
+        db.execute("UPDATE templates SET is_default = 0 WHERE type = ?", (row["type"],))
+        db.execute("UPDATE templates SET is_default = 1 WHERE id = ?", (template_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
 # ── Video ──
 
 from services.video_service import download_video, get_progress
@@ -380,6 +461,111 @@ def api_extract_subtitles(req: dict):
         finally:
             db.close()
     return {"subtitle_text": subtitle_text}
+
+
+# ── PPT Generation ──
+
+from services.ppt_service import generate_ppt
+
+class PPTGenerateRequest(BaseModel):
+    content: str
+    template_id: str = ""
+    branding: dict = None
+
+
+@app.post("/api/ppt/generate")
+def api_generate_ppt(req: PPTGenerateRequest):
+    try:
+        filepath = generate_ppt(req.content, req.template_id, req.branding)
+        filename = os.path.basename(filepath)
+        return {"filename": filename, "download_url": f"/api/download/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── SOP Export ──
+
+from services.export_service import export_sop
+
+class SOPExportRequest(BaseModel):
+    content: str
+    branding: dict = None
+
+
+@app.post("/api/export/sop")
+def api_export_sop(req: SOPExportRequest):
+    try:
+        filepath = export_sop(req.content, req.branding)
+        filename = os.path.basename(filepath)
+        return {"filename": filename, "download_url": f"/api/download/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── File Download ──
+
+@app.get("/api/download/{filename}")
+def download_file(filename: str):
+    filepath = os.path.join(EXPORT_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(filepath, filename=filename)
+
+
+# ── TTS ──
+
+@app.post("/api/tts/synthesize")
+async def api_tts_synthesize(req: SynthesizeRequest):
+    import httpx
+    try:
+        api_key = os.getenv("DASHSCOPE_API_KEY", "")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="请先在设置中配置 DashScope API Key")
+
+        payload = {
+            "model": req.model,
+            "input": {
+                "text": req.text,
+                "voice": req.voice_id or "longanyang",
+                "format": "mp3",
+                "volume": req.volume,
+                "rate": req.speed,
+            },
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"TTS 失败: {resp.text[:200]}")
+        result = resp.json()
+        audio_url = result.get("output", {}).get("audio", {}).get("url", "")
+        if not audio_url:
+            raise HTTPException(status_code=400, detail="未获取到音频URL")
+
+        # Download and save
+        async with httpx.AsyncClient(timeout=60) as client:
+            dl = await client.get(audio_url)
+        audio_name = f"tts_{os.urandom(4).hex()}.mp3"
+        audio_path = os.path.join(AUDIO_DIR, audio_name)
+        with open(audio_path, "wb") as f:
+            f.write(dl.content)
+
+        return {"audio_url": f"/api/audio/{audio_name}", "filename": audio_name}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/audio/{filename}")
+def serve_audio(filename: str):
+    filepath = os.path.join(AUDIO_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Audio not found")
+    return FileResponse(filepath, media_type="audio/mpeg")
 
 
 if __name__ == "__main__":

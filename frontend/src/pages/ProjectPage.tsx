@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
+import AICollabEditor from '../components/Editor/AICollabEditor'
 
 interface Project {
   id: string
@@ -30,6 +31,8 @@ interface VideoProgress {
   error?: string
 }
 
+const ALL_STEP_KEYS = ['step1', 'step2', 'step3_daoshuyi', 'step3_yanxi', 'step3_sop', 'step4']
+
 function ProjectPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -44,19 +47,43 @@ function ProjectPage() {
   const [subtitleContent, setSubtitleContent] = useState('')
   const [textInput, setTextInput] = useState('')
   const [saving, setSaving] = useState(false)
-  const [stepStatuses, setStepStatuses] = useState<Record<string, StepStatus>>({
-    step1: 'pending',
-    step2: 'pending',
-    step3: 'pending',
-    step4: 'pending',
-  })
-  const [stepContents, setStepContents] = useState<Record<string, string>>({
-    step1: '',
-    step2: '',
-    step3: '',
-    step4: '',
-  })
+
+  const initialStatuses: Record<string, StepStatus> = {}
+  const initialContents: Record<string, string> = {}
+  for (const k of ALL_STEP_KEYS) {
+    initialStatuses[k] = 'pending'
+    initialContents[k] = ''
+  }
+
+  const [stepStatuses, setStepStatuses] = useState<Record<string, StepStatus>>(initialStatuses)
+  const [stepContents, setStepContents] = useState<Record<string, string>>(initialContents)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
+
+  // Saving indicators for individual step3 sub-steps
+  const [savingSubStep, setSavingSubStep] = useState<string | null>(null)
+
+  // ── Step 4 state ──
+  const [pptResults, setPptResults] = useState<Record<string, {filename: string, download_url: string} | null>>({})
+  const [sopResult, setSopResult] = useState<{filename: string, download_url: string} | null>(null)
+  const [voiceoverTexts, setVoiceoverTexts] = useState<Record<string, string>>({dao: '', yanxi: ''})
+  const [ttsResults, setTtsResults] = useState<Record<string, {audio_url: string, filename: string} | null>>({dao: null, yanxi: null})
+
+  const [generatingPpt, setGeneratingPpt] = useState<string | null>(null)
+  const [exportingSop, setExportingSop] = useState(false)
+  const [generatingVoiceover, setGeneratingVoiceover] = useState<string | null>(null)
+  const [synthesizingTts, setSynthesizingTts] = useState<string | null>(null)
+
+  const [pptBranding, setPptBranding] = useState({copyright: '', signature: ''})
+  const [sopBranding, setSopBranding] = useState({copyright: '', signature: ''})
+
+  const [pptTemplates, setPptTemplates] = useState<any[]>([])
+  const [sopTemplates, setSopTemplates] = useState<any[]>([])
+  const [selectedPptTemplateId, setSelectedPptTemplateId] = useState('')
+  const [selectedSopTemplateId, setSelectedSopTemplateId] = useState('')
+
+  const [voiceoverProviderId, setVoiceoverProviderId] = useState('')
+  const [voiceoverModel, setVoiceoverModel] = useState('')
+  const [voiceoverPromptId, setVoiceoverPromptId] = useState('')
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -70,15 +97,18 @@ function ProjectPage() {
       .then(([projectData, steps]) => {
         setProject(projectData as Project)
         const stepsArr = steps as StepResult[]
-        const newStatuses: Record<string, StepStatus> = { step1: 'pending', step2: 'pending', step3: 'pending', step4: 'pending' }
-        const newContents: Record<string, string> = { step1: '', step2: '', step3: '', step4: '' }
+        const newStatuses: Record<string, StepStatus> = { ...initialStatuses }
+        const newContents: Record<string, string> = { ...initialContents }
         for (const s of stepsArr) {
           const key = s.step_name
-          if (s.content) {
-            newContents[key] = s.content
-            newStatuses[key] = 'done'
-          } else if (s.status === 'in_progress') {
-            newStatuses[key] = 'in_progress'
+          // Map known keys
+          if (ALL_STEP_KEYS.includes(key) || key.startsWith('step3_')) {
+            if (s.content) {
+              newContents[key] = s.content
+              newStatuses[key] = 'done'
+            } else if (s.status === 'in_progress') {
+              newStatuses[key] = 'in_progress'
+            }
           }
         }
         setStepStatuses(newStatuses)
@@ -103,7 +133,43 @@ function ProjectPage() {
     }
   }, [])
 
+  const step3Done =
+    stepStatuses.step3_daoshuyi === 'done' &&
+    stepStatuses.step3_yanxi === 'done' &&
+    stepStatuses.step3_sop === 'done'
+
+  const step3StatusForDisplay: StepStatus = step3Done ? 'done'
+    : (stepStatuses.step3_daoshuyi === 'in_progress' ||
+       stepStatuses.step3_yanxi === 'in_progress' ||
+       stepStatuses.step3_sop === 'in_progress')
+      ? 'in_progress'
+      : 'pending'
+
+  // Load templates, providers, and voiceover prompt when step3 is done
+  useEffect(() => {
+    if (!step3Done) return
+    api.listTemplates('ppt').then((data: any[]) => setPptTemplates(data || [])).catch(() => {})
+    api.listTemplates('sop').then((data: any[]) => setSopTemplates(data || [])).catch(() => {})
+    api.listPrompts('口播稿').then((prompts: any[]) => {
+      if (prompts.length > 0) {
+        setVoiceoverPromptId(prompts[0].id)
+      }
+    }).catch(() => {})
+    api.listProviders().then((providers: any[]) => {
+      const enabled = providers.filter((p: any) => p.is_enabled !== 0)
+      if (enabled.length > 0) {
+        setVoiceoverProviderId(enabled[0].id)
+        const models = typeof enabled[0].models === 'string' ? JSON.parse(enabled[0].models) : (enabled[0].models || [])
+        if (models.length > 0) setVoiceoverModel(models[0])
+      }
+    }).catch(() => {})
+  }, [step3Done])
+
   const clearMessage = () => setMessage(null)
+
+  const setStepContent = (key: string, content: string) => {
+    setStepContents(prev => ({ ...prev, [key]: content }))
+  }
 
   const startDownload = async () => {
     if (!urlInput.trim()) return
@@ -117,7 +183,6 @@ function ProjectPage() {
       const tid = (res as any).task_id
       setTaskId(tid)
 
-      // Start polling
       pollingRef.current = setInterval(async () => {
         try {
           const prog = await api.getVideoProgress(tid) as VideoProgress
@@ -173,6 +238,38 @@ function ProjectPage() {
     }
   }
 
+  const confirmStep2 = async () => {
+    if (!id) return
+    const content = stepContents.step2
+    if (!content) return
+    setSaving(true)
+    try {
+      await api.saveStep(id, 'step2', content)
+      setStepStatuses(prev => ({ ...prev, step2: 'done' }))
+      setStepContents(prev => ({ ...prev, step2: content }))
+      setMessage({ text: '步骤 2 已完成，步骤 3 已解锁', type: 'success' })
+    } catch (err: any) {
+      setMessage({ text: '保存失败：' + err.message, type: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveSubStep = async (stepName: string, content: string) => {
+    if (!id || !content) return
+    setSavingSubStep(stepName)
+    try {
+      await api.saveStep(id, stepName, content)
+      setStepStatuses(prev => ({ ...prev, [stepName]: 'done' }))
+      setStepContents(prev => ({ ...prev, [stepName]: content }))
+      setMessage({ text: `已保存`, type: 'success' })
+    } catch (err: any) {
+      setMessage({ text: '保存失败：' + err.message, type: 'error' })
+    } finally {
+      setSavingSubStep(null)
+    }
+  }
+
   const saveOverallProgress = async () => {
     if (!id || !project) return
     try {
@@ -184,6 +281,97 @@ function ProjectPage() {
       setMessage({ text: '进度已保存', type: 'success' })
     } catch (err: any) {
       setMessage({ text: '保存失败：' + err.message, type: 'error' })
+    }
+  }
+
+  // ── Step 4 Handlers ──
+
+  const generatePptHandler = async (key: 'dao' | 'yanxi') => {
+    const contentKey = key === 'dao' ? 'step3_daoshuyi' : 'step3_yanxi'
+    const content = stepContents[contentKey]
+    if (!content) {
+      setMessage({ text: '请先完成对应文档的生成', type: 'error' })
+      return
+    }
+    setGeneratingPpt(key)
+    try {
+      const branding = pptBranding.copyright || pptBranding.signature ? pptBranding : undefined
+      const result = await api.generatePPT(content, selectedPptTemplateId || undefined, branding as any)
+      setPptResults(prev => ({ ...prev, [key]: result as any }))
+      setMessage({ text: `${key === 'dao' ? '道与术' : '研习手册'} PPT 生成成功`, type: 'success' })
+    } catch (err: any) {
+      setMessage({ text: 'PPT 生成失败：' + err.message, type: 'error' })
+    } finally {
+      setGeneratingPpt(null)
+    }
+  }
+
+  const exportSopHandler = async () => {
+    const content = stepContents.step3_sop
+    if (!content) {
+      setMessage({ text: '请先完成 SOP 文档的生成', type: 'error' })
+      return
+    }
+    setExportingSop(true)
+    try {
+      const branding = sopBranding.copyright || sopBranding.signature ? sopBranding : undefined
+      const result = await api.exportSOP(content, branding as any)
+      setSopResult(result as any)
+      setMessage({ text: 'SOP 文档导出成功', type: 'success' })
+    } catch (err: any) {
+      setMessage({ text: 'SOP 导出失败：' + err.message, type: 'error' })
+    } finally {
+      setExportingSop(false)
+    }
+  }
+
+  const generateVoiceoverHandler = async (key: 'dao' | 'yanxi') => {
+    const contentKey = key === 'dao' ? 'step3_daoshuyi' : 'step3_yanxi'
+    const content = stepContents[contentKey]
+    if (!content) {
+      setMessage({ text: '请先完成对应文档的生成', type: 'error' })
+      return
+    }
+    if (!voiceoverProviderId || !voiceoverModel || !voiceoverPromptId) {
+      setMessage({ text: '请先在设置中配置 LLM 提供方和口播稿提示词', type: 'error' })
+      return
+    }
+    setGeneratingVoiceover(key)
+    try {
+      // Get the voiceover prompt
+      const prompt = await api.getPrompt(voiceoverPromptId)
+      const systemPrompt = prompt.system_prompt || ''
+      const result = await api.llmGenerate({
+        provider_id: voiceoverProviderId,
+        model: voiceoverModel,
+        system_prompt: systemPrompt,
+        user_message: content,
+      })
+      const text = (result as any).content || ''
+      setVoiceoverTexts(prev => ({ ...prev, [key]: text }))
+      setMessage({ text: `${key === 'dao' ? '道与术' : '研习手册'} 口播稿生成成功`, type: 'success' })
+    } catch (err: any) {
+      setMessage({ text: '口播稿生成失败：' + err.message, type: 'error' })
+    } finally {
+      setGeneratingVoiceover(null)
+    }
+  }
+
+  const synthesizeTtsHandler = async (key: 'dao' | 'yanxi') => {
+    const text = voiceoverTexts[key]
+    if (!text) {
+      setMessage({ text: '请先生成口播稿', type: 'error' })
+      return
+    }
+    setSynthesizingTts(key)
+    try {
+      const result = await api.ttsSynthesize(text)
+      setTtsResults(prev => ({ ...prev, [key]: result as any }))
+      setMessage({ text: `${key === 'dao' ? '道与术' : '研习手册'} 语音合成成功`, type: 'success' })
+    } catch (err: any) {
+      setMessage({ text: '语音合成失败：' + err.message, type: 'error' })
+    } finally {
+      setSynthesizingTts(null)
     }
   }
 
@@ -202,6 +390,53 @@ function ProjectPage() {
     step2: '步骤 2：笔记整理',
     step3: '步骤 3：文档生成',
     step4: '步骤 4：输出',
+  }
+
+  // Shared styles
+  const cardStyle: React.CSSProperties = {
+    background: 'var(--color-card)',
+    border: '1px solid var(--color-border)',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  }
+
+  const stepHeaderStyle = (status: StepStatus): React.CSSProperties => ({
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  })
+
+  const stepDotStyle = (status: StepStatus): React.CSSProperties => ({
+    display: 'inline-block',
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: statusColor(status),
+    animation: status === 'in_progress' ? 'pulse 1.2s ease-in-out infinite' : 'none',
+    flexShrink: 0,
+  })
+
+  const btnPrimary: React.CSSProperties = {
+    background: 'var(--color-primary)',
+    color: '#fff',
+    border: 'none',
+    padding: '8px 18px',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: 14,
+    fontWeight: 600,
+    cursor: 'pointer',
+  }
+
+  const btnSecondary: React.CSSProperties = {
+    background: 'none',
+    border: '1px solid var(--color-border)',
+    padding: '6px 14px',
+    borderRadius: 'var(--radius-sm)',
+    fontSize: 13,
+    color: 'var(--color-text-secondary)',
+    cursor: 'pointer',
   }
 
   if (loading) {
@@ -239,6 +474,7 @@ function ProjectPage() {
               padding: '6px 14px',
               color: 'var(--color-text-secondary)',
               fontSize: 14,
+              cursor: 'pointer',
             }}
           >
             &larr; 返回
@@ -249,15 +485,7 @@ function ProjectPage() {
         </div>
         <button
           onClick={saveOverallProgress}
-          style={{
-            background: 'var(--color-primary)',
-            color: '#fff',
-            border: 'none',
-            padding: '8px 18px',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: 14,
-            fontWeight: 600,
-          }}
+          style={btnPrimary}
         >
           保存进度
         </button>
@@ -288,30 +516,11 @@ function ProjectPage() {
         </div>
       )}
 
-      {/* Step 1 Card */}
-      <div style={{
-        background: 'var(--color-card)',
-        border: '1px solid var(--color-border)',
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 16,
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: 16,
-        }}>
+      {/* ==================== Step 1 Card ==================== */}
+      <div style={cardStyle}>
+        <div style={stepHeaderStyle(stepStatuses.step1)}>
           <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{
-              display: 'inline-block',
-              width: 8,
-              height: 8,
-              borderRadius: '50%',
-              background: statusColor(stepStatuses.step1),
-              animation: stepStatuses.step1 === 'in_progress' ? 'pulse 1.2s ease-in-out infinite' : 'none',
-              flexShrink: 0,
-            }} />
+            <span style={stepDotStyle(stepStatuses.step1)} />
             {stepLabels.step1}
           </h2>
           <span style={{
@@ -337,6 +546,7 @@ function ProjectPage() {
                 color: inputMode === mode ? 'var(--color-primary)' : 'var(--color-text-secondary)',
                 fontSize: 13,
                 fontWeight: inputMode === mode ? 600 : 400,
+                cursor: 'pointer',
               }}
             >
               {mode === 'link' ? '链接' : mode === 'text' ? '文本' : '文件'}
@@ -379,6 +589,7 @@ function ProjectPage() {
                     fontWeight: 600,
                     opacity: urlInput.trim() ? 1 : 0.5,
                     whiteSpace: 'nowrap',
+                    cursor: 'pointer',
                   }}
                 >
                   开始下载
@@ -395,6 +606,7 @@ function ProjectPage() {
                     fontSize: 14,
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
+                    cursor: 'pointer',
                   }}
                 >
                   取消
@@ -518,6 +730,7 @@ function ProjectPage() {
               fontSize: 14,
               fontWeight: 600,
               opacity: (stepStatuses.step1 === 'done' || textInput) ? 1 : 0.6,
+              cursor: 'pointer',
             }}
           >
             {saving ? '保存中...' : '保存到项目'}
@@ -525,54 +738,597 @@ function ProjectPage() {
         </div>
       </div>
 
-      {/* Steps 2-4: Placeholder cards */}
-      {['step2', 'step3', 'step4'].map(stepKey => (
-        <div
-          key={stepKey}
-          style={{
-            background: 'var(--color-card)',
-            border: '1px solid var(--color-border)',
-            borderRadius: 8,
-            padding: 16,
-            marginBottom: 16,
-            opacity: 0.7,
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 12,
+      {/* ==================== Step 2 Card ==================== */}
+      <div style={cardStyle}>
+        <div style={stepHeaderStyle(stepStatuses.step2)}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={stepDotStyle(stepStatuses.step2)} />
+            {stepLabels.step2}
+          </h2>
+          <span style={{
+            fontSize: 13,
+            color: statusColor(stepStatuses.step2),
+            fontWeight: 500,
           }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{
-                display: 'inline-block',
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                background: statusColor(stepStatuses[stepKey]),
-                flexShrink: 0,
-              }} />
-              {stepLabels[stepKey]}
-            </h2>
-            <span style={{
-              fontSize: 13,
-              color: statusColor(stepStatuses[stepKey]),
-              fontWeight: 500,
-            }}>
-              {statusLabel(stepStatuses[stepKey])}
-            </span>
-          </div>
+            {statusLabel(stepStatuses.step2)}
+          </span>
+        </div>
+
+        {stepStatuses.step1 !== 'done' ? (
           <div style={{
             padding: '40px 20px',
             textAlign: 'center',
             color: 'var(--color-text-secondary)',
             fontSize: 14,
           }}>
-            后续版本开放
+            请先完成步骤 1
           </div>
+        ) : (
+          <>
+            <AICollabEditor
+              value={stepContents.step2}
+              onChange={text => setStepContent('step2', text)}
+              placeholder="在此编辑笔记内容..."
+              height="400px"
+              category="笔记整理"
+              generateUserMessage={stepContents.step1}
+            />
+
+            {/* Confirm step 2 button */}
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button
+                onClick={confirmStep2}
+                disabled={saving || !stepContents.step2}
+                style={{
+                  ...btnPrimary,
+                  opacity: (saving || !stepContents.step2) ? 0.5 : 1,
+                }}
+              >
+                {saving ? '保存中...' : '确认，进入步骤 3'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ==================== Step 3 Card ==================== */}
+      <div style={{
+        ...cardStyle,
+        maxWidth: '100%',
+        overflowX: 'auto',
+      }}>
+        <div style={stepHeaderStyle(step3StatusForDisplay)}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={stepDotStyle(step3StatusForDisplay)} />
+            {stepLabels.step3}
+          </h2>
+          <span style={{
+            fontSize: 13,
+            color: statusColor(step3StatusForDisplay),
+            fontWeight: 500,
+          }}>
+            {statusLabel(step3StatusForDisplay)}
+          </span>
         </div>
-      ))}
+
+        {stepStatuses.step2 !== 'done' ? (
+          <div style={{
+            padding: '40px 20px',
+            textAlign: 'center',
+            color: 'var(--color-text-secondary)',
+            fontSize: 14,
+          }}>
+            请先完成步骤 2
+          </div>
+        ) : (
+          <>
+            {/* Three-column layout for the three documents */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 12,
+              minWidth: 750,
+            }}>
+              {/* --- 食谱的道与术分析 --- */}
+              <div style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+              }}>
+                <div style={{
+                  padding: '8px 12px',
+                  borderBottom: '1px solid var(--color-border)',
+                  background: 'var(--color-bg)',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}>
+                  <span style={{
+                    display: 'inline-block',
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: statusColor(stepStatuses.step3_daoshuyi),
+                    flexShrink: 0,
+                  }} />
+                  食谱的道与术分析
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <AICollabEditor
+                    value={stepContents.step3_daoshuyi}
+                    onChange={text => setStepContent('step3_daoshuyi', text)}
+                    placeholder="道与术分析..."
+                    height="350px"
+                    category="道与术分析"
+                    generateUserMessage={stepContents.step2}
+                  />
+                </div>
+                <div style={{ padding: '8px 12px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => saveSubStep('step3_daoshuyi', stepContents.step3_daoshuyi)}
+                    disabled={savingSubStep === 'step3_daoshuyi' || !stepContents.step3_daoshuyi}
+                    style={{
+                      ...btnPrimary,
+                      fontSize: 12,
+                      padding: '4px 14px',
+                      opacity: (savingSubStep === 'step3_daoshuyi' || !stepContents.step3_daoshuyi) ? 0.5 : 1,
+                    }}
+                  >
+                    {savingSubStep === 'step3_daoshuyi' ? '保存中...' : '保存'}
+                  </button>
+                </div>
+              </div>
+
+              {/* --- 食谱的研习手册 --- */}
+              <div style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+              }}>
+                <div style={{
+                  padding: '8px 12px',
+                  borderBottom: '1px solid var(--color-border)',
+                  background: 'var(--color-bg)',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}>
+                  <span style={{
+                    display: 'inline-block',
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: statusColor(stepStatuses.step3_yanxi),
+                    flexShrink: 0,
+                  }} />
+                  食谱的研习手册
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <AICollabEditor
+                    value={stepContents.step3_yanxi}
+                    onChange={text => setStepContent('step3_yanxi', text)}
+                    placeholder="研习手册..."
+                    height="350px"
+                    category="研习手册"
+                    generateUserMessage={stepContents.step2}
+                  />
+                </div>
+                <div style={{ padding: '8px 12px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => saveSubStep('step3_yanxi', stepContents.step3_yanxi)}
+                    disabled={savingSubStep === 'step3_yanxi' || !stepContents.step3_yanxi}
+                    style={{
+                      ...btnPrimary,
+                      fontSize: 12,
+                      padding: '4px 14px',
+                      opacity: (savingSubStep === 'step3_yanxi' || !stepContents.step3_yanxi) ? 0.5 : 1,
+                    }}
+                  >
+                    {savingSubStep === 'step3_yanxi' ? '保存中...' : '保存'}
+                  </button>
+                </div>
+              </div>
+
+              {/* --- 食谱的SOP --- */}
+              <div style={{
+                border: '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-md)',
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
+              }}>
+                <div style={{
+                  padding: '8px 12px',
+                  borderBottom: '1px solid var(--color-border)',
+                  background: 'var(--color-bg)',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}>
+                  <span style={{
+                    display: 'inline-block',
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: statusColor(stepStatuses.step3_sop),
+                    flexShrink: 0,
+                  }} />
+                  食谱的 SOP
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <AICollabEditor
+                    value={stepContents.step3_sop}
+                    onChange={text => setStepContent('step3_sop', text)}
+                    placeholder="SOP..."
+                    height="350px"
+                    category="SOP"
+                    generateUserMessage={stepContents.step2}
+                  />
+                </div>
+                <div style={{ padding: '8px 12px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={() => saveSubStep('step3_sop', stepContents.step3_sop)}
+                    disabled={savingSubStep === 'step3_sop' || !stepContents.step3_sop}
+                    style={{
+                      ...btnPrimary,
+                      fontSize: 12,
+                      padding: '4px 14px',
+                      opacity: (savingSubStep === 'step3_sop' || !stepContents.step3_sop) ? 0.5 : 1,
+                    }}
+                  >
+                    {savingSubStep === 'step3_sop' ? '保存中...' : '保存'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Overall step 3 status */}
+            {step3Done && (
+              <div style={{
+                marginTop: 12,
+                padding: '10px 16px',
+                background: 'rgba(74, 139, 63, 0.08)',
+                border: '1px solid var(--color-success)',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: 13,
+                color: 'var(--color-success)',
+                textAlign: 'center',
+              }}>
+                三份文档已全部生成完成，可进入步骤 4
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ==================== Step 4 Card ==================== */}
+      <div style={{
+        ...cardStyle,
+        opacity: step3Done ? 1 : 0.7,
+      }}>
+        <div style={stepHeaderStyle(stepStatuses.step4)}>
+          <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={stepDotStyle(stepStatuses.step4)} />
+            {stepLabels.step4}
+          </h2>
+          <span style={{
+            fontSize: 13,
+            color: statusColor(stepStatuses.step4),
+            fontWeight: 500,
+          }}>
+            {statusLabel(stepStatuses.step4)}
+          </span>
+        </div>
+
+        {!step3Done ? (
+          <div style={{
+            padding: '40px 20px',
+            textAlign: 'center',
+            color: 'var(--color-text-secondary)',
+            fontSize: 14,
+          }}>
+            请先完成步骤 3
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+            {/* ── A. PPT 生成 ── */}
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px 0' }}>PPT 生成</h3>
+              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
+                使用下方共享的模板与品牌配置，分别从道与术分析和研习手册生成 PPT。
+              </div>
+
+              {/* Shared branding inputs for PPT */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                <input
+                  type="text"
+                  placeholder="版权说明（如 © 2026）"
+                  value={pptBranding.copyright}
+                  onChange={e => setPptBranding(prev => ({ ...prev, copyright: e.target.value }))}
+                  style={{
+                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
+                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 180px', outline: 'none',
+                    background: 'var(--color-card)', color: 'var(--color-text)',
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="作者签名"
+                  value={pptBranding.signature}
+                  onChange={e => setPptBranding(prev => ({ ...prev, signature: e.target.value }))}
+                  style={{
+                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
+                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 150px', outline: 'none',
+                    background: 'var(--color-card)', color: 'var(--color-text)',
+                  }}
+                />
+                {pptTemplates.length > 0 && (
+                  <select
+                    value={selectedPptTemplateId}
+                    onChange={e => setSelectedPptTemplateId(e.target.value)}
+                    style={{
+                      padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
+                      fontSize: 13, fontFamily: 'var(--font-family)', outline: 'none',
+                      background: 'var(--color-card)', color: 'var(--color-text)',
+                    }}
+                  >
+                    <option value="">默认模板</option>
+                    {pptTemplates.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Row 1: 道与术 PPT */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 140 }}>
+                  来源: 道与术分析
+                </span>
+                <button
+                  onClick={() => generatePptHandler('dao')}
+                  disabled={generatingPpt === 'dao' || !stepContents.step3_daoshuyi}
+                  style={{
+                    ...btnPrimary, fontSize: 13, padding: '6px 16px',
+                    opacity: (generatingPpt === 'dao' || !stepContents.step3_daoshuyi) ? 0.5 : 1,
+                  }}
+                >
+                  {generatingPpt === 'dao' ? '生成中...' : '生成PPT'}
+                </button>
+                {pptResults.dao && (
+                  <a
+                    href={pptResults.dao.download_url}
+                    download
+                    style={{ fontSize: 13, color: 'var(--color-primary)', textDecoration: 'underline' }}
+                  >
+                    下载: {pptResults.dao.filename}
+                  </a>
+                )}
+              </div>
+
+              {/* Row 2: 研习手册 PPT */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 140 }}>
+                  来源: 研习手册
+                </span>
+                <button
+                  onClick={() => generatePptHandler('yanxi')}
+                  disabled={generatingPpt === 'yanxi' || !stepContents.step3_yanxi}
+                  style={{
+                    ...btnPrimary, fontSize: 13, padding: '6px 16px',
+                    opacity: (generatingPpt === 'yanxi' || !stepContents.step3_yanxi) ? 0.5 : 1,
+                  }}
+                >
+                  {generatingPpt === 'yanxi' ? '生成中...' : '生成PPT'}
+                </button>
+                {pptResults.yanxi && (
+                  <a
+                    href={pptResults.yanxi.download_url}
+                    download
+                    style={{ fontSize: 13, color: 'var(--color-primary)', textDecoration: 'underline' }}
+                  >
+                    下载: {pptResults.yanxi.filename}
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* ── B. SOP 导出 ── */}
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px 0' }}>SOP 导出</h3>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                <input
+                  type="text"
+                  placeholder="版权说明"
+                  value={sopBranding.copyright}
+                  onChange={e => setSopBranding(prev => ({ ...prev, copyright: e.target.value }))}
+                  style={{
+                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
+                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 180px', outline: 'none',
+                    background: 'var(--color-card)', color: 'var(--color-text)',
+                  }}
+                />
+                <input
+                  type="text"
+                  placeholder="作者签名"
+                  value={sopBranding.signature}
+                  onChange={e => setSopBranding(prev => ({ ...prev, signature: e.target.value }))}
+                  style={{
+                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
+                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 150px', outline: 'none',
+                    background: 'var(--color-card)', color: 'var(--color-text)',
+                  }}
+                />
+                {sopTemplates.length > 0 && (
+                  <select
+                    value={selectedSopTemplateId}
+                    onChange={e => setSelectedSopTemplateId(e.target.value)}
+                    style={{
+                      padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
+                      fontSize: 13, fontFamily: 'var(--font-family)', outline: 'none',
+                      background: 'var(--color-card)', color: 'var(--color-text)',
+                    }}
+                  >
+                    <option value="">默认模板</option>
+                    {sopTemplates.map((t: any) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 140 }}>
+                  来源: SOP 文档
+                </span>
+                <button
+                  onClick={exportSopHandler}
+                  disabled={exportingSop || !stepContents.step3_sop}
+                  style={{
+                    ...btnPrimary, fontSize: 13, padding: '6px 16px',
+                    opacity: (exportingSop || !stepContents.step3_sop) ? 0.5 : 1,
+                  }}
+                >
+                  {exportingSop ? '导出中...' : '导出文档'}
+                </button>
+                {sopResult && (
+                  <a
+                    href={sopResult.download_url}
+                    download
+                    style={{ fontSize: 13, color: 'var(--color-primary)', textDecoration: 'underline' }}
+                  >
+                    下载: {sopResult.filename}
+                  </a>
+                )}
+              </div>
+            </div>
+
+            {/* ── C. 口播稿 + 语音 ── */}
+            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px 0' }}>口播稿 + 语音合成</h3>
+
+              {/* Row 1: 道与术口播稿 */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>道与术口播稿</span>
+                  <button
+                    onClick={() => generateVoiceoverHandler('dao')}
+                    disabled={generatingVoiceover === 'dao' || !stepContents.step3_daoshuyi}
+                    style={{
+                      ...btnPrimary, fontSize: 12, padding: '4px 12px',
+                      opacity: (generatingVoiceover === 'dao' || !stepContents.step3_daoshuyi) ? 0.5 : 1,
+                    }}
+                  >
+                    {generatingVoiceover === 'dao' ? '生成中...' : '生成口播稿'}
+                  </button>
+                  <button
+                    onClick={() => synthesizeTtsHandler('dao')}
+                    disabled={synthesizingTts === 'dao' || !voiceoverTexts.dao}
+                    style={{
+                      ...btnSecondary, fontSize: 12, padding: '4px 12px',
+                      opacity: (synthesizingTts === 'dao' || !voiceoverTexts.dao) ? 0.5 : 1,
+                    }}
+                  >
+                    {synthesizingTts === 'dao' ? '合成中...' : '语音合成'}
+                  </button>
+                </div>
+                <textarea
+                  value={voiceoverTexts.dao}
+                  onChange={e => setVoiceoverTexts(prev => ({ ...prev, dao: e.target.value }))}
+                  placeholder="口播稿将在此显示..."
+                  style={{
+                    width: '100%',
+                    minHeight: 80,
+                    padding: 8,
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 4,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    resize: 'vertical',
+                    outline: 'none',
+                    background: 'var(--color-card)',
+                    color: 'var(--color-text)',
+                  }}
+                />
+                {ttsResults.dao && (
+                  <div style={{ marginTop: 6 }}>
+                    <audio controls style={{ width: '100%', maxWidth: 400 }}>
+                      <source src={ttsResults.dao.audio_url} type="audio/mpeg" />
+                    </audio>
+                  </div>
+                )}
+              </div>
+
+              {/* Row 2: 研习手册口播稿 */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600 }}>研习手册口播稿</span>
+                  <button
+                    onClick={() => generateVoiceoverHandler('yanxi')}
+                    disabled={generatingVoiceover === 'yanxi' || !stepContents.step3_yanxi}
+                    style={{
+                      ...btnPrimary, fontSize: 12, padding: '4px 12px',
+                      opacity: (generatingVoiceover === 'yanxi' || !stepContents.step3_yanxi) ? 0.5 : 1,
+                    }}
+                  >
+                    {generatingVoiceover === 'yanxi' ? '生成中...' : '生成口播稿'}
+                  </button>
+                  <button
+                    onClick={() => synthesizeTtsHandler('yanxi')}
+                    disabled={synthesizingTts === 'yanxi' || !voiceoverTexts.yanxi}
+                    style={{
+                      ...btnSecondary, fontSize: 12, padding: '4px 12px',
+                      opacity: (synthesizingTts === 'yanxi' || !voiceoverTexts.yanxi) ? 0.5 : 1,
+                    }}
+                  >
+                    {synthesizingTts === 'yanxi' ? '合成中...' : '语音合成'}
+                  </button>
+                </div>
+                <textarea
+                  value={voiceoverTexts.yanxi}
+                  onChange={e => setVoiceoverTexts(prev => ({ ...prev, yanxi: e.target.value }))}
+                  placeholder="口播稿将在此显示..."
+                  style={{
+                    width: '100%',
+                    minHeight: 80,
+                    padding: 8,
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 4,
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    resize: 'vertical',
+                    outline: 'none',
+                    background: 'var(--color-card)',
+                    color: 'var(--color-text)',
+                  }}
+                />
+                {ttsResults.yanxi && (
+                  <div style={{ marginTop: 6 }}>
+                    <audio controls style={{ width: '100%', maxWidth: 400 }}>
+                      <source src={ttsResults.yanxi.audio_url} type="audio/mpeg" />
+                    </audio>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+      </div>
 
       {/* Keyframes for pulse animation */}
       <style>{`

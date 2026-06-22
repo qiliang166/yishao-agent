@@ -176,4 +176,25 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ data }),
     }),
+
+  // Templates
+  listTemplates: (type?: string) => request(`/api/templates${type ? `?type=${encodeURIComponent(type)}` : ''}`).then(d => d.templates),
+  createTemplate: (data: {name: string; type: string; file_path?: string; linked_skill_id?: string; branding_config?: string}) =>
+    request('/api/templates', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  updateTemplate: (id: string, data: {name: string; type: string; file_path?: string; linked_skill_id?: string; branding_config?: string}) =>
+    request(`/api/templates/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  deleteTemplate: (id: string) => request(`/api/templates/${id}`, { method: 'DELETE' }),
+  setDefaultTemplate: (id: string) => request(`/api/templates/${id}/set-default`, { method: 'POST' }),
+
+  // PPT
+  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>) =>
+    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding}) }),
+
+  // SOP Export
+  exportSOP: (content: string, branding?: Record<string, string>) =>
+    request('/api/export/sop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, branding}) }),
+
+  // TTS
+  ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number) =>
+    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0}) }),
 }
