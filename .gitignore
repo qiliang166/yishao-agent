@@ -18,6 +18,11 @@ backend/data/backups/
 .vscode/
 .idea/
 
+# Node
+node_modules/
+dist/
+.vite/
+
 # OS
 .DS_Store
 Thumbs.db
