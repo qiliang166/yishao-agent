@@ -388,6 +388,28 @@ export default function ProjectPage() {
 
   return (
     <div className="pipeline-area">
+      {/* ═══ Project Header ═══ */}
+      <div className="proj-header-bar">
+        <span className="proj-header-name">{project?.name || '加载中...'}</span>
+        <span className={`pc-status ${project?.status || 'draft'}`}
+          style={{ cursor: 'pointer' }}
+          onClick={async () => {
+            if (!id) return
+            const newStatus = (project?.status === 'completed') ? 'draft' : 'completed'
+            await api.updateProject(id, { status: newStatus })
+            setProject(prev => prev ? { ...prev, status: newStatus } : prev)
+          }}>{project?.status === 'completed' ? '已完成' : '草稿'}</span>
+        <button className={`btn btn-sm ${(project as any)?.is_locked ? 'btn-primary' : 'btn-outline'}`}
+          onClick={async () => {
+            if (!id) return
+            const locked = !(project as any)?.is_locked
+            await api.updateProject(id, { is_locked: locked } as any)
+            setProject(prev => prev ? { ...prev, is_locked: locked } as any : prev)
+          }}>
+          {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 解锁'}
+        </button>
+      </div>
+
       {/* ═══ Top Nav ═══ */}
       <div className="top-nav">
         {STAGES.map((s, i) => (

@@ -163,6 +163,14 @@ def init_db():
         except Exception:
             pass
 
+        # Add is_locked column to projects if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()]
+            if 'is_locked' not in existing_cols:
+                conn.execute("ALTER TABLE projects ADD COLUMN is_locked INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tts_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,

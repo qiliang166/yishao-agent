@@ -187,6 +187,8 @@ def update_project(project_id: str, req: ProjectUpdate):
             if req.storage_path.strip():
                 os.makedirs(req.storage_path, exist_ok=True)
             db.execute("UPDATE projects SET storage_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (os.path.normpath(req.storage_path) if req.storage_path.strip() else req.storage_path, project_id))
+        if req.is_locked is not None:
+            db.execute("UPDATE projects SET is_locked = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.is_locked, project_id))
         db.commit()
         row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
         return dict(row)
@@ -230,6 +232,11 @@ def _delete_project_files(project_id: str, db):
 def delete_project(project_id: str):
     db = get_db()
     try:
+        row = db.execute("SELECT is_locked FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Project not found")
+        if row["is_locked"]:
+            raise HTTPException(403, "项目已锁定，无法删除")
         _delete_project_files(project_id, db)
         db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         db.commit()
@@ -245,9 +252,12 @@ def batch_delete_projects(req: dict):
         raise HTTPException(400, "ids required")
     db = get_db()
     try:
+        placeholders = ",".join(["?"] * len(ids))
+        locked = db.execute(f"SELECT id FROM projects WHERE id IN ({placeholders}) AND is_locked = 1", ids).fetchall()
+        if locked:
+            raise HTTPException(403, f"以下项目已锁定，无法删除: {', '.join(r['id'][:8] for r in locked)}")
         for pid in ids:
             _delete_project_files(pid, db)
-        placeholders = ",".join(["?"] * len(ids))
         db.execute(f"DELETE FROM projects WHERE id IN ({placeholders})", ids)
         db.commit()
         return {"ok": True, "deleted": len(ids)}

@@ -53,6 +53,7 @@ export interface Project {
   status: string
   source_type: string
   storage_path?: string
+  is_locked?: number
   created_at: string
   updated_at: string
 }
@@ -102,7 +103,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, source_type: 'text' }),
     }),
-  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string}) =>
+  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number}) =>
     request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
   batchDeleteProjects: (ids: string[]) =>

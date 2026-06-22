@@ -87,7 +87,7 @@ function HomePage() {
   }
 
   const statusLabel = (s: string) => {
-    const map: Record<string, string> = { draft: '草稿', in_progress: '进行中', completed: '已完成' }
+    const map: Record<string, string> = { draft: '草稿', completed: '已完成' }
     return map[s] || s
   }
 
@@ -126,21 +126,32 @@ function HomePage() {
               )}
             </div>
           )}
-          {filtered.map(p => (
+          {filtered.map((p, i) => (
             <div key={p.id} className="proj-card">
               <input type="checkbox"
                 checked={selected.has(p.id)}
                 onChange={() => toggleSelect(p.id)}
                 onClick={e => e.stopPropagation()}
                 style={{ marginRight: 8 }} />
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 28, textAlign: 'center' }}>{(page - 1) * PAGE_SIZE + i + 1}</span>
               <span className="pc-name" style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/project/${p.id}`)}>{p.name}</span>
-              <span className={`pc-status ${p.status}`}>{statusLabel(p.status)}</span>
+              <span className={`pc-status ${p.status}`}
+                style={{ cursor: 'pointer' }}
+                onClick={async e => {
+                  e.stopPropagation()
+                  const newStatus = p.status === 'completed' ? 'draft' : 'completed'
+                  await api.updateProject(p.id, { status: newStatus })
+                  loadProjects(page)
+                }}>{statusLabel(p.status)}</span>
               <span className="pc-date">{new Date(p.updated_at).toLocaleDateString('zh-CN')}</span>
               <span className="pc-actions">
-
-                <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}
-                  style={{ color: 'var(--warning)' }}>删除</button>
+                {p.is_locked ? (
+                  <span style={{ fontSize: 14 }} title="已锁定">🔒</span>
+                ) : (
+                  <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}
+                    style={{ color: 'var(--warning)' }}>删除</button>
+                )}
               </span>
             </div>
           ))}

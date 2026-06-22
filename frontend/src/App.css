@@ -250,6 +250,19 @@
   min-height: 0;
   overflow: hidden;
 }
+.proj-header-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+.proj-header-bar .proj-header-name {
+  font-weight: 600;
+  font-size: 14px;
+  flex: 1;
+}
 .panel-grid {
   display: flex;
   gap: 16px;

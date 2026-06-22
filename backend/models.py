@@ -12,6 +12,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     status: Optional[str] = None
     storage_path: Optional[str] = None
+    is_locked: Optional[int] = None
 
 
 class StepResultSave(BaseModel):
