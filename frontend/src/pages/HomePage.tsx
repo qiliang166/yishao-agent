@@ -146,14 +146,18 @@ function HomePage() {
                 }}>{statusLabel(p.status)}</span>
               <span className="pc-date">{new Date(p.updated_at).toLocaleDateString('zh-CN')}</span>
               <span className="pc-actions" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <span style={{ cursor: 'pointer', fontSize: 13 }}
+                <span style={{
+                    cursor: 'pointer', fontSize: 11, marginLeft: 4,
+                    color: p.is_locked ? 'var(--warning)' : 'var(--text-secondary)',
+                    fontWeight: p.is_locked ? 500 : 400,
+                  }}
                   onClick={async e => {
                     e.stopPropagation()
                     const locked = p.is_locked ? 0 : 1
                     await api.updateProject(p.id, { is_locked: locked })
                     loadProjects(page)
                   }} title={p.is_locked ? '点击解锁' : '点击锁定'}>
-                  {p.is_locked ? '🔒' : '🔓'}
+                  {p.is_locked ? '🔒 已锁定' : '🔓 锁定'}
                 </span>
                 {!p.is_locked && (
                   <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}

@@ -399,14 +399,19 @@ export default function ProjectPage() {
             await api.updateProject(id, { status: newStatus })
             setProject(prev => prev ? { ...prev, status: newStatus } : prev)
           }}>{project?.status === 'completed' ? '已完成' : '草稿'}</span>
-        <button style={{ fontSize: 12, padding: '4px 12px', borderRadius: 4, border: '1px solid var(--border)', background: (project as any)?.is_locked ? 'var(--primary)' : 'var(--card)', color: (project as any)?.is_locked ? '#fff' : 'var(--text-primary)', cursor: 'pointer' }}
+        <button style={{
+            fontSize: 12, padding: '4px 12px', borderRadius: 4, cursor: 'pointer',
+            border: (project as any)?.is_locked ? '1px solid var(--warning)' : '1px solid var(--border)',
+            background: (project as any)?.is_locked ? 'var(--warning)' : 'var(--card)',
+            color: (project as any)?.is_locked ? '#fff' : 'var(--text-secondary)',
+          }}
           onClick={async () => {
             if (!id) return
             const locked = !(project as any)?.is_locked
             await api.updateProject(id, { is_locked: locked } as any)
             setProject(prev => prev ? { ...prev, is_locked: locked } as any : prev)
           }}>
-          {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 解锁'}
+          {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 锁定'}
         </button>
       </div>
 
