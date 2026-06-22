@@ -87,7 +87,13 @@ export interface DiffResult {
 
 export const api = {
   // Projects
-  listProjects: () => request('/api/projects').then(d => d.projects as Project[]),
+  listProjects: (page?: number, pageSize?: number) => {
+    const params = new URLSearchParams()
+    if (page) params.set('page', String(page))
+    if (pageSize) params.set('page_size', String(pageSize))
+    const qs = params.toString()
+    return request(`/api/projects${qs ? '?' + qs : ''}`).then(d => d as { projects: Project[]; total: number; page: number; page_size: number })
+  },
   getProject: (id: string) => request(`/api/projects/${id}`),
   listProjectVideos: (id: string) => request(`/api/projects/${id}/videos`),
   createProject: (name: string) =>
@@ -99,6 +105,12 @@ export const api = {
   updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string}) =>
     request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
+  batchDeleteProjects: (ids: string[]) =>
+    request('/api/projects/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    }),
 
   // Step results
   getSteps: (projectId: string) => request(`/api/projects/${projectId}/steps`).then(d => d.steps),

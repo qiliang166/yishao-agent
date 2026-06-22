@@ -1,4 +1,5 @@
 import os
+import shutil
 import uuid
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -110,11 +111,16 @@ def health():
 # ── Projects ──
 
 @app.get("/api/projects")
-def list_projects():
+def list_projects(page: int = 1, page_size: int = 20):
     db = get_db()
     try:
-        rows = db.execute("SELECT * FROM projects ORDER BY updated_at DESC").fetchall()
-        return {"projects": [dict(r) for r in rows]}
+        total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+        offset = (page - 1) * page_size
+        rows = db.execute(
+            "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            (page_size, offset)
+        ).fetchall()
+        return {"projects": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
 
@@ -209,13 +215,42 @@ def api_save_file_to_project(project_id: str, req: dict):
     return {"ok": True, "path": filepath, "filename": filename}
 
 
+def _delete_project_files(project_id: str, db):
+    """Remove project storage directory and step results."""
+    db.execute("DELETE FROM step_results WHERE project_id = ?", (project_id,))
+    try:
+        path = resolve_project_storage(project_id, auto_create=False)
+        if os.path.exists(path):
+            shutil.rmtree(path)
+    except Exception:
+        pass
+
+
 @app.delete("/api/projects/{project_id}")
 def delete_project(project_id: str):
     db = get_db()
     try:
+        _delete_project_files(project_id, db)
         db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
         db.commit()
         return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/projects/batch-delete")
+def batch_delete_projects(req: dict):
+    ids = req.get("ids", [])
+    if not ids:
+        raise HTTPException(400, "ids required")
+    db = get_db()
+    try:
+        for pid in ids:
+            _delete_project_files(pid, db)
+        placeholders = ",".join(["?"] * len(ids))
+        db.execute(f"DELETE FROM projects WHERE id IN ({placeholders})", ids)
+        db.commit()
+        return {"ok": True, "deleted": len(ids)}
     finally:
         db.close()
 
