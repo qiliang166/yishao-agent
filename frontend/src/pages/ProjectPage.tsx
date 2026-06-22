@@ -399,7 +399,7 @@ export default function ProjectPage() {
             await api.updateProject(id, { status: newStatus })
             setProject(prev => prev ? { ...prev, status: newStatus } : prev)
           }}>{project?.status === 'completed' ? '已完成' : '草稿'}</span>
-        <button className={`btn btn-sm ${(project as any)?.is_locked ? 'btn-primary' : 'btn-outline'}`}
+        <button style={{ fontSize: 12, padding: '4px 12px', borderRadius: 4, border: '1px solid var(--border)', background: (project as any)?.is_locked ? 'var(--primary)' : 'var(--card)', color: (project as any)?.is_locked ? '#fff' : 'var(--text-primary)', cursor: 'pointer' }}
           onClick={async () => {
             if (!id) return
             const locked = !(project as any)?.is_locked
