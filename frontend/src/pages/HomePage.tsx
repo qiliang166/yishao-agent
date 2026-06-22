@@ -130,10 +130,26 @@ function HomePage() {
                 {selected.size > 0 ? `已选 ${selected.size} 项` : '全选'}
               </span>
               {selected.size > 0 && (
-                <button className="btn btn-sm" onClick={batchDelete}
-                  style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)', marginLeft: 'auto' }}>
-                  删除选中({selected.size})
-                </button>
+                <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                  <button className="btn btn-outline btn-sm" onClick={async () => {
+                    const ids = [...selected]
+                    await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 1 })))
+                    loadProjects(page)
+                    setSelected(new Set())
+                    modal.toast(`已锁定 ${ids.length} 个项目`, 'success')
+                  }}>🔒 批量锁定</button>
+                  <button className="btn btn-outline btn-sm" onClick={async () => {
+                    const ids = [...selected]
+                    await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 0 })))
+                    loadProjects(page)
+                    setSelected(new Set())
+                    modal.toast(`已解锁 ${ids.length} 个项目`, 'success')
+                  }}>🔓 批量解锁</button>
+                  <button className="btn btn-sm" onClick={batchDelete}
+                    style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)' }}>
+                    删除选中({selected.size})
+                  </button>
+                </div>
               )}
             </div>
           )}
