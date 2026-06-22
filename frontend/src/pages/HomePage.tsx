@@ -111,7 +111,7 @@ function HomePage() {
           style={{ flex: 1, maxWidth: 300 }}
           value={search} onChange={e => setSearch(e.target.value)} />
         <button className="btn btn-primary btn-sm" onClick={createProject}>+ 新建项目</button>
-        <button className="btn btn-outline btn-sm">导入</button>
+
         {selected.size > 0 && (
           <button className="btn btn-sm" onClick={batchDelete}
             style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)' }}>
