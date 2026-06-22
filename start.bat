@@ -1,5 +1,7 @@
 @echo off
 chcp 65001 >nul
+set "ROOT=%~dp0"
+
 echo ========================================
 echo   一勺笔录 Agent
 echo ========================================
@@ -11,12 +13,22 @@ taskkill /f /im python.exe 2>nul
 timeout /t 2 /nobreak >nul
 
 echo [1/2] Starting backend on port 8765...
-start "Yishao-Backend" cmd /c "cd /d d:\YISHAOAGENT\backend && python app.py"
+cd /d "%ROOT%backend"
+if not exist "venv\" (
+    echo Installing Python dependencies...
+    pip install -r requirements.txt -q
+)
+start "Yishao-Backend" cmd /c "cd /d "%ROOT%backend" && python app.py"
 
 timeout /t 3 /nobreak >nul
 
 echo [2/2] Starting frontend on port 5173...
-start "Yishao-Frontend" cmd /c "cd /d d:\YISHAOAGENT\frontend && npm run dev"
+cd /d "%ROOT%frontend"
+if not exist "node_modules\" (
+    echo Installing frontend dependencies...
+    call npm install
+)
+start "Yishao-Frontend" cmd /c "cd /d "%ROOT%frontend" && npm run dev"
 
 timeout /t 4 /nobreak >nul
 

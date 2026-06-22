@@ -40,94 +40,96 @@ def backup_database():
 def init_db():
     backup_database()
     conn = get_db()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS projects (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            status TEXT DEFAULT 'draft',
-            source_type TEXT,
-            source_url TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS step_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
-            step_name TEXT NOT NULL,
-            content TEXT,
-            content_type TEXT DEFAULT 'markdown',
-            file_path TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS prompts (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            category TEXT NOT NULL,
-            current_version TEXT,
-            is_default INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS prompt_versions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            prompt_id TEXT REFERENCES prompts(id) ON DELETE CASCADE,
-            version TEXT NOT NULL,
-            system_prompt TEXT,
-            skill_template TEXT,
-            change_note TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS templates (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            type TEXT NOT NULL,
-            file_path TEXT NOT NULL,
-            thumbnail_path TEXT,
-            linked_skill_id TEXT,
-            branding_config TEXT,
-            is_default INTEGER DEFAULT 0,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS llm_providers (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            api_key TEXT,
-            base_url TEXT NOT NULL,
-            models TEXT,
-            is_enabled INTEGER DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS tts_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT,
-            text TEXT NOT NULL,
-            voice_id TEXT,
-            model TEXT,
-            audio_path TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS projects (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                status TEXT DEFAULT 'draft',
+                source_type TEXT,
+                source_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS step_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
+                step_name TEXT NOT NULL,
+                content TEXT,
+                content_type TEXT DEFAULT 'markdown',
+                file_path TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS prompts (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                category TEXT NOT NULL,
+                current_version TEXT,
+                is_default INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS prompt_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                prompt_id TEXT REFERENCES prompts(id) ON DELETE CASCADE,
+                version TEXT NOT NULL,
+                system_prompt TEXT,
+                skill_template TEXT,
+                change_note TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS templates (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL,
+                file_path TEXT NOT NULL,
+                thumbnail_path TEXT,
+                linked_skill_id TEXT,
+                branding_config TEXT,
+                is_default INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS llm_providers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                api_key TEXT,
+                base_url TEXT NOT NULL,
+                models TEXT,
+                is_enabled INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tts_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT,
+                text TEXT NOT NULL,
+                voice_id TEXT,
+                model TEXT,
+                audio_path TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
     print(f"[DB] Initialized at {DB_PATH}")
 
 

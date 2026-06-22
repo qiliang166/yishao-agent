@@ -67,6 +67,11 @@ def get_project(project_id: str):
 def update_project(project_id: str, req: ProjectUpdate):
     db = get_db()
     try:
+        # Check project exists first
+        existing = db.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Project not found")
+
         if req.name is not None:
             db.execute("UPDATE projects SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.name, project_id))
         if req.status is not None:

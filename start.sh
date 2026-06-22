@@ -4,15 +4,31 @@ echo "  一勺笔录 Agent"
 echo "========================================"
 echo
 
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+
 echo "[1/2] Starting backend on port 8765..."
-cd "$(dirname "$0")/backend"
+cd "$ROOT/backend"
+
+# Install Python dependencies if needed
+if [ ! -d "venv" ]; then
+    echo "Installing Python dependencies..."
+    pip install -r requirements.txt -q
+fi
+
 python app.py &
 BACKEND_PID=$!
 
 sleep 3
 
 echo "[2/2] Starting frontend on port 5173..."
-cd "$(dirname "$0")/frontend"
+cd "$ROOT/frontend"
+
+# Install Node dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo "Installing frontend dependencies..."
+    npm install
+fi
+
 npm run dev &
 FRONTEND_PID=$!
 
