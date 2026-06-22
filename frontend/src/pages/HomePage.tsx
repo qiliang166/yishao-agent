@@ -133,6 +133,20 @@ function HomePage() {
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                   <button className="btn btn-outline btn-sm" onClick={async () => {
                     const ids = [...selected]
+                    await Promise.all(ids.map(id => api.updateProject(id, { status: 'completed' })))
+                    loadProjects(page)
+                    setSelected(new Set())
+                    modal.toast(`已标记 ${ids.length} 个项目为已完成`, 'success')
+                  }}>✅ 批量完成</button>
+                  <button className="btn btn-outline btn-sm" onClick={async () => {
+                    const ids = [...selected]
+                    await Promise.all(ids.map(id => api.updateProject(id, { status: 'draft' })))
+                    loadProjects(page)
+                    setSelected(new Set())
+                    modal.toast(`已标记 ${ids.length} 个项目为草稿`, 'success')
+                  }}>📝 批量草稿</button>
+                  <button className="btn btn-outline btn-sm" onClick={async () => {
+                    const ids = [...selected]
                     await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 1 })))
                     loadProjects(page)
                     setSelected(new Set())
