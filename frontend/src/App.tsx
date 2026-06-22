@@ -71,7 +71,7 @@ function Sidebar() {
             当前项目：<strong>{projName || '—'}</strong>
           </div>
         )}
-        <div style={{ fontSize: 9, color: 'var(--text-secondary)', padding: '2px 10px 6px' }}>一勺笔录 v1.0.0</div>
+        <div style={{ fontSize: 9, color: 'var(--text-secondary)', padding: '2px 10px 6px' }}>{brandName} v1.0.0</div>
       </div>
     </aside>
   )
