@@ -1,5 +1,6 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import HomePage from './pages/HomePage'
+import SettingsPage from './pages/SettingsPage'
 import './App.css'
 
 const navItems = [
@@ -38,7 +39,7 @@ function App() {
           <Route path="/project/:id" element={<div>Project Page</div>} />
           <Route path="/prompts" element={<div>Prompt Manager</div>} />
           <Route path="/templates" element={<div>Template Manager</div>} />
-          <Route path="/settings" element={<div>Settings</div>} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>
