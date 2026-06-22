@@ -3,7 +3,9 @@ import uuid
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from database import init_db, get_db
-from models import ProjectCreate, ProjectUpdate, StepResultSave
+from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest
+import json
+from services.llm_service import test_connection, generate, refine
 
 init_db()
 
@@ -127,6 +129,107 @@ def save_step(project_id: str, step_name: str, req: StepResultSave):
         return {"ok": True}
     finally:
         db.close()
+
+
+# ── LLM Providers ──
+
+from pydantic import BaseModel
+
+class LLMProviderCreate(BaseModel):
+    name: str
+    api_key: str = ""
+    base_url: str = "https://api.deepseek.com/v1"
+    models: list[str] = []
+
+
+@app.get("/api/llm/providers")
+def list_llm_providers():
+    db = get_db()
+    try:
+        rows = db.execute("SELECT * FROM llm_providers ORDER BY created_at").fetchall()
+        providers = []
+        for r in rows:
+            p = dict(r)
+            models_str = p.get("models", "[]")
+            p["models"] = json.loads(models_str) if models_str else []
+            if p.get("api_key"):
+                key = p["api_key"]
+                p["api_key"] = key[:8] + "***" if len(key) > 8 else "***"
+            providers.append(p)
+        return {"providers": providers}
+    finally:
+        db.close()
+
+
+@app.post("/api/llm/providers")
+def create_llm_provider(req: LLMProviderCreate):
+    pid = uuid.uuid4().hex[:8]
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO llm_providers (id, name, api_key, base_url, models) VALUES (?, ?, ?, ?, ?)",
+            (pid, req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False)))
+        db.commit()
+        return {"id": pid, "name": req.name}
+    finally:
+        db.close()
+
+
+@app.put("/api/llm/providers/{provider_id}")
+def update_llm_provider(provider_id: str, req: LLMProviderCreate):
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE llm_providers SET name=?, api_key=?, base_url=?, models=? WHERE id=?",
+            (req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), provider_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/llm/providers/{provider_id}")
+def delete_llm_provider(provider_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM llm_providers WHERE id = ?", (provider_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/llm/providers/{provider_id}/test")
+async def test_provider(provider_id: str):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM llm_providers WHERE id = ?", (provider_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        result = await test_connection(row["api_key"], row["base_url"])
+        return result
+    finally:
+        db.close()
+
+
+# ── LLM Calls ──
+
+@app.post("/api/llm/generate")
+async def llm_generate(req: LLMGenerateRequest):
+    try:
+        result = await generate(req.provider_id, req.model, req.system_prompt, req.user_message, req.temperature)
+        return {"content": result}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/llm/refine")
+async def llm_refine(req: LLMRefineRequest):
+    try:
+        result = await refine(req.provider_id, req.model, req.instruction, req.selected_text, req.full_context)
+        return {"content": result}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 if __name__ == "__main__":
