@@ -25,16 +25,65 @@ export interface Project {
   updated_at: string
 }
 
+export interface Prompt {
+  id: string
+  name: string
+  category: string
+  system_prompt: string
+  skill_template: string
+  is_default: number
+  created_at: string
+  updated_at: string
+}
+
+export interface PromptVersion {
+  version: string
+  system_prompt: string
+  skill_template: string
+  change_note: string
+  created_at: string
+}
+
+export interface PromptDetail extends Prompt {
+  versions: PromptVersion[]
+}
+
+export interface DiffResult {
+  system_prompt_diff: string
+  skill_template_diff: string
+}
+
 export const api = {
   // Projects
   listProjects: () => request('/api/projects').then(d => d.projects as Project[]),
+  getProject: (id: string) => request(`/api/projects/${id}`),
   createProject: (name: string) =>
     request('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, source_type: 'text' }),
     }),
+  updateProject: (id: string, data: {name?: string; status?: string}) =>
+    request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
+
+  // Step results
+  getSteps: (projectId: string) => request(`/api/projects/${projectId}/steps`).then(d => d.steps),
+  saveStep: (projectId: string, stepName: string, content: string, contentType: string = 'markdown') =>
+    request(`/api/projects/${projectId}/steps/${stepName}`, {
+      method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ step_name: stepName, content, content_type: contentType }),
+    }),
+
+  // Video
+  downloadVideo: (url: string) => request('/api/video/download', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url}),
+  }),
+  getVideoProgress: (taskId: string) => request(`/api/video/progress/${taskId}`),
+  extractSubtitles: (taskId: string, projectId: string) => request('/api/video/extract-subtitles', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({task_id: taskId, project_id: projectId}),
+  }),
 
   // LLM Providers
   listProviders: () => request('/api/llm/providers').then(d => d.providers as LLMProvider[]),
@@ -80,5 +129,51 @@ export const api = {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+    }),
+
+  // Prompts
+  listPrompts: (category?: string) => {
+    const params = category ? `?category=${encodeURIComponent(category)}` : ''
+    return request(`/api/prompts${params}`).then(d => d.prompts as Prompt[])
+  },
+  createPrompt: (data: { name: string; category: string; system_prompt?: string; skill_template?: string }) =>
+    request('/api/prompts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as Prompt & { versions?: PromptVersion[] }),
+  getPrompt: (id: string) =>
+    request(`/api/prompts/${id}`).then(d => d as PromptDetail),
+  updatePrompt: (id: string, data: { name?: string; category?: string; system_prompt?: string; skill_template?: string; change_note?: string }) =>
+    request(`/api/prompts/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as Prompt & { versions?: PromptVersion[] }),
+  deletePrompt: (id: string) =>
+    request(`/api/prompts/${id}`, { method: 'DELETE' }),
+  getPromptVersions: (id: string) =>
+    request(`/api/prompts/${id}/versions`).then(d => d.versions as PromptVersion[]),
+  rollbackPrompt: (id: string, version: string) =>
+    request(`/api/prompts/${id}/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version }),
+    }).then(d => d as PromptDetail),
+  diffPrompt: (id: string, version_a: string, version_b: string) =>
+    request(`/api/prompts/${id}/diff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version_a, version_b }),
+    }).then(d => d as DiffResult),
+  setDefaultPrompt: (id: string) =>
+    request(`/api/prompts/${id}/set-default`, { method: 'POST' }),
+  exportPrompts: () =>
+    request('/api/prompts/export'),
+  importPrompts: (data: any[]) =>
+    request('/api/prompts/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data }),
     }),
 }

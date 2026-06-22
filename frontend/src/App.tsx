@@ -1,5 +1,7 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom'
 import HomePage from './pages/HomePage'
+import ProjectPage from './pages/ProjectPage'
+import PromptManager from './pages/PromptManager'
 import SettingsPage from './pages/SettingsPage'
 import './App.css'
 
@@ -36,8 +38,8 @@ function App() {
       <main className="main-content">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/project/:id" element={<div>Project Page</div>} />
-          <Route path="/prompts" element={<div>Prompt Manager</div>} />
+          <Route path="/project/:id" element={<ProjectPage />} />
+          <Route path="/prompts" element={<PromptManager />} />
           <Route path="/templates" element={<div>Template Manager</div>} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
