@@ -128,12 +128,12 @@ function HomePage() {
           )}
           {filtered.map((p, i) => (
             <div key={p.id} className="proj-card">
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 28, textAlign: 'center' }}>{(page - 1) * PAGE_SIZE + i + 1}</span>
               <input type="checkbox"
                 checked={selected.has(p.id)}
                 onChange={() => toggleSelect(p.id)}
                 onClick={e => e.stopPropagation()}
                 style={{ marginRight: 8 }} />
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 28, textAlign: 'center' }}>{(page - 1) * PAGE_SIZE + i + 1}</span>
               <span className="pc-name" style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/project/${p.id}`)}>{p.name}</span>
               <span className={`pc-status ${p.status}`}
