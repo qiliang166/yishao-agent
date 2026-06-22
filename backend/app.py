@@ -691,7 +691,7 @@ def update_settings(req: dict):
 
 
 VERSION = "1.0.0"
-UPDATE_CHECK_URL = "https://raw.githubusercontent.com/qiliang166/yishao-agent/main/version.json"
+UPDATE_CHECK_URL = "https://raw.githubusercontent.com/qiliang166/yishao-agent/master/version.json"
 
 
 @app.get("/api/version")
