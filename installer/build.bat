@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ==========================================
-echo   一勺食谱课件Agent — 构建安装包
+echo   一勺笔录(SOP)智能体 — 构建安装包
 echo ==========================================
 echo.
 

@@ -501,7 +501,7 @@ function SettingsPage() {
       <h2 style={styles.sectionTitle}>关于</h2>
       <div style={{ ...styles.card, textAlign: 'center', padding: '40px 16px' }}>
         <h3 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--color-primary)', marginBottom: '8px' }}>
-          一勺食谱课件Agent
+          一勺笔录(SOP)智能体
         </h3>
         <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginBottom: '24px' }}>
           版本 v{versionInfo?.current || '1.0.0'}

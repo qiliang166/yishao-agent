@@ -1,4 +1,4 @@
-# 一勺食谱课件Agent — Build Script (PowerShell)
+# 一勺笔录(SOP)智能体 — Build Script (PowerShell)
 # Creates distribution packages: NSIS installer + portable ZIP
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +10,7 @@ $VERSION = "1.0.0"
 $APP_NAME = "yishao-agent"
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "  一勺食谱课件Agent — 构建安装包 v$VERSION" -ForegroundColor Cyan
+Write-Host "  一勺笔录(SOP)智能体 — 构建安装包 v$VERSION" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 

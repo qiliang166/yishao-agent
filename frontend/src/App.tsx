@@ -20,7 +20,7 @@ function App() {
     <div className="app-layout">
       <aside className="sidebar">
         <div className="sidebar-header">
-          <h1 className="sidebar-logo">一勺食谱课件Agent</h1>
+          <h1 className="sidebar-logo">一勺笔录(SOP)智能体</h1>
           <span className="sidebar-version">v1.0.0</span>
         </div>
         <nav className="sidebar-nav">

@@ -1,4 +1,4 @@
-; 一勺食谱课件Agent — NSIS Installer
+; 一勺笔录(SOP)智能体 — NSIS Installer
 ; Requirements: NSIS 3.x (https://nsis.sourceforge.io)
 
 Unicode true
@@ -7,10 +7,10 @@ Unicode true
 !include "FileFunc.nsh"
 
 ; ── Metadata ──
-!define PRODUCT_NAME "一勺食谱课件Agent"
+!define PRODUCT_NAME "一勺笔录(SOP)智能体"
 !define PRODUCT_NAME_EN "YishaoAgent"
 !define PRODUCT_VERSION "1.0.0"
-!define PRODUCT_PUBLISHER "一勺食谱课件Agent"
+!define PRODUCT_PUBLISHER "一勺笔录(SOP)智能体"
 !define PRODUCT_WEB_SITE "https://github.com/yishao-agent/yishao-agent"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME_EN}"
 

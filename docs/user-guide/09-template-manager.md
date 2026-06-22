@@ -44,7 +44,7 @@
    ```json
    {
      "logo_position": "top-right",
-     "copyright": "© 2026 一勺食谱课件Agent",
+     "copyright": "© 2026 一勺笔录(SOP)智能体",
      "signature": ""
    }
    ```
