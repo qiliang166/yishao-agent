@@ -23,6 +23,9 @@ node_modules/
 dist/
 .vite/
 
+# Superpowers dev artifacts
+.superpowers/
+
 # OS
 .DS_Store
 Thumbs.db

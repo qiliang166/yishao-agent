@@ -1,0 +1,481 @@
+import { useState, useEffect, useCallback } from 'react'
+import { api, Prompt } from '../services/api'
+
+// ---------- types ----------
+
+interface Template {
+  id: string
+  name: string
+  type: string
+  file_path: string
+  linked_skill_id: string
+  branding_config: string
+  is_default: number
+  created_at: string
+}
+
+const TABS = [
+  { key: 'ppt', label: 'PPT模板' },
+  { key: 'sop', label: 'SOP模板' },
+]
+
+// ---------- shared inline style factories ----------
+
+const btnPrimary: React.CSSProperties = {
+  background: 'var(--color-primary)',
+  color: '#fff',
+  border: 'none',
+  padding: '8px 16px',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: '14px',
+  fontWeight: 600,
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+}
+
+const btnSecondary: React.CSSProperties = {
+  background: 'none',
+  border: '1px solid var(--color-border)',
+  padding: '6px 14px',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: '13px',
+  color: 'var(--color-text-secondary)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+}
+
+const btnDanger: React.CSSProperties = {
+  background: 'none',
+  border: '1px solid var(--color-border)',
+  padding: '6px 14px',
+  borderRadius: 'var(--radius-sm)',
+  fontSize: '13px',
+  color: 'var(--color-primary)',
+  cursor: 'pointer',
+  whiteSpace: 'nowrap',
+}
+
+const inputField: React.CSSProperties = {
+  width: '100%',
+  height: '36px',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-sm)',
+  padding: '0 10px',
+  fontSize: '14px',
+  fontFamily: 'inherit',
+  color: 'var(--color-text)',
+  background: 'var(--color-card)',
+  outline: 'none',
+  boxSizing: 'border-box',
+}
+
+const labelStyle: React.CSSProperties = {
+  fontSize: '13px',
+  fontWeight: 600,
+  color: 'var(--color-text)',
+  display: 'block',
+  marginBottom: '6px',
+}
+
+const card: React.CSSProperties = {
+  background: 'var(--color-card)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 'var(--radius-md)',
+  padding: '16px',
+}
+
+// ---------- component ----------
+
+function TemplateManager() {
+  // ---------- state ----------
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [prompts, setPrompts] = useState<Prompt[]>([])
+  const [activeTab, setActiveTab] = useState('ppt')
+  const [loading, setLoading] = useState(true)
+
+  // create / edit modal
+  const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [formName, setFormName] = useState('')
+  const [formType, setFormType] = useState('ppt')
+  const [formSkillId, setFormSkillId] = useState('')
+  const [formBrandingConfig, setFormBrandingConfig] = useState('{}')
+  const [formError, setFormError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  // ---------- data loading ----------
+
+  const loadTemplates = useCallback(async () => {
+    try {
+      const data = await api.listTemplates()
+      setTemplates(data)
+    } catch (err: any) {
+      console.error('Failed to load templates:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const loadPrompts = useCallback(async () => {
+    try {
+      const data = await api.listPrompts()
+      setPrompts(data)
+    } catch (err: any) {
+      console.error('Failed to load prompts:', err)
+    }
+  }, [])
+
+  useEffect(() => { loadTemplates() }, [loadTemplates])
+  useEffect(() => { loadPrompts() }, [loadPrompts])
+
+  // ---------- derived ----------
+
+  const filteredTemplates = templates.filter(t => t.type === activeTab)
+
+  // Resolve linked skill name
+  const getSkillName = (skillId: string): string => {
+    if (!skillId) return ''
+    const p = prompts.find(pp => pp.id === skillId)
+    return p ? p.name : skillId
+  }
+
+  // ---------- modal handlers ----------
+
+  const openCreate = () => {
+    setEditingId(null)
+    setFormName('')
+    setFormType(activeTab)
+    setFormSkillId('')
+    setFormBrandingConfig('{}')
+    setFormError('')
+    setShowModal(true)
+  }
+
+  const openEdit = (t: Template) => {
+    setEditingId(t.id)
+    setFormName(t.name)
+    setFormType(t.type)
+    setFormSkillId(t.linked_skill_id || '')
+    setFormBrandingConfig(t.branding_config || '{}')
+    setFormError('')
+    setShowModal(true)
+  }
+
+  const handleSave = async () => {
+    if (!formName.trim()) {
+      setFormError('请输入模板名称')
+      return
+    }
+    setSaving(true)
+    setFormError('')
+    try {
+      const payload = {
+        name: formName.trim(),
+        type: formType,
+        linked_skill_id: formSkillId,
+        branding_config: formBrandingConfig,
+      }
+      if (editingId) {
+        await api.updateTemplate(editingId, payload)
+      } else {
+        await api.createTemplate(payload)
+      }
+      await loadTemplates()
+      setShowModal(false)
+    } catch (err: any) {
+      setFormError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (t: Template) => {
+    if (!confirm(`确认删除模板「${t.name}」？此操作不可撤销。`)) return
+    try {
+      await api.deleteTemplate(t.id)
+      await loadTemplates()
+    } catch (err: any) {
+      alert('删除失败: ' + err.message)
+    }
+  }
+
+  const handleSetDefault = async (t: Template) => {
+    try {
+      await api.setDefaultTemplate(t.id)
+      await loadTemplates()
+    } catch (err: any) {
+      alert('设置默认失败: ' + err.message)
+    }
+  }
+
+  // ---------- render ----------
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)', gap: 0 }}>
+
+      {/* ====== Top Toolbar ====== */}
+      <div style={{
+        display: 'flex', gap: '10px', alignItems: 'center',
+        paddingBottom: '16px', borderBottom: '1px solid var(--color-border)',
+        marginBottom: '0', flexShrink: 0,
+      }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 700, marginRight: 'auto' }}>模板管理</h2>
+        <button style={btnPrimary} onClick={openCreate}>+ 新建模板</button>
+      </div>
+
+      {/* ====== Tabs ====== */}
+      <div style={{
+        display: 'flex', gap: '0', paddingTop: '16px', paddingBottom: '16px',
+        borderBottom: '1px solid var(--color-border)', flexShrink: 0,
+      }}>
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            style={{
+              background: 'none',
+              border: 'none',
+              borderBottom: activeTab === tab.key ? '2px solid var(--color-primary)' : '2px solid transparent',
+              padding: '8px 20px',
+              fontSize: '14px',
+              fontWeight: activeTab === tab.key ? 700 : 400,
+              color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+              cursor: 'pointer',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ====== Template Cards Grid ====== */}
+      <div style={{
+        flex: 1, overflowY: 'auto', paddingTop: '20px',
+      }}>
+        {loading ? (
+          <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', textAlign: 'center', padding: '40px 0' }}>
+            加载中...
+          </p>
+        ) : filteredTemplates.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: '60px 20px',
+            color: 'var(--color-text-secondary)', fontSize: '14px',
+          }}>
+            <p style={{ marginBottom: '16px' }}>暂无{activeTab === 'ppt' ? 'PPT' : 'SOP'}模板</p>
+            <button style={btnPrimary} onClick={openCreate}>+ 新建模板</button>
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '16px',
+          }}>
+            {filteredTemplates.map(t => (
+              <div
+                key={t.id}
+                style={{
+                  background: 'var(--color-card)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                {/* Header row: name + badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <h3 style={{
+                    fontSize: '15px', fontWeight: 700, color: 'var(--color-text)',
+                    flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    minWidth: 0,
+                  }}>
+                    {t.name}
+                  </h3>
+                  <span style={{
+                    fontSize: '11px', fontWeight: 600,
+                    color: t.type === 'ppt' ? 'var(--color-primary)' : 'var(--color-accent)',
+                    background: t.type === 'ppt' ? 'rgba(139, 26, 26, 0.08)' : 'rgba(212, 165, 116, 0.15)',
+                    padding: '2px 8px',
+                    borderRadius: '4px',
+                    whiteSpace: 'nowrap',
+                  }}>
+                    {t.type === 'ppt' ? 'PPT' : 'SOP'}
+                  </span>
+                  {t.is_default === 1 && (
+                    <span style={{
+                      fontSize: '11px', fontWeight: 600,
+                      color: 'var(--color-success)',
+                      background: 'rgba(74, 139, 63, 0.1)',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      默认
+                    </span>
+                  )}
+                </div>
+
+                {/* Linked skill */}
+                {t.linked_skill_id && (
+                  <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                    <span style={{ fontWeight: 600 }}>关联Skill: </span>
+                    {getSkillName(t.linked_skill_id)}
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div style={{
+                  display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px',
+                  borderTop: '1px solid var(--color-border)',
+                }}>
+                  {t.is_default !== 1 && (
+                    <button
+                      style={{
+                        background: 'none',
+                        border: '1px solid var(--color-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '4px 12px',
+                        fontSize: '12px',
+                        color: 'var(--color-text-secondary)',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => handleSetDefault(t)}
+                    >
+                      设为默认
+                    </button>
+                  )}
+                  <button
+                    style={{
+                      background: 'none',
+                      border: '1px solid var(--color-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      color: 'var(--color-text-secondary)',
+                      cursor: 'pointer',
+                      marginLeft: t.is_default !== 1 ? undefined : 'auto',
+                    }}
+                    onClick={() => openEdit(t)}
+                  >
+                    编辑
+                  </button>
+                  <button
+                    style={{
+                      ...btnDanger,
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                    }}
+                    onClick={() => handleDelete(t)}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ====== Create / Edit Modal ====== */}
+      {showModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
+        }}>
+          <div style={{ ...card, width: '480px', maxWidth: '90vw', padding: '24px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>
+              {editingId ? '编辑模板' : '新建模板'}
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Name */}
+              <div>
+                <label style={labelStyle}>名称</label>
+                <input
+                  style={inputField}
+                  placeholder="输入模板名称"
+                  value={formName}
+                  onChange={e => setFormName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+                  autoFocus
+                />
+              </div>
+
+              {/* Type */}
+              <div>
+                <label style={labelStyle}>类型</label>
+                <select
+                  style={{ ...inputField, cursor: 'pointer' }}
+                  value={formType}
+                  onChange={e => setFormType(e.target.value)}
+                >
+                  <option value="ppt">PPT</option>
+                  <option value="sop">SOP</option>
+                </select>
+              </div>
+
+              {/* Linked Skill */}
+              <div>
+                <label style={labelStyle}>关联Skill</label>
+                <select
+                  style={{ ...inputField, cursor: 'pointer' }}
+                  value={formSkillId}
+                  onChange={e => setFormSkillId(e.target.value)}
+                >
+                  <option value="">（无）</option>
+                  {prompts
+                    .filter(p => {
+                      if (formType === 'ppt') return p.category === 'PPT Skill'
+                      if (formType === 'sop') return p.category === 'SOP'
+                      return false
+                    })
+                    .map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                </select>
+              </div>
+
+              {/* Branding Config */}
+              <div>
+                <label style={labelStyle}>品牌配置</label>
+                <textarea
+                  value={formBrandingConfig}
+                  onChange={e => setFormBrandingConfig(e.target.value)}
+                  placeholder='{"logo_position": "top-right", "copyright_placeholder": "", "signature_placeholder": ""}'
+                  style={{
+                    width: '100%',
+                    height: '80px',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px',
+                    fontSize: '13px',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--color-text)',
+                    background: 'var(--color-card)',
+                    outline: 'none',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    lineHeight: 1.5,
+                  }}
+                />
+              </div>
+            </div>
+
+            {formError && (
+              <p style={{ color: 'var(--color-warning)', fontSize: '13px', marginTop: '12px' }}>{formError}</p>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button style={btnSecondary} onClick={() => setShowModal(false)} disabled={saving}>取消</button>
+              <button style={btnPrimary} onClick={handleSave} disabled={saving}>
+                {saving ? '保存中...' : '保存'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default TemplateManager
