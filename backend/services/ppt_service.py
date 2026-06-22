@@ -9,7 +9,7 @@ EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
 
-def generate_ppt(content: str, template_id: str = None, branding: dict = None) -> str:
+def generate_ppt(content: str, template_id: str = None, branding: dict = None, output_dir: str = None) -> str:
     """Generate a PPTX file from content. Returns file path."""
     prs = Presentation()
     prs.slide_width = Inches(13.333)
@@ -52,6 +52,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None) -
                 p.alignment = PP_ALIGN.RIGHT
 
     filename = f"ppt_{os.urandom(4).hex()}.pptx"
-    filepath = os.path.join(EXPORT_DIR, filename)
+    target_dir = output_dir if output_dir else EXPORT_DIR
+    os.makedirs(target_dir, exist_ok=True)
+    filepath = os.path.join(target_dir, filename)
     prs.save(filepath)
     return filepath

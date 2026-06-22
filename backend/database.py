@@ -117,6 +117,53 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS tts_providers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                api_key TEXT,
+                base_url TEXT NOT NULL,
+                models TEXT,
+                is_enabled INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS asr_providers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                api_key TEXT,
+                base_url TEXT NOT NULL,
+                models TEXT,
+                is_enabled INTEGER DEFAULT 1,
+                is_default INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Add storage_path column if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()]
+            if 'storage_path' not in existing_cols:
+                conn.execute("ALTER TABLE projects ADD COLUMN storage_path TEXT DEFAULT ''")
+        except Exception:
+            pass
+
+        # Add is_default column to tts_providers if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(tts_providers)").fetchall()]
+            if 'is_default' not in existing_cols:
+                conn.execute("ALTER TABLE tts_providers ADD COLUMN is_default INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        # Add is_default column to asr_providers if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(asr_providers)").fetchall()]
+            if 'is_default' not in existing_cols:
+                conn.execute("ALTER TABLE asr_providers ADD COLUMN is_default INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS tts_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id TEXT,
@@ -124,6 +171,18 @@ def init_db():
                 voice_id TEXT,
                 model TEXT,
                 audio_path TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS voices (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                voice_id TEXT NOT NULL,
+                description TEXT,
+                preview_audio_path TEXT,
+                is_default INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)

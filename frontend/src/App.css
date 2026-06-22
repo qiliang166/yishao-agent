@@ -243,6 +243,13 @@
 }
 
 /* ═══ Panel Grid ═══ */
+.pipeline-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
 .panel-grid {
   display: flex;
   gap: 16px;
@@ -339,10 +346,16 @@
 }
 .form-textarea {
   min-height: 80px;
-  resize: vertical;
+  resize: none;
   font-family: var(--mono);
   font-size: 10px;
   line-height: 1.6;
+}
+
+.btn-saved-flash {
+  background: #22c55e !important;
+  border-color: #22c55e !important;
+  color: #fff !important;
 }
 
 /* ═══ Mode Tabs ═══ */
@@ -680,6 +693,12 @@
 }
 .dialog-box.wide {
   width: 520px;
+}
+.dialog-box.video-checker {
+  width: 90vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .dialog-title {
   font-size: 14px;

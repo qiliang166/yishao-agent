@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from database import init_db, get_db
 from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest
+from typing import Optional
 import json
 from services.llm_service import test_connection, generate, generate_stream, refine, get_provider
 from services.prompt_service import (
@@ -30,6 +31,75 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 os.makedirs(LOGO_DIR, exist_ok=True)
 
+import re
+
+
+def _get_global_save_path() -> str:
+    """Read global save_path from settings, or return default."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT value FROM settings WHERE key = 'save_path'").fetchone()
+        if row and row["value"]:
+            return row["value"]
+    finally:
+        db.close()
+    return os.path.join(BASE_DIR, "data", "output")
+
+
+def _sanitize_folder_name(name: str) -> str:
+    """Remove characters invalid for Windows folder names."""
+    return re.sub(r'[<>:"/\\|?*]', '_', name).strip().rstrip('.') or "unnamed"
+
+
+def _get_setting(key: str) -> str:
+    """Read a single setting value from the database."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else ""
+    finally:
+        db.close()
+
+
+def _get_project(project_id: str):
+    """Return project record dict or None."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+        return dict(row) if row else None
+    finally:
+        db.close()
+
+
+def resolve_project_storage(project_id: str, auto_create: bool = True) -> str:
+    """Return the effective storage directory for a project."""
+    db = get_db()
+    try:
+        proj = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not proj:
+            raise FileNotFoundError(f"Project {project_id} not found")
+
+        if proj["storage_path"]:
+            path = os.path.normpath(proj["storage_path"])
+            if auto_create:
+                os.makedirs(path, exist_ok=True)
+            return path
+
+        base = _get_global_save_path()
+        folder = _sanitize_folder_name(proj["name"])
+        path = os.path.normpath(os.path.join(base, folder))
+
+        if auto_create:
+            os.makedirs(path, exist_ok=True)
+            db.execute(
+                "UPDATE projects SET storage_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (path, project_id))
+            db.commit()
+
+        return path
+    finally:
+        db.close()
+
 # ── Health check ──
 
 @app.get("/api/health")
@@ -54,14 +124,33 @@ def create_project(req: ProjectCreate):
     pid = uuid.uuid4().hex[:12]
     db = get_db()
     try:
+        # Compute default storage path
+        base = _get_global_save_path()
+        folder = _sanitize_folder_name(req.name)
+        storage_path = os.path.normpath(req.storage_path or os.path.join(base, folder))
+        os.makedirs(storage_path, exist_ok=True)
+
         db.execute(
-            "INSERT INTO projects (id, name, source_type) VALUES (?, ?, ?)",
-            (pid, req.name, req.source_type))
+            "INSERT INTO projects (id, name, source_type, storage_path) VALUES (?, ?, ?, ?)",
+            (pid, req.name, req.source_type, storage_path))
         db.commit()
         row = db.execute("SELECT * FROM projects WHERE id = ?", (pid,)).fetchone()
         return dict(row)
     finally:
         db.close()
+
+
+@app.get("/api/projects/{project_id}/videos")
+def api_project_videos(project_id: str):
+    """List video files in the project's storage folder."""
+    path = resolve_project_storage(project_id, auto_create=False)
+    videos = []
+    if os.path.exists(path):
+        for f in os.listdir(path):
+            if f.lower().endswith(('.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv')):
+                full = os.path.join(path, f)
+                videos.append({"filename": f, "path": full, "size": os.path.getsize(full)})
+    return {"videos": videos, "storage_path": path}
 
 
 @app.get("/api/projects/{project_id}")
@@ -80,7 +169,6 @@ def get_project(project_id: str):
 def update_project(project_id: str, req: ProjectUpdate):
     db = get_db()
     try:
-        # Check project exists first
         existing = db.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Project not found")
@@ -89,11 +177,36 @@ def update_project(project_id: str, req: ProjectUpdate):
             db.execute("UPDATE projects SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.name, project_id))
         if req.status is not None:
             db.execute("UPDATE projects SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.status, project_id))
+        if req.storage_path is not None:
+            if req.storage_path.strip():
+                os.makedirs(req.storage_path, exist_ok=True)
+            db.execute("UPDATE projects SET storage_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (os.path.normpath(req.storage_path) if req.storage_path.strip() else req.storage_path, project_id))
         db.commit()
         row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
         return dict(row)
     finally:
         db.close()
+
+
+@app.post("/api/projects/{project_id}/save-file")
+def api_save_file_to_project(project_id: str, req: dict):
+    """Save text content to a file in the project's storage directory."""
+    filename = req.get("filename", "document.txt")
+    content = req.get("content", "")
+    path = resolve_project_storage(project_id)
+    os.makedirs(path, exist_ok=True)
+    filepath = os.path.join(path, filename)
+    # Avoid overwriting: append (1), (2), etc. if file exists
+    if os.path.exists(filepath):
+        base, ext = os.path.splitext(filename)
+        n = 1
+        while os.path.exists(os.path.join(path, f"{base}({n}){ext}")):
+            n += 1
+        filename = f"{base}({n}){ext}"
+        filepath = os.path.join(path, filename)
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(content)
+    return {"ok": True, "path": filepath, "filename": filename}
 
 
 @app.delete("/api/projects/{project_id}")
@@ -219,6 +332,341 @@ async def test_provider(provider_id: str):
             raise HTTPException(status_code=404, detail="Provider not found")
         result = await test_connection(row["api_key"], row["base_url"])
         return result
+    finally:
+        db.close()
+
+
+# ── TTS Providers ──
+
+class TTSProviderCreate(BaseModel):
+    name: str
+    api_key: str = ""
+    base_url: str = "https://dashscope.aliyuncs.com/api/v1"
+    models: list[str] = []
+    is_default: int = 0
+
+
+class VoiceCreate(BaseModel):
+    name: str
+    provider_id: str
+    voice_id: str
+    description: str = ""
+    is_default: int = 0
+
+
+class VoiceUpdate(BaseModel):
+    name: Optional[str] = None
+    provider_id: Optional[str] = None
+    voice_id: Optional[str] = None
+    description: Optional[str] = None
+    is_default: Optional[int] = None
+
+
+@app.get("/api/tts/providers")
+def list_tts_providers():
+    db = get_db()
+    try:
+        rows = db.execute("SELECT * FROM tts_providers ORDER BY created_at").fetchall()
+        providers = []
+        for r in rows:
+            p = dict(r)
+            models_str = p.get("models", "[]")
+            p["models"] = json.loads(models_str) if models_str else []
+            if p.get("api_key"):
+                key = p["api_key"]
+                p["api_key"] = key[:8] + "***" if len(key) > 8 else "***"
+            providers.append(p)
+        return {"providers": providers}
+    finally:
+        db.close()
+
+
+@app.post("/api/tts/providers")
+def create_tts_provider(req: TTSProviderCreate):
+    pid = uuid.uuid4().hex[:8]
+    db = get_db()
+    try:
+        if req.is_default:
+            db.execute("UPDATE tts_providers SET is_default = 0")
+        db.execute(
+            "INSERT INTO tts_providers (id, name, api_key, base_url, models, is_default) VALUES (?, ?, ?, ?, ?, ?)",
+            (pid, req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), req.is_default))
+        db.commit()
+        return {"id": pid, "name": req.name}
+    finally:
+        db.close()
+
+
+@app.put("/api/tts/providers/{provider_id}")
+def update_tts_provider(provider_id: str, req: TTSProviderCreate):
+    db = get_db()
+    try:
+        if req.is_default:
+            db.execute("UPDATE tts_providers SET is_default = 0")
+        db.execute(
+            "UPDATE tts_providers SET name=?, api_key=?, base_url=?, models=?, is_default=? WHERE id=?",
+            (req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), req.is_default, provider_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/tts/providers/{provider_id}")
+def delete_tts_provider(provider_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM tts_providers WHERE id = ?", (provider_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/tts/providers/{provider_id}/test")
+async def test_tts_provider(provider_id: str):
+    import httpx
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM tts_providers WHERE id = ?", (provider_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        # Test by calling the models list or a minimal synthesis check
+        base_url = row["base_url"].rstrip("/")
+        test_url = f"{base_url}/services/audio/tts/SpeechSynthesizer"
+        payload = {
+            "model": "cosyvoice-v3-flash",
+            "input": {"text": "测试", "voice": "longanyang", "format": "mp3"},
+        }
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                test_url,
+                headers={"Authorization": f"Bearer {row['api_key']}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if resp.status_code in (200, 201):
+            return {"ok": True, "status": resp.status_code}
+        return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+    except httpx.HTTPError as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+# ── ASR Providers ──
+
+class ASRProviderCreate(BaseModel):
+    name: str
+    api_key: str = ""
+    base_url: str = "https://dashscope.aliyuncs.com"
+    models: list[str] = []
+    is_default: int = 0
+
+
+@app.get("/api/asr/providers")
+def list_asr_providers():
+    db = get_db()
+    try:
+        rows = db.execute("SELECT * FROM asr_providers ORDER BY created_at").fetchall()
+        providers = []
+        for r in rows:
+            p = dict(r)
+            models_str = p.get("models", "[]")
+            p["models"] = json.loads(models_str) if models_str else []
+            if p.get("api_key"):
+                key = p["api_key"]
+                p["api_key"] = key[:8] + "***" if len(key) > 8 else "***"
+            providers.append(p)
+        return {"providers": providers}
+    finally:
+        db.close()
+
+
+@app.post("/api/asr/providers")
+def create_asr_provider(req: ASRProviderCreate):
+    pid = uuid.uuid4().hex[:8]
+    db = get_db()
+    try:
+        if req.is_default:
+            db.execute("UPDATE asr_providers SET is_default = 0")
+        db.execute(
+            "INSERT INTO asr_providers (id, name, api_key, base_url, models, is_default) VALUES (?, ?, ?, ?, ?, ?)",
+            (pid, req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), req.is_default))
+        db.commit()
+        return {"id": pid, "name": req.name}
+    finally:
+        db.close()
+
+
+@app.put("/api/asr/providers/{provider_id}")
+def update_asr_provider(provider_id: str, req: ASRProviderCreate):
+    db = get_db()
+    try:
+        if req.is_default:
+            db.execute("UPDATE asr_providers SET is_default = 0")
+        db.execute(
+            "UPDATE asr_providers SET name=?, api_key=?, base_url=?, models=?, is_default=? WHERE id=?",
+            (req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), req.is_default, provider_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/asr/providers/{provider_id}")
+def delete_asr_provider(provider_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM asr_providers WHERE id = ?", (provider_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/asr/providers/{provider_id}/test")
+async def test_asr_provider(provider_id: str):
+    import httpx
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM asr_providers WHERE id = ?", (provider_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        base_url = row["base_url"].rstrip("/")
+        # Test by listing available models or hitting a get endpoint
+        test_url = f"{base_url}/compatible-mode/v1/models"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                test_url,
+                headers={"Authorization": f"Bearer {row['api_key']}"},
+            )
+        if resp.status_code in (200, 201):
+            return {"ok": True, "status": resp.status_code}
+        # Try list files as lightweight connectivity check
+        test_url2 = f"{base_url}/api/v1/files"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp2 = await client.get(
+                test_url2,
+                headers={"Authorization": f"Bearer {row['api_key']}"},
+            )
+        if resp2.status_code in (200, 401, 403):
+            return {"ok": True, "status": resp2.status_code}
+        return {"ok": False, "error": f"HTTP {resp2.status_code}: {resp2.text[:200]}"}
+    except httpx.HTTPError as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        db.close()
+
+
+# ── Voice Library ──
+
+@app.get("/api/voices")
+def list_voices(provider_id: str = ""):
+    db = get_db()
+    try:
+        if provider_id:
+            rows = db.execute(
+                "SELECT * FROM voices WHERE provider_id = ? ORDER BY is_default DESC, created_at",
+                (provider_id,)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM voices ORDER BY is_default DESC, created_at").fetchall()
+        return {"voices": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/voices")
+def create_voice(data: VoiceCreate):
+    import uuid
+    db = get_db()
+    try:
+        vid = uuid.uuid4().hex[:10]
+        if data.is_default:
+            db.execute("UPDATE voices SET is_default = 0")
+        db.execute(
+            "INSERT INTO voices (id, name, provider_id, voice_id, description, is_default) VALUES (?,?,?,?,?,?)",
+            (vid, data.name, data.provider_id, data.voice_id, data.description, data.is_default),
+        )
+        db.commit()
+        return {"id": vid, "ok": True}
+    finally:
+        db.close()
+
+
+@app.put("/api/voices/{voice_id}")
+def update_voice(voice_id: str, data: VoiceUpdate):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT * FROM voices WHERE id = ?", (voice_id,)).fetchone()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Voice not found")
+        updates = {}
+        if data.name is not None:
+            updates["name"] = data.name
+        if data.provider_id is not None:
+            updates["provider_id"] = data.provider_id
+        if data.voice_id is not None:
+            updates["voice_id"] = data.voice_id
+        if data.description is not None:
+            updates["description"] = data.description
+        if data.is_default is not None:
+            updates["is_default"] = data.is_default
+            if data.is_default:
+                db.execute("UPDATE voices SET is_default = 0")
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            values = list(updates.values()) + [voice_id]
+            db.execute(f"UPDATE voices SET {set_clause} WHERE id = ?", values)
+            db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/voices/{voice_id}")
+def delete_voice(voice_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM voices WHERE id = ?", (voice_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/voices/{voice_id}/preview")
+async def preview_voice(voice_id: str):
+    """Generate a short preview audio for a voice"""
+    import httpx
+    db = get_db()
+    try:
+        voice = db.execute(
+            "SELECT v.*, p.api_key, p.base_url FROM voices v LEFT JOIN tts_providers p ON v.provider_id = p.id WHERE v.id = ?",
+            (voice_id,)).fetchone()
+        if not voice:
+            raise HTTPException(status_code=404, detail="Voice not found")
+        if not voice["api_key"]:
+            raise HTTPException(status_code=400, detail="关联的 TTS 提供商未配置 API Key")
+
+        base_url = voice["base_url"].rstrip("/")
+        tts_url = f"{base_url}/services/audio/tts/SpeechSynthesizer"
+        payload = {
+            "model": "cosyvoice-v3-flash",
+            "input": {"text": "你好，这是一条音色预览测试。", "voice": voice["voice_id"], "format": "mp3"},
+        }
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                tts_url,
+                headers={"Authorization": f"Bearer {voice['api_key']}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if resp.status_code != 200:
+            raise HTTPException(status_code=400, detail=f"预览生成失败: {resp.text[:200]}")
+        result = resp.json()
+        audio_url = result.get("output", {}).get("audio", {}).get("url", "")
+        if not audio_url:
+            raise HTTPException(status_code=400, detail="未获取到音频URL")
+        return {"audio_url": audio_url}
     finally:
         db.close()
 
@@ -464,11 +912,30 @@ from services.video_service import download_video, get_progress
 
 class VideoDownloadRequest(BaseModel):
     url: str
+    cookies_path: Optional[str] = None
+    project_id: Optional[str] = None
+    asr_model: Optional[str] = "fun-asr"
+    asr_provider_id: Optional[str] = None
+
+
+COOKIES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cookies")
+os.makedirs(COOKIES_DIR, exist_ok=True)
+
+@app.post("/api/video/upload-cookies")
+async def api_upload_cookies(file: UploadFile = File(...)):
+    if not file.filename or not file.filename.endswith('.txt'):
+        raise HTTPException(400, "请上传 .txt 格式的 cookies 文件")
+    file_id = uuid.uuid4().hex[:8]
+    file_path = os.path.join(COOKIES_DIR, f"{file_id}.txt")
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+    return {"cookies_path": file_path, "filename": file.filename}
 
 
 @app.post("/api/video/download")
 def api_download_video(req: VideoDownloadRequest):
-    result = download_video(req.url)
+    result = download_video(req.url, req.cookies_path, req.project_id, req.asr_model or "fun-asr", req.asr_provider_id)
     return result
 
 
@@ -487,11 +954,30 @@ def api_video_progress(task_id: str):
         "task_id": task_id,
         "status": fe_status,
         "percent": data.get("progress", 0),
-        "text": data.get("subtitle_text", "") or data.get("message", ""),
+        "text": data.get("merged_text", "") or data.get("asr_text", "") or data.get("subtitle_text", "") or data.get("message", ""),
+        "subtitle_text": data.get("subtitle_text", ""),
+        "asr_text": data.get("asr_text", ""),
+        "merged_text": data.get("merged_text", ""),
         "video_path": data.get("video_path", ""),
         "task_dir": data.get("task_dir", ""),
         "error": data.get("message", "") if svc_status == "error" else None,
     }
+
+
+@app.get("/api/video/file")
+def api_video_file(path: str = ""):
+    """Serve a downloaded video file. Allows paths under VIDEO_DIR, data_dir, or global save_path."""
+    import os as _os
+    base = _os.path.dirname(_os.path.abspath(__file__))
+    video_dir = _os.path.normcase(_os.path.normpath(_os.path.join(base, "data", "videos")))
+    data_dir = _os.path.normcase(_os.path.normpath(_os.path.join(base, "data")))
+    save_root = _os.path.normcase(_os.path.normpath(_get_global_save_path()))
+    full = _os.path.normcase(_os.path.normpath(_os.path.abspath(path)))
+    if not (full.startswith(video_dir) or full.startswith(data_dir + _os.sep) or full.startswith(save_root)):
+        raise HTTPException(403, f"Access denied: {full}")
+    if not _os.path.exists(full):
+        raise HTTPException(404, f"File not found: {full}")
+    return FileResponse(full)
 
 
 @app.post("/api/video/extract-subtitles")
@@ -532,14 +1018,31 @@ class PPTGenerateRequest(BaseModel):
     content: str
     template_id: str = ""
     branding: dict = None
+    project_id: Optional[str] = None
 
 
 @app.post("/api/ppt/generate")
 def api_generate_ppt(req: PPTGenerateRequest):
     try:
-        filepath = generate_ppt(req.content, req.template_id, req.branding)
+        output_dir = None
+        project_name = ""
+        if req.project_id:
+            output_dir = resolve_project_storage(req.project_id)
+            proj = _get_project(req.project_id)
+            if proj:
+                project_name = proj["name"]
+        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir)
         filename = os.path.basename(filepath)
-        return {"filename": filename, "download_url": f"/api/download/{filename}"}
+        params = []
+        if req.project_id:
+            params.append(f"project_id={req.project_id}")
+        if project_name:
+            safe_name = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip()
+            params.append(f"name={safe_name}_PPT.pptx")
+        download_url = f"/api/download/{filename}"
+        if params:
+            download_url += "?" + "&".join(params)
+        return {"filename": filename, "download_url": download_url}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -551,14 +1054,31 @@ from services.export_service import export_sop
 class SOPExportRequest(BaseModel):
     content: str
     branding: dict = None
+    project_id: Optional[str] = None
 
 
 @app.post("/api/export/sop")
 def api_export_sop(req: SOPExportRequest):
     try:
-        filepath = export_sop(req.content, req.branding)
+        output_dir = None
+        project_name = ""
+        if req.project_id:
+            output_dir = resolve_project_storage(req.project_id)
+            proj = _get_project(req.project_id)
+            if proj:
+                project_name = proj["name"]
+        filepath = export_sop(req.content, req.branding, output_dir)
         filename = os.path.basename(filepath)
-        return {"filename": filename, "download_url": f"/api/download/{filename}"}
+        params = []
+        if req.project_id:
+            params.append(f"project_id={req.project_id}")
+        if project_name:
+            safe_name = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip()
+            params.append(f"name={safe_name}_SOP.docx")
+        download_url = f"/api/download/{filename}"
+        if params:
+            download_url += "?" + "&".join(params)
+        return {"filename": filename, "download_url": download_url}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -566,11 +1086,21 @@ def api_export_sop(req: SOPExportRequest):
 # ── File Download ──
 
 @app.get("/api/download/{filename}")
-def download_file(filename: str):
+def download_file(filename: str, project_id: str = None, name: str = None):
+    download_name = name or filename
+    if project_id:
+        try:
+            proj_dir = resolve_project_storage(project_id, auto_create=False)
+            filepath = os.path.join(proj_dir, filename)
+            if os.path.exists(filepath):
+                return FileResponse(filepath, filename=download_name)
+        except Exception:
+            pass
+
     filepath = os.path.join(EXPORT_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath, filename=filename)
+    return FileResponse(filepath, filename=download_name)
 
 
 # ── TTS ──
@@ -579,9 +1109,25 @@ def download_file(filename: str):
 async def api_tts_synthesize(req: SynthesizeRequest):
     import httpx
     try:
-        api_key = os.getenv("DASHSCOPE_API_KEY", "")
+        # Resolve TTS API key and base_url from provider or fallback to settings
+        api_key = ""
+        base_url = "https://dashscope.aliyuncs.com/api/v1"
+        if req.provider_id:
+            tts_db = get_db()
+            try:
+                provider = tts_db.execute(
+                    "SELECT * FROM tts_providers WHERE id = ? AND is_enabled = 1",
+                    (req.provider_id,)).fetchone()
+                if provider:
+                    api_key = provider["api_key"]
+                    base_url = provider["base_url"]
+            finally:
+                tts_db.close()
         if not api_key:
-            raise HTTPException(status_code=400, detail="请先在设置中配置 DashScope API Key")
+            api_key = _get_setting("tts_api_key") or os.getenv("DASHSCOPE_API_KEY", "")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="请先在项目配置中设置 TTS API Key")
+        tts_url = base_url.rstrip("/") + "/services/audio/tts/SpeechSynthesizer"
 
         payload = {
             "model": req.model,
@@ -595,7 +1141,7 @@ async def api_tts_synthesize(req: SynthesizeRequest):
         }
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                "https://dashscope.aliyuncs.com/api/v1/services/audio/tts/SpeechSynthesizer",
+                tts_url,
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json=payload,
             )
@@ -609,12 +1155,28 @@ async def api_tts_synthesize(req: SynthesizeRequest):
         # Download and save
         async with httpx.AsyncClient(timeout=60) as client:
             dl = await client.get(audio_url)
+
+        output_dir = AUDIO_DIR
+        if req.project_id:
+            output_dir = resolve_project_storage(req.project_id)
+        os.makedirs(output_dir, exist_ok=True)
+
         audio_name = f"tts_{os.urandom(4).hex()}.mp3"
-        audio_path = os.path.join(AUDIO_DIR, audio_name)
+        audio_path = os.path.join(output_dir, audio_name)
         with open(audio_path, "wb") as f:
             f.write(dl.content)
 
-        return {"audio_url": f"/api/audio/{audio_name}", "filename": audio_name}
+        serve_url = f"/api/audio/{audio_name}"
+        params = []
+        if req.project_id:
+            params.append(f"project_id={req.project_id}")
+            proj = _get_project(req.project_id)
+            if proj:
+                safe_name = "".join(c for c in proj["name"] if c.isalnum() or c in "._- ()（）").strip()
+                params.append(f"name={safe_name}_音频.mp3")
+        if params:
+            serve_url += "?" + "&".join(params)
+        return {"audio_url": serve_url, "filename": audio_name}
     except HTTPException:
         raise
     except Exception as e:
@@ -622,7 +1184,17 @@ async def api_tts_synthesize(req: SynthesizeRequest):
 
 
 @app.get("/api/audio/{filename}")
-def serve_audio(filename: str):
+def serve_audio(filename: str, project_id: str = None, name: str = None):
+    download_name = name or filename
+    if project_id:
+        try:
+            proj_dir = resolve_project_storage(project_id, auto_create=False)
+            filepath = os.path.join(proj_dir, filename)
+            if os.path.exists(filepath):
+                return FileResponse(filepath, media_type="audio/mpeg", filename=download_name)
+        except Exception:
+            pass
+
     filepath = os.path.join(AUDIO_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Audio not found")
@@ -688,6 +1260,21 @@ def update_settings(req: dict):
         return {"ok": True}
     finally:
         db.close()
+
+
+@app.get("/api/browse-folder")
+def browse_folder():
+    """Open native folder picker dialog and return selected path."""
+    import tkinter.filedialog, tkinter
+    try:
+        root = tkinter.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        path = tkinter.filedialog.askdirectory(title="选择默认保存路径")
+        root.destroy()
+        return {"path": path if path else ""}
+    except Exception:
+        return {"path": ""}
 
 
 VERSION = "1.0.0"
@@ -794,6 +1381,24 @@ def _version_greater(a: str, b: str) -> bool:
     except Exception:
         return False
 
+
+from pydantic import BaseModel
+
+class OpenFolderRequest(BaseModel):
+    path: str
+
+@app.post("/api/open-folder")
+def open_folder(req: OpenFolderRequest):
+    p = req.path.strip()
+    if not p:
+        raise HTTPException(400, "path required")
+    if not os.path.exists(p):
+        raise HTTPException(404, f"path not found: {p}")
+    try:
+        os.startfile(p)
+        return {"ok": True}
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 if __name__ == "__main__":
     import uvicorn

@@ -11,9 +11,10 @@ import './App.css'
 function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const isWorkspace = location.pathname.startsWith('/project/')
   const [brandLogo, setBrandLogo] = useState('🍽')
   const [brandName, setBrandName] = useState('一勺笔录(SOP)智能体')
+  const [projName, setProjName] = useState('')
+  const isWorkspace = location.pathname.startsWith('/project/')
 
   useEffect(() => {
     api.getSettings().then(data => {
@@ -22,6 +23,16 @@ function Sidebar() {
       if (s.brand_name) setBrandName(s.brand_name)
     }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const parts = location.pathname.split('/')
+    const id = parts[1] === 'project' ? parts[2] : null
+    if (id) {
+      api.getProject(id).then((p: any) => setProjName(p.name || '')).catch(() => setProjName(''))
+    } else {
+      setProjName('')
+    }
+  }, [location.pathname])
 
   const isImagePath = (v: string) => v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
@@ -36,7 +47,6 @@ function Sidebar() {
     <aside className="sidebar">
       <div className="sidebar-head">
         <div className="sidebar-logo">{renderLogo()} {brandName}</div>
-        <div className="sidebar-sub">v1.0.0</div>
       </div>
       <nav className="sidebar-nav">
         <button
@@ -56,9 +66,12 @@ function Sidebar() {
         </button>
       </nav>
       <div className="sidebar-foot">
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)', padding: '4px 10px' }}>
-          当前项目：<strong>—</strong>
-        </div>
+        {isWorkspace && (
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', padding: '4px 10px' }}>
+            当前项目：<strong>{projName || '—'}</strong>
+          </div>
+        )}
+        <div style={{ fontSize: 9, color: 'var(--text-secondary)', padding: '2px 10px 6px' }}>一勺笔录 v1.0.0</div>
       </div>
     </aside>
   )

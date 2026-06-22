@@ -16,11 +16,43 @@ export interface LLMProvider {
   is_enabled: number
 }
 
+export interface TTSProvider {
+  id: string
+  name: string
+  api_key: string
+  base_url: string
+  models: string[]
+  is_enabled: number
+  is_default?: number
+}
+
+export interface ASRProvider {
+  id: string
+  name: string
+  api_key: string
+  base_url: string
+  models: string[]
+  is_enabled: number
+  is_default?: number
+}
+
+export interface Voice {
+  id: string
+  name: string
+  provider_id: string
+  voice_id: string
+  description: string
+  preview_audio_path: string
+  is_default: number
+  created_at: string
+}
+
 export interface Project {
   id: string
   name: string
   status: string
   source_type: string
+  storage_path?: string
   created_at: string
   updated_at: string
 }
@@ -57,13 +89,14 @@ export const api = {
   // Projects
   listProjects: () => request('/api/projects').then(d => d.projects as Project[]),
   getProject: (id: string) => request(`/api/projects/${id}`),
+  listProjectVideos: (id: string) => request(`/api/projects/${id}/videos`),
   createProject: (name: string) =>
     request('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, source_type: 'text' }),
     }),
-  updateProject: (id: string, data: {name?: string; status?: string}) =>
+  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string}) =>
     request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
 
@@ -75,10 +108,25 @@ export const api = {
       body: JSON.stringify({ step_name: stepName, content, content_type: contentType }),
     }),
 
+  // File save to project
+  saveFileToProject: (projectId: string, filename: string, content: string) =>
+    request(`/api/projects/${projectId}/save-file`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ filename, content }),
+    }),
+
   // Video
-  downloadVideo: (url: string) => request('/api/video/download', {
-    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url}),
+  downloadVideo: (url: string, cookiesPath?: string, projectId?: string, asrModel?: string, asrProviderId?: string) => request('/api/video/download', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url, cookies_path: cookiesPath || null, project_id: projectId || null, asr_model: asrModel || 'fun-asr', asr_provider_id: asrProviderId || null}),
   }),
+  uploadCookies: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/video/upload-cookies', { method: 'POST', body: formData })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Upload failed')
+    return data as { cookies_path: string; filename: string }
+  },
   getVideoProgress: (taskId: string) => request(`/api/video/progress/${taskId}`),
   extractSubtitles: (taskId: string, projectId: string) => request('/api/video/extract-subtitles', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -101,6 +149,34 @@ export const api = {
     }),
   deleteProvider: (id: string) => request(`/api/llm/providers/${id}`, { method: 'DELETE' }),
   testProvider: (id: string) => request(`/api/llm/providers/${id}/test`, { method: 'POST' }),
+
+  // TTS Providers
+  listTtsProviders: () => request('/api/tts/providers').then(d => d.providers as TTSProvider[]),
+  createTtsProvider: (data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
+    request('/api/tts/providers', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  updateTtsProvider: (id: string, data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
+    request(`/api/tts/providers/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  deleteTtsProvider: (id: string) => request(`/api/tts/providers/${id}`, { method: 'DELETE' }),
+  testTtsProvider: (id: string) => request(`/api/tts/providers/${id}/test`, { method: 'POST' }),
+
+  // Voices
+  listVoices: (providerId?: string) =>
+    request(`/api/voices${providerId ? `?provider_id=${encodeURIComponent(providerId)}` : ''}`).then(d => d.voices as Voice[]),
+  createVoice: (data: { name: string; provider_id: string; voice_id: string; description?: string; is_default?: number }) =>
+    request('/api/voices', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  updateVoice: (id: string, data: { name?: string; provider_id?: string; voice_id?: string; description?: string; is_default?: number }) =>
+    request(`/api/voices/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  deleteVoice: (id: string) => request(`/api/voices/${id}`, { method: 'DELETE' }),
+  previewVoice: (id: string) => request(`/api/voices/${id}/preview`, { method: 'POST' }),
+
+  // ASR Providers
+  listAsrProviders: () => request('/api/asr/providers').then(d => d.providers as ASRProvider[]),
+  createAsrProvider: (data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
+    request('/api/asr/providers', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  updateAsrProvider: (id: string, data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
+    request(`/api/asr/providers/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  deleteAsrProvider: (id: string) => request(`/api/asr/providers/${id}`, { method: 'DELETE' }),
+  testAsrProvider: (id: string) => request(`/api/asr/providers/${id}/test`, { method: 'POST' }),
 
   // LLM calls
   llmGenerate: (data: {
@@ -227,16 +303,16 @@ export const api = {
   setDefaultTemplate: (id: string) => request(`/api/templates/${id}/set-default`, { method: 'POST' }),
 
   // PPT
-  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>) =>
-    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding}) }),
+  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string) =>
+    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null}) }),
 
   // SOP Export
-  exportSOP: (content: string, branding?: Record<string, string>) =>
-    request('/api/export/sop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, branding}) }),
+  exportSOP: (content: string, branding?: Record<string, string>, projectId?: string) =>
+    request('/api/export/sop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, branding, project_id: projectId || null}) }),
 
   // TTS
-  ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number) =>
-    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0}) }),
+  ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number, projectId?: string, providerId?: string) =>
+    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null}) }),
 
   // Logo upload
   uploadLogo: async (file: File) => {
@@ -247,6 +323,10 @@ export const api = {
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { filename: string; url: string }
   },
+
+  // File system
+  openFolder: (path: string) =>
+    request('/api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) }),
 
   // Version
   getVersion: () => request('/api/version'),

@@ -72,6 +72,16 @@ function SettingsPage() {
     }
   }
 
+  const handleBrowseFolder = async () => {
+    try {
+      const res = await fetch('/api/browse-folder')
+      const data = await res.json()
+      if (data.path) setSavePath(data.path)
+    } catch {
+      // user cancelled or not supported
+    }
+  }
+
   return (
     <div>
       {/* 品牌信息 */}
@@ -109,7 +119,10 @@ function SettingsPage() {
           <label>默认保存路径</label>
           <input className="form-input" type="text" value={savePath}
             onChange={e => setSavePath(e.target.value)} />
-          <button className="btn btn-ghost btn-sm">浏览...</button>
+          <button className="btn btn-ghost btn-sm" onClick={handleBrowseFolder}>浏览...</button>
+        </div>
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+          此路径作为所有项目的默认存储根目录，每个项目将在此路径下创建独立子文件夹。
         </div>
       </div>
 
@@ -129,7 +142,7 @@ function SettingsPage() {
       <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
         <h3>关于</h3>
         <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-          一勺笔录(SOP)智能体 v{versionInfo?.current || '1.0.0'}<br />
+          {brandName} v{versionInfo?.current || '1.0.0'}<br />
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
             onClick={handleCheckUpdate} disabled={checkingUpdate}>
             {checkingUpdate ? '检查中...' : '检查更新'}

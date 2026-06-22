@@ -7,7 +7,7 @@ EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
 
-def export_sop(content: str, branding: dict = None) -> str:
+def export_sop(content: str, branding: dict = None, output_dir: str = None) -> str:
     """Export SOP as a docx file. Returns file path."""
     doc = Document()
 
@@ -34,6 +34,8 @@ def export_sop(content: str, branding: dict = None) -> str:
             doc.add_paragraph(f"作者: {branding['signature']}")
 
     filename = f"sop_{os.urandom(4).hex()}.docx"
-    filepath = os.path.join(EXPORT_DIR, filename)
+    target_dir = output_dir if output_dir else EXPORT_DIR
+    os.makedirs(target_dir, exist_ok=True)
+    filepath = os.path.join(target_dir, filename)
     doc.save(filepath)
     return filepath

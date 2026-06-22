@@ -35,11 +35,12 @@ cd /d "%ROOT%backend"
 if not exist "venv\" (
     echo   创建虚拟环境...
     python -m venv venv
-    echo   安装 Python 依赖...
-    venv\Scripts\pip install -r requirements.txt -q
+    echo   安装 Python 依赖（离线模式）...
+    call "%ROOT%backend\install_deps.bat"
     if %ERRORLEVEL% NEQ 0 (
-        echo   [WARN] pip install 失败，重试中...
-        venv\Scripts\pip install -r requirements.txt
+        echo   [ERROR] 依赖安装失败
+        pause
+        exit /b 1
     )
     echo   后端依赖安装完成
 )
