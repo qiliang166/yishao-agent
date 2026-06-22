@@ -86,15 +86,6 @@ function HomePage() {
     }
   }
 
-  const exportProject = (p: Project) => {
-    const data = JSON.stringify(p, null, 2)
-    const blob = new Blob([data], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = `${p.name}.json`
-    a.click(); URL.revokeObjectURL(url)
-  }
-
   const statusLabel = (s: string) => {
     const map: Record<string, string> = { draft: '草稿', in_progress: '进行中', completed: '已完成' }
     return map[s] || s
@@ -147,7 +138,7 @@ function HomePage() {
               <span className={`pc-status ${p.status}`}>{statusLabel(p.status)}</span>
               <span className="pc-date">{new Date(p.updated_at).toLocaleDateString('zh-CN')}</span>
               <span className="pc-actions">
-                <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); exportProject(p) }}>导出</button>
+
                 <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}
                   style={{ color: 'var(--warning)' }}>删除</button>
               </span>
