@@ -103,14 +103,18 @@ function AICollabEditor({
     if (!prompt) return
     setError(null)
     setLoading(true)
+    onChange('')
     try {
-      const res: any = await api.llmGenerate({
+      let fullText = ''
+      for await (const chunk of api.llmGenerateStream({
         provider_id: selectedProviderId,
         model: selectedModel,
         system_prompt: prompt.system_prompt,
         user_message: generateUserMessage,
-      })
-      onChange(res.content)
+      })) {
+        fullText += chunk
+        onChange(fullText)
+      }
     } catch (err: any) {
       setError(err.message || '生成失败')
     } finally {
@@ -179,7 +183,7 @@ function AICollabEditor({
   const labelStyle: React.CSSProperties = {
     fontSize: 12,
     fontWeight: 600,
-    color: 'var(--color-text-secondary)',
+    color: 'var(--text-secondary)',
     display: 'block',
     marginBottom: 4,
   }
@@ -187,20 +191,20 @@ function AICollabEditor({
   const selectStyle: React.CSSProperties = {
     width: '100%',
     height: 32,
-    border: '1px solid var(--color-border)',
+    border: '1px solid var(--border)',
     borderRadius: 'var(--radius-sm)',
     padding: '0 8px',
     fontSize: 13,
     fontFamily: 'inherit',
-    color: 'var(--color-text)',
-    background: 'var(--color-card)',
+    color: 'var(--text)',
+    background: 'var(--card)',
     outline: 'none',
     cursor: 'pointer',
     boxSizing: 'border-box',
   }
 
   const btnPrimary: React.CSSProperties = {
-    background: 'var(--color-primary)',
+    background: 'var(--primary)',
     color: '#fff',
     border: 'none',
     padding: '8px 16px',
@@ -213,10 +217,10 @@ function AICollabEditor({
   const quickBtnStyle: React.CSSProperties = {
     padding: '4px 10px',
     background: 'none',
-    border: '1px solid var(--color-border)',
+    border: '1px solid var(--border)',
     borderRadius: 'var(--radius-sm)',
     fontSize: 12,
-    color: 'var(--color-text-secondary)',
+    color: 'var(--text-secondary)',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   }
@@ -224,10 +228,10 @@ function AICollabEditor({
   return (
     <div style={{
       display: 'flex',
-      border: '1px solid var(--color-border)',
-      borderRadius: 'var(--radius-md)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)',
       overflow: 'hidden',
-      background: 'var(--color-card)',
+      background: 'var(--card)',
     }}>
       {/* Left: Editor textarea */}
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -245,13 +249,13 @@ function AICollabEditor({
             height,
             padding: 12,
             border: 'none',
-            fontFamily: 'var(--font-mono)',
+            fontFamily: 'var(--mono)',
             fontSize: 13,
             lineHeight: 1.6,
             resize: 'vertical',
             outline: 'none',
-            background: 'var(--color-card)',
-            color: 'var(--color-text)',
+            background: 'var(--card)',
+            color: 'var(--text)',
             boxSizing: 'border-box',
             display: 'block',
           }}
@@ -262,7 +266,7 @@ function AICollabEditor({
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        borderLeft: '1px solid var(--color-border)',
+        borderLeft: '1px solid var(--border)',
       }}>
         <button
           onClick={() => setPanelOpen(!panelOpen)}
@@ -274,8 +278,8 @@ function AICollabEditor({
             border: 'none',
             background: panelOpen
               ? 'rgba(139, 26, 26, 0.06)'
-              : 'var(--color-bg)',
-            color: panelOpen ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+              : 'var(--bg)',
+            color: panelOpen ? 'var(--primary)' : 'var(--text-secondary)',
             fontSize: 13,
             fontWeight: 600,
             cursor: 'pointer',
@@ -292,8 +296,8 @@ function AICollabEditor({
         <div style={{
           width: 300,
           minWidth: 300,
-          borderLeft: '1px solid var(--color-border)',
-          background: 'var(--color-bg)',
+          borderLeft: '1px solid var(--border)',
+          background: 'var(--bg)',
           padding: 12,
           display: 'flex',
           flexDirection: 'column',
@@ -306,10 +310,10 @@ function AICollabEditor({
             <div style={{
               padding: '6px 10px',
               background: 'rgba(199, 91, 57, 0.1)',
-              border: '1px solid var(--color-warning)',
+              border: '1px solid var(--warning)',
               borderRadius: 'var(--radius-sm)',
               fontSize: 12,
-              color: 'var(--color-warning)',
+              color: 'var(--warning)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
@@ -321,7 +325,7 @@ function AICollabEditor({
                   marginLeft: 8,
                   background: 'none',
                   border: 'none',
-                  color: 'var(--color-warning)',
+                  color: 'var(--warning)',
                   cursor: 'pointer',
                   fontWeight: 700,
                   fontSize: 14,
@@ -337,22 +341,27 @@ function AICollabEditor({
           {/* Loading indicator */}
           {loading && (
             <div style={{
-              fontSize: 12,
-              color: 'var(--color-text-secondary)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--primary)',
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              padding: '4px 0',
+              justifyContent: 'center',
+              gap: 10,
+              padding: '12px 0',
+              background: 'rgba(139, 26, 26, 0.05)',
+              borderRadius: 'var(--radius-sm)',
+              border: '1px solid rgba(139, 26, 26, 0.15)',
             }}>
               <span style={{
                 display: 'inline-block',
-                width: 8,
-                height: 8,
+                width: 12,
+                height: 12,
                 borderRadius: '50%',
-                background: 'var(--color-primary)',
+                background: 'var(--primary)',
                 animation: 'pulse 1.2s ease-in-out infinite',
               }} />
-              AI 处理中...
+              AI 正在处理，请稍候...
             </div>
           )}
 
@@ -465,15 +474,15 @@ function AICollabEditor({
                 style={{
                   width: '100%',
                   height: 60,
-                  border: '1px solid var(--color-border)',
+                  border: '1px solid var(--border)',
                   borderRadius: 'var(--radius-sm)',
                   padding: '6px 8px',
                   fontSize: 12,
-                  fontFamily: 'var(--font-family)',
+                  fontFamily: 'var(--font)',
                   resize: 'vertical',
                   outline: 'none',
-                  background: 'var(--color-card)',
-                  color: 'var(--color-text)',
+                  background: 'var(--card)',
+                  color: 'var(--text)',
                   boxSizing: 'border-box',
                 }}
               />

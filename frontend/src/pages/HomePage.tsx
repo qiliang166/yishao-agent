@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, Project } from '../services/api'
+import { useModal } from '../components/ModalProvider'
 
 function HomePage() {
+  const modal = useModal()
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -20,24 +23,34 @@ function HomePage() {
   }, [])
 
   const createProject = async () => {
-    const name = prompt('请输入食谱名称：')
+    const name = await modal.prompt('请输入食谱名称：')
     if (!name) return
     try {
       const project = await api.createProject(name)
       navigate(`/project/${project.id}`)
     } catch (err: any) {
-      alert('创建失败：' + err.message)
+      modal.toast('创建失败：' + err.message, 'error')
     }
   }
 
   const deleteProject = async (id: string, name: string) => {
-    if (!confirm(`确认删除「${name}」？此操作不可撤销。`)) return
+    const ok = await modal.confirm(`确认删除「${name}」？此操作不可撤销。`)
+    if (!ok) return
     try {
       await api.deleteProject(id)
       setProjects(prev => prev.filter(p => p.id !== id))
     } catch (err: any) {
-      alert('删除失败：' + err.message)
+      modal.toast('删除失败：' + err.message, 'error')
     }
+  }
+
+  const exportProject = (p: Project) => {
+    const data = JSON.stringify(p, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `${p.name}.json`
+    a.click(); URL.revokeObjectURL(url)
   }
 
   const statusLabel = (s: string) => {
@@ -45,72 +58,39 @@ function HomePage() {
     return map[s] || s
   }
 
+  const filtered = search
+    ? projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
+    : projects
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>我的项目</h1>
-        <button
-          onClick={createProject}
-          style={{
-            background: 'var(--color-primary)',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: 14,
-            fontWeight: 600,
-          }}
-        >
-          + 新建项目
-        </button>
+      <div className="proj-list-header">
+        <input className="form-input" type="text" placeholder="搜索项目..."
+          style={{ flex: 1, maxWidth: 300 }}
+          value={search} onChange={e => setSearch(e.target.value)} />
+        <button className="btn btn-primary btn-sm" onClick={createProject}>+ 新建项目</button>
+        <button className="btn btn-outline btn-sm">导入</button>
       </div>
 
       {loading ? (
-        <p style={{ color: 'var(--color-text-secondary)' }}>加载中...</p>
-      ) : projects.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--color-text-secondary)' }}>
-          <p style={{ fontSize: 16, marginBottom: 12 }}>还没有项目</p>
-          <p>点击「+ 新建项目」开始你的第一份食谱笔记</p>
-        </div>
+        <p style={{ padding: 20, color: 'var(--text-secondary)', fontSize: 12 }}>加载中...</p>
       ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {projects.map(p => (
-            <div
-              key={p.id}
-              onClick={() => navigate(`/project/${p.id}`)}
-              style={{
-                background: 'var(--color-card)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                padding: '16px 20px',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                cursor: 'pointer',
-                boxShadow: 'var(--shadow-card)',
-              }}
-            >
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{p.name}</h3>
-                <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                  {statusLabel(p.status)} · {new Date(p.updated_at).toLocaleString('zh-CN')}
-                </span>
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); deleteProject(p.id, p.name) }}
-                style={{
-                  background: 'none',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '6px 12px',
-                  color: 'var(--color-text-secondary)',
-                  fontSize: 12,
-                }}
-              >
-                删除
-              </button>
+        <div className="proj-list">
+          {filtered.map(p => (
+            <div key={p.id} className="proj-card" onClick={() => navigate(`/project/${p.id}`)}>
+              <span className="pc-name">{p.name}</span>
+              <span className={`pc-status ${p.status}`}>{statusLabel(p.status)}</span>
+              <span className="pc-date">{new Date(p.updated_at).toLocaleDateString('zh-CN')}</span>
+              <span className="pc-actions">
+                <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); exportProject(p) }}>导出</button>
+                <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}
+                  style={{ color: 'var(--warning)' }}>删除</button>
+              </span>
             </div>
           ))}
+          <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 11 }}>
+            {filtered.length === 0 ? '没有匹配的项目' : '点击项目卡片进入编辑'}
+          </div>
         </div>
       )}
     </div>

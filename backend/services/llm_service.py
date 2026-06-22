@@ -55,6 +55,41 @@ async def generate(
     return response.choices[0].message.content
 
 
+async def generate_stream(
+    provider_id: str,
+    model: str,
+    system_prompt: str,
+    user_message: str,
+    temperature: float = 0.7,
+):
+    provider = await get_provider(provider_id)
+    if not provider:
+        raise ValueError(f"Provider {provider_id} not found or disabled")
+
+    client = OpenAI(
+        api_key=provider["api_key"],
+        base_url=provider["base_url"],
+        timeout=120.0,
+    )
+
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": user_message})
+
+    stream = client.chat.completions.create(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        stream=True,
+    )
+
+    for chunk in stream:
+        delta = chunk.choices[0].delta
+        if delta.content:
+            yield delta.content
+
+
 async def refine(
     provider_id: str,
     model: str,

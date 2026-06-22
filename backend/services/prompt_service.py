@@ -10,11 +10,18 @@ def list_prompts(category: str = None):
     try:
         if category:
             rows = db.execute(
-                "SELECT * FROM prompts WHERE category = ? ORDER BY updated_at DESC",
+                """SELECT p.*, pv.system_prompt, pv.skill_template
+                   FROM prompts p
+                   LEFT JOIN prompt_versions pv ON pv.prompt_id = p.id AND pv.version = p.current_version
+                   WHERE p.category = ?
+                   ORDER BY p.updated_at DESC""",
                 (category,)).fetchall()
         else:
             rows = db.execute(
-                "SELECT * FROM prompts ORDER BY category, updated_at DESC").fetchall()
+                """SELECT p.*, pv.system_prompt, pv.skill_template
+                   FROM prompts p
+                   LEFT JOIN prompt_versions pv ON pv.prompt_id = p.id AND pv.version = p.current_version
+                   ORDER BY p.category, p.updated_at DESC""").fetchall()
         return [dict(r) for r in rows]
     finally:
         db.close()
@@ -78,8 +85,12 @@ def update_prompt(prompt_id: str, name: str = None, category: str = None,
         if system_prompt is not None or skill_template is not None:
             # Generate new version
             current_ver = prompt["current_version"]
-            parts = current_ver.lstrip("v").split(".")
-            new_version = f"v{parts[0]}.{int(parts[1]) + 1}"
+            ver_num = current_ver.lstrip("v")
+            if "." in ver_num:
+                major, minor = ver_num.split(".", 1)
+                new_version = f"v{major}.{int(minor) + 1}"
+            else:
+                new_version = f"v{ver_num}.1"
 
             existing_sys = system_prompt
             existing_skill = skill_template

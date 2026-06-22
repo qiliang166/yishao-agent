@@ -1,1498 +1,830 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
-import AICollabEditor from '../components/Editor/AICollabEditor'
+import { useModal } from '../components/ModalProvider'
 
-interface DownloadState {
-  status: 'idle' | 'downloading' | 'done'
-  progress: number
-  filename: string
-  sizeBytes: number
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-async function downloadWithProgress(
-  url: string,
-  filename: string,
-  onState: (s: DownloadState) => void
-): Promise<void> {
-  onState({ status: 'downloading', progress: 0, filename, sizeBytes: 0 })
-  try {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const total = Number(res.headers.get('content-length') || 0)
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('无法读取响应流')
-    const chunks: BlobPart[] = []
-    let received = 0
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      if (value) {
-        chunks.push(value)
-        received += value.length
-        onState({
-          status: 'downloading',
-          progress: total > 0 ? Math.round((received / total) * 100) : -1,
-          filename,
-          sizeBytes: received,
-        })
-      }
-    }
-    const blob = new Blob(chunks)
-    const objectUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = objectUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(objectUrl)
-    onState({ status: 'done', progress: 100, filename, sizeBytes: blob.size })
-  } catch (err: any) {
-    onState({ status: 'done', progress: -1, filename: err.message, sizeBytes: 0 })
-  }
-}
-
+// ── Types ──
 interface Project {
-  id: string
-  name: string
-  status: string
-  source_type: string
-  created_at: string
-  updated_at: string
+  id: string; name: string; status: string; source_type: string
+  created_at: string; updated_at: string
+}
+type StageId = 1 | 2 | 3 | 4 | 5
+type SubId = string
+
+interface StageDef { id: StageId; label: string; subs: { id: SubId; label: string }[] }
+interface TemplateItem { id: string; name: string; isDefault: boolean; meta: string; previewHtml: string; color: string; icon: string }
+
+// ── Stage Definitions ──
+const STAGES: StageDef[] = [
+  { id: 1, label: '文案提取', subs: [{ id: '1a', label: '视频提取' }, { id: '1b', label: '文字输入' }, { id: '1c', label: '文件上传' }] },
+  { id: 2, label: '教学文档', subs: [{ id: '2a', label: 'SOP文案' }, { id: '2b', label: '道与术文案' }, { id: '2c', label: '研学手册文案' }] },
+  { id: 3, label: '输出课件', subs: [{ id: '3a', label: 'SOP课件' }, { id: '3b', label: '道术PPT' }, { id: '3c', label: '研学PPT' }] },
+  { id: 4, label: '语音课件', subs: [{ id: '4a', label: '口播文案' }, { id: '4b', label: '口播语音' }] },
+  { id: 5, label: '输出列表', subs: [] },
+]
+
+const CONFIG: Record<number, { model: string; tmpl: string; tmplInfo: string }> = {
+  1: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '—', tmplInfo: '' },
+  2: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '—', tmplInfo: '' },
+  3: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: 'SOP标准模板.docx / PPT模板', tmplInfo: '提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充' },
+  4: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '标准口播模板', tmplInfo: '提示词: 口播稿生成 v1.0 · SKILL: 口播风格' },
+  5: { model: '—', tmpl: '—', tmplInfo: '' },
 }
 
-interface StepResult {
-  step_name: string
-  content: string
-  content_type: string
-  status: string
-  updated_at?: string
+// ── Download Helper ──
+async function downloadFile(url: string, filename: string) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const blob = await res.blob()
+  const objUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = objUrl; a.download = filename
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(objUrl)
 }
 
-type InputMode = 'link' | 'text' | 'file'
-type StepStatus = 'pending' | 'in_progress' | 'done'
-
-interface VideoProgress {
-  task_id: string
-  status: string
-  percent: number
-  text: string
-  error?: string
-}
-
-const ALL_STEP_KEYS = ['step1', 'step2', 'step3_daoshuyi', 'step3_yanxi', 'step3_sop', 'step4']
-
-function DownloadButton({
-  url, filename, label, state, onStateChange,
-}: {
-  url: string
-  filename: string
-  label: string
-  state?: DownloadState
-  onStateChange: (s: DownloadState) => void
+// ── Template Selector Component ──
+function TemplateSelector({ items, selectedId, onSelect, previewTarget }: {
+  items: TemplateItem[]; selectedId: string; onSelect: (item: TemplateItem) => void; previewTarget: string
 }) {
-  const handleDownload = () => {
-    if (state?.status === 'downloading') return
-    downloadWithProgress(url, filename, onStateChange)
-  }
-
-  const btnStyle: React.CSSProperties = {
-    fontSize: 12,
-    padding: '4px 12px',
-    borderRadius: 'var(--radius-sm)',
-    border: '1px solid var(--color-border)',
-    background: state?.status === 'done' && state.progress > 0 ? '#F0F7F0' : 'var(--color-card)',
-    color: state?.status === 'done' && state.progress > 0 ? 'var(--color-success)' : 'var(--color-primary)',
-    cursor: state?.status === 'downloading' ? 'wait' : 'pointer',
-    fontWeight: 600,
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    transition: 'all 0.2s',
-  }
-
-  if (!state || state.status === 'idle') {
-    return (
-      <button onClick={handleDownload} style={btnStyle}>
-        {label}
-      </button>
-    )
-  }
-
-  if (state.status === 'downloading') {
-    const pct = state.progress >= 0 ? `${state.progress}%` : '...'
-    const barStyle: React.CSSProperties = {
-      width: 80,
-      height: 4,
-      background: 'var(--color-border)',
-      borderRadius: 2,
-      overflow: 'hidden',
-    }
-    const fillStyle: React.CSSProperties = {
-      width: state.progress >= 0 ? `${state.progress}%` : '30%',
-      height: '100%',
-      background: 'var(--color-primary)',
-      borderRadius: 2,
-      transition: 'width 0.3s',
-    }
-    return (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-        <span style={barStyle}><span style={fillStyle} /></span>
-        <span style={{ color: 'var(--color-text-secondary)' }}>{pct}</span>
-        <span style={{ color: 'var(--color-text-secondary)' }}>{formatFileSize(state.sizeBytes)}</span>
-      </span>
-    )
-  }
-
-  // Done
-  if (state.progress < 0) {
-    return (
-      <span style={{ fontSize: 12, color: 'var(--color-warning)' }}>
-        下载失败: {state.filename}
-      </span>
-    )
-  }
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-        下载完成
-      </span>
-      <span style={{ color: 'var(--color-text-secondary)' }}>
-        {state.filename} ({formatFileSize(state.sizeBytes)})
-      </span>
-    </span>
-  )
-}
-
-function ProjectPage() {
-  const { id } = useParams<{ id: string }>()
-  const navigate = useNavigate()
-
-  const [project, setProject] = useState<Project | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [inputMode, setInputMode] = useState<InputMode>('link')
-  const [urlInput, setUrlInput] = useState('')
-  const [downloading, setDownloading] = useState(false)
-  const [taskId, setTaskId] = useState<string | null>(null)
-  const [videoProgress, setVideoProgress] = useState<VideoProgress | null>(null)
-  const [subtitleContent, setSubtitleContent] = useState('')
-  const [textInput, setTextInput] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const initialStatuses: Record<string, StepStatus> = {}
-  const initialContents: Record<string, string> = {}
-  for (const k of ALL_STEP_KEYS) {
-    initialStatuses[k] = 'pending'
-    initialContents[k] = ''
-  }
-
-  const [stepStatuses, setStepStatuses] = useState<Record<string, StepStatus>>(initialStatuses)
-  const [stepContents, setStepContents] = useState<Record<string, string>>(initialContents)
-  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null)
-
-  // Saving indicators for individual step3 sub-steps
-  const [savingSubStep, setSavingSubStep] = useState<string | null>(null)
-
-  // ── Step 4 state ──
-  const [pptResults, setPptResults] = useState<Record<string, {filename: string, download_url: string} | null>>({})
-  const [sopResult, setSopResult] = useState<{filename: string, download_url: string} | null>(null)
-  const [voiceoverTexts, setVoiceoverTexts] = useState<Record<string, string>>({dao: '', yanxi: ''})
-  const [ttsResults, setTtsResults] = useState<Record<string, {audio_url: string, filename: string} | null>>({dao: null, yanxi: null})
-
-  const [generatingPpt, setGeneratingPpt] = useState<string | null>(null)
-  const [exportingSop, setExportingSop] = useState(false)
-  const [generatingVoiceover, setGeneratingVoiceover] = useState<string | null>(null)
-  const [synthesizingTts, setSynthesizingTts] = useState<string | null>(null)
-
-  const [fileDownloads, setFileDownloads] = useState<Record<string, DownloadState>>({})
-
-  const [pptBranding, setPptBranding] = useState({copyright: '', signature: ''})
-  const [sopBranding, setSopBranding] = useState({copyright: '', signature: ''})
-
-  const [pptTemplates, setPptTemplates] = useState<any[]>([])
-  const [sopTemplates, setSopTemplates] = useState<any[]>([])
-  const [selectedPptTemplateId, setSelectedPptTemplateId] = useState('')
-  const [selectedSopTemplateId, setSelectedSopTemplateId] = useState('')
-
-  const [voiceoverProviderId, setVoiceoverProviderId] = useState('')
-  const [voiceoverModel, setVoiceoverModel] = useState('')
-  const [voiceoverPromptId, setVoiceoverPromptId] = useState('')
-
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
-
-  // Load project and steps on mount
-  useEffect(() => {
-    if (!id) return
-    Promise.all([
-      api.getProject(id),
-      api.getSteps(id).catch(() => [] as StepResult[]),
-    ])
-      .then(([projectData, steps]) => {
-        setProject(projectData as Project)
-        const stepsArr = steps as StepResult[]
-        const newStatuses: Record<string, StepStatus> = { ...initialStatuses }
-        const newContents: Record<string, string> = { ...initialContents }
-        for (const s of stepsArr) {
-          const key = s.step_name
-          // Map known keys
-          if (ALL_STEP_KEYS.includes(key) || key.startsWith('step3_')) {
-            if (s.content) {
-              newContents[key] = s.content
-              newStatuses[key] = 'done'
-            } else if (s.status === 'in_progress') {
-              newStatuses[key] = 'in_progress'
-            }
-          }
-        }
-        setStepStatuses(newStatuses)
-        setStepContents(newContents)
-        // Populate step1 content into the editor
-        if (newContents.step1) {
-          setSubtitleContent(newContents.step1)
-          setTextInput(newContents.step1)
-        }
-        setLoading(false)
-      })
-      .catch(err => {
-        console.error('Failed to load project:', err)
-        setLoading(false)
-      })
-  }, [id])
-
-  // Cleanup polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current)
-    }
-  }, [])
-
-  const step3Done =
-    stepStatuses.step3_daoshuyi === 'done' &&
-    stepStatuses.step3_yanxi === 'done' &&
-    stepStatuses.step3_sop === 'done'
-
-  const step3StatusForDisplay: StepStatus = step3Done ? 'done'
-    : (stepStatuses.step3_daoshuyi === 'in_progress' ||
-       stepStatuses.step3_yanxi === 'in_progress' ||
-       stepStatuses.step3_sop === 'in_progress')
-      ? 'in_progress'
-      : 'pending'
-
-  // Load templates, providers, and voiceover prompt when step3 is done
-  useEffect(() => {
-    if (!step3Done) return
-    api.listTemplates('ppt').then((data: any[]) => setPptTemplates(data || [])).catch(() => {})
-    api.listTemplates('sop').then((data: any[]) => setSopTemplates(data || [])).catch(() => {})
-    api.listPrompts('口播稿').then((prompts: any[]) => {
-      if (prompts.length > 0) {
-        setVoiceoverPromptId(prompts[0].id)
-      }
-    }).catch(() => {})
-    api.listProviders().then((providers: any[]) => {
-      const enabled = providers.filter((p: any) => p.is_enabled !== 0)
-      if (enabled.length > 0) {
-        setVoiceoverProviderId(enabled[0].id)
-        const models = typeof enabled[0].models === 'string' ? JSON.parse(enabled[0].models) : (enabled[0].models || [])
-        if (models.length > 0) setVoiceoverModel(models[0])
-      }
-    }).catch(() => {})
-  }, [step3Done])
-
-  const clearMessage = () => setMessage(null)
-
-  const setStepContent = (key: string, content: string) => {
-    setStepContents(prev => ({ ...prev, [key]: content }))
-  }
-
-  const startDownload = async () => {
-    if (!urlInput.trim()) return
-    setDownloading(true)
-    setVideoProgress(null)
-    setSubtitleContent('')
-    setStepStatuses(prev => ({ ...prev, step1: 'in_progress' }))
-
-    try {
-      const res = await api.downloadVideo(urlInput.trim())
-      const tid = (res as any).task_id
-      setTaskId(tid)
-
-      pollingRef.current = setInterval(async () => {
-        try {
-          const prog = await api.getVideoProgress(tid) as VideoProgress
-          setVideoProgress(prog)
-
-          if (prog.status === 'completed') {
-            if (pollingRef.current) clearInterval(pollingRef.current)
-            setDownloading(false)
-            setSubtitleContent(prog.text || '')
-            setStepStatuses(prev => ({ ...prev, step1: 'done' }))
-            setMessage({ text: '视频下载完成', type: 'success' })
-          } else if (prog.status === 'failed') {
-            if (pollingRef.current) clearInterval(pollingRef.current)
-            setDownloading(false)
-            setStepStatuses(prev => ({ ...prev, step1: 'pending' }))
-            setMessage({ text: prog.error || '下载失败', type: 'error' })
-          }
-        } catch {
-          // Polling error — keep trying
-        }
-      }, 2000)
-    } catch (err: any) {
-      setDownloading(false)
-      setStepStatuses(prev => ({ ...prev, step1: 'pending' }))
-      setMessage({ text: '开始下载失败：' + err.message, type: 'error' })
-    }
-  }
-
-  const cancelDownload = () => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current)
-      pollingRef.current = null
-    }
-    setDownloading(false)
-    setVideoProgress(null)
-    setStepStatuses(prev => ({ ...prev, step1: 'pending' }))
-    setMessage({ text: '已取消下载', type: 'info' })
-  }
-
-  const saveStep = async () => {
-    if (!id) return
-    setSaving(true)
-    const content = inputMode === 'text' ? textInput : subtitleContent
-    try {
-      await api.saveStep(id, 'step1', content)
-      setStepStatuses(prev => ({ ...prev, step1: content ? 'done' : 'pending' }))
-      setStepContents(prev => ({ ...prev, step1: content }))
-      setMessage({ text: '已保存到项目', type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: '保存失败：' + err.message, type: 'error' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const confirmStep2 = async () => {
-    if (!id) return
-    const content = stepContents.step2
-    if (!content) return
-    setSaving(true)
-    try {
-      await api.saveStep(id, 'step2', content)
-      setStepStatuses(prev => ({ ...prev, step2: 'done' }))
-      setStepContents(prev => ({ ...prev, step2: content }))
-      setMessage({ text: '步骤 2 已完成，步骤 3 已解锁', type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: '保存失败：' + err.message, type: 'error' })
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const saveSubStep = async (stepName: string, content: string) => {
-    if (!id || !content) return
-    setSavingSubStep(stepName)
-    try {
-      await api.saveStep(id, stepName, content)
-      setStepStatuses(prev => ({ ...prev, [stepName]: 'done' }))
-      setStepContents(prev => ({ ...prev, [stepName]: content }))
-      setMessage({ text: `已保存`, type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: '保存失败：' + err.message, type: 'error' })
-    } finally {
-      setSavingSubStep(null)
-    }
-  }
-
-  const saveOverallProgress = async () => {
-    if (!id || !project) return
-    try {
-      const hasStep1 = stepContents.step1 || subtitleContent || textInput
-      await api.updateProject(id, {
-        name: project.name,
-        status: hasStep1 ? 'in_progress' : 'draft',
-      })
-      setMessage({ text: '进度已保存', type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: '保存失败：' + err.message, type: 'error' })
-    }
-  }
-
-  // ── Step 4 Handlers ──
-
-  const generatePptHandler = async (key: 'dao' | 'yanxi') => {
-    const contentKey = key === 'dao' ? 'step3_daoshuyi' : 'step3_yanxi'
-    const content = stepContents[contentKey]
-    if (!content) {
-      setMessage({ text: '请先完成对应文档的生成', type: 'error' })
-      return
-    }
-    setGeneratingPpt(key)
-    try {
-      const branding = pptBranding.copyright || pptBranding.signature ? pptBranding : undefined
-      const result = await api.generatePPT(content, selectedPptTemplateId || undefined, branding as any)
-      setPptResults(prev => ({ ...prev, [key]: result as any }))
-      setMessage({ text: `${key === 'dao' ? '道与术' : '研习手册'} PPT 生成成功`, type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: 'PPT 生成失败：' + err.message, type: 'error' })
-    } finally {
-      setGeneratingPpt(null)
-    }
-  }
-
-  const exportSopHandler = async () => {
-    const content = stepContents.step3_sop
-    if (!content) {
-      setMessage({ text: '请先完成 SOP 文档的生成', type: 'error' })
-      return
-    }
-    setExportingSop(true)
-    try {
-      const branding = sopBranding.copyright || sopBranding.signature ? sopBranding : undefined
-      const result = await api.exportSOP(content, branding as any)
-      setSopResult(result as any)
-      setMessage({ text: 'SOP 文档导出成功', type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: 'SOP 导出失败：' + err.message, type: 'error' })
-    } finally {
-      setExportingSop(false)
-    }
-  }
-
-  const generateVoiceoverHandler = async (key: 'dao' | 'yanxi') => {
-    const contentKey = key === 'dao' ? 'step3_daoshuyi' : 'step3_yanxi'
-    const content = stepContents[contentKey]
-    if (!content) {
-      setMessage({ text: '请先完成对应文档的生成', type: 'error' })
-      return
-    }
-    if (!voiceoverProviderId || !voiceoverModel || !voiceoverPromptId) {
-      setMessage({ text: '请先在设置中配置 LLM 提供方和口播稿提示词', type: 'error' })
-      return
-    }
-    setGeneratingVoiceover(key)
-    try {
-      // Get the voiceover prompt
-      const prompt = await api.getPrompt(voiceoverPromptId)
-      const systemPrompt = prompt.system_prompt || ''
-      const result = await api.llmGenerate({
-        provider_id: voiceoverProviderId,
-        model: voiceoverModel,
-        system_prompt: systemPrompt,
-        user_message: content,
-      })
-      const text = (result as any).content || ''
-      setVoiceoverTexts(prev => ({ ...prev, [key]: text }))
-      setMessage({ text: `${key === 'dao' ? '道与术' : '研习手册'} 口播稿生成成功`, type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: '口播稿生成失败：' + err.message, type: 'error' })
-    } finally {
-      setGeneratingVoiceover(null)
-    }
-  }
-
-  const synthesizeTtsHandler = async (key: 'dao' | 'yanxi') => {
-    const text = voiceoverTexts[key]
-    if (!text) {
-      setMessage({ text: '请先生成口播稿', type: 'error' })
-      return
-    }
-    setSynthesizingTts(key)
-    try {
-      const result = await api.ttsSynthesize(text)
-      setTtsResults(prev => ({ ...prev, [key]: result as any }))
-      setMessage({ text: `${key === 'dao' ? '道与术' : '研习手册'} 语音合成成功`, type: 'success' })
-    } catch (err: any) {
-      setMessage({ text: '语音合成失败：' + err.message, type: 'error' })
-    } finally {
-      setSynthesizingTts(null)
-    }
-  }
-
-  const statusLabel = (s: StepStatus) => {
-    const map: Record<StepStatus, string> = { pending: '等待中', in_progress: '处理中', done: '已完成' }
-    return map[s]
-  }
-
-  const statusColor = (s: StepStatus) => {
-    const map: Record<StepStatus, string> = { pending: 'var(--color-step-pending)', in_progress: 'var(--color-primary)', done: 'var(--color-success)' }
-    return map[s]
-  }
-
-  const stepLabels: Record<string, string> = {
-    step1: '步骤 1：内容获取',
-    step2: '步骤 2：笔记整理',
-    step3: '步骤 3：文档生成',
-    step4: '步骤 4：输出',
-  }
-
-  // Shared styles
-  const cardStyle: React.CSSProperties = {
-    background: 'var(--color-card)',
-    border: '1px solid var(--color-border)',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
-  }
-
-  const stepHeaderStyle = (status: StepStatus): React.CSSProperties => ({
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  })
-
-  const stepDotStyle = (status: StepStatus): React.CSSProperties => ({
-    display: 'inline-block',
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    background: statusColor(status),
-    animation: status === 'in_progress' ? 'pulse 1.2s ease-in-out infinite' : 'none',
-    flexShrink: 0,
-  })
-
-  const btnPrimary: React.CSSProperties = {
-    background: 'var(--color-primary)',
-    color: '#fff',
-    border: 'none',
-    padding: '8px 18px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: 'pointer',
-  }
-
-  const btnSecondary: React.CSSProperties = {
-    background: 'none',
-    border: '1px solid var(--color-border)',
-    padding: '6px 14px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: 13,
-    color: 'var(--color-text-secondary)',
-    cursor: 'pointer',
-  }
-
-  if (loading) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-        加载中...
-      </div>
-    )
-  }
-
-  if (!project) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-text-secondary)' }}>
-        项目未找到
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ maxWidth: 800, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 24,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            onClick={() => navigate('/')}
-            style={{
-              background: 'none',
-              border: '1px solid var(--color-border)',
-              borderRadius: 'var(--radius-sm)',
-              padding: '6px 14px',
-              color: 'var(--color-text-secondary)',
-              fontSize: 14,
-              cursor: 'pointer',
-            }}
-          >
-            &larr; 返回
-          </button>
-          <h1 style={{ fontSize: 20, fontWeight: 700 }}>
-            食谱：{project.name}
-          </h1>
-        </div>
-        <button
-          onClick={saveOverallProgress}
-          style={btnPrimary}
+    <div className="tmpl-group">
+      {items.map(t => (
+        <div key={t.id}
+          className={`tmpl-card${t.id === selectedId ? ' selected' : ''}`}
+          onClick={() => onSelect(t)}
         >
-          保存进度
-        </button>
-      </div>
-
-      {/* Flash message */}
-      {message && (
-        <div
-          onClick={clearMessage}
-          style={{
-            padding: '8px 16px',
-            marginBottom: 16,
-            borderRadius: 'var(--radius-sm)',
-            fontSize: 13,
-            cursor: 'pointer',
-            background: message.type === 'error' ? 'rgba(199, 91, 57, 0.1)'
-              : message.type === 'success' ? 'rgba(74, 139, 63, 0.1)'
-              : 'rgba(139, 26, 26, 0.06)',
-            color: message.type === 'error' ? 'var(--color-warning)'
-              : message.type === 'success' ? 'var(--color-success)'
-              : 'var(--color-primary)',
-            border: '1px solid ' + (message.type === 'error' ? 'var(--color-warning)'
-              : message.type === 'success' ? 'var(--color-success)'
-              : 'var(--color-border)'),
-          }}
-        >
-          {message.text}
-        </div>
-      )}
-
-      {/* ==================== Step 1 Card ==================== */}
-      <div style={cardStyle}>
-        <div style={stepHeaderStyle(stepStatuses.step1)}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={stepDotStyle(stepStatuses.step1)} />
-            {stepLabels.step1}
-          </h2>
-          <span style={{
-            fontSize: 13,
-            color: statusColor(stepStatuses.step1),
-            fontWeight: 500,
-          }}>
-            {statusLabel(stepStatuses.step1)}
-          </span>
-        </div>
-
-        {/* Input mode tabs */}
-        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          {(['link', 'text', 'file'] as InputMode[]).map(mode => (
-            <button
-              key={mode}
-              onClick={() => setInputMode(mode)}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-sm)',
-                border: inputMode === mode ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                background: inputMode === mode ? 'rgba(139, 26, 26, 0.06)' : 'var(--color-card)',
-                color: inputMode === mode ? 'var(--color-primary)' : 'var(--color-text-secondary)',
-                fontSize: 13,
-                fontWeight: inputMode === mode ? 600 : 400,
-                cursor: 'pointer',
-              }}
-            >
-              {mode === 'link' ? '链接' : mode === 'text' ? '文本' : '文件'}
-            </button>
-          ))}
-        </div>
-
-        {/* Link mode */}
-        {inputMode === 'link' && (
-          <div>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-              <input
-                type="text"
-                value={urlInput}
-                onChange={e => setUrlInput(e.target.value)}
-                placeholder="输入视频链接（B站/YouTube/抖音等）"
-                disabled={downloading}
-                style={{
-                  flex: 1,
-                  padding: '8px 12px',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: 14,
-                  fontFamily: 'var(--font-family)',
-                  outline: 'none',
-                }}
-                onKeyDown={e => { if (e.key === 'Enter') startDownload() }}
-              />
-              {!downloading ? (
-                <button
-                  onClick={startDownload}
-                  disabled={!urlInput.trim()}
-                  style={{
-                    padding: '8px 18px',
-                    background: 'var(--color-primary)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    opacity: urlInput.trim() ? 1 : 0.5,
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer',
-                  }}
-                >
-                  开始下载
-                </button>
-              ) : (
-                <button
-                  onClick={cancelDownload}
-                  style={{
-                    padding: '8px 18px',
-                    background: 'var(--color-warning)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 'var(--radius-sm)',
-                    fontSize: 14,
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap',
-                    cursor: 'pointer',
-                  }}
-                >
-                  取消
-                </button>
-              )}
-            </div>
-
-            {/* Progress bar */}
-            {videoProgress && (
-              <div style={{ marginBottom: 12 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                    {videoProgress.status === 'completed' ? '下载完成' :
-                     videoProgress.status === 'downloading' ? '下载中...' :
-                     videoProgress.status === 'processing' ? '处理中...' : videoProgress.status}
-                  </span>
-                  <span style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                    {videoProgress.percent}%
-                  </span>
-                </div>
-                <div style={{
-                  height: 4,
-                  background: 'var(--color-border)',
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                }}>
-                  <div style={{
-                    height: '100%',
-                    width: `${videoProgress.percent}%`,
-                    background: 'var(--color-primary)',
-                    borderRadius: 2,
-                    transition: 'width 0.3s ease',
-                  }} />
-                </div>
-              </div>
-            )}
-
-            {/* Subtitles textarea — shown after download completes */}
-            {stepStatuses.step1 === 'done' && (
-              <div>
-                <textarea
-                  value={subtitleContent}
-                  onChange={e => setSubtitleContent(e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: 200,
-                    padding: 12,
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 6,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 13,
-                    lineHeight: 1.6,
-                    resize: 'vertical',
-                    outline: 'none',
-                    background: 'var(--color-card)',
-                    color: 'var(--color-text)',
-                  }}
-                />
-              </div>
-            )}
+          <div className="tmpl-thumb" style={{ background: t.color + '22', color: t.color }}>{t.icon}</div>
+          <div className="tmpl-info">
+            <div className="tmpl-name">{t.name}{t.isDefault ? <span className="default-tag">默认</span> : null}</div>
+            <div className="tmpl-meta">{t.meta}</div>
           </div>
-        )}
-
-        {/* Text mode */}
-        {inputMode === 'text' && (
-          <div>
-            <textarea
-              value={textInput}
-              onChange={e => {
-                setTextInput(e.target.value)
-                if (e.target.value) {
-                  setStepStatuses(prev => prev.step1 === 'pending' ? { ...prev, step1: 'done' } : prev)
-                }
-              }}
-              placeholder="在此粘贴或输入文本内容..."
-              style={{
-                width: '100%',
-                minHeight: 200,
-                padding: 12,
-                border: '1px solid var(--color-border)',
-                borderRadius: 6,
-                fontFamily: 'var(--font-mono)',
-                fontSize: 13,
-                lineHeight: 1.6,
-                resize: 'vertical',
-                outline: 'none',
-                background: 'var(--color-card)',
-                color: 'var(--color-text)',
-              }}
-            />
-          </div>
-        )}
-
-        {/* File mode placeholder */}
-        {inputMode === 'file' && (
-          <div style={{
-            padding: '40px 20px',
-            textAlign: 'center',
-            color: 'var(--color-text-secondary)',
-            border: '1px dashed var(--color-border)',
-            borderRadius: 'var(--radius-sm)',
-            fontSize: 14,
-          }}>
-            文件上传功能后续开放
-          </div>
-        )}
-
-        {/* Save button */}
-        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            onClick={saveStep}
-            disabled={saving || (inputMode === 'link' && !subtitleContent && stepStatuses.step1 !== 'done')}
-            style={{
-              padding: '8px 20px',
-              background: stepStatuses.step1 === 'done' || (inputMode === 'text' && textInput)
-                ? 'var(--color-primary)'
-                : 'var(--color-step-pending)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 'var(--radius-sm)',
-              fontSize: 14,
-              fontWeight: 600,
-              opacity: (stepStatuses.step1 === 'done' || textInput) ? 1 : 0.6,
-              cursor: 'pointer',
-            }}
-          >
-            {saving ? '保存中...' : '保存到项目'}
-          </button>
         </div>
-      </div>
-
-      {/* ==================== Step 2 Card ==================== */}
-      <div style={cardStyle}>
-        <div style={stepHeaderStyle(stepStatuses.step2)}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={stepDotStyle(stepStatuses.step2)} />
-            {stepLabels.step2}
-          </h2>
-          <span style={{
-            fontSize: 13,
-            color: statusColor(stepStatuses.step2),
-            fontWeight: 500,
-          }}>
-            {statusLabel(stepStatuses.step2)}
-          </span>
-        </div>
-
-        {stepStatuses.step1 !== 'done' ? (
-          <div style={{
-            padding: '40px 20px',
-            textAlign: 'center',
-            color: 'var(--color-text-secondary)',
-            fontSize: 14,
-          }}>
-            请先完成步骤 1
-          </div>
-        ) : (
-          <>
-            <AICollabEditor
-              value={stepContents.step2}
-              onChange={text => setStepContent('step2', text)}
-              placeholder="在此编辑笔记内容..."
-              height="400px"
-              category="笔记整理"
-              generateUserMessage={stepContents.step1}
-            />
-
-            {/* Confirm step 2 button */}
-            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button
-                onClick={confirmStep2}
-                disabled={saving || !stepContents.step2}
-                style={{
-                  ...btnPrimary,
-                  opacity: (saving || !stepContents.step2) ? 0.5 : 1,
-                }}
-              >
-                {saving ? '保存中...' : '确认，进入步骤 3'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ==================== Step 3 Card ==================== */}
-      <div style={{
-        ...cardStyle,
-        maxWidth: '100%',
-        overflowX: 'auto',
-      }}>
-        <div style={stepHeaderStyle(step3StatusForDisplay)}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={stepDotStyle(step3StatusForDisplay)} />
-            {stepLabels.step3}
-          </h2>
-          <span style={{
-            fontSize: 13,
-            color: statusColor(step3StatusForDisplay),
-            fontWeight: 500,
-          }}>
-            {statusLabel(step3StatusForDisplay)}
-          </span>
-        </div>
-
-        {stepStatuses.step2 !== 'done' ? (
-          <div style={{
-            padding: '40px 20px',
-            textAlign: 'center',
-            color: 'var(--color-text-secondary)',
-            fontSize: 14,
-          }}>
-            请先完成步骤 2
-          </div>
-        ) : (
-          <>
-            {/* Three-column layout for the three documents */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 12,
-              minWidth: 750,
-            }}>
-              {/* --- 食谱的道与术分析 --- */}
-              <div style={{
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-              }}>
-                <div style={{
-                  padding: '8px 12px',
-                  borderBottom: '1px solid var(--color-border)',
-                  background: 'var(--color-bg)',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}>
-                  <span style={{
-                    display: 'inline-block',
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: statusColor(stepStatuses.step3_daoshuyi),
-                    flexShrink: 0,
-                  }} />
-                  食谱的道与术分析
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <AICollabEditor
-                    value={stepContents.step3_daoshuyi}
-                    onChange={text => setStepContent('step3_daoshuyi', text)}
-                    placeholder="道与术分析..."
-                    height="350px"
-                    category="道与术分析"
-                    generateUserMessage={stepContents.step2}
-                  />
-                </div>
-                <div style={{ padding: '8px 12px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => saveSubStep('step3_daoshuyi', stepContents.step3_daoshuyi)}
-                    disabled={savingSubStep === 'step3_daoshuyi' || !stepContents.step3_daoshuyi}
-                    style={{
-                      ...btnPrimary,
-                      fontSize: 12,
-                      padding: '4px 14px',
-                      opacity: (savingSubStep === 'step3_daoshuyi' || !stepContents.step3_daoshuyi) ? 0.5 : 1,
-                    }}
-                  >
-                    {savingSubStep === 'step3_daoshuyi' ? '保存中...' : '保存'}
-                  </button>
-                </div>
-              </div>
-
-              {/* --- 食谱的研习手册 --- */}
-              <div style={{
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-              }}>
-                <div style={{
-                  padding: '8px 12px',
-                  borderBottom: '1px solid var(--color-border)',
-                  background: 'var(--color-bg)',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}>
-                  <span style={{
-                    display: 'inline-block',
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: statusColor(stepStatuses.step3_yanxi),
-                    flexShrink: 0,
-                  }} />
-                  食谱的研习手册
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <AICollabEditor
-                    value={stepContents.step3_yanxi}
-                    onChange={text => setStepContent('step3_yanxi', text)}
-                    placeholder="研习手册..."
-                    height="350px"
-                    category="研习手册"
-                    generateUserMessage={stepContents.step2}
-                  />
-                </div>
-                <div style={{ padding: '8px 12px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => saveSubStep('step3_yanxi', stepContents.step3_yanxi)}
-                    disabled={savingSubStep === 'step3_yanxi' || !stepContents.step3_yanxi}
-                    style={{
-                      ...btnPrimary,
-                      fontSize: 12,
-                      padding: '4px 14px',
-                      opacity: (savingSubStep === 'step3_yanxi' || !stepContents.step3_yanxi) ? 0.5 : 1,
-                    }}
-                  >
-                    {savingSubStep === 'step3_yanxi' ? '保存中...' : '保存'}
-                  </button>
-                </div>
-              </div>
-
-              {/* --- 食谱的SOP --- */}
-              <div style={{
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-              }}>
-                <div style={{
-                  padding: '8px 12px',
-                  borderBottom: '1px solid var(--color-border)',
-                  background: 'var(--color-bg)',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}>
-                  <span style={{
-                    display: 'inline-block',
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    background: statusColor(stepStatuses.step3_sop),
-                    flexShrink: 0,
-                  }} />
-                  食谱的 SOP
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <AICollabEditor
-                    value={stepContents.step3_sop}
-                    onChange={text => setStepContent('step3_sop', text)}
-                    placeholder="SOP..."
-                    height="350px"
-                    category="SOP"
-                    generateUserMessage={stepContents.step2}
-                  />
-                </div>
-                <div style={{ padding: '8px 12px', borderTop: '1px solid var(--color-border)', display: 'flex', justifyContent: 'flex-end' }}>
-                  <button
-                    onClick={() => saveSubStep('step3_sop', stepContents.step3_sop)}
-                    disabled={savingSubStep === 'step3_sop' || !stepContents.step3_sop}
-                    style={{
-                      ...btnPrimary,
-                      fontSize: 12,
-                      padding: '4px 14px',
-                      opacity: (savingSubStep === 'step3_sop' || !stepContents.step3_sop) ? 0.5 : 1,
-                    }}
-                  >
-                    {savingSubStep === 'step3_sop' ? '保存中...' : '保存'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Overall step 3 status */}
-            {step3Done && (
-              <div style={{
-                marginTop: 12,
-                padding: '10px 16px',
-                background: 'rgba(74, 139, 63, 0.08)',
-                border: '1px solid var(--color-success)',
-                borderRadius: 'var(--radius-sm)',
-                fontSize: 13,
-                color: 'var(--color-success)',
-                textAlign: 'center',
-              }}>
-                三份文档已全部生成完成，可进入步骤 4
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* ==================== Step 4 Card ==================== */}
-      <div style={{
-        ...cardStyle,
-        opacity: step3Done ? 1 : 0.7,
-      }}>
-        <div style={stepHeaderStyle(stepStatuses.step4)}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={stepDotStyle(stepStatuses.step4)} />
-            {stepLabels.step4}
-          </h2>
-          <span style={{
-            fontSize: 13,
-            color: statusColor(stepStatuses.step4),
-            fontWeight: 500,
-          }}>
-            {statusLabel(stepStatuses.step4)}
-          </span>
-        </div>
-
-        {!step3Done ? (
-          <div style={{
-            padding: '40px 20px',
-            textAlign: 'center',
-            color: 'var(--color-text-secondary)',
-            fontSize: 14,
-          }}>
-            请先完成步骤 3
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-
-            {/* ── A. PPT 生成 ── */}
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px 0' }}>PPT 生成</h3>
-              <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginBottom: 12 }}>
-                使用下方共享的模板与品牌配置，分别从道与术分析和研习手册生成 PPT。
-              </div>
-
-              {/* Shared branding inputs for PPT */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <input
-                  type="text"
-                  placeholder="版权说明（如 © 2026）"
-                  value={pptBranding.copyright}
-                  onChange={e => setPptBranding(prev => ({ ...prev, copyright: e.target.value }))}
-                  style={{
-                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
-                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 180px', outline: 'none',
-                    background: 'var(--color-card)', color: 'var(--color-text)',
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="作者签名"
-                  value={pptBranding.signature}
-                  onChange={e => setPptBranding(prev => ({ ...prev, signature: e.target.value }))}
-                  style={{
-                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
-                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 150px', outline: 'none',
-                    background: 'var(--color-card)', color: 'var(--color-text)',
-                  }}
-                />
-                {pptTemplates.length > 0 && (
-                  <select
-                    value={selectedPptTemplateId}
-                    onChange={e => setSelectedPptTemplateId(e.target.value)}
-                    style={{
-                      padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
-                      fontSize: 13, fontFamily: 'var(--font-family)', outline: 'none',
-                      background: 'var(--color-card)', color: 'var(--color-text)',
-                    }}
-                  >
-                    <option value="">默认模板</option>
-                    {pptTemplates.map((t: any) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Row 1: 道与术 PPT */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 140 }}>
-                  来源: 道与术分析
-                </span>
-                <button
-                  onClick={() => generatePptHandler('dao')}
-                  disabled={generatingPpt === 'dao' || !stepContents.step3_daoshuyi}
-                  style={{
-                    ...btnPrimary, fontSize: 13, padding: '6px 16px',
-                    opacity: (generatingPpt === 'dao' || !stepContents.step3_daoshuyi) ? 0.5 : 1,
-                  }}
-                >
-                  {generatingPpt === 'dao' ? '生成中...' : '生成PPT'}
-                </button>
-                {pptResults.dao && (
-                  <DownloadButton
-                    url={pptResults.dao.download_url}
-                    filename={pptResults.dao.filename}
-                    label="下载PPT"
-                    state={fileDownloads['ppt_dao']}
-                    onStateChange={s => setFileDownloads(prev => ({ ...prev, ppt_dao: s }))}
-                  />
-                )}
-              </div>
-
-              {/* Row 2: 研习手册 PPT */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 140 }}>
-                  来源: 研习手册
-                </span>
-                <button
-                  onClick={() => generatePptHandler('yanxi')}
-                  disabled={generatingPpt === 'yanxi' || !stepContents.step3_yanxi}
-                  style={{
-                    ...btnPrimary, fontSize: 13, padding: '6px 16px',
-                    opacity: (generatingPpt === 'yanxi' || !stepContents.step3_yanxi) ? 0.5 : 1,
-                  }}
-                >
-                  {generatingPpt === 'yanxi' ? '生成中...' : '生成PPT'}
-                </button>
-                {pptResults.yanxi && (
-                  <DownloadButton
-                    url={pptResults.yanxi.download_url}
-                    filename={pptResults.yanxi.filename}
-                    label="下载PPT"
-                    state={fileDownloads['ppt_yanxi']}
-                    onStateChange={s => setFileDownloads(prev => ({ ...prev, ppt_yanxi: s }))}
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* ── B. SOP 导出 ── */}
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px 0' }}>SOP 导出</h3>
-
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <input
-                  type="text"
-                  placeholder="版权说明"
-                  value={sopBranding.copyright}
-                  onChange={e => setSopBranding(prev => ({ ...prev, copyright: e.target.value }))}
-                  style={{
-                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
-                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 180px', outline: 'none',
-                    background: 'var(--color-card)', color: 'var(--color-text)',
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="作者签名"
-                  value={sopBranding.signature}
-                  onChange={e => setSopBranding(prev => ({ ...prev, signature: e.target.value }))}
-                  style={{
-                    padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
-                    fontSize: 13, fontFamily: 'var(--font-family)', flex: '1 1 150px', outline: 'none',
-                    background: 'var(--color-card)', color: 'var(--color-text)',
-                  }}
-                />
-                {sopTemplates.length > 0 && (
-                  <select
-                    value={selectedSopTemplateId}
-                    onChange={e => setSelectedSopTemplateId(e.target.value)}
-                    style={{
-                      padding: '6px 10px', border: '1px solid var(--color-border)', borderRadius: 4,
-                      fontSize: 13, fontFamily: 'var(--font-family)', outline: 'none',
-                      background: 'var(--color-card)', color: 'var(--color-text)',
-                    }}
-                  >
-                    <option value="">默认模板</option>
-                    {sopTemplates.map((t: any) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 13, color: 'var(--color-text-secondary)', minWidth: 140 }}>
-                  来源: SOP 文档
-                </span>
-                <button
-                  onClick={exportSopHandler}
-                  disabled={exportingSop || !stepContents.step3_sop}
-                  style={{
-                    ...btnPrimary, fontSize: 13, padding: '6px 16px',
-                    opacity: (exportingSop || !stepContents.step3_sop) ? 0.5 : 1,
-                  }}
-                >
-                  {exportingSop ? '导出中...' : '导出文档'}
-                </button>
-                {sopResult && (
-                  <DownloadButton
-                    url={sopResult.download_url}
-                    filename={sopResult.filename}
-                    label="下载文档"
-                    state={fileDownloads['sop']}
-                    onStateChange={s => setFileDownloads(prev => ({ ...prev, sop: s }))}
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* ── C. 口播稿 + 语音 ── */}
-            <div style={{ border: '1px solid var(--color-border)', borderRadius: 8, padding: 16 }}>
-              <h3 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 12px 0' }}>口播稿 + 语音合成</h3>
-
-              {/* Row 1: 道与术口播稿 */}
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>道与术口播稿</span>
-                  <button
-                    onClick={() => generateVoiceoverHandler('dao')}
-                    disabled={generatingVoiceover === 'dao' || !stepContents.step3_daoshuyi}
-                    style={{
-                      ...btnPrimary, fontSize: 12, padding: '4px 12px',
-                      opacity: (generatingVoiceover === 'dao' || !stepContents.step3_daoshuyi) ? 0.5 : 1,
-                    }}
-                  >
-                    {generatingVoiceover === 'dao' ? '生成中...' : '生成口播稿'}
-                  </button>
-                  <button
-                    onClick={() => synthesizeTtsHandler('dao')}
-                    disabled={synthesizingTts === 'dao' || !voiceoverTexts.dao}
-                    style={{
-                      ...btnSecondary, fontSize: 12, padding: '4px 12px',
-                      opacity: (synthesizingTts === 'dao' || !voiceoverTexts.dao) ? 0.5 : 1,
-                    }}
-                  >
-                    {synthesizingTts === 'dao' ? '合成中...' : '语音合成'}
-                  </button>
-                </div>
-                <textarea
-                  value={voiceoverTexts.dao}
-                  onChange={e => setVoiceoverTexts(prev => ({ ...prev, dao: e.target.value }))}
-                  placeholder="口播稿将在此显示..."
-                  style={{
-                    width: '100%',
-                    minHeight: 80,
-                    padding: 8,
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 4,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    resize: 'vertical',
-                    outline: 'none',
-                    background: 'var(--color-card)',
-                    color: 'var(--color-text)',
-                  }}
-                />
-                {ttsResults.dao && (
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <audio controls style={{ width: '100%', maxWidth: 400 }}>
-                      <source src={ttsResults.dao.audio_url} type="audio/mpeg" />
-                    </audio>
-                    <DownloadButton
-                      url={ttsResults.dao.audio_url}
-                      filename={ttsResults.dao.filename}
-                      label="下载音频"
-                      state={fileDownloads['tts_dao']}
-                      onStateChange={s => setFileDownloads(prev => ({ ...prev, tts_dao: s }))}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Row 2: 研习手册口播稿 */}
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600 }}>研习手册口播稿</span>
-                  <button
-                    onClick={() => generateVoiceoverHandler('yanxi')}
-                    disabled={generatingVoiceover === 'yanxi' || !stepContents.step3_yanxi}
-                    style={{
-                      ...btnPrimary, fontSize: 12, padding: '4px 12px',
-                      opacity: (generatingVoiceover === 'yanxi' || !stepContents.step3_yanxi) ? 0.5 : 1,
-                    }}
-                  >
-                    {generatingVoiceover === 'yanxi' ? '生成中...' : '生成口播稿'}
-                  </button>
-                  <button
-                    onClick={() => synthesizeTtsHandler('yanxi')}
-                    disabled={synthesizingTts === 'yanxi' || !voiceoverTexts.yanxi}
-                    style={{
-                      ...btnSecondary, fontSize: 12, padding: '4px 12px',
-                      opacity: (synthesizingTts === 'yanxi' || !voiceoverTexts.yanxi) ? 0.5 : 1,
-                    }}
-                  >
-                    {synthesizingTts === 'yanxi' ? '合成中...' : '语音合成'}
-                  </button>
-                </div>
-                <textarea
-                  value={voiceoverTexts.yanxi}
-                  onChange={e => setVoiceoverTexts(prev => ({ ...prev, yanxi: e.target.value }))}
-                  placeholder="口播稿将在此显示..."
-                  style={{
-                    width: '100%',
-                    minHeight: 80,
-                    padding: 8,
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 4,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 13,
-                    lineHeight: 1.5,
-                    resize: 'vertical',
-                    outline: 'none',
-                    background: 'var(--color-card)',
-                    color: 'var(--color-text)',
-                  }}
-                />
-                {ttsResults.yanxi && (
-                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <audio controls style={{ width: '100%', maxWidth: 400 }}>
-                      <source src={ttsResults.yanxi.audio_url} type="audio/mpeg" />
-                    </audio>
-                    <DownloadButton
-                      url={ttsResults.yanxi.audio_url}
-                      filename={ttsResults.yanxi.filename}
-                      label="下载音频"
-                      state={fileDownloads['tts_yanxi']}
-                      onStateChange={s => setFileDownloads(prev => ({ ...prev, tts_yanxi: s }))}
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-
-          </div>
-        )}
-      </div>
-
-      {/* Keyframes for pulse animation */}
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-      `}</style>
+      ))}
     </div>
   )
 }
 
-export default ProjectPage
+// ── Template data ──
+const SOP_TEMPLATES: TemplateItem[] = [
+  { id: 'sop-std', name: 'SOP标准模板.docx', isDefault: true, meta: '提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充', color: '#4A8B3F', icon: '📃', previewHtml: '' },
+  { id: 'sop-simple', name: '简约SOP模板.docx', isDefault: false, meta: '提示词: 简约SOP v1.0 · SKILL: 简约SOP填充', color: '#4A8B3F', icon: '📄', previewHtml: '' },
+  { id: 'sop-detail', name: '详细SOP模板.docx', isDefault: false, meta: '提示词: 详细SOP v1.2 · SKILL: 详细SOP填充', color: '#4A8B3F', icon: '📋', previewHtml: '' },
+]
+const DAO_PPT_TEMPLATES: TemplateItem[] = [
+  { id: 'dao-std', name: '道与术PPT模板.pptx', isDefault: true, meta: '提示词: PPT排版 v1.0 · SKILL: 道与术PPT技能', color: '#7C3AED', icon: '📌', previewHtml: '' },
+  { id: 'dao-food', name: '美食风PPT模板.pptx', isDefault: false, meta: '提示词: 美食PPT v0.9 · SKILL: 美食PPT技能', color: '#C75B39', icon: '🍽', previewHtml: '' },
+]
+const YANXI_PPT_TEMPLATES: TemplateItem[] = [
+  { id: 'yanxi-std', name: '研学手册PPT模板.pptx', isDefault: true, meta: '提示词: PPT排版 v1.0 · SKILL: 研学手册PPT技能', color: '#4A8B3F', icon: '📚', previewHtml: '' },
+  { id: 'yanxi-food', name: '美食风PPT模板.pptx', isDefault: false, meta: '提示词: 美食PPT v0.9 · SKILL: 美食PPT技能', color: '#C75B39', icon: '🍽', previewHtml: '' },
+]
+const KOUBO_TEMPLATES: TemplateItem[] = [
+  { id: 'koubo-std', name: '标准口播模板', isDefault: true, meta: '提示词: 口播稿生成 v1.0 · SKILL: 口播风格', color: '#0891B2', icon: '📢', previewHtml: '' },
+  { id: 'koubo-fast', name: '快节奏口播模板', isDefault: false, meta: '提示词: 口播稿 v0.8 · SKILL: 快节奏口播', color: '#C75B39', icon: '⚡', previewHtml: '' },
+]
+const VOICE_TEMPLATES: TemplateItem[] = [
+  { id: 'voice-soft', name: '标准口播音色', isDefault: true, meta: '音色: 温柔女声 · 语速: 1.0x · 音量: 50%', color: '#E91E63', icon: '🎵', previewHtml: '' },
+  { id: 'voice-male', name: '沉稳男声', isDefault: false, meta: '音色: 沉稳男声 · 语速: 1.0x · 音量: 50%', color: '#4CAF50', icon: '🎵', previewHtml: '' },
+  { id: 'voice-fast', name: '快节奏口播音色', isDefault: false, meta: '音色: 活泼女声 · 语速: 1.3x · 音量: 60%', color: '#FF9800', icon: '🎵', previewHtml: '' },
+]
+
+// Stage 2 prompt/SKILL templates
+const STAGE2_SOP_TMPL: TemplateItem[] = [
+  { id: 's2-sop-std', name: 'SOP标准格式 v2.0', isDefault: true, meta: '提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充', color: '#4A8B3F', icon: '📃', previewHtml: '' },
+  { id: 's2-sop-simple', name: 'SOP简约格式 v1.0', isDefault: false, meta: '提示词: SOP简约格式 v1.0 · SKILL: SOP简约填充', color: '#4A8B3F', icon: '📄', previewHtml: '' },
+  { id: 's2-sop-detail', name: 'SOP详细格式 v1.2', isDefault: false, meta: '提示词: SOP详细格式 v1.2 · SKILL: SOP详细填充', color: '#4A8B3F', icon: '📋', previewHtml: '' },
+]
+const STAGE2_DAO_TMPL: TemplateItem[] = [
+  { id: 's2-dao-std', name: '道与术标准分析 v1.0', isDefault: true, meta: '提示词: 道与术分析 v1.0 · SKILL: 道与术分析技能', color: '#7C3AED', icon: '💡', previewHtml: '' },
+  { id: 's2-dao-deep', name: '道与术深度分析 v0.9', isDefault: false, meta: '提示词: 道与术深度 v0.9 · SKILL: 道与术深度技能', color: '#7C3AED', icon: '🔬', previewHtml: '' },
+]
+const STAGE2_YANXI_TMPL: TemplateItem[] = [
+  { id: 's2-yanxi-std', name: '研学手册标准 v1.0', isDefault: true, meta: '提示词: 研学手册标准 v1.0 · SKILL: 研学手册技能', color: '#C75B39', icon: '📖', previewHtml: '' },
+  { id: 's2-yanxi-detail', name: '研学手册详细 v0.9', isDefault: false, meta: '提示词: 研学手册详细 v0.9 · SKILL: 研学手册详细技能', color: '#C75B39', icon: '📚', previewHtml: '' },
+]
+
+const STAGE2_MODELS = ['DeepSeek (deepseek-v4-pro)', 'Kimi (moonshot-v1)', '通义千问 (qwen-plus)']
+
+// ── Main Component ──
+export default function ProjectPage() {
+  const modal = useModal()
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+
+  const [project, setProject] = useState<Project | null>(null)
+  const [stage, setStage] = useState<StageId>(1)
+  const [sub, setSub] = useState<SubId>('1a')
+  const [steps, setSteps] = useState<Record<string, string>>({})
+
+  // Stage 1 state
+  const [videoUrl, setVideoUrl] = useState('')
+  const [dlStatus, setDlStatus] = useState('')
+  const [dlPercent, setDlPercent] = useState(0)
+  const [dlTaskId, setDlTaskId] = useState('')
+  const [textInput, setTextInput] = useState('')
+  const mode1 = sub === '1a' ? 'link' : sub === '1b' ? 'text' : 'file' as 'link' | 'text' | 'file'
+  const [vcOpen, setVcOpen] = useState(false)
+
+  // Stage 2 state
+  const [step2Generating, setStep2Generating] = useState('') // which sub is generating
+  const [s2SopTmpl, setS2SopTmpl] = useState('s2-sop-std')
+  const [s2DaoTmpl, setS2DaoTmpl] = useState('s2-dao-std')
+  const [s2YanxiTmpl, setS2YanxiTmpl] = useState('s2-yanxi-std')
+  const [s2SopModel, setS2SopModel] = useState(STAGE2_MODELS[0])
+  const [s2DaoModel, setS2DaoModel] = useState(STAGE2_MODELS[0])
+  const [s2YanxiModel, setS2YanxiModel] = useState(STAGE2_MODELS[0])
+  const [s2DataSource, setS2DataSource] = useState('video')
+
+  // Stage 3 state
+  const [sopSelected, setSopSelected] = useState('sop-std')
+  const [daoPptSelected, setDaoPptSelected] = useState('dao-std')
+  const [yanxiPptSelected, setYanxiPptSelected] = useState('yanxi-std')
+  const [pptGenerating, setPptGenerating] = useState('')
+
+  // Stage 4 state
+  const [kouboSelected, setKouboSelected] = useState('koubo-std')
+  const [voiceSelected, setVoiceSelected] = useState('voice-soft')
+  const [kouboText, setKouboText] = useState('')
+  const [ttsGenerating, setTtsGenerating] = useState(false)
+  const [ttsAudioUrl, setTtsAudioUrl] = useState('')
+
+  // Load project
+  useEffect(() => {
+    if (!id) return
+    api.getProject(id).then(setProject).catch(() => navigate('/'))
+    api.getSteps(id).then((s: any[]) => {
+      const map: Record<string, string> = {}
+      s.forEach((x: any) => { map[x.step_name] = x.content })
+      setSteps(map)
+    })
+  }, [id, navigate])
+
+  // Save step helper
+  const saveStep = useCallback((stepName: string, content: string) => {
+    if (!id) return
+    api.saveStep(id, stepName, content)
+    setSteps(prev => ({ ...prev, [stepName]: content }))
+  }, [id])
+
+  // ── Stage nav ──
+  const switchStage = (s: StageId) => {
+    setStage(s)
+    const stageDef = STAGES.find(x => x.id === s)
+    if (stageDef && stageDef.subs.length > 0) setSub(stageDef.subs[0].id)
+  }
+
+  // ── Video download ──
+  const handleVideoDownload = async () => {
+    if (!videoUrl.trim()) return
+    setDlStatus('downloading'); setDlPercent(0)
+    try {
+      const result: any = await api.downloadVideo(videoUrl)
+      setDlTaskId(result.task_id)
+      pollProgress(result.task_id)
+    } catch (e: any) { setDlStatus('error: ' + e.message) }
+  }
+  const pollProgress = async (taskId: string) => {
+    const poll = async () => {
+      const p: any = await api.getVideoProgress(taskId)
+      setDlPercent(p.percent); setDlStatus(p.status)
+      if (p.text) setSteps(prev => ({ ...prev, step1: p.text }))
+      if (p.status === 'completed') { setDlStatus('done'); return }
+      if (p.status === 'failed') { setDlStatus('failed: ' + (p.error || '')); return }
+      setTimeout(poll, 1000)
+    }
+    poll()
+  }
+  const handleExtractSubtitles = async () => {
+    if (!dlTaskId || !id) return
+    const result: any = await api.extractSubtitles(dlTaskId, id)
+    if (result.subtitle_text) {
+      setSteps(prev => ({ ...prev, step1: result.subtitle_text }))
+      saveStep('step1', result.subtitle_text)
+    }
+  }
+
+  // ── LLM Generate ──
+  const doGenerate = async (stepKey: string, systemPrompt: string, userMessage: string) => {
+    if (!id) return
+    try {
+      const result: any = await api.llmGenerate({
+        provider_id: 'default', model: 'deepseek-v4-pro',
+        system_prompt: systemPrompt, user_message: userMessage,
+      })
+      const content = result.content
+      setSteps(prev => ({ ...prev, [stepKey]: content }))
+      saveStep(stepKey, content)
+      return content
+    } catch (e: any) { modal.toast('生成失败: ' + e.message, 'error'); return null }
+  }
+
+  // ── PPT / SOP Generation ──
+  const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string) => {
+    setPptGenerating(stepKey)
+    try {
+      const result: any = await api.generatePPT(content, tmplId)
+      setGenFiles(prev => [...prev, {
+        name: result.filename, type: 'PPT',
+        source: label,
+        url: '/api/download/' + encodeURIComponent(result.filename),
+      }])
+      modal.toast(`PPT 已生成: ${result.filename}`, 'success')
+    } catch (e: any) { modal.toast('PPT生成失败: ' + e.message, 'error') }
+    finally { setPptGenerating('') }
+  }
+  const doExportSOP = async (content: string) => {
+    try {
+      const result: any = await api.exportSOP(content)
+      setGenFiles(prev => [...prev, {
+        name: result.filename, type: 'Word',
+        source: 'SOP课件',
+        url: '/api/download/' + encodeURIComponent(result.filename),
+      }])
+      modal.toast(`SOP 已导出: ${result.filename}`, 'success')
+    } catch (e: any) { modal.toast('SOP导出失败: ' + e.message, 'error') }
+  }
+
+  // ── TTS ──
+  const doTTS = async () => {
+    if (!kouboText.trim()) return
+    setTtsGenerating(true)
+    try {
+      const result: any = await api.ttsSynthesize(kouboText)
+      setTtsAudioUrl(result.audio_url)
+      setGenFiles(prev => [...prev, {
+        name: (project?.name || 'output') + '_口播.mp3', type: 'MP3',
+        source: '口播语音',
+        url: result.audio_url || '/api/audio/' + encodeURIComponent(result.filename || ''),
+      }])
+    } catch (e: any) { modal.toast('TTS失败: ' + e.message, 'error') }
+    finally { setTtsGenerating(false) }
+  }
+
+  // Generated files tracking
+  const [genFiles, setGenFiles] = useState<{ name: string; type: string; source: string; url: string }[]>([])
+
+  // ── Stage status dots ──
+  const stageDot = (s: StageId) => {
+    const st = steps
+    if (s === 1 && st.step1) return 'done'
+    if (s === 2 && (st.step2_sop || st.step2_daoshuyi || st.step2_yanxi)) return 'done'
+    if (s === 3 && (st.step3_sop_doc || st.step3_dao_ppt || st.step3_yan_ppt)) return 'done'
+    if (s === 4 && (st.step4_koubo || st.step4_tts)) return 'done'
+    if (s === 5 && genFiles.length > 0) return 'done'
+    if (s === stage) return 'progress'
+    return 'waiting'
+  }
+
+  if (!project) return <div className="pipeline-area"><div style={{ padding: 32 }}>加载中...</div></div>
+
+  return (
+    <div className="pipeline-area">
+      {/* ═══ Top Nav ═══ */}
+      <div className="top-nav">
+        {STAGES.map((s, i) => (
+          <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {i > 0 && <span className="tn-arrow">→</span>}
+            <div className={`tn-item${stage === s.id ? ' active' : ''}`}
+              onClick={() => switchStage(s.id)}>
+              <span className="tn-num">{s.id}</span> {s.label}
+              <span className={`tn-dot ${stageDot(s.id)}`} />
+            </div>
+          </span>
+        ))}
+      </div>
+
+      {/* ═══ Sub Nav ═══ */}
+      {STAGES.find(s => s.id === stage)?.subs.length ? (
+        <div className="sub-nav">
+          {STAGES.find(s => s.id === stage)!.subs.map((sn, i) => (
+            <span key={sn.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {i > 0 && <span className="sn-sep">|</span>}
+              <div className={`sn-item${sub === sn.id ? ' active' : ''}`}
+                onClick={() => setSub(sn.id)}>{sn.label}</div>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="sub-nav">
+          <span className="sub-nav-desc">输出列表 — 所有产出物统一下载</span>
+        </div>
+      )}
+
+      {/* ═══ Content ═══ */}
+      <div className="content-area">
+        {/* ====== STAGE 1: 文案提取 ====== */}
+        {stage === 1 && (
+          <div className="panel-grid">
+            <div className="panel-left">
+              {/* 1a: Video Link */}
+              {mode1 === 'link' && <>
+                <div className="card">
+                  <div className="card-title">📺 视频提取</div>
+                  <div className="card-hint">粘贴视频链接 → 下载 + 语音识别 → 内容自动填入右侧编辑区</div>
+                  <input className="form-input" placeholder="粘贴视频链接（支持抖音/B站/YouTube等）"
+                    value={videoUrl} onChange={e => setVideoUrl(e.target.value)} style={{ marginBottom: 6 }} />
+                  <button className="btn btn-primary btn-sm w-full"
+                    onClick={handleVideoDownload} disabled={dlStatus === 'downloading'}>
+                    ▶ 下载并识别
+                  </button>
+                  {dlStatus === 'downloading' && (
+                    <div style={{ marginTop: 8, background: 'var(--border)', height: 4, borderRadius: 2 }}>
+                      <div style={{ width: dlPercent + '%', height: '100%', background: 'var(--primary)', borderRadius: 2, transition: 'width .3s' }} />
+                    </div>
+                  )}
+                  {dlStatus === 'done' && <div className="form-hint" style={{ color: 'var(--success)' }}>下载完成</div>}
+                  {dlStatus.startsWith('error') && <div className="form-hint" style={{ color: 'var(--warning)' }}>{dlStatus}</div>}
+                  <button className="btn btn-outline btn-sm w-full" style={{ marginTop: 6 }}
+                    onClick={() => setVcOpen(true)} disabled={!steps.step1}>
+                    📺 播放校验
+                  </button>
+                </div>
+                <div className="card">
+                  <div className="card-title">📁 项目保存路径</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input className="form-input" style={{ fontSize: 10, flex: 1 }} readOnly
+                      value={`D:\\YISHAOAGENT\\data\\projects\\${project?.name || ''}`} />
+                    <button className="btn btn-ghost btn-sm">浏览</button>
+                  </div>
+                </div>
+              </>}
+
+              {/* 1b: Text Input */}
+              {mode1 === 'text' && (
+                <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="card-title">✏️ 文字输入</div>
+                  <div className="card-hint">直接粘贴或输入食谱内容，右侧同步显示并可编辑</div>
+                  <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+                    placeholder="在此粘贴或输入食谱笔记..."
+                    value={textInput} onChange={e => setTextInput(e.target.value)} />
+                </div>
+              )}
+
+              {/* 1c: File Upload */}
+              {mode1 === 'file' && <>
+                <div className="card">
+                  <div className="card-title">📄 文件上传</div>
+                  <div className="card-hint">支持 .txt / .md / .docx 文件，读取后内容自动填入右侧编辑区</div>
+                  <input type="file" accept=".txt,.md,.docx" style={{ fontSize: 10, marginBottom: 6 }}
+                    onChange={async e => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      const text = await f.text()
+                      setSteps(prev => ({ ...prev, step1: text }))
+                      saveStep('step1', text)
+                    }} />
+                  <button className="btn btn-primary btn-sm w-full">读取文件</button>
+                </div>
+                <div className="card">
+                  <div className="card-title">📁 项目保存路径</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input className="form-input" style={{ fontSize: 10, flex: 1 }} readOnly
+                      value={`D:\\YISHAOAGENT\\data\\projects\\${project?.name || ''}`} />
+                    <button className="btn btn-ghost btn-sm">浏览</button>
+                  </div>
+                </div>
+              </>}
+            </div>
+
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="card-title">生成 / 编辑</div>
+                <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+                  value={steps.step1 || ''}
+                  onChange={e => { setSteps(prev => ({ ...prev, step1: e.target.value })); }}
+                  placeholder="提取的文本将显示在此，可直接编辑..." />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>编辑完成后保存，供下一阶段引用</span>
+                  <button className="btn btn-primary btn-sm" onClick={() => saveStep('step1', steps.step1 || '')}>✓ 保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====== STAGE 2: 教学文档 ====== */}
+        {stage === 2 && (
+          <div className="panel-grid">
+            <div className="panel-left">
+              <div className="card">
+                {/* 2a: SOP文案 */}
+                {sub === '2a' && <>
+                  <div className="card-title" style={{ color: 'var(--success)' }}>📃 SOP文案生成</div>
+                  <div className="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成标准SOP文案</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    <div className="form-label">数据来源</div>
+                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
+                      <option value="video">视频提取 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — 暂无内容</option>
+                    </select>
+                  </div>
+                  <div className="form-label">选择模板</div>
+                  <TemplateSelector items={STAGE2_SOP_TMPL} selectedId={s2SopTmpl} onSelect={t => setS2SopTmpl(t.id)} previewTarget="prev2a" />
+                  <div className="form-label">大模型</div>
+                  <select className="form-select" style={{ marginBottom: 8 }} value={s2SopModel} onChange={e => setS2SopModel(e.target.value)}>
+                    {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <button className="btn btn-primary btn-sm w-full"
+                    disabled={!steps.step1 || step2Generating !== ''}
+                    onClick={async () => {
+                      setStep2Generating(sub)
+                      await doGenerate('step2_sop',
+                        '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。',
+                        steps.step1 || '')
+                      setStep2Generating('')
+                    }}>
+                    {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
+                  </button>
+                </>}
+
+                {/* 2b: 道与术文案 */}
+                {sub === '2b' && <>
+                  <div className="card-title" style={{ color: 'var(--purple)' }}>💡 道与术文案生成</div>
+                  <div className="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成「道与术」分析文案</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    <div className="form-label">数据来源</div>
+                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
+                      <option value="video">视频提取 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — 暂无内容</option>
+                    </select>
+                  </div>
+                  <div className="form-label">选择模板</div>
+                  <TemplateSelector items={STAGE2_DAO_TMPL} selectedId={s2DaoTmpl} onSelect={t => setS2DaoTmpl(t.id)} previewTarget="prev2b" />
+                  <div className="form-label">大模型</div>
+                  <select className="form-select" style={{ marginBottom: 8 }} value={s2DaoModel} onChange={e => setS2DaoModel(e.target.value)}>
+                    {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <button className="btn btn-primary btn-sm w-full"
+                    disabled={!steps.step1 || step2Generating !== ''}
+                    onClick={async () => {
+                      setStep2Generating(sub)
+                      await doGenerate('step2_daoshuyi',
+                        '请分析以下食谱内容的"道"（原理、烹饪哲学）与"术"（具体技巧、手法）。',
+                        steps.step1 || '')
+                      setStep2Generating('')
+                    }}>
+                    {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
+                  </button>
+                </>}
+
+                {/* 2c: 研学手册文案 */}
+                {sub === '2c' && <>
+                  <div className="card-title" style={{ color: 'var(--warning)' }}>📖 研学手册文案生成</div>
+                  <div className="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成研学手册文案</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    <div className="form-label">数据来源</div>
+                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
+                      <option value="video">视频提取 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — 暂无内容</option>
+                    </select>
+                  </div>
+                  <div className="form-label">选择模板</div>
+                  <TemplateSelector items={STAGE2_YANXI_TMPL} selectedId={s2YanxiTmpl} onSelect={t => setS2YanxiTmpl(t.id)} previewTarget="prev2c" />
+                  <div className="form-label">大模型</div>
+                  <select className="form-select" style={{ marginBottom: 8 }} value={s2YanxiModel} onChange={e => setS2YanxiModel(e.target.value)}>
+                    {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+                  </select>
+                  <button className="btn btn-primary btn-sm w-full"
+                    disabled={!steps.step1 || step2Generating !== ''}
+                    onClick={async () => {
+                      setStep2Generating(sub)
+                      await doGenerate('step2_yanxi',
+                        '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。',
+                        steps.step1 || '')
+                      setStep2Generating('')
+                    }}>
+                    {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
+                  </button>
+                </>}
+              </div>
+            </div>
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="card-title">生成 / 编辑</div>
+                <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+                  value={steps[`step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`] || ''}
+                  onChange={e => {
+                    const key = `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
+                    setSteps(prev => ({ ...prev, [key]: e.target.value }))
+                  }}
+                  placeholder="点击生成按钮，AI生成后在此编辑..." />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                    {sub === '2a' ? '编辑完成后保存，即可供「标准SOP」栏目引用'
+                      : sub === '2b' ? '编辑完成后保存，即可供「合成PPT」栏目引用'
+                        : '编辑完成后保存，即可供「合成PPT」「口播文案」栏目引用'}
+                  </span>
+                  <button className="btn btn-primary btn-sm" onClick={() => {
+                    const key = `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
+                    saveStep(key, steps[key] || '')
+                  }}>✓ 保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====== STAGE 3: 输出课件 ====== */}
+        {stage === 3 && sub === '3a' && (
+          <div className="panel-grid">
+            <div className="panel-left">
+              <div className="card">
+                <div className="card-title">SOP 生成 + 导出</div>
+                <div className="card-hint">选择模板自动关联提示词+SKILL，配置在「项目配置」→ 栏目配置</div>
+                <div className="form-label">选择模板</div>
+                <TemplateSelector items={SOP_TEMPLATES} selectedId={sopSelected}
+                  onSelect={t => setSopSelected(t.id)} previewTarget="prev3" />
+                <div className="form-label" style={{ marginTop: 10 }}>品牌信息（可选）</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <input className="form-input" placeholder="版权" style={{ flex: 1 }} />
+                  <input className="form-input" placeholder="签名" style={{ flex: 1 }} />
+                </div>
+                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
+                  onClick={() => doExportSOP(steps.step2_sop || steps.step1 || '')}>
+                  📄 AI 生成 + 导出 .docx
+                </button>
+              </div>
+            </div>
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="tmpl-preview-header">📃 模板预览 — {SOP_TEMPLATES.find(t => t.id === sopSelected)?.name}</div>
+                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
+                    <div className="prev-sop">
+                      <div className="prev-title">【标准SOP】菜品名称</div>
+                      <table><thead><tr><th>步骤</th><th>操作</th><th>标准</th><th>备注</th></tr></thead>
+                        <tbody><tr><td>1</td><td>备料</td><td>食材洗净切配</td><td>—</td></tr>
+                          <tr><td>2</td><td>烹饪</td><td>火候/时间</td><td>—</td></tr></tbody></table>
+                      <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>标准表格格式 · 清晰步骤划分</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {stage === 3 && sub === '3b' && (
+          <div className="panel-grid">
+            <div className="panel-left">
+              <div className="card">
+                <div className="card-title">📌 道术PPT</div>
+                <div className="card-hint">基于道与术文案，选择模板合成PPT</div>
+                <div className="form-label">选择模板</div>
+                <TemplateSelector items={DAO_PPT_TEMPLATES} selectedId={daoPptSelected}
+                  onSelect={t => setDaoPptSelected(t.id)} previewTarget="prev3b" />
+                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
+                  disabled={pptGenerating !== ''}
+                  onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '道术PPT')}>
+                  {pptGenerating === 'step3_dao_ppt' ? '⏳ 生成中...' : '📌 合成道术PPT'}
+                </button>
+              </div>
+            </div>
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="tmpl-preview-header">📌 模板预览 — {DAO_PPT_TEMPLATES.find(t => t.id === daoPptSelected)?.name}</div>
+                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
+                    <div className="prev-ppt">
+                      <div className="prev-slide" style={{ borderTop: '3px solid var(--purple)' }}>
+                        <span style={{ fontWeight: 700 }}>标题页</span>
+                        <div className="slide-bar" style={{ background: 'var(--purple)' }} />
+                        <span style={{ fontSize: 7 }}>道与术分析</span>
+                      </div>
+                      <div className="prev-slide"><span>内容页</span><div className="slide-bar" /><span style={{ fontSize: 7 }}>分析要点</span></div>
+                      <div className="prev-slide"><span>内容页</span><div className="slide-bar" /><span style={{ fontSize: 7 }}>总结</span></div>
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>深色商务风 · 3页布局 · 结构清晰</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {stage === 3 && sub === '3c' && (
+          <div className="panel-grid">
+            <div className="panel-left">
+              <div className="card">
+                <div className="card-title">📚 研学PPT</div>
+                <div className="card-hint">基于研学手册文案，选择模板合成PPT</div>
+                <div className="form-label">选择模板</div>
+                <TemplateSelector items={YANXI_PPT_TEMPLATES} selectedId={yanxiPptSelected}
+                  onSelect={t => setYanxiPptSelected(t.id)} previewTarget="prev3c" />
+                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
+                  disabled={pptGenerating !== ''}
+                  onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '研学PPT')}>
+                  {pptGenerating === 'step3_yan_ppt' ? '⏳ 生成中...' : '📌 合成研学PPT'}
+                </button>
+              </div>
+            </div>
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="tmpl-preview-header">📚 模板预览 — {YANXI_PPT_TEMPLATES.find(t => t.id === yanxiPptSelected)?.name}</div>
+                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
+                    <div className="prev-ppt">
+                      <div className="prev-slide" style={{ borderTop: '3px solid var(--success)' }}>
+                        <span style={{ fontWeight: 700 }}>研学封面</span>
+                        <div className="slide-bar" style={{ background: 'var(--success)' }} />
+                      </div>
+                      <div className="prev-slide"><span>背景</span><div className="slide-bar" /></div>
+                      <div className="prev-slide"><span>步骤</span><div className="slide-bar" /></div>
+                      <div className="prev-slide"><span>要点</span><div className="slide-bar" /></div>
+                      <div className="prev-slide"><span>总结</span><div className="slide-bar" /></div>
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>清新学术风 · 5页布局 · 体系完整</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====== STAGE 4: 语音课件 ====== */}
+        {stage === 4 && sub === '4a' && (
+          <div className="panel-grid">
+            <div className="panel-left">
+              <div className="card">
+                <div className="card-title">口播文案</div>
+                <div className="card-hint">基于研学手册文案，选择模板生成口播稿</div>
+                <div className="form-label">来源</div>
+                <select className="form-select" style={{ marginBottom: 8 }}><option>研学手册文案</option></select>
+                <div className="form-label">选择模板</div>
+                <TemplateSelector items={KOUBO_TEMPLATES} selectedId={kouboSelected}
+                  onSelect={t => setKouboSelected(t.id)} previewTarget="prev4a" />
+                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
+                  onClick={async () => {
+                    setStep2Generating('koubo')
+                    const content = await doGenerate('step4_koubo',
+                      '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。',
+                      steps.step2_yanxi || steps.step1 || '')
+                    if (content) setKouboText(content)
+                    setStep2Generating('')
+                  }}>
+                  {step2Generating === 'koubo' ? '⏳ 生成中...' : '📢 生成口播稿'}
+                </button>
+              </div>
+            </div>
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="tmpl-preview-header">📢 口播稿预览 — {KOUBO_TEMPLATES.find(t => t.id === kouboSelected)?.name}</div>
+                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
+                    <div className="prev-script">
+                      {steps.step4_koubo ? (
+                        steps.step4_koubo.split('\n').map((line, i) => <p key={i}>{line || ' '}</p>)
+                      ) : (
+                        <p style={{ color: 'var(--text-secondary)' }}>点击「生成口播稿」生成...</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {stage === 4 && sub === '4b' && (
+          <div className="panel-grid">
+            <div className="panel-left">
+              <div className="card">
+                <div className="card-title">TTS 语音合成</div>
+                <div className="card-hint">选择模板自动关联音色+语速+音量</div>
+                <div className="form-label">来源</div>
+                <select className="form-select" style={{ marginBottom: 8 }}><option>口播文案</option></select>
+                <div className="form-label">引擎</div>
+                <select className="form-select" style={{ marginBottom: 8 }}><option>CosyVoice (DashScope)</option></select>
+                <div className="form-label">选择模板</div>
+                <TemplateSelector items={VOICE_TEMPLATES} selectedId={voiceSelected}
+                  onSelect={t => setVoiceSelected(t.id)} previewTarget="prev4b" />
+                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
+                  disabled={ttsGenerating} onClick={doTTS}>
+                  {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
+                </button>
+                {ttsAudioUrl && (
+                  <div style={{ marginTop: 8 }}>
+                    <audio controls style={{ width: '100%', height: 32 }}>
+                      <source src={ttsAudioUrl} type="audio/mpeg" />
+                    </audio>
+                    <button className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
+                      onClick={() => downloadFile(ttsAudioUrl, 'tts_output.mp3')}>
+                      💾 下载 .mp3
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="tmpl-preview-header">🎵 音色预览 — {VOICE_TEMPLATES.find(t => t.id === voiceSelected)?.name}</div>
+                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
+                    <div className="prev-voice">
+                      <div className="voice-wave" />
+                      <div className="voice-meta">
+                        <strong>{VOICE_TEMPLATES.find(t => t.id === voiceSelected)?.name}</strong><br />
+                        语速: 1.0x · 音量: 50%<br />风格: 自然亲切
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 6 }}>
+                      适合美食类口播，声音柔和有亲和力
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ====== STAGE 5: 输出列表 ====== */}
+        {stage === 5 && (
+          <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className="card-title">所有产出物</div>
+            {genFiles.length > 0 ? (
+              <table className="output-table">
+                <thead><tr><th>文件</th><th>类型</th><th>来源</th><th>大小</th><th>操作</th></tr></thead>
+                <tbody>
+                  {genFiles.map((f, i) => (
+                    <tr key={i}>
+                      <td>
+                        {f.type === 'Word' ? '📃 ' : f.type === 'PPT' ? '📌 ' : '🎵 '}
+                        {f.name}
+                      </td>
+                      <td>{f.type}</td>
+                      <td>{f.source}</td>
+                      <td style={{ fontSize: 10, color: 'var(--text-secondary)' }}>—</td>
+                      <td>
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={() => downloadFile(f.url, f.name)}>下载</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
+                暂无产出物。请完成前面阶段的生成后，文件将自动出现在此列表中。
+              </div>
+            )}
+            {genFiles.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                <button className="btn btn-outline btn-sm"
+                  onClick={async () => {
+                    for (const f of genFiles) {
+                      try { await downloadFile(f.url, f.name) } catch (e: any) { /* skip failed */ }
+                    }
+                  }}>
+                  📦 一键下载全部 ({genFiles.length} 个文件)
+                </button>
+                <button className="btn btn-ghost btn-sm">📁 打开文件夹</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Config Bar ═══ */}
+      <div className="config-bar">
+        <span className="cb-label">⚙ 当前栏目配置：</span>
+        <span>模型</span> <span className="cb-val">{CONFIG[stage]?.model}</span>
+        <span className="cb-sep">|</span>
+        <span>模板</span> <span className="cb-val">{CONFIG[stage]?.tmpl}</span>
+        {CONFIG[stage]?.tmplInfo && (
+          <span style={{ fontSize: 9, color: '#999' }}>({CONFIG[stage]?.tmplInfo})</span>
+        )}
+        <span className="cb-sep">|</span>
+        <span>项目路径</span> <span className="cb-val" style={{ color: 'var(--text-secondary)' }}>{project?.name}</span>
+        <a className="cb-edit" onClick={() => navigate('/proj-settings')}>前往项目配置修改</a>
+      </div>
+
+      {/* ═══ Video Check Dialog ═══ */}
+      {vcOpen && (
+        <div className="dialog-overlay" onClick={e => { if (e.target === e.currentTarget) setVcOpen(false) }}>
+          <div className="dialog-box wide">
+            <div className="dialog-title">📺 视频播放校验 <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>确认字幕内容是否准确</span></div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <div style={{ flex: 1, background: '#000', borderRadius: 8, minHeight: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 48 }}>
+                ▶
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <textarea className="form-textarea" style={{ flex: 1, minHeight: 250 }}
+                  value={steps.step1 || ''}
+                  onChange={e => setSteps(prev => ({ ...prev, step1: e.target.value }))} />
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setVcOpen(false)}>取消</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => { saveStep('step1', steps.step1 || ''); setVcOpen(false) }}>
+                    保存并关闭
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

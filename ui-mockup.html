@@ -1,0 +1,2161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>一勺笔录 — 5阶段流水线 v12</title>
+<style>
+  :root {
+    --bg: #FAFAF8; --card: #FFFFFF; --text: #1A1A1A; --text-secondary: #6B6B6B;
+    --border: #E8E5E0; --primary: #8B1A1A; --primary-light: #FBF5F3;
+    --success: #4A8B3F; --warning: #C75B39; --purple: #7C3AED; --cyan: #0891B2;
+    --radius: 8px; --radius-sm: 6px;
+    --font: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    --mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+    --sidebar-w: 200px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── Layout ── */
+  .app-shell { display: flex; flex: 1; overflow: hidden; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: var(--sidebar-w); min-width: var(--sidebar-w);
+    background: var(--card); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .sidebar-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); }
+  .sidebar-logo { font-size: 13px; font-weight: 700; color: var(--primary); }
+  .sidebar-sub { font-size: 10px; color: var(--text-secondary); margin-top: 1px; }
+  .sidebar-nav { flex:1; padding: 6px; display: flex; flex-direction: column; gap: 1px; }
+  .sidebar-item {
+    display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+    border-radius: var(--radius-sm); font-size: 12px; cursor: pointer;
+    color: var(--text); transition: all .12s; border: none; background: none;
+    font-family: var(--font); text-align: left; width: 100%;
+  }
+  .sidebar-item:hover { background: var(--bg); }
+  .sidebar-item.active { background: rgba(139,26,26,0.07); color: var(--primary); font-weight: 600; }
+  .sidebar-item .ico { font-size: 14px; width: 20px; text-align: center; flex-shrink: 0; }
+  .sidebar-item .badge {
+    margin-left: auto; font-size: 9px; padding: 1px 5px; border-radius: 3px;
+    background: var(--border); color: var(--text-secondary); white-space: nowrap;
+  }
+  .sidebar-foot { padding: 8px; border-top: 1px solid var(--border); }
+
+  /* ── Main Area ── */
+  .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ── Top Header ── */
+  .top-header {
+    background: var(--card); border-bottom: 1px solid var(--border);
+    padding: 0 16px; height: 40px; display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  }
+  .top-header .sep { flex:1; }
+  .proj-dropdown {
+    display: flex; align-items: center; gap: 6px; padding: 4px 10px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 12px; font-weight: 600; cursor: pointer; background: var(--bg);
+    font-family: var(--font);
+  }
+  .proj-dropdown:hover { border-color: var(--primary); }
+  .proj-dropdown .arrow { font-size: 8px; color: var(--text-secondary); }
+
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:5px;
+    padding:6px 12px; border-radius: var(--radius-sm); font-size:11px; font-weight:600;
+    font-family:var(--font); cursor:pointer; border:none; transition:all .12s; white-space:nowrap;
+  }
+  .btn-primary { background:var(--primary); color:#fff; } .btn-primary:hover { background:#6E1515; }
+  .btn-outline { background:var(--card); color:var(--primary); border:1px solid var(--primary); } .btn-outline:hover { background:var(--primary-light); }
+  .btn-ghost { background:transparent; color:var(--text-secondary); border:1px solid var(--border); }
+  .btn-ghost:hover { background:#F5F3F0; }
+  .btn-sm { font-size:10px; padding:3px 8px; }
+
+  /* ── Top Nav (7 main stages) ── */
+  .top-nav {
+    display: flex; align-items: center; gap: 0;
+    padding: 0 12px; flex-shrink: 0;
+    background: var(--card); border-bottom: 1px solid var(--border);
+  }
+  .tn-item {
+    padding: 8px 12px; font-size: 11px; font-weight: 500; cursor: pointer;
+    color: var(--text-secondary); border-bottom: 3px solid transparent;
+    transition: all .15s; display: flex; align-items: center; gap: 5px;
+    white-space: nowrap; position: relative;
+  }
+  .tn-item:hover { color: var(--text); background: #FAFAF8; }
+  .tn-item.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  .tn-item.done { color: var(--success); }
+  .tn-num {
+    width: 16px; height: 16px; border-radius: 50%; font-size: 9px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    background: #E8E5E0; color: #999; transition: all .2s; flex-shrink: 0;
+  }
+  .tn-item.active .tn-num { background: var(--primary); color: #fff; }
+  .tn-item.done .tn-num { background: var(--success); color: #fff; }
+  .tn-arrow { color: #D4C8B8; font-size: 10px; padding: 0 1px; user-select: none; flex-shrink: 0; }
+  .tn-dot {
+    width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+    position: absolute; top: 4px; right: 4px;
+  }
+  .tn-dot.waiting { background: #E8E5E0; }
+  .tn-dot.progress { background: var(--primary); animation: pulse 1.2s ease-in-out infinite; }
+  .tn-dot.done { background: var(--success); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* ── Sub Nav ── */
+  .sub-nav {
+    display: flex; align-items: center; gap: 0;
+    padding: 0 12px; flex-shrink: 0;
+    background: #F5F3F0; border-bottom: 1px solid var(--border);
+  }
+  .sn-item {
+    padding: 5px 12px; font-size: 10px; font-weight: 500; cursor: pointer;
+    color: var(--text-secondary); border-bottom: 2px solid transparent;
+    transition: all .15s; display: flex; align-items: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .sn-item:hover { color: var(--text); }
+  .sn-item.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  .sn-sep { color: #D4C8B8; font-size: 9px; padding: 0 2px; user-select: none; flex-shrink: 0; }
+
+  .hidden { display: none !important; }
+
+  /* ── Page views (for sidebar navigation) ── */
+  .page-view { display: none; flex: 1; overflow-y: auto; }
+  .page-view.active { display: flex; flex-direction: column; }
+  #pageWorkspace { overflow: hidden; min-height: 0; }
+
+  /* ── Project list cards ── */
+  .proj-list-header { padding: 16px 20px 0; display:flex; gap:8px; align-items:center; }
+  .proj-list { padding: 12px 20px; display:flex; flex-direction:column; gap:6px; flex:1; overflow-y:auto; }
+  .proj-card {
+    display:flex; align-items:center; gap:12px; padding:10px 14px;
+    background:var(--card); border:1px solid var(--border); border-radius:var(--radius-sm);
+    cursor:pointer; transition:all .1s;
+  }
+  .proj-card:hover { border-color:var(--primary); background:var(--primary-light); }
+  .proj-card .pc-name { font-weight:600; font-size:13px; flex:1; }
+  .proj-card .pc-status { font-size:10px; padding:2px 6px; border-radius:3px; }
+  .proj-card .pc-status.draft { background:#F0EDE8; color:#999; }
+  .proj-card .pc-status.in_progress { background:var(--primary-light); color:var(--primary); }
+  .proj-card .pc-status.completed { background:#EDF7EB; color:var(--success); }
+  .proj-card .pc-date { font-size:10px; color:var(--text-secondary); }
+  .proj-card .pc-actions { display:flex; gap:4px; }
+
+  /* ── Project Settings tabs (match top-nav style) ── */
+  .mgmt-tabs { display:flex; align-items:center; gap:0; padding:0 12px; flex-shrink:0; background:var(--card); border-bottom:1px solid var(--border); }
+  .mgmt-tab {
+    padding:8px 12px; font-size:11px; font-weight:500; cursor:pointer;
+    color:var(--text-secondary); border-bottom:3px solid transparent;
+    transition:all .15s; display:flex; align-items:center; gap:5px;
+    white-space:nowrap; background:none; border-top:none; border-left:none; border-right:none;
+    font-family:var(--font); border-radius:0;
+  }
+  .mgmt-tab:hover { color:var(--text); background:#FAFAF8; }
+  .mgmt-tab.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:600; }
+  .mgmt-content { padding:16px 20px; flex:1; overflow-y:auto; }
+  .sub-tabs { display:flex; gap:0; margin-bottom:14px; border-bottom:1px solid var(--border); }
+  .sub-tab {
+    padding:6px 14px; font-size:11px; cursor:pointer;
+    color:var(--text-secondary); border-bottom:2px solid transparent;
+    background:none; border-top:none; border-left:none; border-right:none;
+    font-family:var(--font); border-radius:0;
+  }
+  .sub-tab:hover { color:var(--text); }
+  .sub-tab.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:600; }
+  /* ── Accordion ── */
+  .ac-group { margin-bottom:6px; border:1px solid var(--border); border-radius:var(--radius-sm); overflow:hidden; background:var(--card); }
+  .ac-head { display:flex; align-items:center; padding:9px 14px; cursor:pointer; gap:10px; user-select:none; }
+  .ac-head:hover { background:#FAFAF8; }
+  .ac-num { width:20px; height:20px; border-radius:50%; background:var(--primary); color:#fff; font-size:9px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+  .ac-num.no-tmpl { background:var(--text-secondary); }
+  .ac-num.no-config { background:#ccc; }
+  .ac-title { font-weight:600; font-size:12px; }
+  .ac-summary { font-size:10px; color:var(--text-secondary); margin-left:auto; text-align:right; }
+  .ac-arrow { font-size:9px; color:var(--text-secondary); transition:transform .15s; flex-shrink:0; }
+  .ac-group.open .ac-arrow { transform:rotate(180deg); }
+  .ac-body { display:none; padding:10px 14px 12px; border-top:1px solid var(--border); background:#FAFAF8; }
+  .ac-group.open .ac-body { display:block; }
+  .ac-tmpl-card { padding:10px 12px; margin-bottom:6px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--card); }
+  .ac-tmpl-card.default { border-left:3px solid var(--primary); }
+  .ac-tmpl-row { display:flex; align-items:center; gap:8px; font-size:11px; }
+  .ac-tmpl-row .ac-tmpl-name { font-weight:600; }
+  .ac-tmpl-meta { font-size:10px; color:var(--text-secondary); margin-top:4px; }
+  .ac-sub-item { padding:8px 10px; margin-bottom:4px; border:1px dashed var(--border); border-radius:var(--radius-sm); background:var(--card); }
+  .ac-sub-item-header { font-size:10px; font-weight:600; margin-bottom:4px; }
+  .ac-field-row { display:flex; gap:10px; align-items:flex-start; margin-top:4px; }
+  .ac-field { flex:1; }
+  .ac-field label { font-size:9px; color:var(--text-secondary); display:block; margin-bottom:2px; }
+  .ac-field textarea { width:100%; min-height:48px; font-size:9px; font-family:var(--mono); border:1px solid var(--border); border-radius:3px; padding:4px 6px; resize:vertical; background:#fff; }
+  .ac-field textarea:focus { outline:none; border-color:var(--primary); }
+  .mgmt-empty { text-align:center; padding:40px; color:var(--text-secondary); font-size:12px; }
+
+  /* ── Settings page ── */
+  .settings-section { padding:16px 20px; }
+  .settings-section h3 { font-size:13px; margin-bottom:10px; }
+  .settings-row { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+  .settings-row label { font-size:11px; color:var(--text-secondary); min-width:100px; text-align:right; }
+  .settings-row input, .settings-row select { flex:1; max-width:360px; }
+
+
+  /* ── Content Area ── */
+  .content-area { flex: 1; overflow: hidden; min-height: 0; padding: 16px; display: flex; flex-direction: column; }
+  .main-panel { display: none; }
+  .main-panel.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .sub-panel { display: none; }
+  .sub-panel.active { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+  .panel-grid { display: flex; gap: 16px; flex: 1; min-height: 0; height: 100%; }
+  .panel-left { width: 380px; min-width: 380px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; min-height: 0; }
+  .panel-right { flex: 1; display: flex; flex-direction: column; gap: 10px; min-height: 0; height: 100%; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+  }
+  .card-title { font-size: 12px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .card-hint { font-size: 10px; color: var(--text-secondary); margin-bottom: 8px; padding: 6px 8px; background: #FAFAF8; border-radius: 4px; line-height: 1.5; }
+
+  .form-label { font-size: 10px; font-weight: 600; color: var(--text-secondary); margin-bottom: 2px; display: block; }
+  .form-hint { font-size: 10px; color: var(--text-secondary); margin-top: 4px; line-height: 1.4; }
+  .form-row { display:flex; gap:6px; } .form-row > * { flex:1; }
+
+  .form-input, .form-select, .form-textarea {
+    width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:5px;
+    font-size:11px; font-family:var(--font); outline:none; transition:border-color .15s;
+    background:var(--card); color:var(--text);
+  }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color:var(--primary); }
+  .form-select {
+    cursor:pointer; appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B6B6B' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 8px center; padding-right:28px;
+  }
+  .form-textarea { min-height:80px; resize:vertical; font-family:var(--mono); font-size:10px; line-height:1.6; }
+
+  .mode-tabs { display:flex; gap:2px; margin-bottom:8px; }
+  .mode-tab {
+    flex:1; padding:5px 4px; border:1px solid var(--border); background:var(--bg);
+    font-size:10px; cursor:pointer; font-family:var(--font); color:var(--text-secondary);
+    text-align:center; border-radius:4px; transition:all .12s;
+  }
+  .mode-tab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+  .preview-box {
+    background: var(--bg); border:1px solid var(--border); border-radius:5px;
+    padding:12px; font-size:10px; line-height:1.7; font-family:var(--mono);
+    flex:1; overflow-y:auto; min-height:140px;
+  }
+  .preview-box .empty {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    height:100%; color:#CCC; gap:4px; font-family:var(--font);
+  }
+
+  /* ── Config group (model + prompt + skill on one row) ── */
+  .config-group {
+    border: 1px solid var(--border); border-radius: 5px; padding: 8px 10px; margin-bottom: 6px;
+    display: flex; gap: 6px; align-items: flex-end; background: #FAFAFB;
+  }
+  .config-group .cg-item { display: flex; flex-direction: column; }
+  .config-group .cg-item.model { width: 90px; }
+  .config-group .cg-item.prompt { flex: 1; }
+  .config-group .cg-item.skill { flex: 1; }
+  .config-group .cg-label { font-size: 9px; color: var(--text-secondary); margin-bottom: 1px; font-weight: 600; }
+
+  .three-col { display: flex; gap: 10px; flex: 1; }
+  .three-col > div { flex: 1; display: flex; flex-direction: column; }
+
+  /* ── Output mini ── */
+  .output-mini { display: flex; flex-direction: column; gap: 6px; }
+  .output-mini-item {
+    border:1px solid var(--border); border-radius:5px; padding:8px; font-size:9px;
+    line-height:1.5; font-family:var(--mono); max-height:130px; overflow-y:auto;
+  }
+  .omi-header { font-family:var(--font); font-weight:600; font-size:10px; margin-bottom:3px; display:flex; align-items:center; gap:4px; }
+  .omi-sop { color:var(--success); } .omi-dao { color:var(--purple); } .omi-yan { color:var(--warning); }
+
+  .mini-progress { width:100%; height:3px; background:var(--border); border-radius:2px; overflow:hidden; margin-top:4px; }
+  .mini-progress-fill { height:100%; background:var(--cyan); border-radius:2px; transition:width .3s; width:0%; }
+
+  /* ── Stage header in sub-nav ── */
+  .sub-nav-desc { font-size: 10px; color: var(--text); font-weight: 600; padding: 5px 12px; }
+
+  /* ── Table ── */
+  .output-table { width:100%; font-size:10px; border-collapse:collapse; }
+  .output-table th { text-align:left; padding:6px 8px; background:#FAFAF8; border-bottom:2px solid var(--border); font-size:9px; color:var(--text-secondary); }
+  .output-table td { padding:6px 8px; border-bottom:1px solid var(--border); }
+
+  /* ── Config status bar ── */
+  .config-bar {
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    padding: 6px 16px; background: #F8F7F4; border-top: 1px solid var(--border);
+    font-size: 10px; color: var(--text-secondary);
+  }
+  .config-bar .cb-label { font-weight: 600; color: var(--text); }
+  .config-bar .cb-sep { color: #D4C8B8; font-size: 8px; }
+  .config-bar .cb-val { color: var(--primary); font-weight: 500; }
+  .config-bar .cb-edit { font-size: 9px; color: var(--primary); cursor: pointer; text-decoration: underline; margin-left: 4px; }
+
+  /* ── Dialog ── */
+  .dialog-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .dialog-box {
+    background: var(--card); border-radius: var(--radius); padding: 20px;
+    width: 360px; max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+  }
+  .dialog-box.wide { width: 520px; }
+  .dialog-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+  .collapse-toggle {
+    display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600;
+    color: var(--text-secondary); cursor: pointer; padding: 8px 0;
+    border-top: 1px solid var(--border); margin-top: 10px; user-select: none;
+  }
+  .collapse-toggle:hover { color: var(--primary); }
+  .collapse-toggle .c-arrow { font-size: 9px; transition: transform .15s; }
+  .collapse-toggle.open .c-arrow { transform: rotate(90deg); }
+  .collapse-body { display: none; }
+  .collapse-body.open { display: block; }
+  .col-config-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    font-size: 11px; border-bottom: 1px solid #f0f0f0;
+  }
+  .col-config-row .col-num {
+    width: 18px; height: 18px; border-radius: 50%; background: var(--primary);
+    color: #fff; font-size: 9px; font-weight: 700; display: flex;
+    align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .col-config-row .col-name { width: 70px; font-weight: 600; flex-shrink: 0; }
+  .col-config-row .col-select { flex: 1; font-size: 10px; padding: 3px 6px;
+    border: 1px solid var(--border); border-radius: 3px; font-family: var(--font); }
+  .col-config-row .col-label { font-size: 9px; color: var(--text-secondary); width: 28px; flex-shrink: 0; }
+
+  /* ── Video Check Dialog ── */
+  .vc-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  .vc-dialog {
+    background: var(--card); border-radius: var(--radius);
+    width: 85vw; max-width: 1200px; height: 80vh;
+    display: flex; flex-direction: column;
+    box-shadow: 0 12px 48px rgba(0,0,0,0.25);
+    overflow: hidden; position: relative;
+  }
+  .vc-dialog.fullscreen {
+    width: 100vw; max-width: 100vw; height: 100vh; border-radius: 0;
+  }
+  .vc-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .vc-header .vc-title { font-size: 13px; font-weight: 700; flex: 1; }
+  .vc-close {
+    width: 28px; height: 28px; border-radius: 50%; border: none;
+    background: transparent; cursor: pointer; font-size: 16px;
+    color: var(--text-secondary); display: flex; align-items: center; justify-content: center;
+    transition: all .12s;
+  }
+  .vc-close:hover { background: #f0f0f0; color: var(--text); }
+  .vc-body {
+    flex: 1; display: flex; overflow: hidden;
+  }
+  .vc-video-wrap {
+    flex: 1; min-width: 300px; background: #000;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .vc-video-wrap video { width: 100%; height: 100%; object-fit: contain; }
+  .vc-video-placeholder {
+    color: #666; font-size: 14px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .vc-video-placeholder .play-icon {
+    width: 56px; height: 56px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center;
+    font-size: 24px; cursor: pointer; transition: all .15s;
+  }
+  .vc-video-placeholder .play-icon:hover { background: rgba(255,255,255,0.25); }
+  .vc-divider {
+    width: 5px; background: var(--border); cursor: col-resize;
+    flex-shrink: 0; transition: background .12s; position: relative;
+  }
+  .vc-divider:hover, .vc-divider.dragging { background: var(--primary); }
+  .vc-divider::after {
+    content: '⋮'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 14px; color: #999; pointer-events: none;
+  }
+  .vc-divider:hover::after { color: #fff; }
+  .vc-text-panel {
+    width: 380px; min-width: 200px; flex-shrink: 0;
+    display: flex; flex-direction: column;
+    padding: 14px; background: #FDFCFB;
+  }
+  .vc-text-panel .vc-text-title { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: var(--text-secondary); }
+  .vc-text-panel textarea {
+    width: 100%; flex: 1; border: 1px solid var(--border); border-radius: 4px;
+    padding: 8px; font-size: 12px; line-height: 1.8; font-family: var(--font);
+    resize: none; background: #fff; overflow-y: auto;
+  }
+  .vc-text-panel textarea:focus { outline: none; border-color: var(--primary); }
+  .vc-highlight { background: #FFF3CD; padding: 1px 3px; border-radius: 2px; }
+  .vc-missing { color: var(--warning); font-size: 10px; margin-top: 2px; }
+  .vc-controls {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 14px; border-top: 1px solid var(--border);
+    background: #FAFAF8; flex-shrink: 0;
+  }
+  .vc-ctrl-btn {
+    width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--card); cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .12s;
+  }
+  .vc-ctrl-btn:hover { border-color: var(--primary); color: var(--primary); }
+  .vc-progress {
+    flex: 1; height: 4px; background: var(--border); border-radius: 2px;
+    cursor: pointer; position: relative; overflow: visible;
+  }
+  .vc-progress-fill {
+    height: 100%; background: var(--primary); border-radius: 2px;
+    width: 35%; transition: width .1s;
+  }
+  .vc-progress-thumb {
+    position: absolute; top: 50%; left: 35%; transform: translate(-50%,-50%);
+    width: 10px; height: 10px; border-radius: 50%; background: var(--primary);
+    opacity: 0; transition: opacity .12s;
+  }
+  .vc-progress:hover .vc-progress-thumb { opacity: 1; }
+  .vc-time { font-size: 10px; color: var(--text-secondary); white-space: nowrap; min-width: 80px; text-align: center; }
+  .vc-speed-select {
+    font-size: 10px; padding: 3px 6px; border: 1px solid var(--border);
+    border-radius: 3px; font-family: var(--font); cursor: pointer;
+    background: var(--card);
+  }
+  /* ── Selectable Template Cards ── */
+  .tmpl-card {
+    padding: 10px 12px; margin-bottom: 6px;
+    border: 1px solid var(--border); border-left: 3px solid transparent;
+    border-radius: var(--radius-sm); cursor: pointer;
+    background: var(--card); transition: all .12s;
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .tmpl-card:hover { border-color: #ccc; background: #FDFDFC; }
+  .tmpl-card.selected { border-left-color: var(--primary); background: var(--primary-light); }
+  .tmpl-card .tmpl-thumb {
+    width: 64px; height: 42px; border-radius: 3px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; border: 1px solid var(--border);
+    overflow: hidden; background: #F5F3F0;
+  }
+  .tmpl-card .tmpl-thumb img {
+    width: 100%; height: 100%; object-fit: cover;
+  }
+  .tmpl-card .tmpl-thumb .no-thumb {
+    font-size: 9px; color: var(--text-secondary); text-align: center; line-height: 1.2;
+  }
+  .tmpl-card .tmpl-info { flex: 1; min-width: 0; }
+  .tmpl-card .tmpl-name { font-size: 11px; font-weight: 600; }
+  .tmpl-card .tmpl-name .default-tag {
+    font-size: 8px; padding: 1px 5px; border-radius: 2px;
+    background: var(--primary); color: #fff; margin-left: 4px; vertical-align: middle;
+  }
+  .tmpl-card .tmpl-meta { font-size: 9px; color: var(--text-secondary); margin-top: 2px; line-height: 1.4; }
+  .tmpl-group { max-height: 210px; overflow-y: auto; }
+  .tmpl-group::-webkit-scrollbar { width: 4px; }
+  .tmpl-group::-webkit-scrollbar-thumb { background: #ccc; border-radius: 2px; }
+
+  /* ── Template Preview Panel ── */
+  .tmpl-preview {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: #FDFCFB; overflow: hidden; min-height: 180px;
+  }
+  .tmpl-preview-header {
+    padding: 6px 10px; font-size: 10px; font-weight: 600;
+    background: #F5F3F0; border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .tmpl-preview-body { padding: 12px; }
+  /* SOP preview */
+  .prev-sop { font-size: 10px; line-height: 1.6; }
+  .prev-sop .prev-title { font-size: 14px; font-weight: 700; text-align: center; margin-bottom: 6px; }
+  .prev-sop .prev-table { width: 100%; border-collapse: collapse; margin: 6px 0; }
+  .prev-sop .prev-table td, .prev-sop .prev-table th {
+    border: 1px solid #ddd; padding: 3px 6px; font-size: 9px;
+  }
+  .prev-sop .prev-table th { background: #f0f0f0; font-weight: 600; }
+  /* PPT preview */
+  .prev-ppt { display: flex; gap: 8px; flex-wrap: wrap; }
+  .prev-slide {
+    width: 100px; height: 70px; border: 1px solid var(--border);
+    border-radius: 3px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; font-size: 9px;
+    color: var(--text-secondary); background: #fff;
+  }
+  .prev-slide .slide-bar { width: 60%; height: 3px; border-radius: 1px; margin: 3px 0; }
+  /* 口播 preview */
+  .prev-script { font-size: 11px; line-height: 1.8; padding: 8px; }
+  .prev-script .pause-mark { color: var(--warning); font-weight: 600; }
+  /* 语音 preview */
+  .prev-voice { display: flex; gap: 12px; align-items: center; }
+  .prev-voice .voice-wave {
+    flex: 1; height: 32px; border-radius: 4px;
+    background: linear-gradient(90deg, var(--primary-light) 0%, var(--primary) 50%, var(--primary-light) 100%);
+    position: relative; overflow: hidden;
+  }
+  .prev-voice .voice-wave::after {
+    content: ''; position: absolute; top: 2px; bottom: 2px; left: 0; right: 0;
+    background: repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 4px);
+  }
+  .prev-voice .voice-meta { font-size: 10px; color: var(--text-secondary); line-height: 1.6; white-space: nowrap; }
+
+  /* ── Preview Toolbar (format toggle + download) ── */
+  .preview-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 10px; border-bottom: 1px solid var(--border);
+    background: #F5F3F0; flex-shrink: 0;
+  }
+  .fmt-toggle {
+    display: flex; border: 1px solid var(--border); border-radius: 3px; overflow: hidden;
+  }
+  .fmt-toggle button {
+    padding: 3px 10px; font-size: 10px; border: none; cursor: pointer;
+    background: var(--card); color: var(--text-secondary); font-family: var(--font);
+    transition: all .12s;
+  }
+  .fmt-toggle button:not(:last-child) { border-right: 1px solid var(--border); }
+  .fmt-toggle button.active { background: var(--primary); color: #fff; }
+  .fmt-toggle button:hover:not(.active) { background: #eee; }
+  /* Markdown preview */
+  .prev-md { font-size: 12px; line-height: 1.9; }
+  .prev-md h2 { font-size: 14px; color: var(--primary); margin: 8px 0 4px; }
+  .prev-md table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 10px; }
+  .prev-md table td, .prev-md table th { border: 1px solid #ddd; padding: 4px 8px; }
+  .prev-md table th { background: #f0f0f0; font-weight: 600; }
+  .prev-md code { background: #f4f4f4; padding: 1px 4px; border-radius: 2px; font-size: 10px; }
+  .prev-md .md-hint { color: var(--text-secondary); font-size: 10px; font-style: italic; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+
+<!-- ════════════════ SIDEBAR ════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-head">
+    <div class="sidebar-logo"><span id="sbLogo">&#127860;</span> <span id="sbName">一勺笔录(SOP)智能体</span></div>
+    <div class="sidebar-sub">v1.0.0</div>
+  </div>
+  <nav class="sidebar-nav">
+    <button class="sidebar-item active" id="sideProj">
+      <span class="ico">&#128203;</span> 项目列表
+    </button>
+    <button class="sidebar-item" id="sideProjSettings">
+      <span class="ico">&#128736;</span> 项目配置
+    </button>
+    <button class="sidebar-item" id="sideGlobalSettings">
+      <span class="ico">&#9881;</span> 全局设置
+    </button>
+  </nav>
+  <div class="sidebar-foot">
+    <div style="font-size:10px;color:var(--text-secondary);padding:4px 10px;">
+      当前项目：<strong>乾坤多宝鱼</strong>
+    </div>
+  </div>
+</aside>
+
+<!-- ════════════════ MAIN AREA ════════════════ -->
+<div class="main-area">
+
+  <!-- ═══ PAGE: Workspace (7-tab pipeline) ═══ -->
+  <div class="page-view active" id="pageWorkspace">
+
+  <!-- ── Top Nav: 5 main stages ── -->
+  <div class="top-nav" id="topNav">
+    <div class="tn-item active" data-main="1" id="tn1">
+      <span class="tn-num">1</span> 文案提取
+      <span class="tn-dot waiting" id="td1"></span>
+    </div>
+    <span class="tn-arrow">→</span>
+    <div class="tn-item" data-main="2" id="tn2">
+      <span class="tn-num">2</span> 教学文档
+      <span class="tn-dot waiting" id="td2"></span>
+    </div>
+    <span class="tn-arrow">→</span>
+    <div class="tn-item" data-main="3" id="tn3">
+      <span class="tn-num">3</span> 输出课件
+      <span class="tn-dot waiting" id="td3"></span>
+    </div>
+    <span class="tn-arrow">→</span>
+    <div class="tn-item" data-main="4" id="tn4">
+      <span class="tn-num">4</span> 语音课件
+      <span class="tn-dot waiting" id="td4"></span>
+    </div>
+    <span class="tn-arrow">→</span>
+    <div class="tn-item" data-main="5" id="tn5">
+      <span class="tn-num">5</span> 输出列表
+      <span class="tn-dot waiting" id="td5"></span>
+    </div>
+  </div>
+
+  <!-- ── Sub Nav (per stage) ── -->
+  <div class="sub-nav" id="subNav1">
+    <div class="sn-item active" data-sub="1a" id="sn1a">视频提取</div>
+    <span class="sn-sep">|</span>
+    <div class="sn-item" data-sub="1b" id="sn1b">文字输入</div>
+    <span class="sn-sep">|</span>
+    <div class="sn-item" data-sub="1c" id="sn1c">文件上传</div>
+  </div>
+  <div class="sub-nav hidden" id="subNav2">
+    <div class="sn-item active" data-sub="2a" id="sn2a">SOP文案</div>
+    <span class="sn-sep">|</span>
+    <div class="sn-item" data-sub="2b" id="sn2b">道与术文案</div>
+    <span class="sn-sep">|</span>
+    <div class="sn-item" data-sub="2c" id="sn2c">研学手册文案</div>
+  </div>
+  <div class="sub-nav hidden" id="subNav3">
+    <div class="sn-item active" data-sub="3a" id="sn3a">SOP课件</div>
+    <span class="sn-sep">|</span>
+    <div class="sn-item" data-sub="3b" id="sn3b">道术PPT</div>
+    <span class="sn-sep">|</span>
+    <div class="sn-item" data-sub="3c" id="sn3c">研学PPT</div>
+  </div>
+  <div class="sub-nav hidden" id="subNav4">
+    <div class="sn-item active" data-sub="4a" id="sn4a">口播文案</div>
+    <span class="sn-sep">|</span>
+    <div class="sn-item" data-sub="4b" id="sn4b">口播语音</div>
+  </div>
+  <div class="sub-nav hidden" id="subNav5"><div class="sub-nav-desc">输出列表 — 所有产出物统一下载</div></div>
+
+  <!-- ── Content ── -->
+  <div class="content-area">
+
+<!-- ═══════════════════════ MAIN 1: 文案提取 ═══════════════════════ -->
+<div class="main-panel active" id="main1">
+
+  <!-- 1a: 视频提取 -->
+  <div class="sub-panel active" id="sub1a">
+    <div class="panel-grid">
+      <div class="panel-left">
+        <div class="card">
+          <div class="card-title">&#127910; 视频提取</div>
+          <div class="card-hint">粘贴视频链接 → 下载 + 语音识别 → 内容自动填入右侧编辑区</div>
+          <input class="form-input" type="text" placeholder="粘贴视频链接（支持抖音/B站/YouTube等）" style="margin-bottom:6px;">
+          <button class="btn btn-primary btn-sm" style="width:100%;">&#9654; 下载并识别</button>
+          <div class="mini-progress hidden" id="dlBar"><div class="mini-progress-fill" id="dlFill"></div></div>
+          <div class="form-hint" id="dlHint"></div>
+          <button class="btn btn-outline btn-sm" style="width:100%;margin-top:6px;" onclick="openVideoCheck()">&#127910; 播放校验</button>
+        </div>
+        <div class="card">
+          <div class="card-title">&#128193; 项目保存路径</div>
+          <div style="display:flex;gap:4px;">
+            <input class="form-input" type="text" value="D:\YISHAOAGENT\data\projects\乾坤多宝鱼" style="font-size:10px;flex:1;">
+            <button class="btn btn-ghost btn-sm">浏览</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-right">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-title">生成 / 编辑</div>
+          <textarea class="form-textarea" style="flex:1;min-height:120px;" placeholder="视频提取内容将显示在此，可直接编辑..."></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="font-size:10px;color:var(--text-secondary);">编辑完成后保存，即可供下一栏目引用</span>
+            <button class="btn btn-primary btn-sm">&#10003; 保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1b: 文字输入 -->
+  <div class="sub-panel" id="sub1b">
+    <div class="panel-grid">
+      <div class="panel-left">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-title">&#9997; 文字输入</div>
+          <div class="card-hint">直接粘贴或输入食谱内容，右侧同步显示并可编辑</div>
+          <textarea class="form-textarea" style="flex:1;min-height:120px;" placeholder="在此粘贴或输入食谱笔记...">【乾坤多宝鱼】一鱼两吃
+主料：多宝鱼 1条（约750克）
+配料：芦笋 100克、水发木耳 30克、彩椒 50克、生姜 15克
+腌料：盐 3克、湿生粉 15克、胡椒粉 1克
+做法：
+1.多宝鱼宰杀洗净，切下头尾，鱼身去骨片成鱼片
+2.鱼片用腌料腌制10分钟，鱼骨鱼头尾拍干生粉炸至金黄
+3.芦笋切段、木耳撕小朵、彩椒切块，焯水备用
+4.热锅冷油滑炒鱼片至变白捞出
+5.底油爆香姜片，蔬菜翻炒，鱼片回锅，淋调味汁翻匀出锅</textarea>
+        </div>
+      </div>
+      <div class="panel-right">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-title">生成 / 编辑</div>
+          <textarea class="form-textarea" style="flex:1;min-height:120px;">【乾坤多宝鱼】一鱼两吃
+主料：多宝鱼 1条（约750克）
+配料：芦笋 100克、水发木耳 30克、彩椒 50克、生姜 15克
+腌料：盐 3克、湿生粉 15克、胡椒粉 1克
+做法：
+1.多宝鱼宰杀洗净，切下头尾，鱼身去骨片成鱼片
+2.鱼片用腌料腌制10分钟，鱼骨鱼头尾拍干生粉炸至金黄
+3.芦笋切段、木耳撕小朵、彩椒切块，焯水备用
+4.热锅冷油滑炒鱼片至变白捞出
+5.底油爆香姜片，蔬菜翻炒，鱼片回锅，淋调味汁翻匀出锅</textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="font-size:10px;color:var(--text-secondary);">编辑完成后保存，即可供下一栏目引用</span>
+            <button class="btn btn-primary btn-sm">&#10003; 保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1c: 文件上传 -->
+  <div class="sub-panel" id="sub1c">
+    <div class="panel-grid">
+      <div class="panel-left">
+        <div class="card">
+          <div class="card-title">&#128196; 文件上传</div>
+          <div class="card-hint">支持 .txt / .md / .docx 文件，读取后内容自动填入右侧编辑区</div>
+          <input class="form-input" type="file" style="font-size:10px;margin-bottom:6px;">
+          <button class="btn btn-primary btn-sm" style="width:100%;">读取文件</button>
+          <div class="form-hint" id="fileHint"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">&#128193; 项目保存路径</div>
+          <div style="display:flex;gap:4px;">
+            <input class="form-input" type="text" value="D:\YISHAOAGENT\data\projects\乾坤多宝鱼" style="font-size:10px;flex:1;">
+            <button class="btn btn-ghost btn-sm">浏览</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-right">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-title">生成 / 编辑</div>
+          <textarea class="form-textarea" style="flex:1;min-height:120px;" placeholder="文件内容将显示在此，可直接编辑..."></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="font-size:10px;color:var(--text-secondary);">编辑完成后保存，即可供下一栏目引用</span>
+            <button class="btn btn-primary btn-sm">&#10003; 保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MAIN 2: 教学文档 ═══════════════════════ -->
+<div class="main-panel" id="main2">
+
+  <!-- 2a: SOP文案 -->
+  <div class="sub-panel active" id="sub2a">
+    <div class="panel-grid">
+      <div class="panel-left">
+        <div class="card">
+          <div class="card-title" style="color:var(--success);">&#128203; SOP文案生成</div>
+          <div class="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成标准SOP文案</div>
+          <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">
+            <div class="form-label">数据来源</div>
+            <select class="form-select" style="margin-bottom:6px;">
+              <option>视频提取 — 最近保存 15:32</option>
+              <option>文字输入 — 最近保存 14:10</option>
+              <option>文件上传 — 暂无内容</option>
+            </select>
+          </div>
+          <div class="form-label">选择模板</div>
+          <div class="tmpl-group" id="tmplGroup2a">
+            <div class="tmpl-card selected" onclick="selectTemplate(this)">
+              <div class="tmpl-thumb" style="background:#fff;"><div style="width:100%;height:100%;display:flex;flex-direction:column;padding:3px;"><div style="height:6px;background:#eee;border-radius:1px;margin-bottom:2px;"></div><div style="display:flex;gap:1px;flex:1;"><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><div style="height:3px;background:#f0f0f0;"></div><div style="height:3px;background:#f5f5f5;"></div></div><div style="flex:2;display:flex;flex-direction:column;gap:1px;"><div style="height:3px;background:#f0f0f0;"></div><div style="height:3px;background:#f5f5f5;"></div></div></div></div></div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">SOP标准格式 v2.0<span class="default-tag">默认</span></div>
+                <div class="tmpl-meta">提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充</div>
+              </div>
+            </div>
+            <div class="tmpl-card" onclick="selectTemplate(this)">
+              <div class="tmpl-thumb"><div class="no-thumb">无缩略图</div></div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">SOP简约格式 v1.0</div>
+                <div class="tmpl-meta">提示词: SOP简约格式 v1.0 · SKILL: SOP简约填充</div>
+              </div>
+            </div>
+            <div class="tmpl-card" onclick="selectTemplate(this)">
+              <div class="tmpl-thumb"><div class="no-thumb">无缩略图</div></div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">SOP详细格式 v1.2</div>
+                <div class="tmpl-meta">提示词: SOP详细格式 v1.2 · SKILL: SOP详细填充</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-label">大模型</div>
+          <select class="form-select" style="margin-bottom:8px;">
+            <option>DeepSeek (deepseek-v4-pro)</option>
+            <option>Kimi (moonshot-v1)</option>
+            <option>通义千问 (qwen-plus)</option>
+          </select>
+          <button class="btn btn-primary btn-sm" style="width:100%;" id="genSopFullBtn">&#9881; AI 生成 SOP文案</button>
+        </div>
+      </div>
+      <div class="panel-right">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-title">生成 / 编辑</div>
+          <textarea class="form-textarea" style="flex:1;min-height:120px;" placeholder="点击生成按钮，AI生成后在此编辑..."></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="font-size:10px;color:var(--text-secondary);">编辑完成后保存，即可供「标准SOP」栏目引用</span>
+            <button class="btn btn-primary btn-sm">&#10003; 保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2b: 道与术文案 -->
+  <div class="sub-panel" id="sub2b">
+    <div class="panel-grid">
+      <div class="panel-left">
+        <div class="card">
+          <div class="card-title" style="color:var(--purple);">&#128161; 道与术文案生成</div>
+          <div class="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成「道与术」分析文案</div>
+          <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">
+            <div class="form-label">数据来源</div>
+            <select class="form-select" style="margin-bottom:6px;">
+              <option>视频提取 — 最近保存 15:32</option>
+              <option>文字输入 — 最近保存 14:10</option>
+              <option>文件上传 — 暂无内容</option>
+            </select>
+          </div>
+          <div class="form-label">选择模板</div>
+          <div class="tmpl-group" id="tmplGroup2b">
+            <div class="tmpl-card selected" onclick="selectTemplate(this)">
+              <div class="tmpl-thumb" style="background:#FBFAFF;"><div style="font-size:8px;color:var(--purple);text-align:center;padding:4px;"><strong>道</strong><br><span style="font-size:6px;">原理分析</span></div></div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">道与术标准分析 v1.0<span class="default-tag">默认</span></div>
+                <div class="tmpl-meta">提示词: 道与术分析 v1.0 · SKILL: 道与术分析技能</div>
+              </div>
+            </div>
+            <div class="tmpl-card" onclick="selectTemplate(this)">
+              <div class="tmpl-thumb"><div class="no-thumb">无缩略图</div></div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">道与术深度分析 v0.9</div>
+                <div class="tmpl-meta">提示词: 道与术深度 v0.9 · SKILL: 道与术深度技能</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-label">大模型</div>
+          <select class="form-select" style="margin-bottom:8px;">
+            <option>DeepSeek (deepseek-v4-pro)</option>
+            <option>Kimi (moonshot-v1)</option>
+            <option>通义千问 (qwen-plus)</option>
+          </select>
+          <button class="btn btn-primary btn-sm" style="width:100%;" id="genDaoFullBtn">&#9881; AI 生成 道与术文案</button>
+        </div>
+      </div>
+      <div class="panel-right">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-title">生成 / 编辑</div>
+          <textarea class="form-textarea" style="flex:1;min-height:120px;" placeholder="点击生成按钮，AI生成后在此编辑..."></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="font-size:10px;color:var(--text-secondary);">编辑完成后保存，即可供「合成PPT」栏目引用</span>
+            <button class="btn btn-primary btn-sm">&#10003; 保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2c: 研学手册文案 -->
+  <div class="sub-panel" id="sub2c">
+    <div class="panel-grid">
+      <div class="panel-left">
+        <div class="card">
+          <div class="card-title" style="color:var(--warning);">&#128218; 研学手册文案生成</div>
+          <div class="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成研学手册文案</div>
+          <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">
+            <div class="form-label">数据来源</div>
+            <select class="form-select" style="margin-bottom:6px;">
+              <option>视频提取 — 最近保存 15:32</option>
+              <option>文字输入 — 最近保存 14:10</option>
+              <option>文件上传 — 暂无内容</option>
+            </select>
+          </div>
+          <div class="form-label">选择模板</div>
+          <div class="tmpl-group" id="tmplGroup2c">
+            <div class="tmpl-card selected" onclick="selectTemplate(this)">
+              <div class="tmpl-thumb" style="background:#FFFCF5;"><div style="font-size:8px;color:var(--warning);text-align:center;padding:4px;"><strong>&#128218;</strong><br><span style="font-size:6px;">研习手册</span></div></div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">研学手册标准 v1.0<span class="default-tag">默认</span></div>
+                <div class="tmpl-meta">提示词: 研学手册标准 v1.0 · SKILL: 研学手册技能</div>
+              </div>
+            </div>
+            <div class="tmpl-card" onclick="selectTemplate(this)">
+              <div class="tmpl-thumb"><div class="no-thumb">无缩略图</div></div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">研学手册详细 v0.9</div>
+                <div class="tmpl-meta">提示词: 研学手册详细 v0.9 · SKILL: 研学手册详细技能</div>
+              </div>
+            </div>
+          </div>
+          <div class="form-label">大模型</div>
+          <select class="form-select" style="margin-bottom:8px;">
+            <option>DeepSeek (deepseek-v4-pro)</option>
+            <option>Kimi (moonshot-v1)</option>
+            <option>通义千问 (qwen-plus)</option>
+          </select>
+          <button class="btn btn-primary btn-sm" style="width:100%;" id="genYanFullBtn">&#9881; AI 生成 研学手册文案</button>
+        </div>
+      </div>
+      <div class="panel-right">
+        <div class="card" style="flex:1;display:flex;flex-direction:column;">
+          <div class="card-title">生成 / 编辑</div>
+          <textarea class="form-textarea" style="flex:1;min-height:120px;" placeholder="点击生成按钮，AI生成后在此编辑..."></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <span style="font-size:10px;color:var(--text-secondary);">编辑完成后保存，即可供「合成PPT」「口播文案」栏目引用</span>
+            <button class="btn btn-primary btn-sm">&#10003; 保存</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ MAIN 3: 输出课件 ═══════════════════════ -->
+<div class="main-panel" id="main3">
+
+  <!-- 3a: SOP课件 -->
+  <div class="sub-panel active" id="sub3a">
+  <div class="panel-grid">
+    <div class="panel-left">
+      <div class="card">
+        <div class="card-title">SOP 生成 + 导出</div>
+        <div class="card-hint">选择模板自动关联提示词+SKILL，配置在「项目配置」→ 栏目配置</div>
+        <div class="form-label">选择模板</div>
+        <div class="tmpl-group" id="tmplGroup3">
+          <div class="tmpl-card selected" data-preview-target="prev3" data-preview-html='<div class="prev-sop"><div class="prev-title">【标准SOP】菜品名称</div><table class="prev-table"><tr><th>步骤</th><th>操作</th><th>标准</th><th>备注</th></tr><tr><td>1</td><td>备料</td><td>食材洗净切配</td><td>—</td></tr><tr><td>2</td><td>烹饪</td><td>火候/时间</td><td>—</td></tr></table><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">标准表格格式 · 清晰步骤划分</div></div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb" style="background:#fff;color:var(--success);"><div style="width:100%;height:100%;display:flex;flex-direction:column;padding:2px;"><div style="height:8px;background:#ddd;border-radius:1px;margin-bottom:2px;"></div><div style="display:flex;gap:1px;flex:1;"><div style="flex:1;border-right:1px solid #eee;display:flex;flex-direction:column;gap:1px;padding:1px;"><div style="height:3px;background:#e0e0e0;"></div><div style="height:3px;background:#e8e8e8;"></div><div style="height:3px;background:#e8e8e8;"></div></div><div style="flex:2;display:flex;flex-direction:column;gap:1px;padding:1px;"><div style="height:3px;background:#f0f0f0;"></div><div style="height:3px;background:#f0f0f0;"></div><div style="height:3px;background:#f0f0f0;"></div></div></div></div></div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">SOP标准模板.docx<span class="default-tag">默认</span></div>
+              <div class="tmpl-meta">提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充</div>
+            </div>
+          </div>
+          <div class="tmpl-card" data-preview-target="prev3" data-preview-html='<div class="prev-sop"><div class="prev-title">【简约SOP】菜品名称</div><div style="font-size:10px;line-height:1.8;"><p><strong>备料：</strong>食材清单 + 预处理</p><p><strong>烹饪：</strong>核心步骤简述</p><p><strong>装盘：</strong>摆盘要点</p></div><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">简约列表格式 · 适合快速出餐</div></div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb"><div class="no-thumb">无缩略图</div></div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">简约SOP模板.docx</div>
+              <div class="tmpl-meta">提示词: 简约SOP v1.0 · SKILL: 简约SOP填充</div>
+            </div>
+          </div>
+          <div class="tmpl-card" data-preview-target="prev3" data-preview-html='<div class="prev-sop"><div class="prev-title">【详细SOP】菜品名称</div><table class="prev-table"><tr><th>阶段</th><th>步骤</th><th>操作细节</th><th>工具</th><th>时间</th></tr><tr><td>准备</td><td>1</td><td>详细操作描述...</td><td>刀具</td><td>5min</td></tr><tr><td>烹饪</td><td>2</td><td>详细操作描述...</td><td>炒锅</td><td>10min</td></tr></table><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">详细五列表格 · 适合培训考核</div></div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb"><div class="no-thumb">无缩略图</div></div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">详细SOP模板.docx</div>
+              <div class="tmpl-meta">提示词: 详细SOP v1.2 · SKILL: 详细SOP填充</div>
+            </div>
+          </div>
+        </div>
+        <div class="form-label" style="margin-top:8px;">品牌信息（可选）</div>
+        <div style="display:flex;gap:4px;">
+          <input class="form-input" placeholder="版权" style="flex:1;">
+          <input class="form-input" placeholder="签名" style="flex:1;">
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px;">&#128196; AI 生成 + 导出 .docx</button>
+      </div>
+    </div>
+    <div class="panel-right">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;">
+        <div class="tmpl-preview" style="flex:1;display:flex;flex-direction:column;">
+          <div class="tmpl-preview-header">
+            <span>&#128203; 模板预览 — SOP标准模板.docx</span>
+          </div>
+          <div class="preview-toolbar">
+            <div class="fmt-toggle" id="fmtToggle3">
+              <button class="active" onclick="switchFmt('3','doc',this)">DOC 格式</button>
+              <button onclick="switchFmt('3','md',this)">Markdown</button>
+            </div>
+            <span style="flex:1;"></span>
+            <button class="btn btn-ghost btn-sm">&#128229; 下载</button>
+          </div>
+          <div class="tmpl-preview-body" style="overflow-y:auto;" id="prev3">
+            <div class="prev-sop" id="prev3-doc">
+              <div class="prev-title">【标准SOP】菜品名称</div>
+              <table class="prev-table">
+                <tr><th>步骤</th><th>操作</th><th>标准</th><th>备注</th></tr>
+                <tr><td>1</td><td>备料</td><td>食材洗净切配</td><td>—</td></tr>
+                <tr><td>2</td><td>烹饪</td><td>火候/时间</td><td>—</td></tr>
+              </table>
+              <div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">标准表格格式 · 清晰步骤划分</div>
+            </div>
+            <div class="prev-md hidden" id="prev3-md">
+              <h2>【标准SOP】菜品名称</h2>
+              <table><tr><th>步骤</th><th>操作</th><th>标准</th><th>备注</th></tr><tr><td>1</td><td>备料</td><td>食材洗净切配</td><td>—</td></tr><tr><td>2</td><td>烹饪</td><td>火候/时间</td><td>—</td></tr></table>
+              <p class="md-hint">* 标准表格格式 · 清晰步骤划分</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /sub3a -->
+
+  <!-- 3b: 道术PPT -->
+  <div class="sub-panel" id="sub3b">
+
+  <div class="panel-grid">
+    <div class="panel-left">
+      <div class="card">
+        <div class="card-title">&#128205; 道术PPT</div>
+        <div class="card-hint">基于教学文档→道与术文案，选择模板合成PPT</div>
+        <div class="form-label">选择模板</div>
+        <div class="tmpl-group" id="tmplGroup3b">
+            <div class="tmpl-card selected" data-preview-target="prev4" data-preview-html='<div class="prev-ppt"><div class="prev-slide" style="border-top:3px solid var(--purple);"><span style="font-weight:700;">标题页</span><div class="slide-bar" style="background:var(--purple);"></div><span style="font-size:7px;">道与术分析</span></div><div class="prev-slide"><span>内容页</span><div class="slide-bar" style="background:#ddd;"></div><span style="font-size:7px;">分析要点</span></div><div class="prev-slide"><span>内容页</span><div class="slide-bar" style="background:#ddd;"></div><span style="font-size:7px;">总结</span></div></div><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">深色商务风 · 3页布局 · 结构清晰</div>' onclick="selectTemplate(this)">
+              <div class="tmpl-thumb" style="background:#FBFAFF;color:var(--purple);">&#128205;</div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">道与术PPT模板.pptx<span class="default-tag">默认</span></div>
+                <div class="tmpl-meta">提示词: PPT排版 v1.0 · SKILL: 道与术PPT技能</div>
+              </div>
+            </div>
+            <div class="tmpl-card" data-preview-target="prev4" data-preview-html='<div class="prev-ppt"><div class="prev-slide" style="border-top:3px solid var(--warning);"><span style="font-weight:700;">封面</span><div class="slide-bar" style="background:var(--warning);"></div><span style="font-size:7px;">美食主题</span></div><div class="prev-slide"><span>食材</span><div class="slide-bar" style="background:#f8d8b0;"></div></div><div class="prev-slide"><span>做法</span><div class="slide-bar" style="background:#f8d8b0;"></div></div><div class="prev-slide"><span>品鉴</span><div class="slide-bar" style="background:#f8d8b0;"></div></div></div><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">暖色美食风 · 4页布局 · 视觉丰富</div>' onclick="selectTemplate(this)">
+              <div class="tmpl-thumb" style="background:#FFFCF5;color:var(--warning);">&#127869;</div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">美食风PPT模板.pptx</div>
+                <div class="tmpl-meta">提示词: 美食PPT v0.9 · SKILL: 美食PPT技能</div>
+              </div>
+            </div>
+          </div>
+        <button class="btn btn-primary btn-sm" style="width:100%;">&#128205; 合成道术PPT</button>
+        </div>
+      </div>
+    <div class="panel-right">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;">
+        <div class="tmpl-preview" style="flex:1;display:flex;flex-direction:column;">
+          <div class="tmpl-preview-header">&#128205; 模板预览 — 道术PPT模板</div>
+          <div class="preview-toolbar">
+            <div class="fmt-toggle" id="fmtToggle3b">
+              <button class="active" onclick="switchFmt('3b','doc',this)">幻灯片</button>
+              <button onclick="switchFmt('3b','md',this)">Markdown</button>
+            </div>
+            <span style="flex:1;"></span>
+            <button class="btn btn-ghost btn-sm">&#128229; 下载 .pptx</button>
+          </div>
+          <div class="tmpl-preview-body" style="overflow-y:auto;" id="prev3b">
+            <div id="prev3b-doc">
+              <div class="prev-ppt">
+                <div class="prev-slide" style="border-top:3px solid var(--purple);"><span style="font-weight:700;">标题页</span><div class="slide-bar" style="background:var(--purple);"></div><span style="font-size:7px;">道与术分析</span></div>
+                <div class="prev-slide"><span>内容页</span><div class="slide-bar" style="background:#ddd;"></div><span style="font-size:7px;">分析要点</span></div>
+                <div class="prev-slide"><span>内容页</span><div class="slide-bar" style="background:#ddd;"></div><span style="font-size:7px;">总结</span></div>
+              </div>
+              <div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">深色商务风 · 3页布局 · 结构清晰</div>
+            </div>
+            <div class="prev-md hidden" id="prev3b-md">
+              <h2>幻灯片大纲</h2>
+              <table><tr><th>页码</th><th>类型</th><th>内容</th></tr><tr><td>1</td><td>标题页</td><td>道与术分析</td></tr><tr><td>2</td><td>内容页</td><td>分析要点一</td></tr><tr><td>3</td><td>内容页</td><td>分析要点二</td></tr></table>
+              <p class="md-hint">* 深色商务风 · 3页布局</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /sub3b -->
+
+  <!-- 3c: 研学PPT -->
+  <div class="sub-panel" id="sub3c">
+  <div class="panel-grid">
+    <div class="panel-left">
+      <div class="card">
+        <div class="card-title">&#128218; 研学PPT</div>
+        <div class="card-hint">基于教学文档→研学手册文案，选择模板合成PPT</div>
+        <div class="form-label">选择模板</div>
+        <div class="tmpl-group" id="tmplGroup3c">
+            <div class="tmpl-card selected" data-preview-target="prev4" data-preview-html='<div class="prev-ppt"><div class="prev-slide" style="border-top:3px solid var(--success);"><span style="font-weight:700;">研学封面</span><div class="slide-bar" style="background:var(--success);"></div></div><div class="prev-slide"><span>背景</span><div class="slide-bar"></div></div><div class="prev-slide"><span>步骤</span><div class="slide-bar"></div></div><div class="prev-slide"><span>要点</span><div class="slide-bar"></div></div><div class="prev-slide"><span>总结</span><div class="slide-bar"></div></div></div><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">清新学术风 · 5页布局 · 体系完整</div>' onclick="selectTemplate(this)">
+              <div class="tmpl-thumb" style="background:#F0F7F0;color:var(--success);">&#128218;</div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">研学手册PPT模板.pptx<span class="default-tag">默认</span></div>
+                <div class="tmpl-meta">提示词: PPT排版 v1.0 · SKILL: 研学手册PPT技能</div>
+              </div>
+            </div>
+            <div class="tmpl-card" data-preview-target="prev4" data-preview-html='<div class="prev-ppt"><div class="prev-slide" style="border-top:3px solid var(--warning);"><span style="font-weight:700;">美食封面</span><div class="slide-bar" style="background:var(--warning);"></div></div><div class="prev-slide"><span>食材</span><div class="slide-bar" style="background:#f8d8b0;"></div></div><div class="prev-slide"><span>研学</span><div class="slide-bar" style="background:#f8d8b0;"></div></div></div><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">美食研学风 · 3页布局</div>' onclick="selectTemplate(this)">
+              <div class="tmpl-thumb" style="background:#FFFCF5;color:var(--warning);">&#127869;</div>
+              <div class="tmpl-info">
+                <div class="tmpl-name">美食风PPT模板.pptx</div>
+                <div class="tmpl-meta">提示词: 美食PPT v0.9 · SKILL: 美食PPT技能</div>
+              </div>
+            </div>
+          </div>
+        <button class="btn btn-primary btn-sm" style="width:100%;">&#128205; 合成研学PPT</button>
+        </div>
+      </div>
+    <div class="panel-right">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;">
+        <div class="tmpl-preview" style="flex:1;display:flex;flex-direction:column;">
+          <div class="tmpl-preview-header">&#128218; 模板预览 — 研学PPT模板</div>
+          <div class="preview-toolbar">
+            <div class="fmt-toggle" id="fmtToggle3c">
+              <button class="active" onclick="switchFmt('3c','doc',this)">幻灯片</button>
+              <button onclick="switchFmt('3c','md',this)">Markdown</button>
+            </div>
+            <span style="flex:1;"></span>
+            <button class="btn btn-ghost btn-sm">&#128229; 下载 .pptx</button>
+          </div>
+          <div class="tmpl-preview-body" style="overflow-y:auto;" id="prev3c">
+            <div id="prev3c-doc">
+              <div class="prev-ppt">
+                <div class="prev-slide" style="border-top:3px solid var(--success);"><span style="font-weight:700;">研学封面</span><div class="slide-bar" style="background:var(--success);"></div></div>
+                <div class="prev-slide"><span>背景</span><div class="slide-bar"></div></div>
+                <div class="prev-slide"><span>步骤</span><div class="slide-bar"></div></div>
+                <div class="prev-slide"><span>要点</span><div class="slide-bar"></div></div>
+                <div class="prev-slide"><span>总结</span><div class="slide-bar"></div></div>
+              </div>
+              <div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">清新学术风 · 5页布局 · 体系完整</div>
+            </div>
+            <div class="prev-md hidden" id="prev3c-md">
+              <h2>幻灯片大纲</h2>
+              <table><tr><th>页码</th><th>类型</th><th>内容</th></tr><tr><td>1</td><td>封面</td><td>研学手册 — 菜品名称</td></tr><tr><td>2</td><td>背景</td><td>菜品文化背景</td></tr><tr><td>3</td><td>步骤</td><td>研学要点</td></tr></table>
+              <p class="md-hint">* 清新学术风 · 5页布局</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div><!-- /sub3c -->
+
+</div><!-- /main3: 输出课件 -->
+
+<!-- ═══════════════════════ MAIN 4: 语音课件 ═══════════════════════ -->
+<div class="main-panel" id="main4">
+
+  <!-- 4a: 口播文案 -->
+  <div class="sub-panel active" id="sub4a">
+  <div class="panel-grid">
+    <div class="panel-left">
+      <div class="card">
+        <div class="card-title">口播文案</div>
+        <div class="card-hint">基于研学手册文案，选择模板生成口播稿</div>
+        <div class="form-label">来源</div>
+        <select class="form-select" style="margin-bottom:6px;"><option>研学手册文案</option></select>
+        <div class="form-label">选择模板</div>
+        <div class="tmpl-group" id="tmplGroup5">
+          <div class="tmpl-card selected" data-preview-target="prev5" data-preview-html='<div class="prev-script"><p><strong>大家好，欢迎收看今天的美食分享！</strong></p><p>今天我们要做的是一道经典名菜——<strong>【菜品名称】</strong></p><p><span class="pause-mark">‖ 停顿1s</span></p><p>首先来看食材准备：主料、配料、调料一一备齐。</p><p>关键步骤来了<span class="pause-mark">‖ 强调</span>：火候控制在中小火，时间约3分钟。</p><p>最后装盘，撒上葱花点缀，一道色香味俱全的佳肴就完成了！</p></div><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">标准节奏 · 适合短视频口播 · 约60秒</div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb" style="background:#F0F7FF;color:var(--cyan);">&#128227;</div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">标准口播模板<span class="default-tag">默认</span></div>
+              <div class="tmpl-meta">提示词: 口播稿生成 v1.0 · SKILL: 口播风格</div>
+            </div>
+          </div>
+          <div class="tmpl-card" data-preview-target="prev5" data-preview-html='<div class="prev-script"><p><strong>&#9889;【菜品】来啦！30秒教会你！</strong></p><p>食材超简单，就这几样<span class="pause-mark">‖ 快速</span></p><p>第一步：处理食材，30秒搞定</p><p>第二步：下锅翻炒，大火快炒<span class="pause-mark">‖ 加速</span></p><p>出锅！就是这么简单！双击点赞收藏！</p></div><div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">快节奏 · 适合短视频 · 约30秒</div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb" style="background:#FFF5F5;color:var(--warning);">&#9889;</div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">快节奏口播模板</div>
+              <div class="tmpl-meta">提示词: 口播稿 v0.8 · SKILL: 快节奏口播</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:100%;margin-top:6px;">&#128227; 生成口播稿</button>
+      </div>
+    </div>
+    <div class="panel-right">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;">
+        <div class="tmpl-preview" style="flex:1;display:flex;flex-direction:column;">
+          <div class="tmpl-preview-header">&#128227; 模板预览 — 标准口播模板</div>
+          <div class="preview-toolbar">
+            <div class="fmt-toggle" id="fmtToggle5">
+              <button class="active" onclick="switchFmt('5','doc',this)">口播稿</button>
+              <button onclick="switchFmt('5','md',this)">Markdown</button>
+            </div>
+            <span style="flex:1;"></span>
+            <button class="btn btn-ghost btn-sm">&#128229; 下载</button>
+          </div>
+          <div class="tmpl-preview-body" style="overflow-y:auto;" id="prev5">
+            <div id="prev5-doc">
+              <div class="prev-script">
+                <p><strong>大家好，欢迎收看今天的美食分享！</strong></p>
+                <p>今天我们要做的是一道经典名菜——<strong>【菜品名称】</strong></p>
+                <p><span class="pause-mark">‖ 停顿1s</span></p>
+                <p>首先来看食材准备：主料、配料、调料一一备齐。</p>
+                <p>关键步骤来了<span class="pause-mark">‖ 强调</span>：火候控制在中小火，时间约3分钟。</p>
+                <p>最后装盘，撒上葱花点缀，一道色香味俱全的佳肴就完成了！</p>
+              </div>
+              <div style="font-size:9px;color:var(--text-secondary);margin-top:4px;">标准节奏 · 适合短视频口播 · 约60秒</div>
+            </div>
+            <div class="prev-md hidden" id="prev5-md">
+              <h2>口播稿 — 标准口播模板</h2>
+              <p><strong>大家好，欢迎收看今天的美食分享！</strong></p>
+              <p>今天我们要做的是一道经典名菜——<strong>【菜品名称】</strong></p>
+              <p><code>‖ 停顿1s</code></p>
+              <p>首先来看食材准备：主料、配料、调料一一备齐。</p>
+              <p>关键步骤来了 <code>‖ 强调</code>：火候控制在中小火，时间约3分钟。</p>
+              <p>最后装盘，撒上葱花点缀，一道色香味俱全的佳肴就完成了！</p>
+              <p class="md-hint">* 标准节奏 · 适合短视频口播 · 约60秒</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /sub4a: 口播文案 -->
+
+  <!-- 4b: 口播语音 -->
+  <div class="sub-panel" id="sub4b">
+  <div class="panel-grid">
+    <div class="panel-left">
+      <div class="card">
+        <div class="card-title">TTS 语音合成</div>
+        <div class="card-hint">选择模板自动关联音色+语速+音量，配置在「项目配置」→ 栏目配置</div>
+        <div class="form-label">来源</div>
+        <select class="form-select" style="margin-bottom:6px;"><option>口播文案</option></select>
+        <div class="form-label">引擎</div>
+        <select class="form-select" style="margin-bottom:6px;"><option>CosyVoice (DashScope)</option></select>
+        <div class="form-label">选择模板</div>
+        <div class="tmpl-group" id="tmplGroup6">
+          <div class="tmpl-card selected" data-preview-target="prev6" data-preview-html='<div class="prev-voice"><div class="voice-wave"></div><div class="voice-meta"><strong>温柔女声</strong><br>语速: 1.0x · 音量: 50%<br>风格: 自然亲切</div></div><div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">适合美食类口播，声音柔和有亲和力</div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb" style="background:#FFF0F5;color:#E91E63;">&#127925;</div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">标准口播音色<span class="default-tag">默认</span></div>
+              <div class="tmpl-meta">音色: 温柔女声 · 语速: 1.0x · 音量: 50%</div>
+            </div>
+          </div>
+          <div class="tmpl-card" data-preview-target="prev6" data-preview-html='<div class="prev-voice"><div class="voice-wave" style="background:linear-gradient(90deg,#E8F5E9 0%,#4CAF50 50%,#E8F5E9 100%);"></div><div class="voice-meta"><strong>沉稳男声</strong><br>语速: 1.0x · 音量: 50%<br>风格: 专业稳重</div></div><div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">适合教学类口播，声音沉稳有说服力</div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb" style="background:#E8F5E9;color:#4CAF50;">&#127925;</div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">沉稳男声</div>
+              <div class="tmpl-meta">音色: 沉稳男声 · 语速: 1.0x · 音量: 50%</div>
+            </div>
+          </div>
+          <div class="tmpl-card" data-preview-target="prev6" data-preview-html='<div class="prev-voice"><div class="voice-wave" style="background:linear-gradient(90deg,#FFF3E0 0%,#FF9800 50%,#FFF3E0 100%);"></div><div class="voice-meta"><strong>活泼女声</strong><br>语速: 1.3x · 音量: 60%<br>风格: 快节奏活泼</div></div><div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">适合快节奏短视频口播，声音活泼有感染力</div>' onclick="selectTemplate(this)">
+            <div class="tmpl-thumb" style="background:#FFF3E0;color:#FF9800;">&#127925;</div>
+            <div class="tmpl-info">
+              <div class="tmpl-name">快节奏口播音色</div>
+              <div class="tmpl-meta">音色: 活泼女声 · 语速: 1.3x · 音量: 60%</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="width:100%;margin-top:8px;">&#128266; 语音合成</button>
+      </div>
+    </div>
+    <div class="panel-right">
+      <div class="card" style="flex:1;display:flex;flex-direction:column;">
+        <div class="tmpl-preview" style="flex:1;display:flex;flex-direction:column;">
+          <div class="tmpl-preview-header">&#127925; 模板预览 — 标准口播音色</div>
+          <div class="preview-toolbar">
+            <span style="font-size:10px;color:var(--text-secondary);">&#127925; 音频预览</span>
+            <span style="flex:1;"></span>
+            <button class="btn btn-ghost btn-sm">&#9654; 试听</button>
+            <button class="btn btn-ghost btn-sm">&#128229; 下载 .mp3</button>
+          </div>
+          <div class="tmpl-preview-body" style="overflow-y:auto;" id="prev6">
+            <div class="prev-voice">
+              <div class="voice-wave"></div>
+              <div class="voice-meta">
+                <strong>温柔女声</strong><br>语速: 1.0x · 音量: 50%<br>风格: 自然亲切
+              </div>
+            </div>
+            <div style="font-size:10px;color:var(--text-secondary);margin-top:6px;">适合美食类口播，声音柔和有亲和力</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /sub4b: 口播语音 -->
+
+</div><!-- /main4: 语音课件 -->
+
+<!-- ═══════════════════════ MAIN 5: 输出列表 ═══════════════════════ -->
+<div class="main-panel" id="main5">
+  <div class="card" style="height:100%;display:flex;flex-direction:column;">
+    <div class="card-title">所有产出物</div>
+    <table class="output-table">
+      <thead><tr><th>文件</th><th>类型</th><th>来源</th><th>大小</th><th>操作</th></tr></thead>
+      <tbody>
+        <tr><td>&#128203; 乾坤多宝鱼_SOP.docx</td><td>Word</td><td>SOP文案</td><td>—</td><td><button class="btn btn-ghost btn-sm">下载</button></td></tr>
+        <tr><td>&#128205; 乾坤多宝鱼_道与术.pptx</td><td>PPT</td><td>道与术文案</td><td>—</td><td><button class="btn btn-ghost btn-sm">下载</button></td></tr>
+        <tr><td>&#128205; 乾坤多宝鱼_研学手册.pptx</td><td>PPT</td><td>研学手册文案</td><td>—</td><td><button class="btn btn-ghost btn-sm">下载</button></td></tr>
+        <tr><td>&#127925; 乾坤多宝鱼_口播.mp3</td><td>MP3</td><td>口播文案→TTS</td><td>—</td><td><button class="btn btn-ghost btn-sm">下载</button></td></tr>
+      </tbody>
+    </table>
+    <div style="display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+      <button class="btn btn-primary btn-sm">&#128230; 一键下载全部 .zip</button>
+      <button class="btn btn-outline btn-sm">&#128194; 打开文件夹</button>
+    </div>
+  </div>
+</div><!-- /main5: 输出列表 -->
+
+  </div><!-- /content-area -->
+
+  <!-- Config status bar -->
+  <div class="config-bar" id="configBar">
+    <span class="cb-label">&#9881; 当前栏目配置：</span>
+    <span>模型</span> <span class="cb-val" id="cbModel">DeepSeek</span>
+    <span class="cb-sep">|</span>
+    <span>模板</span> <span class="cb-val" id="cbTmpl">—</span>
+    <span style="font-size:9px;color:#999;">(提示词 + SKILL)</span>
+    <span class="cb-sep">|</span>
+    <span>项目路径</span> <span class="cb-val" style="color:var(--text-secondary);">D:\...\乾坤多宝鱼</span>
+    <a class="cb-edit" onclick="document.getElementById('sideProjSettings').click()">前往项目配置修改</a>
+  </div>
+
+  </div><!-- /pageWorkspace -->
+
+  <!-- ═══ PAGE: 项目列表 ═══ -->
+  <div class="page-view" id="pageProjects">
+    <div class="proj-list-header">
+      <input class="form-input" type="text" placeholder="搜索项目..." style="flex:1;max-width:300px;">
+      <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); document.getElementById('newProjDialog').classList.remove('hidden');">+ 新建项目</button>
+      <button class="btn btn-outline btn-sm">导入</button>
+    </div>
+    <div class="proj-list">
+      <div class="proj-card" onclick="openProject('proj1')">
+        <span class="pc-name">乾坤多宝鱼·一鱼两吃</span>
+        <span class="pc-status in_progress">进行中</span>
+        <span class="pc-date">2026-06-22</span>
+        <span class="pc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">导出</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()" style="color:var(--warning);">删除</button>
+        </span>
+      </div>
+      <div class="proj-card" onclick="openProject('proj2')">
+        <span class="pc-name">宫保鸡丁</span>
+        <span class="pc-status completed">已完成</span>
+        <span class="pc-date">2026-06-18</span>
+        <span class="pc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">导出</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()" style="color:var(--warning);">删除</button>
+        </span>
+      </div>
+      <div class="proj-card" onclick="openProject('proj3')">
+        <span class="pc-name">红烧肉</span>
+        <span class="pc-status draft">草稿</span>
+        <span class="pc-date">2026-06-15</span>
+        <span class="pc-actions">
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()">导出</button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation()" style="color:var(--warning);">删除</button>
+        </span>
+      </div>
+      <div style="padding:20px;text-align:center;color:var(--text-secondary);font-size:11px;">
+        点击项目卡片进入编辑
+      </div>
+    </div>
+  </div><!-- /pageProjects -->
+
+  <!-- ═══ PAGE: 项目配置 ═══ -->
+  <div class="page-view" id="pageProjSettings">
+    <div class="mgmt-tabs" id="projSettingsTabs">
+      <button class="mgmt-tab active" data-pstab="models">模型设置</button>
+	      <button class="mgmt-tab" data-pstab="columns">栏目配置</button>
+    </div>
+    <div class="mgmt-content">
+      <!-- Tab 1: 模型设置 — 按7个栏目列出每个栏目的模型 -->
+      <div id="pstabModels">
+        <!-- 二级导航 -->
+        <div class="sub-tabs" id="modelSubTabs">
+          <button class="sub-tab active" data-msub="providers">添加厂商</button>
+          <button class="sub-tab" data-msub="stageModels">模型配置</button>
+        </div>
+
+        <!-- 添加厂商 -->
+        <div id="msubProviders">
+          <table class="output-table" style="margin-bottom:8px;">
+            <thead><tr><th>名称</th><th>Base URL</th><th>状态</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td>DeepSeek</td><td>https://api.deepseek.com/v1</td><td style="color:var(--success);">已连接</td><td><button class="btn btn-ghost btn-sm">编辑</button></td></tr>
+              <tr><td>通义千问</td><td>https://dashscope.aliyuncs.com/...</td><td style="color:var(--success);">已连接</td><td><button class="btn btn-ghost btn-sm">编辑</button></td></tr>
+              <tr><td>Kimi</td><td>https://api.moonshot.cn/v1</td><td style="color:var(--text-secondary);">未配置</td><td><button class="btn btn-ghost btn-sm">配置</button></td></tr>
+            </tbody>
+          </table>
+          <button class="btn btn-outline btn-sm" style="margin-bottom:12px;">+ 添加 LLM 提供商</button>
+
+          <div style="padding:10px;border:1px solid var(--border);border-radius:5px;">
+            <div style="font-size:11px;font-weight:600;margin-bottom:6px;">TTS 语音</div>
+            <div class="settings-row">
+              <label>DashScope API Key</label>
+              <input class="form-input" type="password" value="sk-xxxx****">
+              <button class="btn btn-ghost btn-sm">测试</button>
+            </div>
+            <div class="settings-row">
+              <label>默认音色</label>
+              <select class="form-select" style="max-width:200px;"><option>温柔女声</option><option>沉稳男声</option></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 模型配置 -->
+        <div id="msubStageModels" class="hidden">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <span style="font-size:10px;color:var(--text-secondary);">为每个栏目/子栏目指定默认大模型，新建项目时自动套用，也可在项目中覆盖。</span>
+            <button class="btn btn-outline btn-sm">+ 新建模型配置</button>
+          </div>
+          <table class="output-table">
+            <thead><tr><th>栏目</th><th>子项</th><th>当前模型</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td rowspan="3"><strong>1. 文案提取</strong></td><td>直接输入</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;">  <option>DeepSeek (deepseek-v4-pro)</option><option>DeepSeek (deepseek-chat)</option><option>通义千问 (qwen-plus)</option><option>通义千问 (qwen-max)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td>视频链接</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option>DeepSeek (deepseek-v4-pro)</option><option selected>通义千问 (qwen-plus)</option><option>通义千问 (qwen-max)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td>导入文件</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option selected>DeepSeek (deepseek-v4-pro)</option><option>DeepSeek (deepseek-chat)</option><option>通义千问 (qwen-plus)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td rowspan="3"><strong>2. 教学文档</strong></td><td>SOP文案</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option selected>DeepSeek (deepseek-v4-pro)</option><option>DeepSeek (deepseek-chat)</option><option>通义千问 (qwen-plus)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td>道与术文案</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option selected>DeepSeek (deepseek-v4-pro)</option><option>DeepSeek (deepseek-chat)</option><option>通义千问 (qwen-plus)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td>研学手册文案</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option selected>DeepSeek (deepseek-v4-pro)</option><option>DeepSeek (deepseek-chat)</option><option>通义千问 (qwen-plus)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td><strong>3. 标准SOP</strong></td><td>SOP 生成+导出</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option selected>DeepSeek (deepseek-v4-pro)</option><option>DeepSeek (deepseek-chat)</option><option>通义千问 (qwen-plus)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td rowspan="2"><strong>4. 合成PPT</strong></td><td>道与术 PPT</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option>DeepSeek (deepseek-v4-pro)</option><option selected>Kimi (moonshot-v1)</option><option>通义千问 (qwen-plus)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td>研学手册 PPT</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option>DeepSeek (deepseek-v4-pro)</option><option selected>Kimi (moonshot-v1)</option><option>通义千问 (qwen-plus)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td><strong>5. 口播文案</strong></td><td>口播稿生成</td><td><select class="form-select" style="font-size:10px;padding:2px 4px;"><option selected>DeepSeek (deepseek-v4-pro)</option><option>DeepSeek (deepseek-chat)</option><option>通义千问 (qwen-plus)</option><option>Kimi (moonshot-v1)</option></select></td><td><button class="btn btn-ghost btn-sm">测试</button></td></tr>
+              <tr><td><strong>6. 语音合成</strong></td><td>TTS</td><td style="color:var(--text-secondary);">CosyVoice (无需选择)</td><td>—</td></tr>
+              <tr><td><strong>7. 输出列表</strong></td><td>汇总下载</td><td style="color:var(--text-secondary);">无需配置</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Tab 2: 栏目配置 — 按栏目折叠面板 -->
+      <div id="pstabColumns" class="hidden">
+        <div style="font-size:10px;color:var(--text-secondary);margin-bottom:10px;">每个栏目配置模板/提示词/SKILL，新建项目时按栏目调取默认配置。有模板的栏目上传模板后AI自动分析生成提示词+SKILL，无模板的栏目直接手写。</div>
+
+        <!-- 1. 文案提取 — 无模板 -->
+        <div class="ac-group">
+          <div class="ac-head" onclick="toggleAccordion(this)">
+            <span class="ac-num no-tmpl">1</span>
+            <span class="ac-title">文案提取</span>
+            <span class="ac-summary">无模板 · 3 个独立配置项</span>
+            <span class="ac-arrow">&#9660;</span>
+          </div>
+          <div class="ac-body">
+            <div class="ac-sub-item">
+              <div class="ac-sub-item-header">直接输入</div>
+              <div class="ac-field-row">
+                <div class="ac-field"><label>提示词</label><textarea>你是一个食谱内容整理专家。请将用户输入的食谱笔记整理为结构化格式，包含：菜品名称、主料、配料、调料、步骤。</textarea></div>
+                <div class="ac-field"><label>SKILL 输出格式</label><textarea>## 菜品名称\n{name}\n\n## 主料\n- {ingredient}\n\n## 步骤\n1. {step}</textarea></div>
+              </div>
+            </div>
+            <div class="ac-sub-item">
+              <div class="ac-sub-item-header">视频链接</div>
+              <div class="ac-field-row">
+                <div class="ac-field"><label>提示词</label><textarea>你是一个视频内容提取专家。请根据视频字幕整理出完整的食谱内容，去除冗余对话，保留所有关键步骤和用量。</textarea></div>
+                <div class="ac-field"><label>SKILL 输出格式</label><textarea>## 菜品名称\n{name}\n\n## 原料\n- {ingredient}</textarea></div>
+              </div>
+            </div>
+            <div class="ac-sub-item">
+              <div class="ac-sub-item-header">导入文件</div>
+              <div class="ac-field-row">
+                <div class="ac-field"><label>提示词</label><textarea>你是一个文件内容解析专家。请从上传的文件中提取完整食谱内容，识别并保留所有数值信息（用量、时间、温度）。</textarea></div>
+                <div class="ac-field"><label>SKILL 输出格式</label><textarea>## 菜品名称\n{name}\n\n## 主料\n- {ingredient}\n\n## 步骤\n1. {step}</textarea></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 教学文档 — 无模板 -->
+        <div class="ac-group">
+          <div class="ac-head" onclick="toggleAccordion(this)">
+            <span class="ac-num no-tmpl">2</span>
+            <span class="ac-title">教学文档</span>
+            <span class="ac-summary">无模板 · 3 个独立配置项</span>
+            <span class="ac-arrow">&#9660;</span>
+          </div>
+          <div class="ac-body">
+            <div class="ac-sub-item">
+              <div class="ac-sub-item-header">SOP 文案</div>
+              <div class="ac-field-row">
+                <div class="ac-field"><label>提示词</label><textarea>你是一个SOP撰写专家。请将食谱内容转化为标准操作流程，每一步包含：操作名称、所需工具、操作时间、质量标准。</textarea></div>
+                <div class="ac-field"><label>SKILL 输出格式</label><textarea># SOP：{菜品名称}\n\n## 准备工作\n| 项目 | 规格 |\n\n## 操作步骤\n### 步骤1：{名称}\n- 时间：\n- 标准：</textarea></div>
+              </div>
+            </div>
+            <div class="ac-sub-item">
+              <div class="ac-sub-item-header">道与术文案</div>
+              <div class="ac-field-row">
+                <div class="ac-field"><label>提示词</label><textarea>你是一个美食文化分析专家。请从食谱中提炼「道」（文化渊源、烹饪哲学）与「术」（技术要点、关键技巧），语言富有感染力。</textarea></div>
+                <div class="ac-field"><label>SKILL 输出格式</label><textarea># {菜品名称} — 道与术\n\n## 道 · 文化渊源\n> {文化背景}\n\n## 术 · 烹饪技法\n### 技法一：{名称}\n- 要点：</textarea></div>
+              </div>
+            </div>
+            <div class="ac-sub-item">
+              <div class="ac-sub-item-header">研学手册文案</div>
+              <div class="ac-field-row">
+                <div class="ac-field"><label>提示词</label><textarea>你是一个研学课程设计师。请将食谱转化为研学手册内容，包含：学习目标、知识要点、实践任务、思考题，适合中小学研学使用。</textarea></div>
+                <div class="ac-field"><label>SKILL 输出格式</label><textarea># 研学手册：{菜品名称}\n\n## 学习目标\n1. \n\n## 知识卡片\n| 知识点 | 说明 |\n\n## 实践任务\n### 任务一：</textarea></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 标准SOP — 有模板（文档模板） -->
+        <div class="ac-group">
+          <div class="ac-head" onclick="toggleAccordion(this)">
+            <span class="ac-num">3</span>
+            <span class="ac-title">标准SOP</span>
+            <span class="ac-summary">默认: SOP标准模板.docx · 3 个模板</span>
+            <span class="ac-arrow">&#9660;</span>
+          </div>
+          <div class="ac-body">
+            <div class="ac-tmpl-card default">
+              <div class="ac-tmpl-row">
+                <div class="tmpl-thumb" style="width:48px;height:32px;background:#fff;"><div style="width:100%;height:100%;display:flex;flex-direction:column;padding:2px;"><div style="height:6px;background:#ddd;border-radius:1px;margin-bottom:1px;"></div><div style="display:flex;gap:1px;flex:1;"><div style="flex:1;border-right:1px solid #eee;display:flex;flex-direction:column;gap:1px;padding:1px;"><div style="height:2px;background:#e0e0e0;"></div><div style="height:2px;background:#e8e8e8;"></div></div><div style="flex:2;display:flex;flex-direction:column;gap:1px;padding:1px;"><div style="height:2px;background:#f0f0f0;"></div><div style="height:2px;background:#f0f0f0;"></div></div></div></div></div>
+                <div style="flex:1;min-width:0;">
+                  <div class="ac-tmpl-row" style="margin-bottom:2px;">
+                    <span class="ac-tmpl-name">SOP标准模板.docx</span>
+                    <span class="badge" style="background:var(--primary);">默认</span>
+                    <span style="flex:1;"></span>
+                    <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                    <button class="btn btn-ghost btn-sm">下载</button>
+                    <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+                  </div>
+                  <div class="ac-tmpl-meta">提示词: SOP标准格式 v2.0 | SKILL: SOP表格填充 | 分析时间: 2026-06-20</div>
+                </div>
+              </div>
+            </div>
+            <div class="ac-tmpl-card">
+              <div class="ac-tmpl-row">
+                <div class="tmpl-thumb" style="width:48px;height:32px;"><div class="no-thumb">无缩略图</div></div>
+                <div style="flex:1;min-width:0;">
+                  <div class="ac-tmpl-row" style="margin-bottom:2px;">
+                    <span class="ac-tmpl-name">简约SOP模板.docx</span>
+                    <button class="btn btn-ghost btn-sm" style="font-size:9px;margin-left:4px;">设为默认</button>
+                    <span style="flex:1;"></span>
+                    <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                    <button class="btn btn-ghost btn-sm">下载</button>
+                    <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+                  </div>
+                  <div class="ac-tmpl-meta">提示词: 简约SOP v1.0 | SKILL: 简约SOP填充 | 分析时间: 2026-06-18 | <a href="#" style="color:var(--primary);font-size:9px;">上传缩略图</a></div>
+                </div>
+              </div>
+            </div>
+            <div class="ac-tmpl-card">
+              <div class="ac-tmpl-row">
+                <div class="tmpl-thumb" style="width:48px;height:32px;"><div class="no-thumb">无缩略图</div></div>
+                <div style="flex:1;min-width:0;">
+                  <div class="ac-tmpl-row" style="margin-bottom:2px;">
+                    <span class="ac-tmpl-name">详细SOP模板.docx</span>
+                    <button class="btn btn-ghost btn-sm" style="font-size:9px;margin-left:4px;">设为默认</button>
+                    <span style="flex:1;"></span>
+                    <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                    <button class="btn btn-ghost btn-sm">下载</button>
+                    <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+                  </div>
+                  <div class="ac-tmpl-meta">提示词: 详细SOP v1.2 | SKILL: 详细SOP填充 | 分析时间: 2026-06-22 | <a href="#" style="color:var(--primary);font-size:9px;">上传缩略图</a></div>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm">+ 上传文档模板</button>
+          </div>
+        </div>
+
+        <!-- 4. 合成PPT — 有模板（PPT模板） -->
+        <div class="ac-group">
+          <div class="ac-head" onclick="toggleAccordion(this)">
+            <span class="ac-num">4</span>
+            <span class="ac-title">合成PPT</span>
+            <span class="ac-summary">默认: 道与术PPT模板.pptx · 3 个模板</span>
+            <span class="ac-arrow">&#9660;</span>
+          </div>
+          <div class="ac-body">
+            <div class="ac-tmpl-card default">
+              <div class="ac-tmpl-row">
+                <span class="ac-tmpl-name">&#128205; 道与术PPT模板.pptx</span>
+                <span class="badge" style="background:var(--primary);">默认</span>
+                <span style="flex:1;"></span>
+                <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                <button class="btn btn-ghost btn-sm">下载</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+              </div>
+              <div class="ac-tmpl-meta">提示词: PPT排版 v1.0 | SKILL: 道与术PPT技能 | 分析时间: 2026-06-17</div>
+            </div>
+            <div class="ac-tmpl-card">
+              <div class="ac-tmpl-row">
+                <span class="ac-tmpl-name">&#128205; 研学手册PPT模板.pptx</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:9px;margin-left:4px;">设为默认</button>
+                <span style="flex:1;"></span>
+                <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                <button class="btn btn-ghost btn-sm">下载</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+              </div>
+              <div class="ac-tmpl-meta">提示词: PPT排版 v1.0 | SKILL: 研学手册PPT技能 | 分析时间: 2026-06-17</div>
+            </div>
+            <div class="ac-tmpl-card">
+              <div class="ac-tmpl-row">
+                <span class="ac-tmpl-name">&#128205; 美食风PPT模板.pptx</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:9px;margin-left:4px;">设为默认</button>
+                <span style="flex:1;"></span>
+                <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                <button class="btn btn-ghost btn-sm">下载</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+              </div>
+              <div class="ac-tmpl-meta">提示词: 美食PPT v0.9 | SKILL: 美食PPT技能 | 分析时间: 2026-06-22</div>
+            </div>
+            <button class="btn btn-outline btn-sm">+ 上传 PPT 模板</button>
+          </div>
+        </div>
+
+        <!-- 5. 口播文案 — 有模板（语音模板） -->
+        <div class="ac-group">
+          <div class="ac-head" onclick="toggleAccordion(this)">
+            <span class="ac-num">5</span>
+            <span class="ac-title">口播文案</span>
+            <span class="ac-summary">默认: 标准口播模板 · 2 个模板</span>
+            <span class="ac-arrow">&#9660;</span>
+          </div>
+          <div class="ac-body">
+            <div class="ac-tmpl-card default">
+              <div class="ac-tmpl-row">
+                <span class="ac-tmpl-name">&#127897; 标准口播模板</span>
+                <span class="badge" style="background:var(--primary);">默认</span>
+                <span style="flex:1;"></span>
+                <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                <button class="btn btn-ghost btn-sm">编辑</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+              </div>
+              <div class="ac-tmpl-meta">提示词: 口播稿生成 v1.0 | SKILL: 口播风格 | 音色: 温柔女声 | 语速: 1.0x</div>
+            </div>
+            <div class="ac-tmpl-card">
+              <div class="ac-tmpl-row">
+                <span class="ac-tmpl-name">&#127897; 快节奏口播模板</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:9px;margin-left:4px;">设为默认</button>
+                <span style="flex:1;"></span>
+                <button class="btn btn-ghost btn-sm">&#128269; 分析</button>
+                <button class="btn btn-ghost btn-sm">编辑</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+              </div>
+              <div class="ac-tmpl-meta">提示词: 口播稿 v0.8 | SKILL: 快节奏口播 | 音色: 活泼女声 | 语速: 1.2x</div>
+            </div>
+            <button class="btn btn-outline btn-sm">+ 新建语音模板</button>
+          </div>
+        </div>
+
+        <!-- 6. 语音合成 — 有模板（语音/音色模板） -->
+        <div class="ac-group">
+          <div class="ac-head" onclick="toggleAccordion(this)">
+            <span class="ac-num">6</span>
+            <span class="ac-title">语音合成</span>
+            <span class="ac-summary">默认: 标准口播模板 (音色配置) · 2 个模板</span>
+            <span class="ac-arrow">&#9660;</span>
+          </div>
+          <div class="ac-body">
+            <div style="font-size:10px;color:var(--text-secondary);margin-bottom:8px;">使用 CosyVoice，模板定义音色、语速等配置。关联口播文案使用的模板。</div>
+            <div class="ac-tmpl-card default">
+              <div class="ac-tmpl-row">
+                <span class="ac-tmpl-name">&#127897; 标准口播模板 (音色配置)</span>
+                <span class="badge" style="background:var(--primary);">默认</span>
+                <span style="flex:1;"></span>
+                <button class="btn btn-ghost btn-sm">编辑</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+              </div>
+              <div class="ac-tmpl-meta">音色: 温柔女声 | 语速: 1.0x | 音量: 50%</div>
+            </div>
+            <div class="ac-tmpl-card">
+              <div class="ac-tmpl-row">
+                <span class="ac-tmpl-name">&#127897; 快节奏口播模板 (音色配置)</span>
+                <button class="btn btn-ghost btn-sm" style="font-size:9px;margin-left:4px;">设为默认</button>
+                <span style="flex:1;"></span>
+                <button class="btn btn-ghost btn-sm">编辑</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--warning);">移除</button>
+              </div>
+              <div class="ac-tmpl-meta">音色: 活泼女声 | 语速: 1.2x | 音量: 50%</div>
+            </div>
+            <button class="btn btn-outline btn-sm">+ 新建语音模板</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /pageProjSettings -->
+
+  <!-- ═══ PAGE: 全局设置 ═══ -->
+  <div class="page-view" id="pageGlobalSettings">
+    <div class="settings-section">
+      <h3>品牌信息</h3>
+      <div class="settings-row">
+        <label>LOGO 图标</label>
+        <input class="form-input" type="text" value="&#127860;" style="max-width:80px;" id="brandLogoInput" oninput="updateBrandLogo(this.value)">
+        <span style="font-size:10px;color:var(--text-secondary);">可输入 emoji 或图片 URL</span>
+      </div>
+      <div class="settings-row">
+        <label>应用名称</label>
+        <input class="form-input" type="text" value="一勺笔录(SOP)智能体" style="max-width:300px;" id="brandNameInput" oninput="document.getElementById('sbName').textContent=this.value">
+      </div>
+    </div>
+    <div class="settings-section" style="border-top:1px solid var(--border);">
+      <h3>文件保存</h3>
+      <div class="settings-row">
+        <label>默认保存路径</label>
+        <input class="form-input" type="text" value="D:\YISHAOAGENT\data\output">
+        <button class="btn btn-ghost btn-sm">浏览...</button>
+      </div>
+    </div>
+    <div class="settings-section" style="border-top:1px solid var(--border);">
+      <button class="btn btn-primary btn-sm">&#128190; 全局保存</button>
+    </div>
+    <div class="settings-section" style="border-top:1px solid var(--border);">
+      <h3>关于</h3>
+      <div style="font-size:11px;color:var(--text-secondary);">
+        一勺笔录(SOP)智能体 v1.0.0<br>
+        <button class="btn btn-ghost btn-sm" style="margin-top:4px;">检查更新</button>
+      </div>
+    </div>
+  </div><!-- /pageGlobalSettings -->
+
+</div><!-- /main-area -->
+</div><!-- /app-shell -->
+
+<!-- ═══ Dialog: New Project ═══ -->
+<div class="dialog-overlay hidden" id="newProjDialog">
+  <div class="dialog-box wide">
+    <div class="dialog-title">新建项目</div>
+    <div class="form-label">项目名称</div>
+    <input class="form-input" type="text" placeholder="如：宫保鸡丁" id="newProjName">
+    <div class="form-label" style="margin-top:8px;">保存路径</div>
+    <div style="display:flex;gap:4px;">
+      <input class="form-input" type="text" value="D:\YISHAOAGENT\data\projects\" style="flex:1;font-size:10px;" id="newProjPath">
+      <button class="btn btn-ghost btn-sm">浏览</button>
+    </div>
+
+    <!-- Collapsible column template config -->
+    <div class="collapse-toggle" id="advToggle" onclick="
+      this.classList.toggle('open');
+      document.getElementById('advBody').classList.toggle('open');
+    ">
+      <span class="c-arrow">&#9654;</span> 栏目模板配置（使用项目默认设置）
+    </div>
+    <div class="collapse-body" id="advBody">
+      <div style="font-size:10px;color:var(--text-secondary);margin-bottom:6px;">可覆盖各栏目默认模板，仅影响本项目。</div>
+      <!-- Col 1: 文案提取 (no template, model only) -->
+      <div class="col-config-row">
+        <span class="col-num">1</span>
+        <span class="col-name">文案提取</span>
+        <span class="col-label">模型</span>
+        <select class="col-select" id="newProjModel1">
+          <option>DeepSeek (deepseek-v4-pro)</option>
+          <option>Kimi (moonshot-v1)</option>
+          <option>通义千问 (qwen-plus)</option>
+        </select>
+      </div>
+      <!-- Col 2: 教学文档 (no template, model only) -->
+      <div class="col-config-row">
+        <span class="col-num">2</span>
+        <span class="col-name">教学文档</span>
+        <span class="col-label">模型</span>
+        <select class="col-select" id="newProjModel2">
+          <option>DeepSeek (deepseek-v4-pro)</option>
+          <option>Kimi (moonshot-v1)</option>
+          <option>通义千问 (qwen-plus)</option>
+        </select>
+      </div>
+      <!-- Col 3: 输出课件 (has templates: SOP + 道术PPT + 研学PPT) -->
+      <div class="col-config-row">
+        <span class="col-num">3</span>
+        <span class="col-name">输出课件</span>
+        <span class="col-label">模板</span>
+        <select class="col-select" id="newProjTmpl3">
+          <option>SOP标准模板.docx (默认)</option>
+          <option>简约SOP模板.docx</option>
+          <option>道与术PPT模板.pptx (默认)</option>
+          <option>研学手册PPT模板.pptx</option>
+        </select>
+      </div>
+      <!-- Col 4: 语音课件 (has templates: 口播 + 音色) -->
+      <div class="col-config-row">
+        <span class="col-num">4</span>
+        <span class="col-name">语音课件</span>
+        <span class="col-label">模板</span>
+        <select class="col-select" id="newProjTmpl4">
+          <option>标准口播模板 (默认)</option>
+          <option>快节奏口播模板</option>
+          <option>标准口播音色 (默认)</option>
+          <option>快节奏口播音色</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('newProjDialog').classList.add('hidden')">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="createProject()">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Dialog: Video Check Player ═══ -->
+<div class="vc-overlay hidden" id="vcDialog">
+  <div class="vc-dialog" id="vcBox">
+    <div class="vc-header">
+      <span style="font-size:15px;">&#127910;</span>
+      <span class="vc-title" id="vcTitle">视频校验 — 乾坤多宝鱼</span>
+      <button class="btn btn-ghost btn-sm" onclick="toggleVCFullscreen()" title="全屏">&#x26F6;</button>
+      <button class="vc-close" onclick="closeVideoCheck()">&times;</button>
+    </div>
+    <div class="vc-body" id="vcBody">
+      <div class="vc-video-wrap" id="vcVideoWrap">
+        <video id="vcVideo" src="" style="display:none;"></video>
+        <div class="vc-video-placeholder" id="vcPlaceholder" onclick="toggleVCPlay()">
+          <div class="play-icon">&#9654;</div>
+          <span>点击播放校验视频</span>
+        </div>
+      </div>
+      <div class="vc-divider" id="vcDivider"></div>
+      <div class="vc-text-panel" id="vcTextPanel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span class="vc-text-title" style="margin-bottom:0;">&#128221; 提取内容对比</span>
+          <button class="btn btn-primary btn-sm" onclick="saveVCToEditor()">&#10003; 保存到编辑区</button>
+        </div>
+        <textarea id="vcTextarea">【乾坤多宝鱼】一鱼两吃
+主料：多宝鱼 1条（约750克）
+配料：芦笋 100克、水发木耳 30克、彩椒 50克、生姜 15克
+腌料：盐 3克、湿生粉 15克、胡椒粉 1克
+做法：
+1.多宝鱼宰杀洗净，切下头尾，鱼身去骨片成鱼片
+2.鱼片用腌料腌制10分钟，鱼骨鱼头尾拍干生粉炸至金黄
+3.芦笋切段、木耳撕小朵、彩椒切块，焯水备用
+4.热锅冷油滑炒鱼片至变白捞出
+5.底油爆香姜片，蔬菜翻炒，鱼片回锅，淋调味汁翻匀出锅</textarea>
+      </div>
+    </div>
+    <div class="vc-controls">
+      <button class="vc-ctrl-btn" id="vcBtnPlay" onclick="toggleVCPlay()">&#9654;</button>
+      <span class="vc-time" id="vcTime">00:42 / 03:15</span>
+      <div class="vc-progress" id="vcProgress" onclick="seekVC(event)">
+        <div class="vc-progress-fill" id="vcProgressFill" style="width:22%;"></div>
+        <div class="vc-progress-thumb" style="left:22%;"></div>
+      </div>
+      <span class="vc-time" style="min-width:auto;">&#128264;</span>
+      <select class="vc-speed-select" id="vcSpeed" onchange="changeVCSpeed(this.value)">
+        <option>0.5x</option>
+        <option>0.75x</option>
+        <option selected>1x</option>
+        <option>1.25x</option>
+        <option>1.5x</option>
+        <option>2x</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Utility ──
+function showPage(name) {
+  document.querySelectorAll('.page-view').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('page' + name);
+  if (target) target.classList.add('active');
+}
+function updateBrandLogo(val) {
+  document.getElementById('sbLogo').textContent = val || '&#127860;';
+}
+
+// ── Sidebar Navigation ──
+document.getElementById('sideProj').addEventListener('click', ()=>{
+  document.getElementById('sideProj').classList.add('active');
+  document.getElementById('sideProjSettings').classList.remove('active');
+  document.getElementById('sideGlobalSettings').classList.remove('active');
+  showPage('Projects');
+});
+document.getElementById('sideProjSettings').addEventListener('click', ()=>{
+  document.getElementById('sideProj').classList.remove('active');
+  document.getElementById('sideProjSettings').classList.add('active');
+  document.getElementById('sideGlobalSettings').classList.remove('active');
+  showPage('ProjSettings');
+});
+document.getElementById('sideGlobalSettings').addEventListener('click', ()=>{
+  document.getElementById('sideProj').classList.remove('active');
+  document.getElementById('sideProjSettings').classList.remove('active');
+  document.getElementById('sideGlobalSettings').classList.add('active');
+  showPage('GlobalSettings');
+});
+
+// ── Project Settings tabs (模型设置 / 栏目配置) ──
+document.querySelectorAll('#projSettingsTabs .mgmt-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#projSettingsTabs .mgmt-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const key = tab.dataset.pstab;
+    document.getElementById('pstabModels').classList.toggle('hidden', key !== 'models');
+    document.getElementById('pstabColumns').classList.toggle('hidden', key !== 'columns');
+  });
+});
+
+// ── Accordion toggle ──
+function toggleAccordion(head) {
+  const group = head.parentElement;
+  group.classList.toggle('open');
+}
+
+// ── 模型设置 sub-tabs (添加厂商 / 模型配置) ──
+document.querySelectorAll('#modelSubTabs .sub-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#modelSubTabs .sub-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const key = tab.dataset.msub;
+    document.getElementById('msubProviders').classList.toggle('hidden', key !== 'providers');
+    document.getElementById('msubStageModels').classList.toggle('hidden', key !== 'stageModels');
+  });
+});
+
+// ── Config bar per stage (5-stage pipeline) ──
+const configMap = {
+  1: { model:'DeepSeek (deepseek-v4-pro)', tmpl:'—', tmplInfo:'' },
+  2: { model:'DeepSeek (deepseek-v4-pro)', tmpl:'—', tmplInfo:'' },
+  3: { model:'DeepSeek (deepseek-v4-pro)', tmpl:'SOP标准模板.docx / PPT模板', tmplInfo:'提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充' },
+  4: { model:'DeepSeek (deepseek-v4-pro)', tmpl:'标准口播模板', tmplInfo:'提示词: 口播稿生成 v1.0 · SKILL: 口播风格' },
+  5: { model:'—', tmpl:'—', tmplInfo:'' }
+};
+function updateConfigBar(n) {
+  const c = configMap[n] || configMap[1];
+  document.getElementById('cbModel').textContent = c.model;
+  document.getElementById('cbTmpl').textContent = c.tmpl;
+  if (c.tmplInfo) {
+    document.getElementById('cbTmpl').nextElementSibling.textContent = '(' + c.tmplInfo + ')';
+  } else {
+    document.getElementById('cbTmpl').nextElementSibling.textContent = '';
+  }
+}
+
+// ── Template Card Selection ──
+function selectTemplate(card) {
+  const group = card.parentElement;
+  group.querySelectorAll('.tmpl-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  // Update preview if data-preview-target is set
+  const previewId = card.dataset.previewTarget;
+  const previewHtml = card.dataset.previewHtml;
+  if (previewId && previewHtml !== undefined) {
+    // Support dual-format preview: update -doc child if it exists
+    const docTarget = document.getElementById(previewId + '-doc');
+    if (docTarget) {
+      docTarget.innerHTML = previewHtml;
+    } else {
+      const target = document.getElementById(previewId);
+      if (target) target.innerHTML = previewHtml;
+    }
+  }
+}
+
+// ── Preview Format Toggle ──
+function switchFmt(stage, fmt, btn) {
+  const group = btn.parentElement;
+  group.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const docEl = document.getElementById('prev' + stage + '-doc');
+  const mdEl = document.getElementById('prev' + stage + '-md');
+  if (docEl) docEl.classList.toggle('hidden', fmt !== 'doc');
+  if (mdEl) mdEl.classList.toggle('hidden', fmt !== 'md');
+}
+
+// ── Sub Nav ──
+document.querySelectorAll('#subNav1 .sn-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('#subNav1 .sn-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    const sub = item.dataset.sub;
+    document.querySelectorAll('#main1 .sub-panel').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('sub' + sub);
+    if (target) target.classList.add('active');
+  });
+});
+
+// Stage 2 sub-nav
+document.querySelectorAll('#subNav2 .sn-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('#subNav2 .sn-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    const sub = item.dataset.sub;
+    document.querySelectorAll('#main2 .sub-panel').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('sub' + sub);
+    if (target) target.classList.add('active');
+  });
+});
+
+// Stage 3 sub-nav (输出课件)
+document.querySelectorAll('#subNav3 .sn-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('#subNav3 .sn-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    const sub = item.dataset.sub;
+    document.querySelectorAll('#main3 .sub-panel').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('sub' + sub);
+    if (target) target.classList.add('active');
+  });
+});
+
+// Stage 4 sub-nav (语音课件)
+document.querySelectorAll('#subNav4 .sn-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('#subNav4 .sn-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    const sub = item.dataset.sub;
+    document.querySelectorAll('#main4 .sub-panel').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('sub' + sub);
+    if (target) target.classList.add('active');
+  });
+});
+
+// ── Top Nav ──
+document.querySelectorAll('#topNav .tn-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('#topNav .tn-item').forEach(i => i.classList.remove('active'));
+    item.classList.add('active');
+    const n = item.dataset.main;
+    document.querySelectorAll('.main-panel').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById('main' + n);
+    if (target) target.classList.add('active');
+    document.querySelectorAll('.sub-nav').forEach(s => s.classList.add('hidden'));
+    const sn = document.getElementById('subNav' + n);
+    if (sn) sn.classList.remove('hidden');
+    updateConfigBar(parseInt(n));
+  });
+});
+
+// ── Mode Tabs (直接输入 / 视频链接 / 导入文件) ──
+document.querySelectorAll('#modeTabs .mode-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('#modeTabs .mode-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    const mode = tab.dataset.mode;
+    document.getElementById('modeText').classList.toggle('hidden', mode !== 'text');
+    document.getElementById('modeLink').classList.toggle('hidden', mode !== 'link');
+    document.getElementById('modeFile').classList.toggle('hidden', mode !== 'file');
+  });
+});
+
+// ── Open project from list → back to workspace ──
+function openProject(id) {
+  document.getElementById('sideProj').classList.add('active');
+  document.getElementById('sideProjSettings').classList.remove('active');
+  document.getElementById('sideGlobalSettings').classList.remove('active');
+  showPage('Workspace');
+}
+
+// ── New Project Dialog ──
+document.getElementById('newProjBtn').addEventListener('click', ()=>{
+  document.getElementById('newProjDialog').classList.remove('hidden');
+});
+function createProject() {
+  const name = document.getElementById('newProjName').value.trim();
+  if (!name) return;
+  const path = document.getElementById('newProjPath').value.trim();
+  const config = {
+    name, path,
+    col1Model: document.getElementById('newProjModel1').value,
+    col2Model: document.getElementById('newProjModel2').value,
+    col3Tmpl:  document.getElementById('newProjTmpl3').value,
+    col4Tmpl:  document.getElementById('newProjTmpl4').value,
+  };
+  console.log('创建项目:', config);
+  document.getElementById('newProjDialog').classList.add('hidden');
+  document.getElementById('newProjName').value = '';
+  // Reset collapse
+  document.getElementById('advToggle').classList.remove('open');
+  document.getElementById('advBody').classList.remove('open');
+  // Would create project via API and refresh list
+}
+
+// ── Dialog: click overlay to close ──
+document.querySelectorAll('.dialog-overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.add('hidden');
+  });
+});
+
+// ── Update word count ──
+document.getElementById('editorBox').addEventListener('input', function() {
+  document.getElementById('wordCount').textContent = '字数：' + this.value.length;
+});
+
+// ── Video Check Player ──
+let vcPlaying = false;
+let vcInterval = null;
+let vcProgress = 22; // percentage
+
+function openVideoCheck() {
+  document.getElementById('vcDialog').classList.remove('hidden');
+}
+function closeVideoCheck() {
+  pauseVC();
+  document.getElementById('vcDialog').classList.add('hidden');
+}
+function toggleVCPlay() {
+  const btn = document.getElementById('vcBtnPlay');
+  const placeholder = document.getElementById('vcPlaceholder');
+  if (vcPlaying) {
+    pauseVC();
+    btn.innerHTML = '&#9654;';
+    if (placeholder) placeholder.style.display = 'flex';
+  } else {
+    vcPlaying = true;
+    btn.innerHTML = '&#9208;';
+    if (placeholder) placeholder.style.display = 'none';
+    // Simulate progress
+    vcInterval = setInterval(() => {
+      if (vcProgress >= 100) { pauseVC(); btn.innerHTML = '&#9654;'; return; }
+      vcProgress += 0.3;
+      updateVCProgress();
+    }, 200);
+  }
+}
+function pauseVC() {
+  vcPlaying = false;
+  if (vcInterval) { clearInterval(vcInterval); vcInterval = null; }
+}
+function updateVCProgress() {
+  document.getElementById('vcProgressFill').style.width = vcProgress + '%';
+  const thumb = document.querySelector('.vc-progress-thumb');
+  if (thumb) thumb.style.left = vcProgress + '%';
+  const totalSecs = 195;
+  const currentSecs = Math.floor(totalSecs * vcProgress / 100);
+  const m = Math.floor(currentSecs / 60);
+  const s = String(currentSecs % 60).padStart(2, '0');
+  const tm = Math.floor(totalSecs / 60);
+  const ts = String(totalSecs % 60).padStart(2, '0');
+  document.getElementById('vcTime').textContent = m + ':' + s + ' / ' + tm + ':' + ts;
+}
+function seekVC(e) {
+  const bar = document.getElementById('vcProgress');
+  const rect = bar.getBoundingClientRect();
+  vcProgress = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+  updateVCProgress();
+}
+function changeVCSpeed(val) {
+  // Would set video.playbackRate = parseFloat(val)
+}
+function saveVCToEditor() {
+  const text = document.getElementById('vcTextarea').value;
+  // Find the editor textarea in sub1a (video extraction) and update it
+  const editor = document.querySelector('#sub1a .form-textarea');
+  if (editor) editor.value = text;
+  closeVideoCheck();
+}
+function toggleVCFullscreen() {
+  document.getElementById('vcBox').classList.toggle('fullscreen');
+}
+
+// Divider drag
+(function(){
+  let dragging = false;
+  const divider = document.getElementById('vcDivider');
+  const textPanel = document.getElementById('vcTextPanel');
+  const body = document.getElementById('vcBody');
+  divider.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    divider.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const rect = body.getBoundingClientRect();
+    const newWidth = rect.right - e.clientX;
+    textPanel.style.width = Math.max(200, Math.min(rect.width - 300, newWidth)) + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    divider.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+// Close VC on overlay click
+document.getElementById('vcDialog').addEventListener('click', function(e) {
+  if (e.target === this) closeVideoCheck();
+});
+
+// ── Init: sync config bar for stage 1 ──
+updateConfigBar(1);
+</script>
+</body>
+</html>

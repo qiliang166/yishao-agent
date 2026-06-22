@@ -1,12 +1,12 @@
 import os
 import uuid
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from database import init_db, get_db
 from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest
 import json
-from services.llm_service import test_connection, generate, refine
+from services.llm_service import test_connection, generate, generate_stream, refine, get_provider
 from services.prompt_service import (
     list_prompts, get_prompt, create_prompt, update_prompt, delete_prompt,
     rollback_version, diff_versions, set_default, export_prompts, import_prompts,
@@ -27,6 +27,8 @@ AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
+LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
+os.makedirs(LOGO_DIR, exist_ok=True)
 
 # ── Health check ──
 
@@ -232,6 +234,48 @@ async def llm_generate(req: LLMGenerateRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/llm/generate-stream")
+def llm_generate_stream(req: LLMGenerateRequest):
+    """Streaming LLM generate via SSE. Sync generator — Starlette offloads to threadpool."""
+    def event_stream():
+        try:
+            db = get_db()
+            row = db.execute(
+                "SELECT * FROM llm_providers WHERE id = ? AND is_enabled = 1",
+                (req.provider_id,)
+            ).fetchone()
+            db.close()
+            if not row:
+                yield f"data: {json.dumps({'error': 'Provider not found'})}\n\n"
+                return
+            provider = dict(row)
+
+            from openai import OpenAI
+            client = OpenAI(
+                api_key=provider["api_key"],
+                base_url=provider["base_url"],
+                timeout=120.0,
+            )
+            messages = []
+            if req.system_prompt:
+                messages.append({"role": "system", "content": req.system_prompt})
+            messages.append({"role": "user", "content": req.user_message})
+
+            stream = client.chat.completions.create(
+                model=req.model, messages=messages,
+                temperature=req.temperature, stream=True,
+            )
+            for chunk in stream:
+                delta = chunk.choices[0].delta
+                if delta.content:
+                    yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.post("/api/llm/refine")
 async def llm_refine(req: LLMRefineRequest):
     try:
@@ -430,7 +474,24 @@ def api_download_video(req: VideoDownloadRequest):
 
 @app.get("/api/video/progress/{task_id}")
 def api_video_progress(task_id: str):
-    return get_progress(task_id)
+    data = get_progress(task_id)
+    svc_status = data.get("status", "")
+    # Normalize status codes for frontend
+    if svc_status == "done":
+        fe_status = "completed"
+    elif svc_status == "error":
+        fe_status = "failed"
+    else:
+        fe_status = svc_status
+    return {
+        "task_id": task_id,
+        "status": fe_status,
+        "percent": data.get("progress", 0),
+        "text": data.get("subtitle_text", "") or data.get("message", ""),
+        "video_path": data.get("video_path", ""),
+        "task_dir": data.get("task_dir", ""),
+        "error": data.get("message", "") if svc_status == "error" else None,
+    }
 
 
 @app.post("/api/video/extract-subtitles")
@@ -568,6 +629,39 @@ def serve_audio(filename: str):
     return FileResponse(filepath, media_type="audio/mpeg")
 
 
+# ── Logo Upload ──
+
+@app.post("/api/upload/logo")
+async def upload_logo(file: UploadFile = File(...)):
+    """Upload a logo image file. Returns the filename for later retrieval."""
+    import uuid as _uuid
+    ext = os.path.splitext(file.filename or "logo.png")[1] or ".png"
+    if ext.lower() not in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico"):
+        raise HTTPException(status_code=400, detail="不支持的图片格式，请上传 PNG/JPG/GIF/SVG/WebP/ICO")
+    filename = f"logo_{_uuid.uuid4().hex[:8]}{ext}"
+    filepath = os.path.join(LOGO_DIR, filename)
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 5MB")
+    with open(filepath, "wb") as f:
+        f.write(content)
+    return {"filename": filename, "url": f"/api/logos/{filename}"}
+
+
+@app.get("/api/logos/{filename}")
+def serve_logo(filename: str):
+    filepath = os.path.join(LOGO_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Logo not found")
+    media_map = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+        ".ico": "image/x-icon",
+    }
+    ext = os.path.splitext(filename)[1].lower()
+    return FileResponse(filepath, media_type=media_map.get(ext, "application/octet-stream"))
+
+
 # ── Settings ──
 
 @app.get("/api/settings")
@@ -597,7 +691,7 @@ def update_settings(req: dict):
 
 
 VERSION = "1.0.0"
-UPDATE_CHECK_URL = "https://raw.githubusercontent.com/yishao-agent/yishao-agent/main/version.json"
+UPDATE_CHECK_URL = "https://raw.githubusercontent.com/qiliang166/yishao-agent/main/version.json"
 
 
 @app.get("/api/version")
@@ -630,6 +724,58 @@ async def api_check_update():
         "release_url": "",
         "error": "无法连接更新服务器",
     }
+
+
+@app.post("/api/download-update")
+async def api_download_update(req: dict):
+    """Download the latest release .exe from GitHub."""
+    import httpx
+    import subprocess
+    import tempfile
+
+    download_url = req.get("download_url", "")
+    if not download_url:
+        # Fetch the latest release info from GitHub API to get the .exe URL
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    "https://api.github.com/repos/qiliang166/yishao-agent/releases/latest",
+                    headers={"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"},
+                )
+            if resp.status_code != 200:
+                raise HTTPException(status_code=400, detail="无法获取最新版本信息")
+            release = resp.json()
+            assets = release.get("assets", [])
+            exe_asset = next((a for a in assets if a["name"].endswith(".exe")), None)
+            if not exe_asset:
+                raise HTTPException(status_code=400, detail="未找到安装包")
+            download_url = exe_asset["browser_download_url"]
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"获取下载地址失败: {str(e)}")
+
+    # Download to temp directory
+    tmpdir = tempfile.gettempdir()
+    local_path = os.path.join(tmpdir, "yishao-agent-setup.exe")
+    try:
+        async with httpx.AsyncClient(timeout=600, follow_redirects=True) as client:
+            async with client.stream("GET", download_url) as resp:
+                if resp.status_code != 200:
+                    raise HTTPException(status_code=400, detail=f"下载失败 HTTP {resp.status_code}")
+                total = int(resp.headers.get("content-length", 0))
+                downloaded = 0
+                with open(local_path, "wb") as f:
+                    async for chunk in resp.aiter_bytes(1024 * 1024):
+                        f.write(chunk)
+                        downloaded += len(chunk)
+        # Launch the installer
+        subprocess.Popen([local_path], shell=True)
+        return {"status": "installing", "path": local_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"下载失败: {str(e)}")
 
 
 def _version_greater(a: str, b: str) -> bool:

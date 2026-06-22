@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, Prompt } from '../services/api'
+import { useModal } from '../components/ModalProvider'
 
 // ---------- types ----------
 
@@ -22,7 +23,7 @@ const TABS = [
 // ---------- shared inline style factories ----------
 
 const btnPrimary: React.CSSProperties = {
-  background: 'var(--color-primary)',
+  background: 'var(--primary)',
   color: '#fff',
   border: 'none',
   padding: '8px 16px',
@@ -35,22 +36,22 @@ const btnPrimary: React.CSSProperties = {
 
 const btnSecondary: React.CSSProperties = {
   background: 'none',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   padding: '6px 14px',
   borderRadius: 'var(--radius-sm)',
   fontSize: '13px',
-  color: 'var(--color-text-secondary)',
+  color: 'var(--text-secondary)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 }
 
 const btnDanger: React.CSSProperties = {
   background: 'none',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   padding: '6px 14px',
   borderRadius: 'var(--radius-sm)',
   fontSize: '13px',
-  color: 'var(--color-primary)',
+  color: 'var(--primary)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 }
@@ -58,13 +59,13 @@ const btnDanger: React.CSSProperties = {
 const inputField: React.CSSProperties = {
   width: '100%',
   height: '36px',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   borderRadius: 'var(--radius-sm)',
   padding: '0 10px',
   fontSize: '14px',
   fontFamily: 'inherit',
-  color: 'var(--color-text)',
-  background: 'var(--color-card)',
+  color: 'var(--text)',
+  background: 'var(--card)',
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -72,21 +73,22 @@ const inputField: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontSize: '13px',
   fontWeight: 600,
-  color: 'var(--color-text)',
+  color: 'var(--text)',
   display: 'block',
   marginBottom: '6px',
 }
 
 const card: React.CSSProperties = {
-  background: 'var(--color-card)',
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-md)',
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius)',
   padding: '16px',
 }
 
 // ---------- component ----------
 
 function TemplateManager() {
+  const modal = useModal()
   // ---------- state ----------
   const [templates, setTemplates] = useState<Template[]>([])
   const [prompts, setPrompts] = useState<Prompt[]>([])
@@ -190,12 +192,13 @@ function TemplateManager() {
   }
 
   const handleDelete = async (t: Template) => {
-    if (!confirm(`确认删除模板「${t.name}」？此操作不可撤销。`)) return
+    const ok = await modal.confirm(`确认删除模板「${t.name}」？此操作不可撤销。`)
+    if (!ok) return
     try {
       await api.deleteTemplate(t.id)
       await loadTemplates()
     } catch (err: any) {
-      alert('删除失败: ' + err.message)
+      modal.toast('删除失败: ' + err.message, 'error')
     }
   }
 
@@ -204,7 +207,7 @@ function TemplateManager() {
       await api.setDefaultTemplate(t.id)
       await loadTemplates()
     } catch (err: any) {
-      alert('设置默认失败: ' + err.message)
+      modal.toast('设置默认失败: ' + err.message, 'error')
     }
   }
 
@@ -216,7 +219,7 @@ function TemplateManager() {
       {/* ====== Top Toolbar ====== */}
       <div style={{
         display: 'flex', gap: '10px', alignItems: 'center',
-        paddingBottom: '16px', borderBottom: '1px solid var(--color-border)',
+        paddingBottom: '16px', borderBottom: '1px solid var(--border)',
         marginBottom: '0', flexShrink: 0,
       }}>
         <h2 style={{ fontSize: '20px', fontWeight: 700, marginRight: 'auto' }}>模板管理</h2>
@@ -226,7 +229,7 @@ function TemplateManager() {
       {/* ====== Tabs ====== */}
       <div style={{
         display: 'flex', gap: '0', paddingTop: '16px', paddingBottom: '16px',
-        borderBottom: '1px solid var(--color-border)', flexShrink: 0,
+        borderBottom: '1px solid var(--border)', flexShrink: 0,
       }}>
         {TABS.map(tab => (
           <button
@@ -235,11 +238,11 @@ function TemplateManager() {
             style={{
               background: 'none',
               border: 'none',
-              borderBottom: activeTab === tab.key ? '2px solid var(--color-primary)' : '2px solid transparent',
+              borderBottom: activeTab === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
               padding: '8px 20px',
               fontSize: '14px',
               fontWeight: activeTab === tab.key ? 700 : 400,
-              color: activeTab === tab.key ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+              color: activeTab === tab.key ? 'var(--primary)' : 'var(--text-secondary)',
               cursor: 'pointer',
             }}
           >
@@ -253,13 +256,13 @@ function TemplateManager() {
         flex: 1, overflowY: 'auto', paddingTop: '20px',
       }}>
         {loading ? (
-          <p style={{ color: 'var(--color-text-secondary)', fontSize: '14px', textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', textAlign: 'center', padding: '40px 0' }}>
             加载中...
           </p>
         ) : filteredTemplates.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '60px 20px',
-            color: 'var(--color-text-secondary)', fontSize: '14px',
+            color: 'var(--text-secondary)', fontSize: '14px',
           }}>
             <p style={{ marginBottom: '16px' }}>暂无{activeTab === 'ppt' ? 'PPT' : 'SOP'}模板</p>
             <button style={btnPrimary} onClick={openCreate}>+ 新建模板</button>
@@ -274,9 +277,9 @@ function TemplateManager() {
               <div
                 key={t.id}
                 style={{
-                  background: 'var(--color-card)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius)',
                   padding: '20px',
                   display: 'flex',
                   flexDirection: 'column',
@@ -286,7 +289,7 @@ function TemplateManager() {
                 {/* Header row: name + badges */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <h3 style={{
-                    fontSize: '15px', fontWeight: 700, color: 'var(--color-text)',
+                    fontSize: '15px', fontWeight: 700, color: 'var(--text)',
                     flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     minWidth: 0,
                   }}>
@@ -294,7 +297,7 @@ function TemplateManager() {
                   </h3>
                   <span style={{
                     fontSize: '11px', fontWeight: 600,
-                    color: t.type === 'ppt' ? 'var(--color-primary)' : 'var(--color-accent)',
+                    color: t.type === 'ppt' ? 'var(--primary)' : 'var(--color-accent)',
                     background: t.type === 'ppt' ? 'rgba(139, 26, 26, 0.08)' : 'rgba(212, 165, 116, 0.15)',
                     padding: '2px 8px',
                     borderRadius: '4px',
@@ -305,7 +308,7 @@ function TemplateManager() {
                   {t.is_default === 1 && (
                     <span style={{
                       fontSize: '11px', fontWeight: 600,
-                      color: 'var(--color-success)',
+                      color: 'var(--success)',
                       background: 'rgba(74, 139, 63, 0.1)',
                       padding: '2px 8px',
                       borderRadius: '4px',
@@ -318,7 +321,7 @@ function TemplateManager() {
 
                 {/* Linked skill */}
                 {t.linked_skill_id && (
-                  <div style={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                     <span style={{ fontWeight: 600 }}>关联Skill: </span>
                     {getSkillName(t.linked_skill_id)}
                   </div>
@@ -327,17 +330,17 @@ function TemplateManager() {
                 {/* Action buttons */}
                 <div style={{
                   display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px',
-                  borderTop: '1px solid var(--color-border)',
+                  borderTop: '1px solid var(--border)',
                 }}>
                   {t.is_default !== 1 && (
                     <button
                       style={{
                         background: 'none',
-                        border: '1px solid var(--color-border)',
+                        border: '1px solid var(--border)',
                         borderRadius: 'var(--radius-sm)',
                         padding: '4px 12px',
                         fontSize: '12px',
-                        color: 'var(--color-text-secondary)',
+                        color: 'var(--text-secondary)',
                         cursor: 'pointer',
                       }}
                       onClick={() => handleSetDefault(t)}
@@ -348,11 +351,11 @@ function TemplateManager() {
                   <button
                     style={{
                       background: 'none',
-                      border: '1px solid var(--color-border)',
+                      border: '1px solid var(--border)',
                       borderRadius: 'var(--radius-sm)',
                       padding: '4px 12px',
                       fontSize: '12px',
-                      color: 'var(--color-text-secondary)',
+                      color: 'var(--text-secondary)',
                       cursor: 'pointer',
                       marginLeft: t.is_default !== 1 ? undefined : 'auto',
                     }}
@@ -445,13 +448,13 @@ function TemplateManager() {
                   style={{
                     width: '100%',
                     height: '80px',
-                    border: '1px solid var(--color-border)',
+                    border: '1px solid var(--border)',
                     borderRadius: 'var(--radius-sm)',
                     padding: '10px',
                     fontSize: '13px',
-                    fontFamily: 'var(--font-mono)',
-                    color: 'var(--color-text)',
-                    background: 'var(--color-card)',
+                    fontFamily: 'var(--mono)',
+                    color: 'var(--text)',
+                    background: 'var(--card)',
                     outline: 'none',
                     resize: 'vertical',
                     boxSizing: 'border-box',
@@ -462,7 +465,7 @@ function TemplateManager() {
             </div>
 
             {formError && (
-              <p style={{ color: 'var(--color-warning)', fontSize: '13px', marginTop: '12px' }}>{formError}</p>
+              <p style={{ color: 'var(--warning)', fontSize: '13px', marginTop: '12px' }}>{formError}</p>
             )}
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>

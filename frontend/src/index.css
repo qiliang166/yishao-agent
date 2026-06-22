@@ -5,36 +5,32 @@
 }
 
 :root {
-  --color-bg: #FAFAF8;
-  --color-card: #FFFFFF;
-  --color-text: #1A1A1A;
-  --color-text-secondary: #6B6B6B;
-  --color-primary: #8B1A1A;
-  --color-primary-hover: #6E1515;
-  --color-accent: #D4A574;
-  --color-success: #4A8B3F;
-  --color-warning: #C75B39;
-  --color-border: #E8E5E0;
-  --color-step-pending: #D0D0D0;
-  --font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-  --font-mono: "Consolas", "Source Code Pro", monospace;
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.08);
-  --shadow-modal: 0 8px 32px rgba(0,0,0,0.12);
+  --bg: #FAFAF8;
+  --card: #FFFFFF;
+  --text: #1A1A1A;
+  --text-secondary: #6B6B6B;
+  --primary: #8B1A1A;
+  --primary-light: #FBF5F3;
+  --border: #E8E5E0;
+  --success: #4A8B3F;
+  --warning: #C75B39;
+  --purple: #7C3AED;
+  --cyan: #0891B2;
+  --font: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --mono: "SF Mono", "Cascadia Code", Consolas, monospace;
+  --radius: 8px;
   --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --sidebar-width: 240px;
+  --sidebar-w: 200px;
 }
 
 html, body, #root {
   height: 100%;
-  font-family: var(--font-family);
-  font-size: 14px;
-  color: var(--color-text);
-  background: var(--color-bg);
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
 }
 
-a { color: var(--color-primary); text-decoration: none; }
+a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 button {

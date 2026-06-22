@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api, PromptDetail, PromptVersion, DiffResult } from '../services/api'
+import { useModal } from '../components/ModalProvider'
 
 const CATEGORIES = ['笔记整理', '道与术分析', '研习手册', 'SOP', '口播稿', 'PPT Skill']
 
 // ---------- shared inline style factories ----------
 
 const btnPrimary: React.CSSProperties = {
-  background: 'var(--color-primary)',
+  background: 'var(--primary)',
   color: '#fff',
   border: 'none',
   padding: '8px 16px',
@@ -19,22 +20,22 @@ const btnPrimary: React.CSSProperties = {
 
 const btnSecondary: React.CSSProperties = {
   background: 'none',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   padding: '6px 14px',
   borderRadius: 'var(--radius-sm)',
   fontSize: '13px',
-  color: 'var(--color-text-secondary)',
+  color: 'var(--text-secondary)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 }
 
 const btnDanger: React.CSSProperties = {
   background: 'none',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   padding: '6px 14px',
   borderRadius: 'var(--radius-sm)',
   fontSize: '13px',
-  color: 'var(--color-primary)',
+  color: 'var(--primary)',
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 }
@@ -42,13 +43,13 @@ const btnDanger: React.CSSProperties = {
 const inputField: React.CSSProperties = {
   width: '100%',
   height: '36px',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   borderRadius: 'var(--radius-sm)',
   padding: '0 10px',
   fontSize: '14px',
   fontFamily: 'inherit',
-  color: 'var(--color-text)',
-  background: 'var(--color-card)',
+  color: 'var(--text)',
+  background: 'var(--card)',
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -56,31 +57,32 @@ const inputField: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   fontSize: '13px',
   fontWeight: 600,
-  color: 'var(--color-text)',
+  color: 'var(--text)',
   display: 'block',
   marginBottom: '6px',
 }
 
 const card: React.CSSProperties = {
-  background: 'var(--color-card)',
-  border: '1px solid var(--color-border)',
-  borderRadius: 'var(--radius-md)',
+  background: 'var(--card)',
+  border: '1px solid var(--border)',
+  borderRadius: 'var(--radius)',
   padding: '16px',
 }
 
 const smallBtn: React.CSSProperties = {
   background: 'none',
-  border: '1px solid var(--color-border)',
+  border: '1px solid var(--border)',
   borderRadius: 'var(--radius-sm)',
   padding: '3px 10px',
   fontSize: '12px',
-  color: 'var(--color-text-secondary)',
+  color: 'var(--text-secondary)',
   cursor: 'pointer',
 }
 
 // ---------- component ----------
 
 function PromptManager() {
+  const modal = useModal()
   // ---------- state ----------
   const [prompts, setPrompts] = useState<{ id: string; name: string; category: string; is_default: number; updated_at: string }[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -235,25 +237,27 @@ function PromptManager() {
 
   const handleDelete = async () => {
     if (!selectedId || !selectedPrompt) return
-    if (!confirm(`确认删除「${selectedPrompt.name}」？此操作不可撤销。`)) return
+    const ok = await modal.confirm(`确认删除「${selectedPrompt.name}」？此操作不可撤销。`)
+    if (!ok) return
     try {
       await api.deletePrompt(selectedId)
       setSelectedId(null)
       await loadPrompts()
     } catch (err: any) {
-      alert('删除失败: ' + err.message)
+      modal.toast('删除失败: ' + err.message, 'error')
     }
   }
 
   const handleRollback = async (version: string) => {
     if (!selectedId) return
-    if (!confirm(`确认回滚到版本 ${version}？当前未保存的修改将丢失。`)) return
+    const ok = await modal.confirm(`确认回滚到版本 ${version}？当前未保存的修改将丢失。`)
+    if (!ok) return
     try {
       const data = await api.rollbackPrompt(selectedId, version)
       setSelectedPrompt(data)
       await loadPrompts()
     } catch (err: any) {
-      alert('回滚失败: ' + err.message)
+      modal.toast('回滚失败: ' + err.message, 'error')
     }
   }
 
@@ -264,7 +268,7 @@ function PromptManager() {
       setEditIsDefault(true)
       await loadPrompts()
     } catch (err: any) {
-      alert('设置默认失败: ' + err.message)
+      modal.toast('设置默认失败: ' + err.message, 'error')
     }
   }
 
@@ -279,7 +283,7 @@ function PromptManager() {
       a.click()
       URL.revokeObjectURL(url)
     } catch (err: any) {
-      alert('导出失败: ' + err.message)
+      modal.toast('导出失败: ' + err.message, 'error')
     }
   }
 
@@ -295,15 +299,15 @@ function PromptManager() {
       const raw = JSON.parse(text)
       const data = Array.isArray(raw) ? raw : (raw.prompts || raw.data || [])
       if (!Array.isArray(data) || data.length === 0) {
-        alert('导入失败: 文件中未找到有效的提示词数据')
+        modal.toast('导入失败: 文件中未找到有效的提示词数据', 'error')
         return
       }
       await api.importPrompts(data)
       await loadPrompts()
       setSelectedId(null)
-      alert(`导入成功，共 ${data.length} 条提示词`)
+      modal.toast(`导入成功，共 ${data.length} 条提示词`, 'success')
     } catch (err: any) {
-      alert('导入失败: ' + err.message)
+      modal.toast('导入失败: ' + err.message, 'error')
     } finally {
       // reset input so the same file can be re-selected
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -317,7 +321,7 @@ function PromptManager() {
       const result = await api.diffPrompt(selectedId, diffVersions[0], diffVersions[1])
       setDiffModal({ ...result, va: diffVersions[0], vb: diffVersions[1] })
     } catch (err: any) {
-      alert('对比失败: ' + err.message)
+      modal.toast('对比失败: ' + err.message, 'error')
     } finally {
       setDiffLoading(false)
     }
@@ -339,7 +343,7 @@ function PromptManager() {
       {/* ====== Top Toolbar ====== */}
       <div style={{
         display: 'flex', gap: '10px', alignItems: 'center',
-        paddingBottom: '16px', borderBottom: '1px solid var(--color-border)',
+        paddingBottom: '16px', borderBottom: '1px solid var(--border)',
         marginBottom: '0', flexShrink: 0,
       }}>
         <h2 style={{ fontSize: '20px', fontWeight: 700, marginRight: 'auto' }}>提示词管理</h2>
@@ -363,7 +367,7 @@ function PromptManager() {
         {/* ---------- LEFT PANEL: category tree + prompt list ---------- */}
         <div style={{
           width: '280px', minWidth: '280px',
-          borderRight: '1px solid var(--color-border)',
+          borderRight: '1px solid var(--border)',
           overflowY: 'auto',
           paddingRight: '12px',
           display: 'flex', flexDirection: 'column',
@@ -380,9 +384,9 @@ function PromptManager() {
 
           {/* Category list */}
           {loading ? (
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', padding: '8px 0' }}>加载中...</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', padding: '8px 0' }}>加载中...</p>
           ) : !hasSearchResults ? (
-            <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px', padding: '8px 0' }}>无匹配结果</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px', padding: '8px 0' }}>无匹配结果</p>
           ) : (
             grouped.map(g => (
               <div key={g.category} style={{ marginBottom: '4px' }}>
@@ -392,7 +396,7 @@ function PromptManager() {
                 }}>
                   <span style={{
                     fontSize: '13px', fontWeight: 700,
-                    color: 'var(--color-text-secondary)',
+                    color: 'var(--text-secondary)',
                     textTransform: 'uppercase', letterSpacing: '0.5px',
                   }}>
                     {g.category}
@@ -406,7 +410,7 @@ function PromptManager() {
                       fontSize: '14px',
                       lineHeight: '18px',
                       border: 'none',
-                      color: 'var(--color-text-secondary)',
+                      color: 'var(--text-secondary)',
                       fontWeight: 700,
                     }}
                   >
@@ -416,7 +420,7 @@ function PromptManager() {
 
                 {g.prompts.length === 0 ? (
                   <p style={{
-                    fontSize: '12px', color: 'var(--color-text-secondary)',
+                    fontSize: '12px', color: 'var(--text-secondary)',
                     padding: '4px 16px', fontStyle: 'italic',
                   }}>
                     暂无提示词
@@ -437,7 +441,7 @@ function PromptManager() {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         background: selectedId === p.id ? 'rgba(139, 26, 26, 0.08)' : 'transparent',
-                        color: selectedId === p.id ? 'var(--color-primary)' : 'var(--color-text)',
+                        color: selectedId === p.id ? 'var(--primary)' : 'var(--text)',
                         fontWeight: selectedId === p.id ? 600 : 400,
                       }}
                     >
@@ -448,8 +452,8 @@ function PromptManager() {
                       </span>
                       {p.is_default === 1 && (
                         <span style={{
-                          fontSize: '10px', color: 'var(--color-primary)',
-                          border: '1px solid var(--color-primary)',
+                          fontSize: '10px', color: 'var(--primary)',
+                          border: '1px solid var(--primary)',
                           borderRadius: '3px', padding: '0 4px',
                           marginLeft: '6px', flexShrink: 0,
                         }}>
@@ -474,7 +478,7 @@ function PromptManager() {
           {!selectedPrompt ? (
             <div style={{
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'var(--color-text-secondary)', fontSize: '15px',
+              color: 'var(--text-secondary)', fontSize: '15px',
             }}>
               选择一个提示词开始编辑，或点击「+ 新建提示词」
             </div>
@@ -505,8 +509,8 @@ function PromptManager() {
                 <div style={{ flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '4px' }}>
                   {editIsDefault ? (
                     <span style={{
-                      fontSize: '12px', color: 'var(--color-primary)',
-                      border: '1px solid var(--color-primary)',
+                      fontSize: '12px', color: 'var(--primary)',
+                      border: '1px solid var(--primary)',
                       borderRadius: 'var(--radius-sm)', padding: '4px 10px',
                     }}>
                       已设为默认
@@ -529,13 +533,13 @@ function PromptManager() {
                     onChange={e => setEditSystemPrompt(e.target.value)}
                     style={{
                       flex: 1, minHeight: '200px',
-                      border: '1px solid var(--color-border)',
+                      border: '1px solid var(--border)',
                       borderRadius: 'var(--radius-sm)',
                       padding: '10px',
                       fontSize: '13px',
-                      fontFamily: 'var(--font-mono)',
-                      color: 'var(--color-text)',
-                      background: 'var(--color-card)',
+                      fontFamily: 'var(--mono)',
+                      color: 'var(--text)',
+                      background: 'var(--card)',
                       resize: 'vertical',
                       outline: 'none',
                       lineHeight: 1.6,
@@ -549,13 +553,13 @@ function PromptManager() {
                     onChange={e => setEditSkillTemplate(e.target.value)}
                     style={{
                       flex: 1, minHeight: '200px',
-                      border: '1px solid var(--color-border)',
+                      border: '1px solid var(--border)',
                       borderRadius: 'var(--radius-sm)',
                       padding: '10px',
                       fontSize: '13px',
-                      fontFamily: 'var(--font-mono)',
-                      color: 'var(--color-text)',
-                      background: 'var(--color-card)',
+                      fontFamily: 'var(--mono)',
+                      color: 'var(--text)',
+                      background: 'var(--card)',
                       resize: 'vertical',
                       outline: 'none',
                       lineHeight: 1.6,
@@ -581,7 +585,7 @@ function PromptManager() {
                 {saveMsg && (
                   <span style={{
                     fontSize: '13px',
-                    color: saveMsg.includes('失败') ? 'var(--color-warning)' : 'var(--color-success)',
+                    color: saveMsg.includes('失败') ? 'var(--warning)' : 'var(--success)',
                   }}>
                     {saveMsg}
                   </span>
@@ -607,7 +611,7 @@ function PromptManager() {
                 </div>
 
                 {(!selectedPrompt.versions || selectedPrompt.versions.length === 0) ? (
-                  <p style={{ color: 'var(--color-text-secondary)', fontSize: '13px' }}>暂无版本记录</p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>暂无版本记录</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {[...selectedPrompt.versions]
@@ -627,18 +631,18 @@ function PromptManager() {
                           >
                             <span style={{
                               fontSize: '13px', fontWeight: 600,
-                              color: 'var(--color-primary)', minWidth: '52px',
+                              color: 'var(--primary)', minWidth: '52px',
                             }}>
                               {v.version}
                             </span>
                             <span style={{
-                              fontSize: '12px', color: 'var(--color-text-secondary)',
+                              fontSize: '12px', color: 'var(--text-secondary)',
                               minWidth: '120px',
                             }}>
                               {new Date(v.created_at).toLocaleString('zh-CN')}
                             </span>
                             <span style={{
-                              fontSize: '13px', color: 'var(--color-text)',
+                              fontSize: '13px', color: 'var(--text)',
                               flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                             }}>
                               {v.change_note || '（无说明）'}
@@ -652,8 +656,8 @@ function PromptManager() {
                             <button
                               style={{
                                 ...smallBtn,
-                                border: isSelected ? '1px solid var(--color-primary)' : '1px solid var(--color-border)',
-                                color: isSelected ? 'var(--color-primary)' : 'var(--color-text-secondary)',
+                                border: isSelected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                                color: isSelected ? 'var(--primary)' : 'var(--text-secondary)',
                                 fontWeight: isSelected ? 600 : 400,
                               }}
                               onClick={() => toggleDiffVersion(v.version)}
@@ -705,7 +709,7 @@ function PromptManager() {
               </div>
             </div>
             {createError && (
-              <p style={{ color: 'var(--color-warning)', fontSize: '13px', marginTop: '12px' }}>{createError}</p>
+              <p style={{ color: 'var(--warning)', fontSize: '13px', marginTop: '12px' }}>{createError}</p>
             )}
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
               <button style={btnSecondary} onClick={() => setShowCreate(false)} disabled={creating}>取消</button>
@@ -742,23 +746,23 @@ function PromptManager() {
 
             {/* System prompt diff */}
             <div style={{ marginBottom: '20px' }}>
-              <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--color-text)' }}>
+              <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--text)' }}>
                 系统 Prompt 差异
               </h4>
               <pre style={{
                 background: '#fafafa',
-                border: '1px solid var(--color-border)',
+                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '12px',
                 fontSize: '12px',
-                fontFamily: 'var(--font-mono)',
+                fontFamily: 'var(--mono)',
                 lineHeight: 1.6,
                 overflowX: 'auto',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-all',
                 maxHeight: '280px',
                 overflowY: 'auto',
-                color: 'var(--color-text)',
+                color: 'var(--text)',
                 margin: 0,
               }}>
                 {diffModal.system_prompt_diff || '（无变化）'}
@@ -767,23 +771,23 @@ function PromptManager() {
 
             {/* Skill template diff */}
             <div>
-              <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--color-text)' }}>
+              <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: 'var(--text)' }}>
                 Skill 模板差异
               </h4>
               <pre style={{
                 background: '#fafafa',
-                border: '1px solid var(--color-border)',
+                border: '1px solid var(--border)',
                 borderRadius: 'var(--radius-sm)',
                 padding: '12px',
                 fontSize: '12px',
-                fontFamily: 'var(--font-mono)',
+                fontFamily: 'var(--mono)',
                 lineHeight: 1.6,
                 overflowX: 'auto',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-all',
                 maxHeight: '280px',
                 overflowY: 'auto',
-                color: 'var(--color-text)',
+                color: 'var(--text)',
                 margin: 0,
               }}>
                 {diffModal.skill_template_diff || '（无变化）'}

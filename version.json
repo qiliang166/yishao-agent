@@ -1,5 +1,5 @@
 {
   "version": "1.0.0",
-  "release_url": "https://github.com/yishao-agent/yishao-agent/releases/latest",
-  "release_notes": "首个正式版本：支持项目管理、LLM配置、提示词管理、模板管理、视频下载、AI笔记整理、三文档批量生成、PPT/SOP导出、TTS语音合成。"
+  "release_url": "https://github.com/qiliang166/yishao-agent/releases/latest",
+  "release_notes": "初始版本"
 }

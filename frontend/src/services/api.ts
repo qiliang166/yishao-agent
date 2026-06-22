@@ -112,6 +112,46 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }),
+  // LLM streaming generate (SSE)
+  llmGenerateStream: async function* (data: {
+    provider_id: string; model: string; system_prompt: string;
+    user_message: string; temperature?: number
+  }): AsyncGenerator<string, void, unknown> {
+    const res = await fetch('/api/llm/generate-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
+      throw new Error(err.detail || `HTTP ${res.status}`)
+    }
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('No response body')
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const payload = line.slice(6)
+          if (payload === '[DONE]') return
+          try {
+            const parsed = JSON.parse(payload)
+            if (parsed.error) throw new Error(parsed.error)
+            if (parsed.content) yield parsed.content
+          } catch (e: any) {
+            if (e.message && !e.message.includes('JSON')) throw e
+          }
+        }
+      }
+    }
+  },
+
   llmRefine: (data: {
     provider_id: string; model: string; instruction: string;
     selected_text: string; full_context?: string
@@ -198,7 +238,23 @@ export const api = {
   ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number) =>
     request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0}) }),
 
+  // Logo upload
+  uploadLogo: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/upload/logo', { method: 'POST', body: formData })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Upload failed')
+    return data as { filename: string; url: string }
+  },
+
   // Version
   getVersion: () => request('/api/version'),
   checkUpdate: () => request('/api/check-update'),
+  downloadUpdate: (downloadUrl?: string) =>
+    request('/api/download-update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ download_url: downloadUrl || '' }),
+    }),
 }
