@@ -7,35 +7,70 @@ echo   一勺笔录(SOP)智能体
 echo ========================================
 echo.
 
-REM Stop existing processes
-taskkill /f /im node.exe 2>nul
-taskkill /f /im python.exe 2>nul
-timeout /t 2 /nobreak >nul
+REM ── Check prerequisites ──
+where python >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] 未找到 Python，请安装 Python 3.11+
+    echo 下载地址: https://www.python.org/downloads/
+    pause
+    exit /b 1
+)
 
-echo [1/2] Starting backend on port 8765...
+where node >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] 未找到 Node.js，请安装 Node.js 18+
+    echo 下载地址: https://nodejs.org/
+    pause
+    exit /b 1
+)
+
+echo Python:  & python --version
+echo Node.js: & node --version
+echo.
+
+REM ── Backend ──
+echo [1/2] 启动后端 (port 8765)...
 cd /d "%ROOT%backend"
+
 if not exist "venv\" (
-    echo Installing Python dependencies...
-    pip install -r requirements.txt -q
+    echo   创建虚拟环境...
+    python -m venv venv
+    echo   安装 Python 依赖...
+    venv\Scripts\pip install -r requirements.txt -q
+    if %ERRORLEVEL% NEQ 0 (
+        echo   [WARN] pip install 失败，重试中...
+        venv\Scripts\pip install -r requirements.txt
+    )
+    echo   后端依赖安装完成
 )
-start "Yishao-Backend" cmd /c "cd /d "%ROOT%backend" && python app.py"
 
-timeout /t 3 /nobreak >nul
+start "Yishao-Backend" venv\Scripts\python app.py
 
-echo [2/2] Starting frontend on port 5173...
+REM ── Frontend ──
+echo [2/2] 启动前端 (port 5173)...
 cd /d "%ROOT%frontend"
+
 if not exist "node_modules\" (
-    echo Installing frontend dependencies...
+    echo   安装前端依赖...
     call npm install
+    echo   前端依赖安装完成
 )
-start "Yishao-Frontend" cmd /c "cd /d "%ROOT%frontend" && npm run dev"
 
-timeout /t 4 /nobreak >nul
+start "Yishao-Frontend" npm run dev
 
 echo.
 echo ========================================
-echo   打开浏览器访问: http://localhost:5173
+echo   等待服务启动中...
+echo   后端: http://localhost:8765
+echo   前端: http://localhost:5173
 echo ========================================
 echo.
+
+REM Wait a bit then open browser
+timeout /t 5 /nobreak >nul
 start http://localhost:5173
-pause
+
+echo.
+echo 如果浏览器未打开，请手动访问 http://localhost:5173
+echo 按任意键关闭此窗口（不会停止服务）
+pause >nul
