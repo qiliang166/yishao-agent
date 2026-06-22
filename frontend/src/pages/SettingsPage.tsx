@@ -481,6 +481,21 @@ function SettingsPage() {
   )
 
   // --- ABOUT TAB ---
+  const [versionInfo, setVersionInfo] = useState<null | { current: string; latest: string; has_update: boolean; release_url?: string; error?: string }>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+
+  const handleCheckUpdate = async () => {
+    setCheckingUpdate(true)
+    try {
+      const data = await api.checkUpdate()
+      setVersionInfo(data)
+    } catch {
+      setVersionInfo({ current: '1.0.0', latest: '1.0.0', has_update: false, error: '检查更新失败，请检查网络连接' })
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
+
   const renderAboutTab = () => (
     <div>
       <h2 style={styles.sectionTitle}>关于</h2>
@@ -489,17 +504,36 @@ function SettingsPage() {
           一勺笔录 Agent
         </h3>
         <p style={{ fontSize: '14px', color: 'var(--color-text-secondary)', marginBottom: '24px' }}>
-          版本 v1.0.0
+          版本 v{versionInfo?.current || '1.0.0'}
         </p>
         <p style={{ fontSize: '13px', color: 'var(--color-text-secondary)', marginBottom: '24px', lineHeight: 1.6 }}>
           智能食谱笔记助手，基于大语言模型的一体化食谱记录与优化工具
         </p>
         <button
           style={styles.btnSecondary}
-          onClick={() => alert('当前已是最新版本')}
+          onClick={handleCheckUpdate}
+          disabled={checkingUpdate}
         >
-          检查更新
+          {checkingUpdate ? '检查中...' : '检查更新'}
         </button>
+        {versionInfo && !checkingUpdate && (
+          <div style={{ marginTop: '16px', fontSize: '13px', padding: '12px', borderRadius: '6px', background: versionInfo.has_update ? '#FFF3E0' : '#F0F7F0' }}>
+            {versionInfo.error ? (
+              <p style={{ color: 'var(--color-warning)' }}>{versionInfo.error}</p>
+            ) : versionInfo.has_update ? (
+              <p style={{ color: 'var(--color-warning)' }}>
+                发现新版本 v{versionInfo.latest}！请前往下载页面更新。
+                {versionInfo.release_url && (
+                  <a href={versionInfo.release_url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '4px', color: 'var(--color-primary)' }}>
+                    前往下载
+                  </a>
+                )}
+              </p>
+            ) : (
+              <p style={{ color: 'var(--color-success)' }}>当前已是最新版本</p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

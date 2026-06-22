@@ -568,6 +568,59 @@ def serve_audio(filename: str):
     return FileResponse(filepath, media_type="audio/mpeg")
 
 
+VERSION = "1.0.0"
+UPDATE_CHECK_URL = "https://raw.githubusercontent.com/yishao-agent/yishao-agent/main/version.json"
+
+
+@app.get("/api/version")
+def api_version():
+    return {"version": VERSION, "app": "一勺笔录 Agent"}
+
+
+@app.get("/api/check-update")
+async def api_check_update():
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(UPDATE_CHECK_URL)
+        if resp.status_code == 200:
+            data = resp.json()
+            latest = data.get("version", VERSION)
+            return {
+                "current": VERSION,
+                "latest": latest,
+                "has_update": _version_greater(latest, VERSION),
+                "release_url": data.get("release_url", ""),
+                "release_notes": data.get("release_notes", ""),
+            }
+    except Exception:
+        pass
+    return {
+        "current": VERSION,
+        "latest": VERSION,
+        "has_update": False,
+        "release_url": "",
+        "error": "无法连接更新服务器",
+    }
+
+
+def _version_greater(a: str, b: str) -> bool:
+    """Compare two semver strings. Returns True if a > b."""
+    try:
+        pa = [int(x) for x in a.split(".")]
+        pb = [int(x) for x in b.split(".")]
+        for i in range(max(len(pa), len(pb))):
+            va = pa[i] if i < len(pa) else 0
+            vb = pb[i] if i < len(pb) else 0
+            if va > vb:
+                return True
+            if va < vb:
+                return False
+        return False
+    except Exception:
+        return False
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8765)

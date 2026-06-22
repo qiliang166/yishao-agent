@@ -197,4 +197,8 @@ export const api = {
   // TTS
   ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number) =>
     request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0}) }),
+
+  // Version
+  getVersion: () => request('/api/version'),
+  checkUpdate: () => request('/api/check-update'),
 }
