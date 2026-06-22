@@ -13,7 +13,6 @@ class ProjectUpdate(BaseModel):
 
 
 class StepResultSave(BaseModel):
-    step_name: str
     content: str
     content_type: str = "markdown"
 

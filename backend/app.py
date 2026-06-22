@@ -568,6 +568,34 @@ def serve_audio(filename: str):
     return FileResponse(filepath, media_type="audio/mpeg")
 
 
+# ── Settings ──
+
+@app.get("/api/settings")
+def get_settings():
+    db = get_db()
+    try:
+        rows = db.execute("SELECT key, value FROM settings").fetchall()
+        return {"settings": {r["key"]: r["value"] for r in rows}}
+    finally:
+        db.close()
+
+
+@app.put("/api/settings")
+def update_settings(req: dict):
+    db = get_db()
+    try:
+        for key, value in req.items():
+            existing = db.execute("SELECT key FROM settings WHERE key = ?", (key,)).fetchone()
+            if existing:
+                db.execute("UPDATE settings SET value = ? WHERE key = ?", (value, key))
+            else:
+                db.execute("INSERT INTO settings (key, value) VALUES (?, ?)", (key, value))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
 VERSION = "1.0.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/yishao-agent/yishao-agent/main/version.json"
 
