@@ -103,12 +103,6 @@ function HomePage() {
           value={search} onChange={e => setSearch(e.target.value)} />
         <button className="btn btn-primary btn-sm" onClick={createProject}>+ 新建项目</button>
 
-        {selected.size > 0 && (
-          <button className="btn btn-sm" onClick={batchDelete}
-            style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)' }}>
-            删除选中({selected.size})
-          </button>
-        )}
       </div>
 
       {loading ? (
@@ -116,14 +110,20 @@ function HomePage() {
       ) : (
         <div className="proj-list">
           {filtered.length > 0 && (
-            <div className="proj-card" style={{ background: 'var(--bg-hover)', cursor: 'default' }}>
+            <div className="proj-card" style={{ background: 'var(--bg-hover)', cursor: 'default', display: 'flex', alignItems: 'center', gap: 8 }}>
               <input type="checkbox"
                 checked={filtered.length > 0 && selected.size === filtered.length}
                 onChange={toggleAll}
                 onClick={e => e.stopPropagation()} />
-              <span style={{ fontSize: 11, color: 'var(--text-secondary)', paddingLeft: 6 }}>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                 {selected.size > 0 ? `已选 ${selected.size} 项` : '全选'}
               </span>
+              {selected.size > 0 && (
+                <button className="btn btn-sm" onClick={batchDelete}
+                  style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)', marginLeft: 'auto' }}>
+                  删除选中({selected.size})
+                </button>
+              )}
             </div>
           )}
           {filtered.map(p => (
