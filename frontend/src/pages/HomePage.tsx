@@ -1,14 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-interface Project {
-  id: string
-  name: string
-  status: string
-  source_type: string
-  created_at: string
-  updated_at: string
-}
+import { api, Project } from '../services/api'
 
 function HomePage() {
   const [projects, setProjects] = useState<Project[]>([])
@@ -16,10 +8,9 @@ function HomePage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    fetch('/api/projects')
-      .then(r => r.json())
+    api.listProjects()
       .then(data => {
-        setProjects(data.projects || [])
+        setProjects(data)
         setLoading(false)
       })
       .catch(err => {
@@ -31,19 +22,22 @@ function HomePage() {
   const createProject = async () => {
     const name = prompt('请输入食谱名称：')
     if (!name) return
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, source_type: 'text' }),
-    })
-    const project = await res.json()
-    navigate(`/project/${project.id}`)
+    try {
+      const project = await api.createProject(name)
+      navigate(`/project/${project.id}`)
+    } catch (err: any) {
+      alert('创建失败：' + err.message)
+    }
   }
 
   const deleteProject = async (id: string, name: string) => {
     if (!confirm(`确认删除「${name}」？此操作不可撤销。`)) return
-    await fetch(`/api/projects/${id}`, { method: 'DELETE' })
-    setProjects(prev => prev.filter(p => p.id !== id))
+    try {
+      await api.deleteProject(id)
+      setProjects(prev => prev.filter(p => p.id !== id))
+    } catch (err: any) {
+      alert('删除失败：' + err.message)
+    }
   }
 
   const statusLabel = (s: string) => {
