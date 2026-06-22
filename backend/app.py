@@ -6,6 +6,10 @@ from database import init_db, get_db
 from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest
 import json
 from services.llm_service import test_connection, generate, refine
+from services.prompt_service import (
+    list_prompts, get_prompt, create_prompt, update_prompt, delete_prompt,
+    rollback_version, diff_versions, set_default, export_prompts, import_prompts,
+)
 
 init_db()
 
@@ -230,6 +234,102 @@ async def llm_refine(req: LLMRefineRequest):
         return {"content": result}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Prompts ──
+
+class PromptCreate(BaseModel):
+    name: str
+    category: str
+    system_prompt: str = ""
+    skill_template: str = ""
+
+
+class PromptUpdate(BaseModel):
+    name: str = None
+    category: str = None
+    system_prompt: str = None
+    skill_template: str = None
+    change_note: str = ""
+
+
+class PromptImport(BaseModel):
+    data: list
+
+
+@app.get("/api/prompts/export")
+def api_export_prompts():
+    return {"prompts": export_prompts()}
+
+
+@app.post("/api/prompts/import")
+def api_import_prompts(req: PromptImport):
+    return import_prompts(req.data)
+
+
+@app.get("/api/prompts")
+def api_list_prompts(category: str = None):
+    return {"prompts": list_prompts(category)}
+
+
+@app.post("/api/prompts")
+def api_create_prompt(req: PromptCreate):
+    prompt = create_prompt(req.name, req.category, req.system_prompt, req.skill_template)
+    return prompt
+
+
+@app.get("/api/prompts/{prompt_id}")
+def api_get_prompt(prompt_id: str):
+    prompt = get_prompt(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return prompt
+
+
+@app.put("/api/prompts/{prompt_id}")
+def api_update_prompt(prompt_id: str, req: PromptUpdate):
+    prompt = update_prompt(
+        prompt_id, req.name, req.category,
+        req.system_prompt, req.skill_template, req.change_note)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return prompt
+
+
+@app.delete("/api/prompts/{prompt_id}")
+def api_delete_prompt(prompt_id: str):
+    delete_prompt(prompt_id)
+    return {"ok": True}
+
+
+@app.get("/api/prompts/{prompt_id}/versions")
+def api_list_versions(prompt_id: str):
+    prompt = get_prompt(prompt_id)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"versions": prompt["versions"]}
+
+
+@app.post("/api/prompts/{prompt_id}/rollback")
+def api_rollback(prompt_id: str, req: dict):
+    prompt = rollback_version(prompt_id, req["version"])
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt or version not found")
+    return prompt
+
+
+@app.post("/api/prompts/{prompt_id}/diff")
+def api_diff(prompt_id: str, req: dict):
+    result = diff_versions(prompt_id, req["version_a"], req["version_b"])
+    if not result:
+        raise HTTPException(status_code=404, detail="Versions not found")
+    return result
+
+
+@app.post("/api/prompts/{prompt_id}/set-default")
+def api_set_default(prompt_id: str):
+    set_default(prompt_id)
+    return {"ok": True}
 
 
 if __name__ == "__main__":
