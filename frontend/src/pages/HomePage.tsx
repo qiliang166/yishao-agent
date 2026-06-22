@@ -61,10 +61,10 @@ function HomePage() {
     const ok = await modal.confirm(`确认删除选中的 ${selected.size} 个项目？此操作不可撤销。`)
     if (!ok) return
     try {
-      await api.batchDeleteProjects([...selected])
+      const resp = await api.batchDeleteProjects([...selected])
       setSelected(new Set())
       loadProjects(page)
-      modal.toast(`已删除 ${selected.size} 个项目`, 'success')
+      modal.toast((resp as any).message || `已删除 ${selected.size} 个项目`, 'success')
     } catch (err: any) {
       modal.toast('批量删除失败：' + err.message, 'error')
     }

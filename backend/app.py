@@ -253,14 +253,26 @@ def batch_delete_projects(req: dict):
     db = get_db()
     try:
         placeholders = ",".join(["?"] * len(ids))
-        locked = db.execute(f"SELECT id FROM projects WHERE id IN ({placeholders}) AND is_locked = 1", ids).fetchall()
-        if locked:
-            raise HTTPException(403, f"以下项目已锁定，无法删除: {', '.join(r['id'][:8] for r in locked)}")
-        for pid in ids:
+        locked_rows = db.execute(
+            f"SELECT id, name FROM projects WHERE id IN ({placeholders}) AND is_locked = 1", ids
+        ).fetchall()
+        locked_ids = {r["id"] for r in locked_rows}
+        unlocked = [pid for pid in ids if pid not in locked_ids]
+        if not unlocked:
+            names = ", ".join(r["name"] for r in locked_rows)
+            raise HTTPException(403, f"所选项目均已锁定，无法删除: {names}")
+        for pid in unlocked:
             _delete_project_files(pid, db)
-        db.execute(f"DELETE FROM projects WHERE id IN ({placeholders})", ids)
+        db.execute(
+            f"DELETE FROM projects WHERE id IN ({','.join(['?'] * len(unlocked))})", unlocked
+        )
         db.commit()
-        return {"ok": True, "deleted": len(ids)}
+        skipped = len(ids) - len(unlocked)
+        msg = f"已删除 {len(unlocked)} 个项目"
+        if skipped > 0:
+            names = ", ".join(r["name"] for r in locked_rows)
+            msg += f"，{skipped} 个已锁定跳过: {names}"
+        return {"ok": True, "deleted": len(unlocked), "skipped": skipped, "message": msg}
     finally:
         db.close()
 
