@@ -332,6 +332,56 @@ def api_set_default(prompt_id: str):
     return {"ok": True}
 
 
+# ── Video ──
+
+from services.video_service import download_video, get_progress
+
+
+class VideoDownloadRequest(BaseModel):
+    url: str
+
+
+@app.post("/api/video/download")
+def api_download_video(req: VideoDownloadRequest):
+    result = download_video(req.url)
+    return result
+
+
+@app.get("/api/video/progress/{task_id}")
+def api_video_progress(task_id: str):
+    return get_progress(task_id)
+
+
+@app.post("/api/video/extract-subtitles")
+def api_extract_subtitles(req: dict):
+    """Manually extract subtitles from a previously downloaded video task."""
+    task_id = req["task_id"]
+    project_id = req.get("project_id")
+    progress = get_progress(task_id)
+    if progress.get("status") != "done":
+        return {"status": "error", "message": "视频尚未下载完成"}
+    subtitle_text = progress.get("subtitle_text", "")
+    # Auto-save as step1 if project_id provided
+    if project_id and subtitle_text:
+        db = get_db()
+        try:
+            existing = db.execute(
+                "SELECT id FROM step_results WHERE project_id = ? AND step_name = ?",
+                (project_id, "step1")).fetchone()
+            if existing:
+                db.execute(
+                    "UPDATE step_results SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (subtitle_text, existing["id"]))
+            else:
+                db.execute(
+                    "INSERT INTO step_results (project_id, step_name, content) VALUES (?, ?, ?)",
+                    (project_id, "step1", subtitle_text))
+            db.commit()
+        finally:
+            db.close()
+    return {"subtitle_text": subtitle_text}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8765)
