@@ -3,6 +3,62 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 import AICollabEditor from '../components/Editor/AICollabEditor'
 
+interface DownloadState {
+  status: 'idle' | 'downloading' | 'done'
+  progress: number
+  filename: string
+  sizeBytes: number
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+async function downloadWithProgress(
+  url: string,
+  filename: string,
+  onState: (s: DownloadState) => void
+): Promise<void> {
+  onState({ status: 'downloading', progress: 0, filename, sizeBytes: 0 })
+  try {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const total = Number(res.headers.get('content-length') || 0)
+    const reader = res.body?.getReader()
+    if (!reader) throw new Error('无法读取响应流')
+    const chunks: BlobPart[] = []
+    let received = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value) {
+        chunks.push(value)
+        received += value.length
+        onState({
+          status: 'downloading',
+          progress: total > 0 ? Math.round((received / total) * 100) : -1,
+          filename,
+          sizeBytes: received,
+        })
+      }
+    }
+    const blob = new Blob(chunks)
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(objectUrl)
+    onState({ status: 'done', progress: 100, filename, sizeBytes: blob.size })
+  } catch (err: any) {
+    onState({ status: 'done', progress: -1, filename: err.message, sizeBytes: 0 })
+  }
+}
+
 interface Project {
   id: string
   name: string
@@ -32,6 +88,88 @@ interface VideoProgress {
 }
 
 const ALL_STEP_KEYS = ['step1', 'step2', 'step3_daoshuyi', 'step3_yanxi', 'step3_sop', 'step4']
+
+function DownloadButton({
+  url, filename, label, state, onStateChange,
+}: {
+  url: string
+  filename: string
+  label: string
+  state?: DownloadState
+  onStateChange: (s: DownloadState) => void
+}) {
+  const handleDownload = () => {
+    if (state?.status === 'downloading') return
+    downloadWithProgress(url, filename, onStateChange)
+  }
+
+  const btnStyle: React.CSSProperties = {
+    fontSize: 12,
+    padding: '4px 12px',
+    borderRadius: 'var(--radius-sm)',
+    border: '1px solid var(--color-border)',
+    background: state?.status === 'done' && state.progress > 0 ? '#F0F7F0' : 'var(--color-card)',
+    color: state?.status === 'done' && state.progress > 0 ? 'var(--color-success)' : 'var(--color-primary)',
+    cursor: state?.status === 'downloading' ? 'wait' : 'pointer',
+    fontWeight: 600,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    transition: 'all 0.2s',
+  }
+
+  if (!state || state.status === 'idle') {
+    return (
+      <button onClick={handleDownload} style={btnStyle}>
+        {label}
+      </button>
+    )
+  }
+
+  if (state.status === 'downloading') {
+    const pct = state.progress >= 0 ? `${state.progress}%` : '...'
+    const barStyle: React.CSSProperties = {
+      width: 80,
+      height: 4,
+      background: 'var(--color-border)',
+      borderRadius: 2,
+      overflow: 'hidden',
+    }
+    const fillStyle: React.CSSProperties = {
+      width: state.progress >= 0 ? `${state.progress}%` : '30%',
+      height: '100%',
+      background: 'var(--color-primary)',
+      borderRadius: 2,
+      transition: 'width 0.3s',
+    }
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+        <span style={barStyle}><span style={fillStyle} /></span>
+        <span style={{ color: 'var(--color-text-secondary)' }}>{pct}</span>
+        <span style={{ color: 'var(--color-text-secondary)' }}>{formatFileSize(state.sizeBytes)}</span>
+      </span>
+    )
+  }
+
+  // Done
+  if (state.progress < 0) {
+    return (
+      <span style={{ fontSize: 12, color: 'var(--color-warning)' }}>
+        下载失败: {state.filename}
+      </span>
+    )
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+      <span style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+        下载完成
+      </span>
+      <span style={{ color: 'var(--color-text-secondary)' }}>
+        {state.filename} ({formatFileSize(state.sizeBytes)})
+      </span>
+    </span>
+  )
+}
 
 function ProjectPage() {
   const { id } = useParams<{ id: string }>()
@@ -72,6 +210,8 @@ function ProjectPage() {
   const [exportingSop, setExportingSop] = useState(false)
   const [generatingVoiceover, setGeneratingVoiceover] = useState<string | null>(null)
   const [synthesizingTts, setSynthesizingTts] = useState<string | null>(null)
+
+  const [fileDownloads, setFileDownloads] = useState<Record<string, DownloadState>>({})
 
   const [pptBranding, setPptBranding] = useState({copyright: '', signature: ''})
   const [sopBranding, setSopBranding] = useState({copyright: '', signature: ''})
@@ -1107,13 +1247,13 @@ function ProjectPage() {
                   {generatingPpt === 'dao' ? '生成中...' : '生成PPT'}
                 </button>
                 {pptResults.dao && (
-                  <a
-                    href={pptResults.dao.download_url}
-                    download
-                    style={{ fontSize: 13, color: 'var(--color-primary)', textDecoration: 'underline' }}
-                  >
-                    下载: {pptResults.dao.filename}
-                  </a>
+                  <DownloadButton
+                    url={pptResults.dao.download_url}
+                    filename={pptResults.dao.filename}
+                    label="下载PPT"
+                    state={fileDownloads['ppt_dao']}
+                    onStateChange={s => setFileDownloads(prev => ({ ...prev, ppt_dao: s }))}
+                  />
                 )}
               </div>
 
@@ -1133,13 +1273,13 @@ function ProjectPage() {
                   {generatingPpt === 'yanxi' ? '生成中...' : '生成PPT'}
                 </button>
                 {pptResults.yanxi && (
-                  <a
-                    href={pptResults.yanxi.download_url}
-                    download
-                    style={{ fontSize: 13, color: 'var(--color-primary)', textDecoration: 'underline' }}
-                  >
-                    下载: {pptResults.yanxi.filename}
-                  </a>
+                  <DownloadButton
+                    url={pptResults.yanxi.download_url}
+                    filename={pptResults.yanxi.filename}
+                    label="下载PPT"
+                    state={fileDownloads['ppt_yanxi']}
+                    onStateChange={s => setFileDownloads(prev => ({ ...prev, ppt_yanxi: s }))}
+                  />
                 )}
               </div>
             </div>
@@ -1204,13 +1344,13 @@ function ProjectPage() {
                   {exportingSop ? '导出中...' : '导出文档'}
                 </button>
                 {sopResult && (
-                  <a
-                    href={sopResult.download_url}
-                    download
-                    style={{ fontSize: 13, color: 'var(--color-primary)', textDecoration: 'underline' }}
-                  >
-                    下载: {sopResult.filename}
-                  </a>
+                  <DownloadButton
+                    url={sopResult.download_url}
+                    filename={sopResult.filename}
+                    label="下载文档"
+                    state={fileDownloads['sop']}
+                    onStateChange={s => setFileDownloads(prev => ({ ...prev, sop: s }))}
+                  />
                 )}
               </div>
             </div>
@@ -1264,10 +1404,17 @@ function ProjectPage() {
                   }}
                 />
                 {ttsResults.dao && (
-                  <div style={{ marginTop: 6 }}>
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <audio controls style={{ width: '100%', maxWidth: 400 }}>
                       <source src={ttsResults.dao.audio_url} type="audio/mpeg" />
                     </audio>
+                    <DownloadButton
+                      url={ttsResults.dao.audio_url}
+                      filename={ttsResults.dao.filename}
+                      label="下载音频"
+                      state={fileDownloads['tts_dao']}
+                      onStateChange={s => setFileDownloads(prev => ({ ...prev, tts_dao: s }))}
+                    />
                   </div>
                 )}
               </div>
@@ -1317,10 +1464,17 @@ function ProjectPage() {
                   }}
                 />
                 {ttsResults.yanxi && (
-                  <div style={{ marginTop: 6 }}>
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                     <audio controls style={{ width: '100%', maxWidth: 400 }}>
                       <source src={ttsResults.yanxi.audio_url} type="audio/mpeg" />
                     </audio>
+                    <DownloadButton
+                      url={ttsResults.yanxi.audio_url}
+                      filename={ttsResults.yanxi.filename}
+                      label="下载音频"
+                      state={fileDownloads['tts_yanxi']}
+                      onStateChange={s => setFileDownloads(prev => ({ ...prev, tts_yanxi: s }))}
+                    />
                   </div>
                 )}
               </div>
