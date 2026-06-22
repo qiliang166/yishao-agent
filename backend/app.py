@@ -14,7 +14,7 @@ from services.prompt_service import (
 
 init_db()
 
-app = FastAPI(title="一勺笔录 Agent")
+app = FastAPI(title="一勺食谱课件Agent")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,7 +32,7 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "一勺笔录 Agent"}
+    return {"status": "ok", "app": "一勺食谱课件Agent"}
 
 
 # ── Projects ──
@@ -574,7 +574,7 @@ UPDATE_CHECK_URL = "https://raw.githubusercontent.com/yishao-agent/yishao-agent/
 
 @app.get("/api/version")
 def api_version():
-    return {"version": VERSION, "app": "一勺笔录 Agent"}
+    return {"version": VERSION, "app": "一勺食谱课件Agent"}
 
 
 @app.get("/api/check-update")
