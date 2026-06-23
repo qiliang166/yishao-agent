@@ -224,7 +224,7 @@ function TemplateManager() {
   const onResizeStart = (e: React.MouseEvent) => {
     e.stopPropagation()
     const baseW = modalSize.w || 520
-    const baseH = modalSize.h || 400
+    const baseH = modalSize.h || 560
     resizeRef.startX = e.clientX
     resizeRef.startY = e.clientY
     resizeRef.startW = baseW
@@ -668,7 +668,7 @@ function TemplateManager() {
                     value={formPrompt}
                     onChange={e => setFormPrompt(e.target.value)}
                     placeholder="输入AI提示词"
-                    style={{ ...textareaStyle, height: '160px' }}
+                    style={{ ...textareaStyle, height: '100px' }}
                   />
                 </div>
                 <div>
@@ -677,7 +677,7 @@ function TemplateManager() {
                     value={formSkill}
                     onChange={e => setFormSkill(e.target.value)}
                     placeholder="输入SKILL模板"
-                    style={{ ...textareaStyle, height: '160px' }}
+                    style={{ ...textareaStyle, height: '100px' }}
                   />
                 </div>
               </div>
@@ -690,7 +690,7 @@ function TemplateManager() {
                     value={formRules}
                     onChange={e => setFormRules(e.target.value)}
                     placeholder='{}'
-                    style={{ ...textareaStyle, height: '80px' }}
+                    style={{ ...textareaStyle, height: '60px' }}
                   />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -719,7 +719,7 @@ function TemplateManager() {
                       value={formBrandingConfig}
                       onChange={e => setFormBrandingConfig(e.target.value)}
                       placeholder='{"logo_position":"top-right"}'
-                      style={{ ...textareaStyle, height: '56px' }}
+                      style={{ ...textareaStyle, height: '44px' }}
                     />
                   </div>
                 </div>
