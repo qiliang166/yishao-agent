@@ -579,7 +579,7 @@ function TemplateManager() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }} onClick={() => setShowModal(false)}>
+        }} onMouseDown={e => { if (e.target === e.currentTarget) setShowModal(false) }}>
           <div style={{
             ...modalCard,
             width: modalSize.w ? modalSize.w : '720px',
