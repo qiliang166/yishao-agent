@@ -918,6 +918,18 @@ export default function ProjectPage() {
                       setSteps(prev => ({ ...prev, [step2Key()]: '' }))
                       saveStep(step2Key(), '')
                     }}>✕ 清空</button>
+                    <button className="btn btn-ghost btn-sm"
+                      disabled={!steps[step2Key()]}
+                      onClick={async () => {
+                        if (!id) return
+                        try {
+                          const label = sub === '2a' ? 'SOP文案' : sub === '2b' ? '道与术文案' : '研学手册文案'
+                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_${label}.txt`, steps[step2Key()] || '')
+                          modal.toast(`已保存到 ${resp.path}`, 'success')
+                        } catch (e: any) {
+                          modal.toast('保存失败: ' + e.message, 'error')
+                        }
+                      }}>📥 保存到项目</button>
                     <button className="btn btn-primary btn-sm" onClick={() => {
                       saveStep(step2Key(), steps[step2Key()] || '')
                     }} style={(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? '💾 保存' : '✓ 已保存'}</button>
