@@ -163,6 +163,10 @@ export default function ProjectPage() {
   const [sopSelected, setSopSelected] = useState('sop-std')
   const [daoPptSelected, setDaoPptSelected] = useState('dao-std')
   const [yanxiPptSelected, setYanxiPptSelected] = useState('yanxi-std')
+  const [stage3Prompts, setStage3Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
+  const [s3SopModel, setS3SopModel] = useState('')
+  const [s3DaoPptModel, setS3DaoPptModel] = useState('')
+  const [s3YanxiPptModel, setS3YanxiPptModel] = useState('')
   const [pptGenerating, setPptGenerating] = useState('')
 
   // Stage 4 state
@@ -199,11 +203,15 @@ export default function ProjectPage() {
       if (map['_model_s2_sop']) { setS2SopModel(map['_model_s2_sop']); hasModelOverride = true }
       if (map['_model_s2_dao']) { setS2DaoModel(map['_model_s2_dao']); hasModelOverride = true }
       if (map['_model_s2_yanxi']) { setS2YanxiModel(map['_model_s2_yanxi']); hasModelOverride = true }
+      if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
+      if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
+      if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
       let s1s = ''
       const s2p: Record<string, { prompt: string; skill: string }> = {}
+      const s3p: Record<string, { prompt: string; skill: string }> = {}
       let kouboP = ''
       configs.forEach((c: any) => {
         if (c.column_id === 'col1') {
@@ -214,6 +222,14 @@ export default function ProjectPage() {
           const key = c.id === 'c2-sop' ? 'sop' : c.id === 'c2-dao' ? 'dao' : c.id === 'c2-yanxi' ? 'yanxi' : ''
           if (key) s2p[key] = { prompt: c.prompt, skill: c.skill }
         }
+        if (c.column_id === 'col3') {
+          const key = c.id === 'c3-sop' ? 'sop' : ''
+          if (key) s3p[key] = { prompt: c.prompt, skill: c.skill }
+        }
+        if (c.column_id === 'col4') {
+          const key = c.id === 'c4-dao' ? 'daoPpt' : c.id === 'c4-yanxi' ? 'yanxiPpt' : ''
+          if (key) s3p[key] = { prompt: c.prompt, skill: c.skill }
+        }
         if (c.column_id === 'col5' && c.id === 'c5-koubo') {
           kouboP = c.prompt
         }
@@ -221,6 +237,7 @@ export default function ProjectPage() {
       setStage1Prompts(s1p)
       if (s1s) setStage1Skill(s1s)
       setStage2Prompts(s2p)
+      setStage3Prompts(s3p)
       if (kouboP) setStage4KouboPrompt(kouboP)
     }).catch(() => {})
     api.listTtsProviders().then((providers: TTSProvider[]) => {
@@ -263,6 +280,9 @@ export default function ProjectPage() {
         setS2SopModel(defVal)
         setS2DaoModel(defVal)
         setS2YanxiModel(defVal)
+        setS3SopModel(defVal)
+        setS3DaoPptModel(defVal)
+        setS3YanxiPptModel(defVal)
       }
     }).catch(() => {})
   }, [id, navigate])
@@ -407,10 +427,18 @@ export default function ProjectPage() {
   }
 
   // ── PPT / SOP Generation ──
-  const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string) => {
+  const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, prompt: string, model: string) => {
     setPptGenerating(stepKey)
     try {
-      const result: any = await api.generatePPT(content, tmplId, undefined, id)
+      // Step 1: AI generation with column prompt
+      let aiContent = content
+      if (model && prompt) {
+        const [pid, mdl] = model.split(':')
+        const result = await doGenerate(stepKey, prompt, content, pid, mdl)
+        if (result) aiContent = result
+      }
+      // Step 2: Format as PPTX
+      const result: any = await api.generatePPT(aiContent, tmplId, undefined, id)
       setGenFiles(prev => [...prev, {
         name: result.filename, type: 'PPT',
         source: label,
@@ -420,9 +448,17 @@ export default function ProjectPage() {
     } catch (e: any) { modal.toast('PPT生成失败: ' + e.message, 'error') }
     finally { setPptGenerating('') }
   }
-  const doExportSOP = async (content: string) => {
+  const doExportSOP = async (content: string, prompt: string, model: string) => {
     try {
-      const result: any = await api.exportSOP(content, undefined, id)
+      // Step 1: AI generation with column prompt
+      let aiContent = content
+      if (model && prompt) {
+        const [pid, mdl] = model.split(':')
+        const result = await doGenerate('step3_sop_doc', prompt, content, pid, mdl)
+        if (result) aiContent = result
+      }
+      // Step 2: Export as DOCX
+      const result: any = await api.exportSOP(aiContent, undefined, id)
       setGenFiles(prev => [...prev, {
         name: result.filename, type: 'Word',
         source: 'SOP课件',
@@ -1003,13 +1039,27 @@ export default function ProjectPage() {
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={SOP_TEMPLATES} selectedId={sopSelected}
                   onSelect={t => setSopSelected(t.id)} previewTarget="prev3" />
+                <div className="form-label">大模型</div>
+                <select className="form-select" style={{ marginBottom: 8 }} value={s3SopModel} onChange={e => { setS3SopModel(e.target.value); saveStep('_model_step3_sop', e.target.value) }}>
+                  <option value="">选择模型...</option>
+                  {llmProviders.filter(p => p.is_enabled).map(p =>
+                    (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                      <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                    ))
+                  )}
+                </select>
                 <div className="form-label" style={{ marginTop: 10 }}>品牌信息（可选）</div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <input className="form-input" placeholder="版权" style={{ flex: 1 }} />
                   <input className="form-input" placeholder="签名" style={{ flex: 1 }} />
                 </div>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  onClick={() => doExportSOP(steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '')}>
+                  disabled={!s3SopModel}
+                  onClick={() => doExportSOP(
+                    steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '',
+                    stage3Prompts.sop?.prompt || '你是一个餐饮标准化专家。请根据食谱笔记，编写SOP。',
+                    s3SopModel
+                  )}>
                   📄 AI 生成 + 导出 .docx
                 </button>
               </div>
@@ -1042,9 +1092,20 @@ export default function ProjectPage() {
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={DAO_PPT_TEMPLATES} selectedId={daoPptSelected}
                   onSelect={t => setDaoPptSelected(t.id)} previewTarget="prev3b" />
+                <div className="form-label">大模型</div>
+                <select className="form-select" style={{ marginBottom: 8 }} value={s3DaoPptModel} onChange={e => { setS3DaoPptModel(e.target.value); saveStep('_model_step3_dao_ppt', e.target.value) }}>
+                  <option value="">选择模型...</option>
+                  {llmProviders.filter(p => p.is_enabled).map(p =>
+                    (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                      <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                    ))
+                  )}
+                </select>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  disabled={pptGenerating !== ''}
-                  onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '道术PPT')}>
+                  disabled={pptGenerating !== '' || !s3DaoPptModel}
+                  onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '道术PPT',
+                    stage3Prompts.daoPpt?.prompt || '你是一个PPT内容设计专家。请将道与术文案转化为PPT大纲。',
+                    s3DaoPptModel)}>
                   {pptGenerating === 'step3_dao_ppt' ? '⏳ 生成中...' : '📌 合成道术PPT'}
                 </button>
               </div>
@@ -1080,9 +1141,20 @@ export default function ProjectPage() {
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={YANXI_PPT_TEMPLATES} selectedId={yanxiPptSelected}
                   onSelect={t => setYanxiPptSelected(t.id)} previewTarget="prev3c" />
+                <div className="form-label">大模型</div>
+                <select className="form-select" style={{ marginBottom: 8 }} value={s3YanxiPptModel} onChange={e => { setS3YanxiPptModel(e.target.value); saveStep('_model_step3_yan_ppt', e.target.value) }}>
+                  <option value="">选择模型...</option>
+                  {llmProviders.filter(p => p.is_enabled).map(p =>
+                    (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                      <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                    ))
+                  )}
+                </select>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  disabled={pptGenerating !== ''}
-                  onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '研学PPT')}>
+                  disabled={pptGenerating !== '' || !s3YanxiPptModel}
+                  onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '研学PPT',
+                    stage3Prompts.yanxiPpt?.prompt || '你是一个教学PPT设计专家。请将研学手册内容转化为PPT。',
+                    s3YanxiPptModel)}>
                   {pptGenerating === 'step3_yan_ppt' ? '⏳ 生成中...' : '📌 合成研学PPT'}
                 </button>
               </div>
