@@ -185,6 +185,7 @@ export default function ProjectPage() {
       setProject(p)
       setProjStoragePath(p.storage_path || '')
     }).catch(() => navigate('/'))
+    let hasModelOverride = false
     api.getSteps(id).then((s: any[]) => {
       const map: Record<string, string> = {}
       s.forEach((x: any) => { map[x.step_name] = x.content })
@@ -194,10 +195,10 @@ export default function ProjectPage() {
       setTextInput(map['raw_text'] || '')
       setFileText(map['raw_file'] || '')
       // Restore saved model selections
-      if (map['_model_step1']) setStep1Model(map['_model_step1'])
-      if (map['_model_s2_sop']) setS2SopModel(map['_model_s2_sop'])
-      if (map['_model_s2_dao']) setS2DaoModel(map['_model_s2_dao'])
-      if (map['_model_s2_yanxi']) setS2YanxiModel(map['_model_s2_yanxi'])
+      if (map['_model_step1']) { setStep1Model(map['_model_step1']); hasModelOverride = true }
+      if (map['_model_s2_sop']) { setS2SopModel(map['_model_s2_sop']); hasModelOverride = true }
+      if (map['_model_s2_dao']) { setS2DaoModel(map['_model_s2_dao']); hasModelOverride = true }
+      if (map['_model_s2_yanxi']) { setS2YanxiModel(map['_model_s2_yanxi']); hasModelOverride = true }
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
@@ -253,15 +254,16 @@ export default function ProjectPage() {
     }).catch(() => {})
     api.listProviders().then((providers: LLMProvider[]) => {
       setLlmProviders(providers)
+      if (hasModelOverride) return  // persisted models already loaded, skip defaults
       const def = providers.find(p => p.is_enabled) || providers[0]
       const defModels = Array.isArray(def?.models) ? def.models : []
       const defVal = def && defModels.length > 0 ? `${def.id}:${defModels[0]}` : ''
-      if (providers.length > 0 && !step1Model) {
-        if (defVal) setStep1Model(defVal)
+      if (defVal) {
+        setStep1Model(defVal)
+        setS2SopModel(defVal)
+        setS2DaoModel(defVal)
+        setS2YanxiModel(defVal)
       }
-      if (defVal && !s2SopModel) setS2SopModel(defVal)
-      if (defVal && !s2DaoModel) setS2DaoModel(defVal)
-      if (defVal && !s2YanxiModel) setS2YanxiModel(defVal)
     }).catch(() => {})
   }, [id, navigate])
 
