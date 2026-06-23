@@ -131,7 +131,8 @@ export default function ProjectPage() {
   const [sourceAsr, setSourceAsr] = useState('')
   const [sourceSubtitle, setSourceSubtitle] = useState('')
   const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
-  const [step1Model, setStep1Model] = useState('')
+  const [step1Models, setStep1Models] = useState<Record<string, string>>({})
+  const step1Model = step1Models[mode1Key] || ''
   const [step1Generating, setStep1Generating] = useState('')
 
   // Stage 2 state
@@ -189,7 +190,19 @@ export default function ProjectPage() {
       setTextInput(map['raw_text'] || '')
       setFileText(map['raw_file'] || '')
       // Restore saved model selections
-      if (map['_model_step1']) { setStep1Model(map['_model_step1']); hasModelOverride = true }
+      if (map['_model_s1_video'] || map['_model_s1_text'] || map['_model_s1_file']) {
+        setStep1Models({
+          video: map['_model_s1_video'] || '',
+          text: map['_model_s1_text'] || '',
+          file: map['_model_s1_file'] || '',
+        })
+        hasModelOverride = true
+      }
+      // Also restore legacy single key for backward compatibility
+      if (!hasModelOverride && map['_model_step1']) {
+        setStep1Models({ video: map['_model_step1'], text: map['_model_step1'], file: map['_model_step1'] })
+        hasModelOverride = true
+      }
       if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
@@ -294,7 +307,11 @@ export default function ProjectPage() {
       const defModels = Array.isArray(def?.models) ? def.models : []
       const defVal = def && defModels.length > 0 ? `${def.id}:${defModels[0]}` : ''
       if (defVal) {
-        setStep1Model((prev: string) => prev || defVal)
+        setStep1Models((prev: Record<string, string>) => ({
+          video: prev.video || defVal,
+          text: prev.text || defVal,
+          file: prev.file || defVal,
+        }))
         setS3SopModel((prev: string) => prev || defVal)
         setS3DaoPptModel((prev: string) => prev || defVal)
         setS3YanxiPptModel((prev: string) => prev || defVal)
@@ -594,7 +611,11 @@ export default function ProjectPage() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <select className="form-select" style={{ flex: 1 }}
                     value={step1Model}
-                    onChange={e => { setStep1Model(e.target.value); saveStep('_model_step1', e.target.value) }}>
+                    onChange={e => {
+                      const val = e.target.value
+                      setStep1Models(prev => ({ ...prev, [mode1Key]: val }))
+                      saveStep(`_model_s1_${mode1Key}`, val)
+                    }}>
                     <option value="">选择模型...</option>
                     {llmProviders.filter(p => p.is_enabled).map(p =>
                       (Array.isArray(p.models) ? p.models : []).map((m: string) => (
