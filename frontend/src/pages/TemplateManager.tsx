@@ -57,7 +57,7 @@ const textareaStyle: React.CSSProperties = {
   borderRadius: 'var(--radius-sm)',
   padding: '10px',
   fontSize: '11px',
-  fontFamily: 'var(--mono)',
+  fontFamily: 'inherit',
   color: 'var(--text)',
   background: 'var(--card)',
   outline: 'none',
