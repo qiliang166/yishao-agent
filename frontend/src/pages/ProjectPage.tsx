@@ -568,7 +568,7 @@ export default function ProjectPage() {
                     📺 播放校验
                   </button>
                   <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 8 }}
-                    disabled={step1Generating !== '' || !step1Model || !videoText.trim()}
+                    disabled={step1Generating === '1a' || !step1Model || !videoText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating === '1a' ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
@@ -667,7 +667,7 @@ export default function ProjectPage() {
                     <button className="btn btn-primary btn-sm" disabled={!textInput.trim()}
                       onClick={() => { if (id && textInput.trim()) { saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : textInput !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : textInput !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-primary btn-sm"
-                      disabled={step1Generating !== '' || !step1Model || !textInput.trim()}
+                      disabled={step1Generating === '1b' || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
                       {step1Generating === '1b' ? '⏳ 生成中...' : '⚙ 整理文档'}
                     </button>
@@ -693,7 +693,7 @@ export default function ProjectPage() {
                       }
                     }} />
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={step1Generating !== '' || !step1Model || !fileText.trim()}
+                    disabled={step1Generating === '1c' || !step1Model || !fileText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating === '1c' ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
