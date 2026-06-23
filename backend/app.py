@@ -32,6 +32,8 @@ EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 os.makedirs(LOGO_DIR, exist_ok=True)
+THUMBNAIL_DIR = os.path.join(BASE_DIR, "data", "thumbnails")
+os.makedirs(THUMBNAIL_DIR, exist_ok=True)
 
 import re
 
@@ -902,6 +904,7 @@ class TemplateCreate(BaseModel):
     file_path: str = ""
     prompt: str = ""
     skill: str = ""
+    rules: str = "{}"
     linked_skill_id: str = ""
     branding_config: str = "{}"
 
@@ -925,8 +928,8 @@ def create_template(req: TemplateCreate):
     db = get_db()
     try:
         db.execute(
-            "INSERT INTO templates (id, name, type, file_path, prompt, skill, linked_skill_id, branding_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (tid, req.name, req.type, req.file_path, req.prompt, req.skill, req.linked_skill_id, req.branding_config))
+            "INSERT INTO templates (id, name, type, file_path, prompt, skill, rules, linked_skill_id, branding_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (tid, req.name, req.type, req.file_path, req.prompt, req.skill, req.rules, req.linked_skill_id, req.branding_config))
         db.commit()
         return {"id": tid, "name": req.name}
     finally:
@@ -938,8 +941,8 @@ def update_template(template_id: str, req: TemplateCreate):
     db = get_db()
     try:
         db.execute(
-            "UPDATE templates SET name=?, type=?, file_path=?, prompt=?, skill=?, linked_skill_id=?, branding_config=? WHERE id=?",
-            (req.name, req.type, req.file_path, req.prompt, req.skill, req.linked_skill_id, req.branding_config, template_id))
+            "UPDATE templates SET name=?, type=?, file_path=?, prompt=?, skill=?, rules=?, linked_skill_id=?, branding_config=? WHERE id=?",
+            (req.name, req.type, req.file_path, req.prompt, req.skill, req.rules, req.linked_skill_id, req.branding_config, template_id))
         db.commit()
         return {"ok": True}
     finally:
@@ -950,6 +953,11 @@ def update_template(template_id: str, req: TemplateCreate):
 def delete_template(template_id: str):
     db = get_db()
     try:
+        row = db.execute("SELECT is_default FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        if row["is_default"]:
+            raise HTTPException(400, "默认模板不可删除，请先将其他模板设为默认后再删除")
         db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
         db.commit()
         return {"ok": True}
@@ -993,6 +1001,43 @@ async def upload_template_file(template_id: str, file: UploadFile = File(...)):
         return {"ok": True, "file_path": file_path, "filename": file.filename}
     finally:
         db.close()
+
+
+@app.post("/api/templates/{template_id}/upload-thumbnail")
+async def upload_template_thumbnail(template_id: str, file: UploadFile = File(...)):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Template not found")
+        if not file.filename:
+            raise HTTPException(400, "No file provided")
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"):
+            raise HTTPException(400, "请上传图片格式文件 (png/jpg/gif/webp/svg)")
+        safe_name = f"{template_id}_thumb{ext}"
+        file_path = os.path.join(THUMBNAIL_DIR, safe_name)
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        db.execute("UPDATE templates SET thumbnail_path = ? WHERE id = ?", (file_path, template_id))
+        db.commit()
+        return {"ok": True, "thumbnail_path": file_path, "filename": file.filename}
+    finally:
+        db.close()
+
+
+@app.get("/api/thumbnails/{filename}")
+def serve_thumbnail(filename: str):
+    filepath = os.path.join(THUMBNAIL_DIR, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="Thumbnail not found")
+    media_map = {
+        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+    }
+    ext = os.path.splitext(filename)[1].lower()
+    return FileResponse(filepath, media_type=media_map.get(ext, "application/octet-stream"))
 
 
 @app.get("/api/templates/for-stage/{stage_type}")
@@ -1095,7 +1140,8 @@ def extract_pptx_structure(file_path: str) -> dict:
 
 
 @app.post("/api/templates/{template_id}/analyze")
-async def analyze_template(template_id: str, stage_type: str = "daoPpt"):
+async def analyze_template(template_id: str, stage_type: str = "daoPpt",
+                            provider_id: str = "", model: str = ""):
     from services.llm_service import generate as llm_generate, get_provider
     db = get_db()
     try:
@@ -1109,24 +1155,32 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt"):
 
         stage_to_column = {"daoPpt": "col4", "yanxiPpt": "col5"}
         column_id = stage_to_column.get(stage_type, "col4")
-        config = db.execute("SELECT rules FROM column_configs WHERE column_id = ?", (column_id,)).fetchone()
+        config = db.execute("SELECT rules, prompt FROM column_configs WHERE column_id = ?", (column_id,)).fetchone()
         if not config or not config["rules"] or config["rules"] == "{}":
             raise HTTPException(400, f"栏目 {column_id} 未配置规则，请先在栏目配置中设置 PPT SKILL 规则")
 
         rules = json.loads(config["rules"])
+        column_prompt = config["prompt"] or ""
         analysis_prompt = rules.get("analysis_rules", "")
         if not analysis_prompt:
             raise HTTPException(400, "栏目规则中缺少 analysis_rules")
 
-        # Get default LLM provider
-        provider_row = db.execute("SELECT id, models FROM llm_providers WHERE is_enabled = 1 ORDER BY rowid LIMIT 1").fetchone()
-        if not provider_row:
-            raise HTTPException(400, "没有可用的 LLM 服务商")
+        # Use specified provider/model, or fall back to first enabled
+        if provider_id and model:
+            provider_row = db.execute("SELECT id, models FROM llm_providers WHERE id = ? AND is_enabled = 1", (provider_id,)).fetchone()
+            if not provider_row:
+                raise HTTPException(400, "指定的 LLM 服务商不可用")
+        else:
+            provider_row = db.execute("SELECT id, models FROM llm_providers WHERE is_enabled = 1 ORDER BY rowid LIMIT 1").fetchone()
+            if not provider_row:
+                raise HTTPException(400, "没有可用的 LLM 服务商")
+            models_list = json.loads(provider_row["models"] or "[]")
+            model = models_list[0] if models_list else "gpt-4o"
 
-        models = json.loads(provider_row["models"] or "[]")
-        model = models[0] if models else "gpt-4o"
+        system_prompt = f"""你是一位专业的 PPT 模板分析专家。请严格遵循栏目预设的角色定义完成分析任务。
 
-        system_prompt = f"""你是一位专业的 PPT 模板分析专家。你的任务是根据给定的栏目约束规则，分析上传的 PPTX 模板文件结构，提取模板的实际样式信息，并生成该模板专属的完整 prompt 和 SKILL。
+## 栏目角色定义（分析的身份立场和领域知识）
+{column_prompt}
 
 ## 栏目约束规则（必须遵守的分析框架）
 {json.dumps(rules, ensure_ascii=False, indent=2)}
@@ -1702,8 +1756,12 @@ def _build_prompt_from_rules(rules: dict) -> str:
 
     parts = []
 
-    # Role
-    parts.append("你是国家级烹饪大师、食品科学家兼PPT内容设计专家。请根据提供的文案，生成一份专业PPT。")
+    # Role — 从栏目配置的 prompt 提供，此处不硬编码。仅输出约束规则部分。
+    role = rules.get("_role_override", "")
+    if not role:
+        # 兼容旧规则：若无 _role_override，使用栏目配置中的 prompt
+        role = "根据栏目配置中定义的提示词角色要求执行。"
+    parts.append(role)
 
     # Constraints section
     parts.append("\n## 约束规则")
@@ -1787,10 +1845,9 @@ def update_column_config(config_id: str, req: dict):
                 try:
                     rules = json.loads(req['rules'])
                     if rules and rules != {}:
-                        new_prompt = _build_prompt_from_rules(rules)
                         new_skill = _build_skill_from_rules(rules)
-                        db.execute("UPDATE column_configs SET prompt = ?, skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                                   (new_prompt, new_skill, config_id))
+                        db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                   (new_skill, config_id))
                 except (json.JSONDecodeError, Exception):
                     pass  # Keep existing prompt/skill if rules parse fails
         db.commit()

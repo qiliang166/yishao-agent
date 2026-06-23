@@ -316,12 +316,20 @@ export const api = {
 
   // Templates
   listTemplates: (type?: string) => request(`/api/templates${type ? `?type=${encodeURIComponent(type)}` : ''}`).then(d => d.templates),
-  createTemplate: (data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; linked_skill_id?: string; branding_config?: string}) =>
+  createTemplate: (data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; rules?: string; linked_skill_id?: string; branding_config?: string}) =>
     request('/api/templates', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
-  updateTemplate: (id: string, data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; linked_skill_id?: string; branding_config?: string}) =>
+  updateTemplate: (id: string, data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; rules?: string; linked_skill_id?: string; branding_config?: string}) =>
     request(`/api/templates/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteTemplate: (id: string) => request(`/api/templates/${id}`, { method: 'DELETE' }),
   setDefaultTemplate: (id: string) => request(`/api/templates/${id}/set-default`, { method: 'POST' }),
+  uploadTemplateThumbnail: async (templateId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload-thumbnail`, { method: 'POST', body: formData })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Upload failed')
+    return data as { ok: boolean; thumbnail_path: string; filename: string }
+  },
   uploadTemplateFile: async (templateId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -363,8 +371,12 @@ export const api = {
   listColumnConfigs: () => request('/api/column-configs').then(d => d.configs),
   updateColumnConfig: (id: string, data: { prompt?: string; skill?: string; rules?: string }) =>
     request(`/api/column-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
-  analyzeTemplate: (templateId: string, stageType: string = 'daoPpt') =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/analyze?stage_type=${encodeURIComponent(stageType)}`, { method: 'POST' }),
+  analyzeTemplate: (templateId: string, stageType: string = 'daoPpt', providerId: string = '', model: string = '') => {
+    const params = new URLSearchParams({ stage_type: stageType })
+    if (providerId) params.set('provider_id', providerId)
+    if (model) params.set('model', model)
+    return request(`/api/templates/${encodeURIComponent(templateId)}/analyze?${params.toString()}`, { method: 'POST' })
+  },
   uploadColumnTemplate: async (id: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)

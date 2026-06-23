@@ -94,6 +94,7 @@ def init_db():
                 file_path TEXT NOT NULL,
                 prompt TEXT DEFAULT '',
                 skill TEXT DEFAULT '',
+                rules TEXT DEFAULT '{}',
                 thumbnail_path TEXT,
                 linked_skill_id TEXT,
                 branding_config TEXT,
@@ -186,6 +187,14 @@ def init_db():
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()]
             if 'skill' not in existing_cols:
                 conn.execute("ALTER TABLE templates ADD COLUMN skill TEXT DEFAULT ''")
+        except Exception:
+            pass
+
+        # Add rules column to templates if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()]
+            if 'rules' not in existing_cols:
+                conn.execute("ALTER TABLE templates ADD COLUMN rules TEXT DEFAULT '{}'")
         except Exception:
             pass
 
