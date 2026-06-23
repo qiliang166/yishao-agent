@@ -769,7 +769,8 @@ export default function ProjectPage() {
                       onClick={async () => {
                         if (!id) return
                         try {
-                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_AI整理.txt`, steps[step1Key()] || '')
+                          const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件上传'
+                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_${label}_AI整理.txt`, steps[step1Key()] || '')
                           modal.toast(`已保存到 ${resp.path}`, 'success')
                         } catch (e: any) {
                           modal.toast('保存失败: ' + e.message, 'error')
