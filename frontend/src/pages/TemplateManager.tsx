@@ -511,7 +511,7 @@ function TemplateManager() {
                             <img
                               src={displayUrl}
                               alt={t.name}
-                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
+                              style={{ position: 'absolute', inset: '8px', width: 'calc(100% - 16px)', height: 'calc(100% - 16px)', objectFit: 'contain' }}
                               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                             />
                           ) : null}
