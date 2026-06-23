@@ -482,6 +482,9 @@ function TemplateManager() {
                             <span style={{ fontSize: '11px' }}>
                               {t.type === 'ppt' ? 'PPT 预览' : 'SOP 预览'}
                             </span>
+                            <span style={{ fontSize: '9px', opacity: 0.5 }}>
+                              建议 320×240
+                            </span>
                           </div>
                         </div>
 
@@ -526,7 +529,7 @@ function TemplateManager() {
                             <label style={{
                               fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
                               flexShrink: 0, lineHeight: 1,
-                            }} title="上传缩略图">
+                            }} title="上传缩略图（建议 320×240）">
                               {thumbUrl ? '更换' : '缩略图'}
                               <input type="file" accept="image/*" style={{ display: 'none' }}
                                 onChange={e => {
