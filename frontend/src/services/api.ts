@@ -345,7 +345,7 @@ export const api = {
   previewTemplate: (templateId: string) =>
     `${BASE}/api/templates/${encodeURIComponent(templateId)}/file`,
   slideUrl: (slidePath: string) =>
-    `${BASE}/api/slides/${encodeURIComponent(slidePath)}`,
+    `${BASE}/api/slides/${slidePath}`,
   listTemplatesForStage: (stageType: string) =>
     request(`/api/templates/for-stage/${encodeURIComponent(stageType)}`).then(d => d.templates),
 
