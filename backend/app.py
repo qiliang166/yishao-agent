@@ -1027,28 +1027,69 @@ def extract_pptx_structure(file_path: str) -> dict:
     from pptx import Presentation
     prs = Presentation(file_path)
     slides = []
+    all_fonts = set()
+    all_colors = set()
+
     for i, slide in enumerate(prs.slides):
         info = {"index": i + 1, "layout": slide.slide_layout.name, "placeholders": [], "shapes": []}
         for shape in slide.placeholders:
+            font_info = {}
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        f = run.font
+                        if f.name:
+                            font_info["name"] = f.name
+                            all_fonts.add(f.name)
+                        if f.size:
+                            font_info["size_pt"] = round(f.size / 12700, 1)
+                        font_info["bold"] = f.bold
+                        try:
+                            if f.color and f.color.rgb:
+                                all_colors.add(str(f.color.rgb))
+                        except Exception:
+                            pass
             info["placeholders"].append({
                 "idx": shape.placeholder_format.idx,
                 "type": str(shape.placeholder_format.type),
                 "name": shape.name,
-                "text_preview": (shape.text or "")[:100]
+                "text_preview": (shape.text or "")[:100],
+                "font": font_info
             })
         for shape in slide.shapes:
             if not shape.is_placeholder:
-                info["shapes"].append({
+                shape_info = {
                     "type": str(shape.shape_type),
                     "name": shape.name,
                     "text_preview": (shape.text or "")[:100] if shape.has_text_frame else ""
-                })
+                }
+                if shape.has_text_frame:
+                    for para in shape.text_frame.paragraphs:
+                        for run in para.runs:
+                            f = run.font
+                            if f.name:
+                                all_fonts.add(f.name)
+                            try:
+                                if f.color and f.color.rgb:
+                                    all_colors.add(str(f.color.rgb))
+                            except Exception:
+                                pass
+                info["shapes"].append(shape_info)
         slides.append(info)
+
+    master_layouts = []
+    for master in prs.slide_masters:
+        for layout in master.slide_layouts:
+            master_layouts.append(layout.name)
+
     return {
         "slide_count": len(slides),
         "slide_width": prs.slide_width,
         "slide_height": prs.slide_height,
         "slide_layouts": [lyt.name for lyt in prs.slide_layouts],
+        "master_layouts": master_layouts,
+        "fonts_used": sorted(list(all_fonts))[:30],
+        "colors_used": sorted(list(all_colors))[:30],
         "slides": slides
     }
 
@@ -1085,19 +1126,22 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt"):
         models = json.loads(provider_row["models"] or "[]")
         model = models[0] if models else "gpt-4o"
 
-        system_prompt = f"""你是一位专业的 PPT 模板分析专家。你的任务是根据给定的栏目规则框架，分析上传的 PPTX 模板文件结构，并生成该模板专属的 prompt 和 SKILL。
+        system_prompt = f"""你是一位专业的 PPT 模板分析专家。你的任务是根据给定的栏目约束规则，分析上传的 PPTX 模板文件结构，提取模板的实际样式信息，并生成该模板专属的完整 prompt 和 SKILL。
 
-## 栏目规则框架
+## 栏目约束规则（必须遵守的分析框架）
 {json.dumps(rules, ensure_ascii=False, indent=2)}
 
 ## 重要指示
 1. 版式类型必须在 layout_types 范围内
-2. 配色必须从 design_rules.color_schemes 中选择最接近的
-3. prompt 应完整包含：角色设定、内容规范引用、版式选择规则、配色约束、输出格式要求
-4. skill 应为完整的 Markdown 模板，包含 content_spec 规定的完整结构
-5. 遵守 design_principles 中的所有铁律"""
+2. 从提取的 PPTX 结构中获取实际配色（colors_used）和字体（fonts_used），不预设任何配色方案
+3. 按 design_rules 中的约束条文审视模板的视觉样式，确保符合设计纪律
+4. prompt 应完整包含：角色设定、从模板提取的实际样式描述（颜色/字体/版式/尺寸）、内容规范引用、版式选择规则、约束规则引用、输出格式要求
+5. skill 应为完整的 Markdown 模板，包含 content_spec 规定的完整结构
+6. 遵守 design_principles 中的所有铁律
+7. 遵守 page_rhythm 中的页面节奏规则
+8. 从模板中提取的实际样式信息必须如实写入 prompt，不编造不预设"""
 
-        user_message = f"请分析以下 PPTX 文件结构，并生成该模板专属的 prompt 和 SKILL：\n\n```json\n{json.dumps(structure, ensure_ascii=False, indent=2)}\n```\n\n请直接输出 JSON，格式为：{{\"prompt\": \"...\", \"skill\": \"...\", \"color_scheme\": \"...\"}}"
+        user_message = f"请分析以下 PPTX 文件结构（含实际提取的颜色和字体），基于约束规则生成该模板专属的 prompt 和 SKILL：\n\n```json\n{json.dumps(structure, ensure_ascii=False, indent=2)}\n```\n\n请直接输出 JSON，格式为：{{\"prompt\": \"...\", \"skill\": \"...\"}}"
 
         ai_response = await llm_generate(provider_row["id"], model, system_prompt, user_message, temperature=0.3)
 
@@ -1112,7 +1156,6 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt"):
         result = json.loads(ai_response)
         prompt = result.get("prompt", "")
         skill = result.get("skill", "")
-        color_scheme = result.get("color_scheme", "")
 
         if not prompt or not skill:
             raise HTTPException(400, "AI 未能生成完整的 prompt 和 skill，请重试")
@@ -1120,7 +1163,7 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt"):
         db.execute("UPDATE templates SET prompt = ?, skill = ? WHERE id = ?", (prompt, skill, template_id))
         db.commit()
 
-        return {"ok": True, "prompt": prompt, "skill": skill, "color_scheme": color_scheme}
+        return {"ok": True, "prompt": prompt, "skill": skill}
     except json.JSONDecodeError:
         raise HTTPException(500, "AI 返回格式异常，请重试")
     finally:
@@ -1648,7 +1691,7 @@ def list_column_configs():
 
 
 def _build_prompt_from_rules(rules: dict) -> str:
-    """从 rules JSON 自动生成 prompt"""
+    """从 rules JSON 自动生成 prompt（约束条文版本）"""
     dr = rules.get("design_rules", {})
     lts = rules.get("layout_types", [])
     comp = rules.get("components", {})
@@ -1665,18 +1708,22 @@ def _build_prompt_from_rules(rules: dict) -> str:
     # Constraints section
     parts.append("\n## 约束规则")
 
-    # Color schemes
-    schemes = dr.get("color_schemes", [])
-    if schemes:
-        names = "/".join(s.get("name", "") for s in schemes)
-        parts.append(f"- 配色：仅从预设中选择（{names}）。{dr.get('color_discipline', '')}")
+    # Color discipline (from constraint text)
+    cd = dr.get("color_discipline", "")
+    if cd:
+        parts.append(f"- 配色纪律：{cd}")
 
-    # Font hierarchy
-    fonts = comp.get("fonts", {})
-    if fonts:
-        parts.append(f"- 字体：标题={fonts.get('title', {}).get('weight', 'bold')} {fonts.get('title', {}).get('size', '')} / 二级={fonts.get('heading', {}).get('weight', '600')} {fonts.get('heading', {}).get('size', '')} / 正文={fonts.get('body', {}).get('weight', '400')} {fonts.get('body', {}).get('size', '')}")
+    # Font discipline
+    fd = dr.get("font_discipline", "")
+    if fd:
+        parts.append(f"- 字体纪律：{fd}")
 
-    # Layout sequence
+    # Layout discipline
+    ld = dr.get("layout_discipline", "")
+    if ld:
+        parts.append(f"- 版式纪律：{ld}")
+
+    # Layout sequence from page_rhythm
     if pr.get("sequence"):
         parts.append(f"- 版式顺序：{' → '.join(pr['sequence'])}。{pr.get('alternation_rule', '')}")
 
