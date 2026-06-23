@@ -300,13 +300,13 @@ export default function ProjectPage() {
       const defModels = Array.isArray(def?.models) ? def.models : []
       const defVal = def && defModels.length > 0 ? `${def.id}:${defModels[0]}` : ''
       if (defVal) {
-        setStep1Model(defVal)
-        setS2SopModel(defVal)
-        setS2DaoModel(defVal)
-        setS2YanxiModel(defVal)
-        setS3SopModel(defVal)
-        setS3DaoPptModel(defVal)
-        setS3YanxiPptModel(defVal)
+        setStep1Model((prev: string) => prev || defVal)
+        setS2SopModel((prev: string) => prev || defVal)
+        setS2DaoModel((prev: string) => prev || defVal)
+        setS2YanxiModel((prev: string) => prev || defVal)
+        setS3SopModel((prev: string) => prev || defVal)
+        setS3DaoPptModel((prev: string) => prev || defVal)
+        setS3YanxiPptModel((prev: string) => prev || defVal)
       }
     }).catch(() => {})
     api.getSettings().then(data => {
