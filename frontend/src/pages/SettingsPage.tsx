@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 import { sha256 } from '../services/sha256'
+import { useModal } from '../components/ModalProvider'
 
 function SettingsPage() {
+  const modal = useModal()
   const [brandLogo, setBrandLogo] = useState('🍽')
   const [brandName, setBrandName] = useState('一勺笔录(SOP)智能体')
   const [savePath, setSavePath] = useState('D:\\YISHAOAGENT\\data\\output')
@@ -64,7 +66,7 @@ function SettingsPage() {
   }
 
   const handlePasswordDisable = async () => {
-    const ok = window.confirm('确定要关闭密码保护吗？关闭后，项目配置中的敏感栏目将无需密码即可访问。')
+    const ok = await modal.confirm('确定要关闭密码保护吗？关闭后，项目配置中的敏感栏目将无需密码即可访问。')
     if (!ok) return
     try {
       await api.updateSettings({ admin_password_enabled: '0' })

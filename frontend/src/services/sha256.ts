@@ -33,7 +33,7 @@ const K = [
 ]
 
 function rotr(x: number, n: number): number {
-  return (x >>> n) | (x << (32 - n))
+  return ((x >>> n) | (x << (32 - n))) >>> 0
 }
 
 export function sha256(input: string): string {
@@ -46,9 +46,12 @@ export function sha256(input: string): string {
     bytes.push(0)
   }
 
-  // Append length as 64-bit big-endian
-  for (let i = 7; i >= 0; i--) {
-    bytes.push((bitLen >>> (i * 8)) & 0xff)
+  // Append length as 64-bit big-endian (upper 32 bits are always 0 for our use case)
+  for (let i = 7; i >= 4; i--) {
+    bytes.push(0)
+  }
+  for (let i = 3; i >= 0; i--) {
+    bytes.push((bitLen / Math.pow(2, i * 8)) >>> 0 & 0xff)
   }
 
   const H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
@@ -57,7 +60,7 @@ export function sha256(input: string): string {
   for (let i = 0; i < bytes.length; i += 64) {
     const W = new Array(64) as number[]
     for (let t = 0; t < 16; t++) {
-      W[t] = (bytes[i + t * 4] << 24) | (bytes[i + t * 4 + 1] << 16) | (bytes[i + t * 4 + 2] << 8) | bytes[i + t * 4 + 3]
+      W[t] = ((bytes[i + t * 4] << 24) | (bytes[i + t * 4 + 1] << 16) | (bytes[i + t * 4 + 2] << 8) | bytes[i + t * 4 + 3]) >>> 0
     }
     for (let t = 16; t < 64; t++) {
       const s0 = rotr(W[t - 15], 7) ^ rotr(W[t - 15], 18) ^ (W[t - 15] >>> 3)
