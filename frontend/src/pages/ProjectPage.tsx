@@ -565,6 +565,14 @@ export default function ProjectPage() {
       modal.toast('批量生成失败: ' + e.message, 'error')
     } finally {
       setBatchGenerating(false)
+      // Refresh steps so Stage 2 panels see the new content
+      try {
+        const s = await api.getSteps(id!)
+        const map: Record<string, string> = {}
+        s.forEach((x: any) => { map[x.step_name] = x.content })
+        setSteps(map)
+        setSavedSteps({...map})
+      } catch {}
     }
   }
 
