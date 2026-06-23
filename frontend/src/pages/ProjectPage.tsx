@@ -109,7 +109,6 @@ export default function ProjectPage() {
     setTimeout(() => setSavedFlash(0), 1500)
   }
   const getSaveBtnLabel = (content: string, savedKey: string) => {
-    if (savedFlash) return '✓ 已保存'
     if (!content.trim()) return '💾 保存'
     if (content !== (savedSteps[savedKey] || '')) return '💾 保存'
     return '✓ 已保存'
@@ -903,9 +902,9 @@ export default function ProjectPage() {
                       onClick={doBatchGenerate}>
                       {batchGenerating ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>
-                    <button className={`btn btn-primary btn-sm ${(steps[step1Key()] || '') !== (savedSteps[step1Key()] || '') ? 'btn-dirty' : ''}`}
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step1Key()] || '', step1Key())}`}
                       disabled={!steps[step1Key()]}
-                      onClick={() => saveStep(step1Key(), steps[step1Key()] || '')}>{getSaveBtnLabel(steps[step1Key()] || '', step1Key())}</button>
+                      onClick={() => { saveStep(step1Key(), steps[step1Key()] || ''); flashSave() }}>{getSaveBtnLabel(steps[step1Key()] || '', step1Key())}</button>
                     <button className="btn btn-ghost btn-sm"
                       disabled={!steps[step1Key()]}
                       onClick={() => { setSteps(prev => ({ ...prev, [step1Key()]: '' })); saveStep(step1Key(), '') }}>✕ 清空</button>
@@ -1056,8 +1055,8 @@ export default function ProjectPage() {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
                       }}>📥 保存到项目</button>
-                    <button className={`btn btn-primary btn-sm ${(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? 'btn-dirty' : ''}`} onClick={() => {
-                      saveStep(step2Key(), steps[step2Key()] || '')
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step2Key()] || '', step2Key())}`} onClick={() => {
+                      saveStep(step2Key(), steps[step2Key()] || ''); flashSave()
                     }}>{getSaveBtnLabel(steps[step2Key()] || '', step2Key())}</button>
                   </span>
                 </div>
@@ -1126,8 +1125,8 @@ export default function ProjectPage() {
                           modal.toast(`已保存到 ${resp.path}`, 'success')
                         } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
                       }}>📥 保存到项目</button>
-                    <button className={`btn btn-primary btn-sm ${(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? 'btn-dirty' : ''}`}
-                      onClick={() => saveStep(step3Key(), steps[step3Key()] || '')}>
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step3Key()] || '', step3Key())}`}
+                      onClick={() => { saveStep(step3Key(), steps[step3Key()] || ''); flashSave() }}>
                       {getSaveBtnLabel(steps[step3Key()] || '', step3Key())}
                     </button>
                   </span>
@@ -1187,8 +1186,8 @@ export default function ProjectPage() {
                           modal.toast(`已保存到 ${resp.path}`, 'success')
                         } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
                       }}>📥 保存到项目</button>
-                    <button className={`btn btn-primary btn-sm ${(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? 'btn-dirty' : ''}`}
-                      onClick={() => saveStep(step3Key(), steps[step3Key()] || '')}>
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step3Key()] || '', step3Key())}`}
+                      onClick={() => { saveStep(step3Key(), steps[step3Key()] || ''); flashSave() }}>
                       {getSaveBtnLabel(steps[step3Key()] || '', step3Key())}
                     </button>
                   </span>
@@ -1248,8 +1247,8 @@ export default function ProjectPage() {
                           modal.toast(`已保存到 ${resp.path}`, 'success')
                         } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
                       }}>📥 保存到项目</button>
-                    <button className={`btn btn-primary btn-sm ${(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? 'btn-dirty' : ''}`}
-                      onClick={() => saveStep(step3Key(), steps[step3Key()] || '')}>
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step3Key()] || '', step3Key())}`}
+                      onClick={() => { saveStep(step3Key(), steps[step3Key()] || ''); flashSave() }}>
                       {getSaveBtnLabel(steps[step3Key()] || '', step3Key())}
                     </button>
                   </span>
