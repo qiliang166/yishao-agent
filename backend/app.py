@@ -1076,6 +1076,23 @@ def reset_template_thumbnail(template_id: str):
         db.close()
 
 
+@app.get("/api/templates/{template_id}/file")
+def serve_template_file(template_id: str):
+    """Serve the template PPTX file for preview/download."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT file_path, name FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row or not row["file_path"]:
+            raise HTTPException(404, "Template file not found")
+        file_path = row["file_path"]
+        if not os.path.exists(file_path):
+            raise HTTPException(404, "Template file not found on disk")
+        return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                          filename=row["name"] + ".pptx")
+    finally:
+        db.close()
+
+
 @app.get("/api/thumbnails/{filename}")
 def serve_thumbnail(filename: str):
     filepath = os.path.join(THUMBNAIL_DIR, filename)

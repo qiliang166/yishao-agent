@@ -340,6 +340,8 @@ export const api = {
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { ok: boolean; file_path: string; filename: string }
   },
+  previewTemplate: (templateId: string) =>
+    `${BASE}/api/templates/${encodeURIComponent(templateId)}/file`,
   listTemplatesForStage: (stageType: string) =>
     request(`/api/templates/for-stage/${encodeURIComponent(stageType)}`).then(d => d.templates),
 

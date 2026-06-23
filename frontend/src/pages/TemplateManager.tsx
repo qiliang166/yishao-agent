@@ -513,6 +513,14 @@ function TemplateManager() {
                               <span style={{ fontSize: '10px', color: 'var(--text-secondary)', flexShrink: 0 }}
                                 title={fileName}>📄</span>
                             )}
+                            {fileName && (
+                              <a href={api.previewTemplate(t.id)} target="_blank" rel="noreferrer"
+                                style={{ fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
+                                  flexShrink: 0, lineHeight: 1, textDecoration: 'none',
+                                }}>
+                                预览
+                              </a>
+                            )}
                             {/* Thumbnail controls on card */}
                             {thumbUrl && (
                               <img src={thumbUrl} alt="thumb" style={{
