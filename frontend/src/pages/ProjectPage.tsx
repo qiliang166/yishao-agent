@@ -149,7 +149,9 @@ export default function ProjectPage() {
   const [s2SopModel, setS2SopModel] = useState('')
   const [s2DaoModel, setS2DaoModel] = useState('')
   const [s2YanxiModel, setS2YanxiModel] = useState('')
-  const [s2DataSource, setS2DataSource] = useState('video')
+  const [s2SopDataSource, setS2SopDataSource] = useState('video')
+  const [s2DaoDataSource, setS2DaoDataSource] = useState('video')
+  const [s2YanxiDataSource, setS2YanxiDataSource] = useState('video')
 
   // Stage 3 state
   const [sopSelected, setSopSelected] = useState('sop-std')
@@ -264,14 +266,14 @@ export default function ProjectPage() {
   const step2Key = () => `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
 
   // Get source text for Stage 2 based on selected data source
-  const getStage2Source = useCallback(() => {
-    switch (s2DataSource) {
+  const getStage2Source = (source: string) => {
+    switch (source) {
       case 'video': return steps.raw_video || ''
       case 'text': return steps.raw_text || ''
       case 'file': return steps.raw_file || ''
       default: return ''
     }
-  }, [s2DataSource, steps])
+  }
 
   // ── Stage nav ──
   const switchStage = (s: StageId) => {
@@ -801,7 +803,7 @@ export default function ProjectPage() {
                   <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成标准SOP文案</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
-                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
+                    <select className="form-select" style={{ marginBottom: 6 }} value={s2SopDataSource} onChange={e => setS2SopDataSource(e.target.value)}>
                       <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
                       <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
                       <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
@@ -817,12 +819,12 @@ export default function ProjectPage() {
                     )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || !s2SopModel || step2Generating === '2a'}
+                    disabled={!getStage2Source(s2SopDataSource) || !s2SopModel || step2Generating === '2a'}
                     onClick={async () => {
                       setStep2Generating('2a')
                       const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
                       const [pid, mdl] = s2SopModel.split(':')
-                      await doGenerate('step2_sop', prompt, getStage2Source(), pid, mdl)
+                      await doGenerate('step2_sop', prompt, getStage2Source(s2SopDataSource), pid, mdl)
                       setStep2Generating('')
                     }}>
                     {step2Generating === '2a' ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
@@ -835,7 +837,7 @@ export default function ProjectPage() {
                   <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成「道与术」分析文案</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
-                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
+                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DaoDataSource} onChange={e => setS2DaoDataSource(e.target.value)}>
                       <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
                       <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
                       <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
@@ -851,12 +853,12 @@ export default function ProjectPage() {
                     )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || !s2DaoModel || step2Generating === '2b'}
+                    disabled={!getStage2Source(s2DaoDataSource) || !s2DaoModel || step2Generating === '2b'}
                     onClick={async () => {
                       setStep2Generating('2b')
                       const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
                       const [pid, mdl] = s2DaoModel.split(':')
-                      await doGenerate('step2_daoshuyi', prompt, getStage2Source(), pid, mdl)
+                      await doGenerate('step2_daoshuyi', prompt, getStage2Source(s2DaoDataSource), pid, mdl)
                       setStep2Generating('')
                     }}>
                     {step2Generating === '2b' ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
@@ -869,7 +871,7 @@ export default function ProjectPage() {
                   <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成研学手册文案</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
-                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
+                    <select className="form-select" style={{ marginBottom: 6 }} value={s2YanxiDataSource} onChange={e => setS2YanxiDataSource(e.target.value)}>
                       <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
                       <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
                       <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
@@ -885,12 +887,12 @@ export default function ProjectPage() {
                     )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || !s2YanxiModel || step2Generating === '2c'}
+                    disabled={!getStage2Source(s2YanxiDataSource) || !s2YanxiModel || step2Generating === '2c'}
                     onClick={async () => {
                       setStep2Generating('2c')
                       const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
                       const [pid, mdl] = s2YanxiModel.split(':')
-                      await doGenerate('step2_yanxi', prompt, getStage2Source(), pid, mdl)
+                      await doGenerate('step2_yanxi', prompt, getStage2Source(s2YanxiDataSource), pid, mdl)
                       setStep2Generating('')
                     }}>
                     {step2Generating === '2c' ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
