@@ -1021,6 +1021,112 @@ def list_templates_for_stage(stage_type: str):
         db.close()
 
 
+# ── Template Analysis ──
+
+def extract_pptx_structure(file_path: str) -> dict:
+    from pptx import Presentation
+    prs = Presentation(file_path)
+    slides = []
+    for i, slide in enumerate(prs.slides):
+        info = {"index": i + 1, "layout": slide.slide_layout.name, "placeholders": [], "shapes": []}
+        for shape in slide.placeholders:
+            info["placeholders"].append({
+                "idx": shape.placeholder_format.idx,
+                "type": str(shape.placeholder_format.type),
+                "name": shape.name,
+                "text_preview": (shape.text or "")[:100]
+            })
+        for shape in slide.shapes:
+            if not shape.is_placeholder:
+                info["shapes"].append({
+                    "type": str(shape.shape_type),
+                    "name": shape.name,
+                    "text_preview": (shape.text or "")[:100] if shape.has_text_frame else ""
+                })
+        slides.append(info)
+    return {
+        "slide_count": len(slides),
+        "slide_width": prs.slide_width,
+        "slide_height": prs.slide_height,
+        "slide_layouts": [lyt.name for lyt in prs.slide_layouts],
+        "slides": slides
+    }
+
+
+@app.post("/api/templates/{template_id}/analyze")
+async def analyze_template(template_id: str, stage_type: str = "daoPpt"):
+    from services.llm_service import generate as llm_generate, get_provider
+    db = get_db()
+    try:
+        tmpl = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not tmpl:
+            raise HTTPException(404, "模板不存在")
+        if not tmpl["file_path"] or not os.path.exists(tmpl["file_path"]):
+            raise HTTPException(400, "请先上传 .pptx 模板文件")
+
+        structure = extract_pptx_structure(tmpl["file_path"])
+
+        stage_to_column = {"daoPpt": "col4", "yanxiPpt": "col5"}
+        column_id = stage_to_column.get(stage_type, "col4")
+        config = db.execute("SELECT rules FROM column_configs WHERE column_id = ?", (column_id,)).fetchone()
+        if not config or not config["rules"] or config["rules"] == "{}":
+            raise HTTPException(400, f"栏目 {column_id} 未配置规则，请先在栏目配置中设置 PPT SKILL 规则")
+
+        rules = json.loads(config["rules"])
+        analysis_prompt = rules.get("analysis_rules", "")
+        if not analysis_prompt:
+            raise HTTPException(400, "栏目规则中缺少 analysis_rules")
+
+        # Get default LLM provider
+        provider_row = db.execute("SELECT id, models FROM llm_providers WHERE is_enabled = 1 ORDER BY rowid LIMIT 1").fetchone()
+        if not provider_row:
+            raise HTTPException(400, "没有可用的 LLM 服务商")
+
+        models = json.loads(provider_row["models"] or "[]")
+        model = models[0] if models else "gpt-4o"
+
+        system_prompt = f"""你是一位专业的 PPT 模板分析专家。你的任务是根据给定的栏目规则框架，分析上传的 PPTX 模板文件结构，并生成该模板专属的 prompt 和 SKILL。
+
+## 栏目规则框架
+{json.dumps(rules, ensure_ascii=False, indent=2)}
+
+## 重要指示
+1. 版式类型必须在 layout_types 范围内
+2. 配色必须从 design_rules.color_schemes 中选择最接近的
+3. prompt 应完整包含：角色设定、内容规范引用、版式选择规则、配色约束、输出格式要求
+4. skill 应为完整的 Markdown 模板，包含 content_spec 规定的完整结构
+5. 遵守 design_principles 中的所有铁律"""
+
+        user_message = f"请分析以下 PPTX 文件结构，并生成该模板专属的 prompt 和 SKILL：\n\n```json\n{json.dumps(structure, ensure_ascii=False, indent=2)}\n```\n\n请直接输出 JSON，格式为：{{\"prompt\": \"...\", \"skill\": \"...\", \"color_scheme\": \"...\"}}"
+
+        ai_response = await llm_generate(provider_row["id"], model, system_prompt, user_message, temperature=0.3)
+
+        # Parse AI response
+        ai_response = ai_response.strip()
+        if ai_response.startswith("```"):
+            lines = ai_response.split("\n")
+            ai_response = "\n".join(lines[1:]) if lines[0].startswith("```") else ai_response
+            if ai_response.endswith("```"):
+                ai_response = ai_response[:ai_response.rfind("```")].strip()
+
+        result = json.loads(ai_response)
+        prompt = result.get("prompt", "")
+        skill = result.get("skill", "")
+        color_scheme = result.get("color_scheme", "")
+
+        if not prompt or not skill:
+            raise HTTPException(400, "AI 未能生成完整的 prompt 和 skill，请重试")
+
+        db.execute("UPDATE templates SET prompt = ?, skill = ? WHERE id = ?", (prompt, skill, template_id))
+        db.commit()
+
+        return {"ok": True, "prompt": prompt, "skill": skill, "color_scheme": color_scheme}
+    except json.JSONDecodeError:
+        raise HTTPException(500, "AI 返回格式异常，请重试")
+    finally:
+        db.close()
+
+
 # ── Video ──
 
 from services.video_service import download_video, get_progress
@@ -1552,6 +1658,8 @@ def update_column_config(config_id: str, req: dict):
             db.execute("UPDATE column_configs SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['prompt'], config_id))
         if 'skill' in req:
             db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
+        if 'rules' in req:
+            db.execute("UPDATE column_configs SET rules = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['rules'], config_id))
         db.commit()
         row = db.execute("SELECT * FROM column_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)

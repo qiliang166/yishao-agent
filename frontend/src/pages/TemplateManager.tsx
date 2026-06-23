@@ -108,6 +108,7 @@ function TemplateManager() {
   const [formBrandingConfig, setFormBrandingConfig] = useState('{}')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [analyzingId, setAnalyzingId] = useState<string | null>(null)
 
   // ---------- data loading ----------
 
@@ -228,6 +229,19 @@ function TemplateManager() {
       modal.toast('模板文件上传成功', 'success')
     } catch (err: any) {
       modal.toast('上传失败: ' + err.message, 'error')
+    }
+  }
+
+  const handleAnalyze = async (t: Template) => {
+    setAnalyzingId(t.id)
+    try {
+      const result = await api.analyzeTemplate(t.id)
+      await loadTemplates()
+      modal.toast('智能解析完成！prompt 和 SKILL 已自动填入', 'success')
+    } catch (err: any) {
+      modal.toast('解析失败: ' + err.message, 'error')
+    } finally {
+      setAnalyzingId(null)
     }
   }
 
@@ -377,6 +391,24 @@ function TemplateManager() {
                       }}
                     />
                   </label>
+                  {t.file_path && (
+                    <button
+                      style={{
+                        background: 'var(--primary)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '4px 12px',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => handleAnalyze(t)}
+                      disabled={analyzingId === t.id}
+                    >
+                      {analyzingId === t.id ? '解析中...' : '智能解析'}
+                    </button>
+                  )}
                   {t.is_default !== 1 && (
                     <button
                       style={{

@@ -20,6 +20,7 @@ interface ColumnConfig {
   label: string
   prompt: string
   skill: string
+  rules: string
   has_template: number
   template_path: string | null
   sort_order: number
@@ -40,11 +41,12 @@ export default function ProjSettingsPage() {
   const [providers, setProviders] = useState<any[]>([])
   // Column configs state
   const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([])
-  const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
+  const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string; rules: string }>>({})
   const [colSaving, setColSaving] = useState<Record<string, boolean>>({})
 
   // Accordion state
   const [openCols, setOpenCols] = useState<Set<string>>(new Set())
+  const [rulesOpen, setRulesOpen] = useState<Set<string>>(new Set())
 
   // Provider form
   const [showProviderForm, setShowProviderForm] = useState(false)
@@ -99,8 +101,8 @@ export default function ProjSettingsPage() {
     api.listAsrProviders().then(setAsrProviders).catch(() => {})
     api.listColumnConfigs().then((configs: ColumnConfig[]) => {
       setColumnConfigs(configs)
-      const vals: Record<string, { prompt: string; skill: string }> = {}
-      configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
+      const vals: Record<string, { prompt: string; skill: string; rules: string }> = {}
+      configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill, rules: c.rules || '{}' } })
       setColValues(vals)
     }).catch(() => {})
     api.getSettings().then(data => {
@@ -577,16 +579,83 @@ export default function ProjSettingsPage() {
                               />
                             </div>
                           </div>
+
+                          {/* PPT SKILL 规则配置 — 仅 col4/col5 */}
+                          {(col.id === 'col4' || col.id === 'col5') && (
+                            <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                              <button
+                                onClick={() => setRulesOpen(prev => {
+                                  const next = new Set(prev)
+                                  next.has(config.id) ? next.delete(config.id) : next.add(config.id)
+                                  return next
+                                })}
+                                style={{
+                                  background: 'none', border: 'none', cursor: 'pointer',
+                                  fontSize: '13px', fontWeight: 600, color: 'var(--primary)',
+                                  padding: 0, display: 'flex', alignItems: 'center', gap: '4px',
+                                }}
+                              >
+                                <span>{rulesOpen.has(config.id) ? '▾' : '▸'}</span>
+                                PPT SKILL 规则配置
+                              </button>
+                              {rulesOpen.has(config.id) && (
+                                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                    参照 guizang-ppt-skill 结构化规则体系。包含：设计纪律、版式类型、组件规范、内容规范、配图规则、澄清问题、设计原则、页面节奏、质量检查清单、分析规则。直接编辑下方 JSON。
+                                  </div>
+                                  <textarea
+                                    value={(() => {
+                                      try {
+                                        const rules = JSON.parse(colValues[config.id]?.rules || '{}')
+                                        return JSON.stringify(rules, null, 2)
+                                      } catch { return colValues[config.id]?.rules || '{}' }
+                                    })()}
+                                    onChange={e => {
+                                      try {
+                                        JSON.parse(e.target.value)
+                                        setColValues(prev => ({
+                                          ...prev,
+                                          [config.id]: { ...prev[config.id], rules: e.target.value }
+                                        }))
+                                      } catch {
+                                        // Allow invalid JSON while typing
+                                        setColValues(prev => ({
+                                          ...prev,
+                                          [config.id]: { ...prev[config.id], rules: e.target.value }
+                                        }))
+                                      }
+                                    }}
+                                    style={{
+                                      width: '100%', height: '300px',
+                                      border: '1px solid var(--border)',
+                                      borderRadius: 'var(--radius-sm)',
+                                      padding: '10px', fontSize: '12px',
+                                      fontFamily: 'var(--mono)',
+                                      color: 'var(--text)',
+                                      background: 'var(--card)',
+                                      outline: 'none', resize: 'vertical',
+                                      boxSizing: 'border-box', lineHeight: 1.5,
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                             <button className="btn btn-primary btn-sm"
                               disabled={colSaving[config.id]}
                               onClick={async () => {
                                 setColSaving(prev => ({ ...prev, [config.id]: true }))
                                 try {
-                                  await api.updateColumnConfig(config.id, {
+                                  const payload: any = {
                                     prompt: colValues[config.id]?.prompt || '',
                                     skill: colValues[config.id]?.skill || '',
-                                  })
+                                  }
+                                  if (col.id === 'col4' || col.id === 'col5') {
+                                    payload.rules = colValues[config.id]?.rules || '{}'
+                                  }
+                                  await api.updateColumnConfig(config.id, payload)
                                   modal.toast('已保存', 'success')
                                 } catch (e: any) {
                                   modal.toast('保存失败: ' + e.message, 'error')
@@ -618,8 +687,8 @@ export default function ProjSettingsPage() {
                               modal.toast('模板已上传', 'success')
                               api.listColumnConfigs().then((configs: ColumnConfig[]) => {
                                 setColumnConfigs(configs)
-                                const vals: Record<string, { prompt: string; skill: string }> = {}
-                                configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
+                                const vals: Record<string, { prompt: string; skill: string; rules: string }> = {}
+                                configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill, rules: c.rules || '{}' } })
                                 setColValues(vals)
                               }).catch(() => {})
                             } catch (err: any) {

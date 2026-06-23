@@ -361,8 +361,10 @@ export const api = {
 
   // Column Configs
   listColumnConfigs: () => request('/api/column-configs').then(d => d.configs),
-  updateColumnConfig: (id: string, data: { prompt?: string; skill?: string }) =>
+  updateColumnConfig: (id: string, data: { prompt?: string; skill?: string; rules?: string }) =>
     request(`/api/column-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  analyzeTemplate: (templateId: string, stageType: string = 'daoPpt') =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/analyze?stage_type=${encodeURIComponent(stageType)}`, { method: 'POST' }),
   uploadColumnTemplate: async (id: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
