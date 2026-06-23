@@ -498,22 +498,20 @@ function TemplateManager() {
                           overflow: 'hidden',
                         }}
                       >
-                        {/* Thumbnail area — 16:9 to match PPT slide ratio */}
+                        {/* Thumbnail area — 16:9 via padding-bottom to match PPT slide ratio */}
                         <div style={{
-                          aspectRatio: '16/9',
+                          width: '100%',
+                          height: 0,
+                          paddingBottom: '56.25%',
                           background: '#1a1a1a',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
                           position: 'relative',
                           overflow: 'hidden',
-                          padding: '10px',
                         }}>
                           {displayUrl ? (
                             <img
                               src={displayUrl}
                               alt={t.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain' }}
                               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                             />
                           ) : null}
