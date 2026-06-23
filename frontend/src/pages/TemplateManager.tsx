@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, Prompt } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
@@ -9,6 +9,8 @@ interface Template {
   name: string
   type: string
   file_path: string
+  prompt: string
+  skill: string
   linked_skill_id: string
   branding_config: string
   is_default: number
@@ -100,6 +102,8 @@ function TemplateManager() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formName, setFormName] = useState('')
   const [formType, setFormType] = useState('ppt')
+  const [formPrompt, setFormPrompt] = useState('')
+  const [formSkill, setFormSkill] = useState('')
   const [formSkillId, setFormSkillId] = useState('')
   const [formBrandingConfig, setFormBrandingConfig] = useState('{}')
   const [formError, setFormError] = useState('')
@@ -147,6 +151,8 @@ function TemplateManager() {
     setEditingId(null)
     setFormName('')
     setFormType(activeTab)
+    setFormPrompt('')
+    setFormSkill('')
     setFormSkillId('')
     setFormBrandingConfig('{}')
     setFormError('')
@@ -157,6 +163,8 @@ function TemplateManager() {
     setEditingId(t.id)
     setFormName(t.name)
     setFormType(t.type)
+    setFormPrompt(t.prompt || '')
+    setFormSkill(t.skill || '')
     setFormSkillId(t.linked_skill_id || '')
     setFormBrandingConfig(t.branding_config || '{}')
     setFormError('')
@@ -174,6 +182,8 @@ function TemplateManager() {
       const payload = {
         name: formName.trim(),
         type: formType,
+        prompt: formPrompt,
+        skill: formSkill,
         linked_skill_id: formSkillId,
         branding_config: formBrandingConfig,
       }
@@ -208,6 +218,16 @@ function TemplateManager() {
       await loadTemplates()
     } catch (err: any) {
       modal.toast('设置默认失败: ' + err.message, 'error')
+    }
+  }
+
+  const handleFileUpload = async (t: Template, file: File) => {
+    try {
+      await api.uploadTemplateFile(t.id, file)
+      await loadTemplates()
+      modal.toast('模板文件上传成功', 'success')
+    } catch (err: any) {
+      modal.toast('上传失败: ' + err.message, 'error')
     }
   }
 
@@ -319,6 +339,11 @@ function TemplateManager() {
                   )}
                 </div>
 
+                {/* File status */}
+                <div style={{ fontSize: '12px', color: t.file_path ? 'var(--success)' : 'var(--text-secondary)' }}>
+                  {t.file_path ? '📌 已上传模板文件' : '📄 未上传模板文件'}
+                </div>
+
                 {/* Linked skill */}
                 {t.linked_skill_id && (
                   <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -330,8 +355,28 @@ function TemplateManager() {
                 {/* Action buttons */}
                 <div style={{
                   display: 'flex', gap: '8px', marginTop: 'auto', paddingTop: '10px',
-                  borderTop: '1px solid var(--border)',
+                  borderTop: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center',
                 }}>
+                  {/* File upload */}
+                  <label style={{
+                    background: 'none',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '4px 12px',
+                    fontSize: '12px',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    display: 'inline-block',
+                  }}>
+                    {t.file_path ? '更换文件' : '上传PPTX'}
+                    <input type="file" accept=".pptx" style={{ display: 'none' }}
+                      onChange={e => {
+                        const f = e.target.files?.[0]
+                        if (f) handleFileUpload(t, f)
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
                   {t.is_default !== 1 && (
                     <button
                       style={{
@@ -357,7 +402,6 @@ function TemplateManager() {
                       fontSize: '12px',
                       color: 'var(--text-secondary)',
                       cursor: 'pointer',
-                      marginLeft: t.is_default !== 1 ? undefined : 'auto',
                     }}
                     onClick={() => openEdit(t)}
                   >
@@ -415,6 +459,56 @@ function TemplateManager() {
                   <option value="ppt">PPT</option>
                   <option value="sop">SOP</option>
                 </select>
+              </div>
+
+              {/* Prompt */}
+              <div>
+                <label style={labelStyle}>提示词 (Prompt)</label>
+                <textarea
+                  value={formPrompt}
+                  onChange={e => setFormPrompt(e.target.value)}
+                  placeholder="输入AI提示词，选择此模板时将使用此提示词生成内容"
+                  style={{
+                    width: '100%',
+                    height: '80px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px',
+                    fontSize: '13px',
+                    fontFamily: 'inherit',
+                    color: 'var(--text)',
+                    background: 'var(--card)',
+                    outline: 'none',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    lineHeight: 1.5,
+                  }}
+                />
+              </div>
+
+              {/* SKILL */}
+              <div>
+                <label style={labelStyle}>输出格式 (SKILL)</label>
+                <textarea
+                  value={formSkill}
+                  onChange={e => setFormSkill(e.target.value)}
+                  placeholder="输入SKILL模板，定义AI输出的格式结构"
+                  style={{
+                    width: '100%',
+                    height: '100px',
+                    border: '1px solid var(--border)',
+                    borderRadius: 'var(--radius-sm)',
+                    padding: '10px',
+                    fontSize: '13px',
+                    fontFamily: 'var(--mono)',
+                    color: 'var(--text)',
+                    background: 'var(--card)',
+                    outline: 'none',
+                    resize: 'vertical',
+                    boxSizing: 'border-box',
+                    lineHeight: 1.5,
+                  }}
+                />
               </div>
 
               {/* Linked Skill */}

@@ -4,6 +4,7 @@ import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjSettingsPage from './pages/ProjSettingsPage'
+import TemplateManager from './pages/TemplateManager'
 import { ModalProvider } from './components/ModalProvider'
 import { api } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
@@ -59,6 +60,11 @@ function Sidebar() {
           className={`sidebar-item ${location.pathname === '/proj-settings' ? 'active' : ''}`}
           onClick={() => navigate('/proj-settings')}>
           <span className="ico">🔧</span> 项目配置
+        </button>
+        <button
+          className={`sidebar-item ${location.pathname === '/templates' ? 'active' : ''}`}
+          onClick={() => navigate('/templates')}>
+          <span className="ico">📄</span> 模板管理
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/settings' ? 'active' : ''}`}
@@ -126,6 +132,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/proj-settings" element={<ProjSettingsPage />} />
+                <Route path="/templates" element={<TemplateManager />} />
                 <Route path="/settings" element={<SettingsPage />} />
               </Routes>
             </div>

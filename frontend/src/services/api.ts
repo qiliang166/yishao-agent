@@ -316,12 +316,22 @@ export const api = {
 
   // Templates
   listTemplates: (type?: string) => request(`/api/templates${type ? `?type=${encodeURIComponent(type)}` : ''}`).then(d => d.templates),
-  createTemplate: (data: {name: string; type: string; file_path?: string; linked_skill_id?: string; branding_config?: string}) =>
+  createTemplate: (data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; linked_skill_id?: string; branding_config?: string}) =>
     request('/api/templates', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
-  updateTemplate: (id: string, data: {name: string; type: string; file_path?: string; linked_skill_id?: string; branding_config?: string}) =>
+  updateTemplate: (id: string, data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; linked_skill_id?: string; branding_config?: string}) =>
     request(`/api/templates/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteTemplate: (id: string) => request(`/api/templates/${id}`, { method: 'DELETE' }),
   setDefaultTemplate: (id: string) => request(`/api/templates/${id}/set-default`, { method: 'POST' }),
+  uploadTemplateFile: async (templateId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload`, { method: 'POST', body: formData })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Upload failed')
+    return data as { ok: boolean; file_path: string; filename: string }
+  },
+  listTemplatesForStage: (stageType: string) =>
+    request(`/api/templates/for-stage/${encodeURIComponent(stageType)}`).then(d => d.templates),
 
   // PPT
   generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string) =>

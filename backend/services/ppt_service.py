@@ -1,8 +1,10 @@
 """PPT generation service."""
 import os
+import json
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN
+from database import get_db
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
@@ -11,7 +13,26 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 
 def generate_ppt(content: str, template_id: str = None, branding: dict = None, output_dir: str = None) -> str:
     """Generate a PPTX file from content. Returns file path."""
-    prs = Presentation()
+    prs = None
+
+    # Load template if provided
+    if template_id:
+        db = get_db()
+        try:
+            row = db.execute("SELECT file_path, branding_config FROM templates WHERE id = ?", (template_id,)).fetchone()
+            if row and row["file_path"] and os.path.exists(row["file_path"]):
+                prs = Presentation(row["file_path"])
+                if not branding and row["branding_config"]:
+                    try:
+                        branding = json.loads(row["branding_config"])
+                    except Exception:
+                        pass
+        finally:
+            db.close()
+
+    if prs is None:
+        prs = Presentation()
+
     prs.slide_width = Inches(13.333)
     prs.slide_height = Inches(7.5)
 

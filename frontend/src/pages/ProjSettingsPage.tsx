@@ -8,9 +8,10 @@ const COLUMN_GROUPS = [
   { id: 'col1', label: '文案提取', hasTemplate: false, summary: '无模板 · 3 个配置项' },
   { id: 'col2', label: '教学文档', hasTemplate: false, summary: '无模板 · 3 个配置项' },
   { id: 'col3', label: '标准SOP', hasTemplate: true, summary: '有模板 · 1 个配置项', tmplFile: 'SOP标准模板.docx' },
-  { id: 'col4', label: '合成PPT', hasTemplate: true, summary: '有模板 · 2 个配置项', tmplFile: 'PPT模板.pptx' },
-  { id: 'col5', label: '口播文案', hasTemplate: false, summary: '无模板 · 1 个配置项' },
-  { id: 'col6', label: '语音合成', hasTemplate: false, summary: '音色库管理' },
+  { id: 'col4', label: '道与术PPT', hasTemplate: true, summary: '有模板 · 1 个配置项', tmplFile: 'PPT模板.pptx' },
+  { id: 'col5', label: '研学PPT', hasTemplate: true, summary: '有模板 · 1 个配置项', tmplFile: 'PPT模板.pptx' },
+  { id: 'col6', label: '口播文案', hasTemplate: false, summary: '无模板 · 1 个配置项' },
+  { id: 'col7', label: '语音合成', hasTemplate: false, summary: '音色库管理' },
 ]
 
 interface ColumnConfig {
@@ -513,7 +514,7 @@ export default function ProjSettingsPage() {
                   <span className="ac-arrow">▼</span>
                 </div>
                 <div className="ac-body">
-                  {col.id === 'col6' ? (
+                  {col.id === 'col7' ? (
                     <div>
                       <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 8 }}>
                         管理自定义音色，合成语音时从音色库中选择。每个音色关联一个 TTS 提供商。

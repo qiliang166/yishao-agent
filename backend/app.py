@@ -900,6 +900,8 @@ class TemplateCreate(BaseModel):
     name: str
     type: str  # "ppt" or "sop"
     file_path: str = ""
+    prompt: str = ""
+    skill: str = ""
     linked_skill_id: str = ""
     branding_config: str = "{}"
 
@@ -923,8 +925,8 @@ def create_template(req: TemplateCreate):
     db = get_db()
     try:
         db.execute(
-            "INSERT INTO templates (id, name, type, file_path, linked_skill_id, branding_config) VALUES (?, ?, ?, ?, ?, ?)",
-            (tid, req.name, req.type, req.file_path, req.linked_skill_id, req.branding_config))
+            "INSERT INTO templates (id, name, type, file_path, prompt, skill, linked_skill_id, branding_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (tid, req.name, req.type, req.file_path, req.prompt, req.skill, req.linked_skill_id, req.branding_config))
         db.commit()
         return {"id": tid, "name": req.name}
     finally:
@@ -936,8 +938,8 @@ def update_template(template_id: str, req: TemplateCreate):
     db = get_db()
     try:
         db.execute(
-            "UPDATE templates SET name=?, type=?, file_path=?, linked_skill_id=?, branding_config=? WHERE id=?",
-            (req.name, req.type, req.file_path, req.linked_skill_id, req.branding_config, template_id))
+            "UPDATE templates SET name=?, type=?, file_path=?, prompt=?, skill=?, linked_skill_id=?, branding_config=? WHERE id=?",
+            (req.name, req.type, req.file_path, req.prompt, req.skill, req.linked_skill_id, req.branding_config, template_id))
         db.commit()
         return {"ok": True}
     finally:
@@ -966,6 +968,55 @@ def set_template_default(template_id: str):
         db.execute("UPDATE templates SET is_default = 1 WHERE id = ?", (template_id,))
         db.commit()
         return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/templates/{template_id}/upload")
+async def upload_template_file(template_id: str, file: UploadFile = File(...)):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Template not found")
+        if not file.filename or not file.filename.endswith('.pptx'):
+            raise HTTPException(400, "请上传 .pptx 格式的模板文件")
+        tmpl_dir = os.path.join(BASE_DIR, "data", "templates")
+        os.makedirs(tmpl_dir, exist_ok=True)
+        safe_name = f"{template_id}_{file.filename}"
+        file_path = os.path.join(tmpl_dir, safe_name)
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+        db.execute("UPDATE templates SET file_path = ? WHERE id = ?", (file_path, template_id))
+        db.commit()
+        return {"ok": True, "file_path": file_path, "filename": file.filename}
+    finally:
+        db.close()
+
+
+@app.get("/api/templates/for-stage/{stage_type}")
+def list_templates_for_stage(stage_type: str):
+    type_map = {"sop": "sop", "daoPpt": "ppt", "yanxiPpt": "ppt"}
+    db_type = type_map.get(stage_type, "ppt")
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT id, name, type, file_path, prompt, skill, branding_config, is_default FROM templates WHERE type = ? ORDER BY is_default DESC, created_at ASC",
+            (db_type,)).fetchall()
+        items = []
+        for r in rows:
+            rdict = dict(r)
+            items.append({
+                "id": rdict["id"],
+                "name": rdict["name"],
+                "type": rdict["type"],
+                "prompt": rdict.get("prompt") or "",
+                "skill": rdict.get("skill") or "",
+                "isDefault": rdict.get("is_default") == 1,
+                "hasFile": bool(rdict.get("file_path") and os.path.exists(rdict.get("file_path") or "")),
+            })
+        return {"templates": items}
     finally:
         db.close()
 

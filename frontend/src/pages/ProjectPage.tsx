@@ -65,24 +65,6 @@ function TemplateSelector({ items, selectedId, onSelect, previewTarget }: {
   )
 }
 
-// ── Template data ──
-const SOP_TEMPLATES: TemplateItem[] = [
-  { id: 'sop-std', name: 'SOP标准模板.docx', isDefault: true, meta: '提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充', color: '#4A8B3F', icon: '📃', previewHtml: '' },
-  { id: 'sop-simple', name: '简约SOP模板.docx', isDefault: false, meta: '提示词: 简约SOP v1.0 · SKILL: 简约SOP填充', color: '#4A8B3F', icon: '📄', previewHtml: '' },
-  { id: 'sop-detail', name: '详细SOP模板.docx', isDefault: false, meta: '提示词: 详细SOP v1.2 · SKILL: 详细SOP填充', color: '#4A8B3F', icon: '📋', previewHtml: '' },
-]
-const DAO_PPT_TEMPLATES: TemplateItem[] = [
-  { id: 'dao-std', name: '道与术PPT模板.pptx', isDefault: true, meta: '提示词: PPT排版 v1.0 · SKILL: 道与术PPT技能', color: '#7C3AED', icon: '📌', previewHtml: '' },
-  { id: 'dao-food', name: '美食风PPT模板.pptx', isDefault: false, meta: '提示词: 美食PPT v0.9 · SKILL: 美食PPT技能', color: '#C75B39', icon: '🍽', previewHtml: '' },
-]
-const YANXI_PPT_TEMPLATES: TemplateItem[] = [
-  { id: 'yanxi-std', name: '研学手册PPT模板.pptx', isDefault: true, meta: '提示词: PPT排版 v1.0 · SKILL: 研学手册PPT技能', color: '#4A8B3F', icon: '📚', previewHtml: '' },
-  { id: 'yanxi-food', name: '美食风PPT模板.pptx', isDefault: false, meta: '提示词: 美食PPT v0.9 · SKILL: 美食PPT技能', color: '#C75B39', icon: '🍽', previewHtml: '' },
-]
-const KOUBO_TEMPLATES: TemplateItem[] = [
-  { id: 'koubo-std', name: '标准口播模板', isDefault: true, meta: '提示词: 口播稿生成 v1.0 · SKILL: 口播风格', color: '#0891B2', icon: '📢', previewHtml: '' },
-  { id: 'koubo-fast', name: '快节奏口播模板', isDefault: false, meta: '提示词: 口播稿 v0.8 · SKILL: 快节奏口播', color: '#C75B39', icon: '⚡', previewHtml: '' },
-]
 
 // Dynamic stage1 prompts — loaded from column_configs, with fallbacks
 const STAGE1_SKILL_FALLBACK = '## 菜名\n**菜名**：\n**菜系**：\n**成品特征**：\n**出品标准**：\n**记录日期**：\n**制作人/来源**：\n\n### 一、食材清单\n| 序号 | 用途 | 食材名称 | 用量 | 处理方式 | 备注 |\n|------|------|----------|------|----------|------|\n| 1 | 主料 | | | | |\n| 2 | 辅料 | | | | |\n| 3 | 调料 | | | | |\n\n> **准备要点**：\n\n### 二、工具与器皿\n| 序号 | 用途 | 工具名称 |\n|------|------|----------|\n| 1 | | |\n\n### 三、制作步骤\n| 序号 | 步骤 | 步骤说明 | 关键技巧 |\n|------|------|----------|----------|\n| 1 | 预处理 | | |\n| 2 | 烹饪 | | |\n\n### 四、时间与火候总览\n| 阶段 | 时长 | 火力 | 注意事项 |\n|------|------|------|----------|\n| | | | |\n\n### 五、试吃与品鉴记录\n- **口味**：\n- **口感**：\n- **色泽**：\n\n### 六、总结与评分\n- **难度**：☆\n- **耗时**：\n- **一句话点评**：'
@@ -169,9 +151,13 @@ export default function ProjectPage() {
   const [s3YanxiPptModel, setS3YanxiPptModel] = useState('')
   const [globalBranding, setGlobalBranding] = useState<{ copyright: string; signature: string }>({ copyright: '', signature: '' })
   const [pptGenerating, setPptGenerating] = useState('')
+  const [daoPptTemplates, setDaoPptTemplates] = useState<TemplateItem[]>([])
+  const [yanxiPptTemplates, setYanxiPptTemplates] = useState<TemplateItem[]>([])
+  const [templatesMap, setTemplatesMap] = useState<Record<string, { prompt: string; skill: string; hasFile: boolean }>>({})
 
   // Stage 4 state
-  const [kouboSelected, setKouboSelected] = useState('koubo-std')
+  const [s4KouboModel, setS4KouboModel] = useState('')
+  const [kouboSelected, setKouboSelected] = useState('')
   const [ttsProviderId, setTtsProviderId] = useState('')
   const [ttsModel, setTtsModel] = useState('cosyvoice-v3-flash')
   const [voiceId, setVoiceId] = useState('')
@@ -207,6 +193,7 @@ export default function ProjectPage() {
       if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
+      if (map['_model_s4_koubo']) { setS4KouboModel(map['_model_s4_koubo']); hasModelOverride = true }
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
@@ -228,10 +215,12 @@ export default function ProjectPage() {
           if (key) s3p[key] = { prompt: c.prompt, skill: c.skill }
         }
         if (c.column_id === 'col4') {
-          const key = c.id === 'c4-dao' ? 'daoPpt' : c.id === 'c4-yanxi' ? 'yanxiPpt' : ''
-          if (key) s3p[key] = { prompt: c.prompt, skill: c.skill }
+          if (c.id === 'c4-dao') s3p['daoPpt'] = { prompt: c.prompt, skill: c.skill }
         }
-        if (c.column_id === 'col5' && c.id === 'c5-koubo') {
+        if (c.column_id === 'col5') {
+          if (c.id === 'c4-yanxi') s3p['yanxiPpt'] = { prompt: c.prompt, skill: c.skill }
+        }
+        if (c.column_id === 'col6' && c.id === 'c5-koubo') {
           kouboP = c.prompt
         }
       })
@@ -241,6 +230,34 @@ export default function ProjectPage() {
       setStage3Prompts(s3p)
       if (kouboP) setStage4KouboPrompt(kouboP)
     }).catch(() => {})
+    // Load templates for Stage 3 PPT columns
+    const loadTemplates = (stageType: string) =>
+      api.listTemplatesForStage(stageType).then((items: any[]) => {
+        const tmplItems: TemplateItem[] = items.map((t: any) => ({
+          id: t.id, name: t.name, isDefault: t.isDefault,
+          meta: t.prompt ? `提示词: ${t.prompt.slice(0, 30)}...` : '暂无提示词',
+          color: '#7C3AED', icon: t.hasFile ? '📌' : '📄', previewHtml: '',
+        }))
+        const map: Record<string, { prompt: string; skill: string; hasFile: boolean }> = {}
+        items.forEach((t: any) => { map[t.id] = { prompt: t.prompt || '', skill: t.skill || '', hasFile: t.hasFile } })
+        return { tmplItems, map, items }
+      }).catch(() => ({ tmplItems: [], map: {}, items: [] }))
+    loadTemplates('daoPpt').then(({ tmplItems, map, items }) => {
+      setDaoPptTemplates(tmplItems)
+      if (tmplItems.length > 0) {
+        const def = items.find((t: any) => t.isDefault) || items[0]
+        setDaoPptSelected(def.id)
+      }
+      setTemplatesMap(prev => ({ ...prev, ...map }))
+    })
+    loadTemplates('yanxiPpt').then(({ tmplItems, map, items }) => {
+      setYanxiPptTemplates(tmplItems)
+      if (tmplItems.length > 0) {
+        const def = items.find((t: any) => t.isDefault) || items[0]
+        setYanxiPptSelected(def.id)
+      }
+      setTemplatesMap(prev => ({ ...prev, ...map }))
+    })
     api.listTtsProviders().then((providers: TTSProvider[]) => {
       setTtsProviders(providers)
       if (providers.length > 0 && !ttsProviderId) {
@@ -438,11 +455,18 @@ export default function ProjectPage() {
   const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, prompt: string, model: string) => {
     setPptGenerating(stepKey)
     try {
-      // Step 1: AI generation with column prompt
+      // Use template prompt/skill if available, otherwise fall back to column config
+      const selectedTemplate = templatesMap[tmplId]
+      const effectivePrompt = selectedTemplate?.prompt || prompt
+      const effectiveSkill = selectedTemplate?.skill || ''
+
       let aiContent = content
-      if (model && prompt) {
+      if (model && effectivePrompt) {
         const [pid, mdl] = model.split(':')
-        const result = await doGenerate(stepKey, prompt, content, pid, mdl)
+        const userMsg = effectiveSkill
+          ? `${effectiveSkill}\n\n${content}`
+          : content
+        const result = await doGenerate(stepKey, effectivePrompt, userMsg, pid, mdl)
         if (result) aiContent = result
       }
       // Step 2: Format as PPTX
@@ -547,7 +571,18 @@ export default function ProjectPage() {
 
       {/* ═══ Top Nav ═══ */}
       <div className="top-nav">
-        {STAGES.map((s, i) => (
+        {STAGES.filter(s => s.id <= 3).map((s, i) => (
+          <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {i > 0 && <span className="tn-arrow">→</span>}
+            <div className={`tn-item${stage === s.id ? ' active' : ''}`}
+              onClick={() => switchStage(s.id)}>
+              <span className="tn-num">{s.id}</span> {s.label}
+              <span className={`tn-dot ${stageDot(s.id)}`} />
+            </div>
+          </span>
+        ))}
+        <span style={{ borderLeft: '1px solid var(--border)', height: 20, margin: '0 6px', alignSelf: 'center' }} />
+        {STAGES.filter(s => s.id >= 4).map((s, i) => (
           <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {i > 0 && <span className="tn-arrow">→</span>}
             <div className={`tn-item${stage === s.id ? ' active' : ''}`}
@@ -1046,7 +1081,7 @@ export default function ProjectPage() {
                 <div className="card-title">SOP 生成 + 导出</div>
                 <div className="card-hint">选择模板自动关联提示词+SKILL，配置在「项目配置」→ 栏目配置</div>
                 <div className="form-label">选择模板</div>
-                <TemplateSelector items={SOP_TEMPLATES} selectedId={sopSelected}
+                <TemplateSelector items={[]} selectedId={sopSelected}
                   onSelect={t => setSopSelected(t.id)} previewTarget="prev3" />
                 <div className="form-label">大模型</div>
                 <select className="form-select" style={{ marginBottom: 8 }} value={s3SopModel} onChange={e => { setS3SopModel(e.target.value); saveStep('_model_step3_sop', e.target.value) }}>
@@ -1116,7 +1151,7 @@ export default function ProjectPage() {
                 <div className="card-title">📌 道术PPT</div>
                 <div className="card-hint">基于道与术文案，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
-                <TemplateSelector items={DAO_PPT_TEMPLATES} selectedId={daoPptSelected}
+                <TemplateSelector items={daoPptTemplates} selectedId={daoPptSelected}
                   onSelect={t => setDaoPptSelected(t.id)} previewTarget="prev3b" />
                 <div className="form-label">大模型</div>
                 <select className="form-select" style={{ marginBottom: 8 }} value={s3DaoPptModel} onChange={e => { setS3DaoPptModel(e.target.value); saveStep('_model_step3_dao_ppt', e.target.value) }}>
@@ -1177,7 +1212,7 @@ export default function ProjectPage() {
                 <div className="card-title">📚 研学PPT</div>
                 <div className="card-hint">基于研学手册文案，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
-                <TemplateSelector items={YANXI_PPT_TEMPLATES} selectedId={yanxiPptSelected}
+                <TemplateSelector items={yanxiPptTemplates} selectedId={yanxiPptSelected}
                   onSelect={t => setYanxiPptSelected(t.id)} previewTarget="prev3c" />
                 <div className="form-label">大模型</div>
                 <select className="form-select" style={{ marginBottom: 8 }} value={s3YanxiPptModel} onChange={e => { setS3YanxiPptModel(e.target.value); saveStep('_model_step3_yan_ppt', e.target.value) }}>
@@ -1237,18 +1272,28 @@ export default function ProjectPage() {
             <div className="panel-left">
               <div className="card">
                 <div className="card-title">口播文案</div>
-                <div className="card-hint">基于研学手册文案，选择模板生成口播稿</div>
+                <div className="card-hint">基于研学手册文案，生成口播稿</div>
                 <div className="form-label">来源</div>
                 <select className="form-select" style={{ marginBottom: 8 }}><option>研学手册文案</option></select>
-                <div className="form-label">选择模板</div>
-                <TemplateSelector items={KOUBO_TEMPLATES} selectedId={kouboSelected}
-                  onSelect={t => setKouboSelected(t.id)} previewTarget="prev4a" />
+                <div className="form-label">大模型</div>
+                <select className="form-select" style={{ marginBottom: 8 }}
+                  value={s4KouboModel} onChange={e => { setS4KouboModel(e.target.value); saveStep('_model_s4_koubo', e.target.value) }}>
+                  <option value="">默认 (DeepSeek)</option>
+                  {llmProviders.map(p => (
+                    Array.isArray(p.models) ? p.models.map((m: string) => (
+                      <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} ({m})</option>
+                    )) : null
+                  ))}
+                </select>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
                   onClick={async () => {
                     setStep2Generating('koubo')
-                    const content = await doGenerate('step4_koubo',
-                      stage4KouboPrompt || '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。',
-                      steps.step2_yanxi || steps.step1_video || steps.step1_text || steps.step1_file || '')
+                    let prompt = stage4KouboPrompt || '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。'
+                    let pid = '', mdl = ''
+                    if (s4KouboModel) { [pid, mdl] = s4KouboModel.split(':') }
+                    const content = await doGenerate('step4_koubo', prompt,
+                      steps.step2_yanxi || steps.step1_video || steps.step1_text || steps.step1_file || '',
+                      pid, mdl)
                     if (content) setKouboText(content)
                     setStep2Generating('')
                   }}>
@@ -1259,7 +1304,7 @@ export default function ProjectPage() {
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="tmpl-preview-header">📢 口播稿预览 — {KOUBO_TEMPLATES.find(t => t.id === kouboSelected)?.name}</div>
+                  <div className="tmpl-preview-header">📢 口播稿预览</div>
                   <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
                     <div className="prev-script">
                       {steps.step4_koubo ? (
