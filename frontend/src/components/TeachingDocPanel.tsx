@@ -10,7 +10,7 @@ export interface TeachingDocPanelProps {
   prompt: string
   skill: string
   llmProviders: { id: string; name: string; is_enabled: number; models: string[] }[]
-  onRefresh: () => void
+  onRefresh: () => Promise<any>
   batchGenerating?: boolean
   hideControls?: boolean
   dataSource?: string
@@ -122,7 +122,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       })
       if (result?.content) {
         await api.saveStep(projectId, stepKey, result.content)
-        onRefresh()
+        await onRefresh()
       }
     } catch (e: any) {
       modal.toast(`生成失败: ${e.message}`, 'error')
@@ -133,17 +133,22 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
   // ── Save ──
   const handleSave = useCallback(async () => {
-    await api.saveStep(projectId, stepKey, localContent)
-    setSavedFlash(Date.now())
-    setTimeout(() => setSavedFlash(0), 1500)
-    onRefresh()
+    try {
+      await api.saveStep(projectId, stepKey, localContent)
+      setSavedFlash(Date.now())
+      setTimeout(() => setSavedFlash(0), 1500)
+      await onRefresh()
+      modal.toast('已保存', 'success')
+    } catch (e: any) {
+      modal.toast(`保存失败: ${e.message}`, 'error')
+    }
   }, [projectId, stepKey, localContent, onRefresh])
 
   // ── Clear ──
   const handleClear = useCallback(async () => {
     setLocalContent('')
     await api.saveStep(projectId, stepKey, '')
-    onRefresh()
+    await onRefresh()
   }, [projectId, stepKey, onRefresh])
 
   // ── Save to project file ──
