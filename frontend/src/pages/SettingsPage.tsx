@@ -171,7 +171,7 @@ function SettingsPage() {
         <h3>安全设置</h3>
         <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
           开启后，访问「项目配置」中的模型设置和栏目配置需要输入密码。
-          忘记密码？打开项目目录下的 backend/data/yishao.db 文件，删掉 settings 表里的 admin_password 和 admin_password_enabled 这两行就行。
+          忘记密码？在下方关闭密码保护后重新设置即可。
         </p>
         <div className="settings-row">
           <label>密码保护</label>

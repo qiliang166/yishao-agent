@@ -775,7 +775,7 @@ export default function ProjSettingsPage() {
               <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6 }}>{passwordError}</div>
             )}
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 8 }}>
-              忘记密码？打开项目目录下的 backend/data/yishao.db 文件，删掉 settings 表里的 admin_password 和 admin_password_enabled 这两行就行。
+              忘记密码？请到全局设置中重置密码。
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => { setShowPasswordDialog(false); setPendingTab(null) }}>取消</button>
