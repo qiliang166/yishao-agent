@@ -1,4 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import TeachingDocPanel from '../TeachingDocPanel'
 
@@ -74,5 +75,88 @@ describe('TeachingDocPanel', () => {
     }} />)
     const daoModelSelect = screen.getByRole('combobox', { name: /大模型/ })
     expect((daoModelSelect as HTMLSelectElement).value).toBe('provider1:model-b')
+  })
+
+  it('Stage 1 模型选择器按 mode 独立 — 改 video 不影响 text/file', async () => {
+    // Simulate Stage 1's step1Models[ mode1Key ] pattern
+    const MODEL_KEYS = { video: '_model_s1_video', text: '_model_s1_text', file: '_model_s1_file' }
+
+    function Stage1ModelFixture({ initModels }: { initModels: Record<string, string> }) {
+      const [models, setModels] = useState<Record<string, string>>(initModels)
+      const mode = 'video'
+      const currentModel = models[mode] || ''
+      return (
+        <div>
+          <select
+            aria-label="Stage1模型"
+            value={currentModel}
+            onChange={e => setModels(prev => ({ ...prev, [mode]: e.target.value }))}
+          >
+            <option value="">选择...</option>
+            <option value="a:1">A / 1</option>
+            <option value="b:2">B / 2</option>
+          </select>
+          <span data-testid="model-video">{models.video || '-'}</span>
+          <span data-testid="model-text">{models.text || '-'}</span>
+          <span data-testid="model-file">{models.file || '-'}</span>
+        </div>
+      )
+    }
+
+    // Initial state: all three modes have different persisted models
+    const { rerender } = render(
+      <Stage1ModelFixture initModels={{ video: 'a:1', text: 'b:2', file: '' }} />
+    )
+
+    const select = screen.getByRole('combobox', { name: 'Stage1模型' })
+    expect((select as HTMLSelectElement).value).toBe('a:1')
+    expect(screen.getByTestId('model-video').textContent).toBe('a:1')
+    expect(screen.getByTestId('model-text').textContent).toBe('b:2')
+    expect(screen.getByTestId('model-file').textContent).toBe('-')
+
+    // Change model for 'video' mode
+    fireEvent.change(select, { target: { value: 'b:2' } })
+    expect((select as HTMLSelectElement).value).toBe('b:2')
+
+    // text and file modes MUST remain unchanged
+    expect(screen.getByTestId('model-text').textContent).toBe('b:2')
+    expect(screen.getByTestId('model-file').textContent).toBe('-')
+
+    // Switch to 'text' mode by re-rendering with mode=text
+    // (simulates sub-tab switch in Stage 1)
+    const Stage1ModelFixtureText = ({ initModels }: { initModels: Record<string, string> }) => {
+      const [models, setModels] = useState<Record<string, string>>(initModels)
+      const mode = 'text'
+      const currentModel = models[mode] || ''
+      return (
+        <div>
+          <select
+            aria-label="Stage1模型"
+            value={currentModel}
+            onChange={e => setModels(prev => ({ ...prev, [mode]: e.target.value }))}
+          >
+            <option value="">选择...</option>
+            <option value="a:1">A / 1</option>
+            <option value="b:2">B / 2</option>
+          </select>
+          <span data-testid="model-video">{models.video || '-'}</span>
+          <span data-testid="model-text">{models.text || '-'}</span>
+        </div>
+      )
+    }
+    rerender(
+      <Stage1ModelFixtureText initModels={{ video: 'b:2', text: 'b:2', file: '' }} />
+    )
+
+    // After switching to text tab, the text model should be shown
+    const selectText = screen.getByRole('combobox', { name: 'Stage1模型' })
+    expect((selectText as HTMLSelectElement).value).toBe('b:2')
+
+    // Change model for 'text' mode
+    fireEvent.change(selectText, { target: { value: 'a:1' } })
+
+    // video model MUST remain as previously set (b:2)
+    expect(screen.getByTestId('model-video').textContent).toBe('b:2')
+    expect(screen.getByTestId('model-text').textContent).toBe('a:1')
   })
 })
