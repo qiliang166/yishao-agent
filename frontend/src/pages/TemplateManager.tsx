@@ -390,36 +390,8 @@ function TemplateManager() {
           </p>
         ) : (
           <>
-            {/* Toolbar: model selector + new button */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
-              flexWrap: 'wrap',
-            }}>
-              <select
-                style={{ ...inputField, width: 'auto', minWidth: '200px', height: '32px' }}
-                value={analyzeProvider ? `${analyzeProvider}:${analyzeModel}` : ''}
-                disabled={enabledProviders.length === 0}
-                onChange={e => {
-                  const val = e.target.value
-                  if (val) {
-                    const [pid, mdl] = val.split(':')
-                    setAnalyzeProvider(pid)
-                    setAnalyzeModel(mdl)
-                  } else {
-                    setAnalyzeProvider('')
-                    setAnalyzeModel('')
-                  }
-                }}
-              >
-                <option value="">
-                  {enabledProviders.length === 0 ? '请先配置 LLM 服务商' : '智能解析模型（自动）'}
-                </option>
-                {enabledProviders.map(p =>
-                  (Array.isArray(p.models) ? p.models : []).map((m: string) => (
-                    <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
-                  ))
-                )}
-              </select>
+            {/* Toolbar: new button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <button className="btn btn-primary btn-sm" onClick={openCreate}>
                 + 新建模板
               </button>
@@ -637,6 +609,33 @@ function TemplateManager() {
                   </div>
                 )
               })()}
+              {/* Model selector */}
+              <div>
+                <label style={labelStyle}>模型选择</label>
+                <select
+                  style={{ ...inputField, cursor: 'pointer' }}
+                  value={analyzeProvider ? `${analyzeProvider}:${analyzeModel}` : ''}
+                  disabled={enabledProviders.length === 0}
+                  onChange={e => {
+                    const val = e.target.value
+                    if (val) {
+                      const [pid, mdl] = val.split(':')
+                      setAnalyzeProvider(pid)
+                      setAnalyzeModel(mdl)
+                    } else {
+                      setAnalyzeProvider('')
+                      setAnalyzeModel('')
+                    }
+                  }}
+                >
+                  <option value="">默认模型</option>
+                  {enabledProviders.map(p =>
+                    (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                      <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                    ))
+                  )}
+                </select>
+              </div>
               {/* Row 1: Name + Type */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div>
