@@ -92,14 +92,11 @@ function TemplateManager() {
   const [activeTab, setActiveTab] = useState('col4')
   const [loading, setLoading] = useState(true)
 
-  // expanded card
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-
-  // inline edit state for expanded card
-  const [editPrompt, setEditPrompt] = useState('')
-  const [editSkill, setEditSkill] = useState('')
-  const [editRules, setEditRules] = useState('{}')
-  const [editSaving, setEditSaving] = useState(false)
+  // modal drag & resize
+  const [modalPos, setModalPos] = useState({ x: 0, y: 0 })
+  const [modalSize, setModalSize] = useState({ w: 0, h: 0 })
+  const dragRef = { startX: 0, startY: 0, posX: 0, posY: 0 }
+  const resizeRef = { startX: 0, startY: 0, startW: 0, startH: 0 }
 
   // create / edit modal
   const [showModal, setShowModal] = useState(false)
@@ -155,14 +152,6 @@ function TemplateManager() {
   useEffect(() => { loadPrompts() }, [loadPrompts])
   useEffect(() => { loadProviders() }, [loadProviders])
 
-  // sync edit state when expanded card changes
-  useEffect(() => {
-    const t = templates.find(tp => tp.id === expandedId)
-    setEditPrompt(t?.prompt || '')
-    setEditSkill(t?.skill || '')
-    setEditRules(t?.rules || '{}')
-  }, [expandedId, templates])
-
   // ---------- derived ----------
 
   const activeTabDef = TEMPLATE_TABS.find(t => t.key === activeTab) || TEMPLATE_TABS[0]
@@ -182,33 +171,6 @@ function TemplateManager() {
 
   const enabledProviders = llmProviders.filter(p => p.is_enabled)
 
-  // ---------- card expand ----------
-
-  const toggleExpand = (t: Template) => {
-    setExpandedId(prev => prev === t.id ? null : t.id)
-  }
-
-  // ---------- inline save ----------
-
-  const handleInlineSave = async (t: Template) => {
-    setEditSaving(true)
-    try {
-      await api.updateTemplate(t.id, {
-        name: t.name,
-        type: t.type,
-        prompt: editPrompt,
-        skill: editSkill,
-        rules: editRules,
-      })
-      modal.toast('已保存', 'success')
-      loadTemplates()
-    } catch (err: any) {
-      modal.toast('保存失败: ' + err.message, 'error')
-    } finally {
-      setEditSaving(false)
-    }
-  }
-
   // ---------- modal handlers ----------
 
   const openCreate = () => {
@@ -221,6 +183,8 @@ function TemplateManager() {
     setFormSkillId('')
     setFormBrandingConfig('{}')
     setFormError('')
+    setModalPos({ x: 0, y: 0 })
+    setModalSize({ w: 0, h: 0 })
     setShowModal(true)
   }
 
@@ -235,6 +199,48 @@ function TemplateManager() {
     setFormBrandingConfig(t.branding_config || '{}')
     setFormError('')
     setShowModal(true)
+  }
+
+  // modal drag handlers
+  const onDragStart = (e: React.MouseEvent) => {
+    dragRef.startX = e.clientX
+    dragRef.startY = e.clientY
+    dragRef.posX = modalPos.x
+    dragRef.posY = modalPos.y
+    const onMove = (ev: MouseEvent) => {
+      setModalPos({
+        x: dragRef.posX + ev.clientX - dragRef.startX,
+        y: dragRef.posY + ev.clientY - dragRef.startY,
+      })
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }
+
+  const onResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const baseW = modalSize.w || 520
+    const baseH = modalSize.h || 400
+    resizeRef.startX = e.clientX
+    resizeRef.startY = e.clientY
+    resizeRef.startW = baseW
+    resizeRef.startH = baseH
+    const onMove = (ev: MouseEvent) => {
+      setModalSize({
+        w: Math.max(380, resizeRef.startW + ev.clientX - resizeRef.startX),
+        h: Math.max(300, resizeRef.startH + ev.clientY - resizeRef.startY),
+      })
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
   }
 
   const handleSave = async () => {
@@ -283,7 +289,6 @@ function TemplateManager() {
     try {
       await api.deleteTemplate(t.id)
       modal.toast('已删除', 'success')
-      if (expandedId === t.id) setExpandedId(null)
       loadTemplates()
     } catch (err: any) {
       modal.toast('删除失败: ' + err.message, 'error')
@@ -362,8 +367,6 @@ function TemplateManager() {
 
   // ---------- render ----------
 
-  const expanded = expandedId ? templates.find(t => t.id === expandedId) : null
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
       {/* ====== mgmt-tabs bar ====== */}
@@ -372,7 +375,7 @@ function TemplateManager() {
           <button
             key={tab.key}
             className={`mgmt-tab${activeTab === tab.key ? ' active' : ''}`}
-            onClick={() => { setActiveTab(tab.key); setExpandedId(null) }}
+            onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
           </button>
@@ -432,7 +435,6 @@ function TemplateManager() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
                 {activeTemplates.map(t => {
                   const thumbUrl = getThumbnailUrl(t)
-                  const isExpanded = expandedId === t.id
                   const fileName = t.file_path ? (t.file_path.split(/[\\/]/).pop() || t.file_path) : ''
 
                   return (
@@ -441,13 +443,9 @@ function TemplateManager() {
                       <div
                         className="card"
                         style={{
-                          cursor: 'pointer',
                           padding: 0,
                           overflow: 'hidden',
-                          transition: 'box-shadow .15s',
-                          borderColor: isExpanded ? 'var(--primary)' : 'var(--border)',
                         }}
-                        onClick={() => toggleExpand(t)}
                       >
                         {/* Thumbnail area */}
                         <div style={{
@@ -531,7 +529,6 @@ function TemplateManager() {
                             }} title="上传缩略图">
                               {thumbUrl ? '更换' : '缩略图'}
                               <input type="file" accept="image/*" style={{ display: 'none' }}
-                                onClick={e => e.stopPropagation()}
                                 onChange={e => {
                                   const f = e.target.files?.[0]
                                   if (f) handleThumbnailUpload(t, f)
@@ -544,136 +541,30 @@ function TemplateManager() {
                                 fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
                                 flexShrink: 0, lineHeight: 1,
                               }} title="恢复默认缩略图"
-                                onClick={e => { e.stopPropagation(); handleResetThumbnail(t) }}>
+                                onClick={() => handleResetThumbnail(t)}>
                                 默认
                               </span>
                             )}
                             <div style={{ flex: 1 }} />
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                              style={{
-                                color: 'var(--text-secondary)',
-                                flexShrink: 0,
-                                transition: 'transform .15s',
-                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                              }}>
-                              <path d="M6 9l6 6 6-6" />
-                            </svg>
+                            <span style={{
+                              fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
+                              flexShrink: 0, lineHeight: 1,
+                            }} title="编辑模板"
+                              onClick={() => openEdit(t)}>
+                              编辑
+                            </span>
+                            {t.is_default !== 1 && (
+                              <span style={{
+                                fontSize: '10px', color: 'var(--warning)', cursor: 'pointer',
+                                flexShrink: 0, lineHeight: 1,
+                              }} title="删除模板"
+                                onClick={() => handleDelete(t)}>
+                                删除
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
-
-                      {/* ====== Expanded editor ====== */}
-                      {isExpanded && (
-                        <div style={{
-                          marginTop: '12px',
-                          background: 'var(--card)',
-                          border: '1px solid var(--border)',
-                          borderRadius: 'var(--radius)',
-                          padding: '16px',
-                        }}>
-                          {/* File & thumbnail upload row */}
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap',
-                            padding: '12px 16px',
-                            background: 'var(--bg)',
-                            borderRadius: 'var(--radius-sm)',
-                            marginBottom: '16px',
-                          }}>
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)',
-                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}
-                              title={fileName || '未上传'}>
-                              {fileName ? '📌 ' + fileName : '📄 未上传模板文件'}
-                            </span>
-                            <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                              {fileName ? '更换文件' : '上传 PPTX'}
-                              <input type="file" accept=".pptx" style={{ display: 'none' }}
-                                onChange={e => {
-                                  const f = e.target.files?.[0]
-                                  if (f) handleFileUpload(t, f)
-                                  e.target.value = ''
-                                }}
-                              />
-                            </label>
-                            {fileName && (
-                              <button
-                                className="btn btn-primary btn-sm"
-                                onClick={() => handleAnalyze(t)}
-                                disabled={analyzingId === t.id}
-                              >
-                                {analyzingId === t.id ? '解析中...' : '智能解析'}
-                              </button>
-                            )}
-                          </div>
-
-                          {/* Prompt + Skill + Rules */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                            <div>
-                              <label style={labelStyle}>提示词 (Prompt)</label>
-                              <textarea
-                                value={editPrompt}
-                                onChange={e => setEditPrompt(e.target.value)}
-                                placeholder="输入AI提示词..."
-                                style={{ ...textareaStyle, height: '120px' }}
-                              />
-                            </div>
-                            <div>
-                              <label style={labelStyle}>输出格式 (SKILL)</label>
-                              <textarea
-                                value={editSkill}
-                                onChange={e => setEditSkill(e.target.value)}
-                                placeholder="输入SKILL模板..."
-                                style={{ ...textareaStyle, height: '160px' }}
-                              />
-                            </div>
-                            <div>
-                              <label style={labelStyle}>设计规则 (Rules JSON)</label>
-                              <textarea
-                                value={editRules}
-                                onChange={e => setEditRules(e.target.value)}
-                                placeholder='{}'
-                                style={{ ...textareaStyle, height: '100px' }}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Linked skill info */}
-                          {t.linked_skill_id && (
-                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '12px' }}>
-                              <span style={{ fontWeight: 600 }}>关联 Skill: </span>
-                              {getSkillName(t.linked_skill_id)}
-                            </div>
-                          )}
-
-                          {/* Action buttons */}
-                          <div style={{
-                            display: 'flex', gap: 8, marginTop: '16px', justifyContent: 'space-between',
-                          }}>
-                            <div style={{ display: 'flex', gap: 8 }}>
-                              <button className="btn btn-ghost btn-sm" onClick={() => openEdit(t)}>
-                                编辑信息
-                              </button>
-                              {t.is_default !== 1 && (
-                                <button className="btn btn-ghost btn-sm" onClick={() => handleSetDefault(t)}>
-                                  设为默认
-                                </button>
-                              )}
-                              {t.is_default !== 1 && (
-                                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
-                                  onClick={() => handleDelete(t)}>
-                                  删除
-                                </button>
-                              )}
-                            </div>
-                            <button
-                              className="btn btn-primary btn-sm"
-                              onClick={() => handleInlineSave(t)}
-                              disabled={editSaving}
-                            >
-                              {editSaving ? '保存中...' : '保存 Prompt & SKILL & Rules'}
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )
                 })}
@@ -688,12 +579,62 @@ function TemplateManager() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }}>
-          <div style={{ ...modalCard, width: '520px', maxWidth: '90vw', padding: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px' }}>
-              {editingId ? '编辑模板' : '新建模板'}
-            </h3>
+        }} onClick={() => setShowModal(false)}>
+          <div style={{
+            ...modalCard,
+            width: modalSize.w ? modalSize.w : '520px',
+            maxWidth: '90vw',
+            minWidth: '380px',
+            minHeight: '300px',
+            padding: '24px',
+            position: 'relative',
+            transform: `translate(${modalPos.x}px, ${modalPos.y}px)`,
+          }} onClick={e => e.stopPropagation()}>
+            {/* Draggable title bar */}
+            <div style={{
+              cursor: 'move', userSelect: 'none',
+              marginBottom: '20px',
+            }} onMouseDown={onDragStart}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
+                {editingId ? '编辑模板' : '新建模板'}
+              </h3>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* File upload row (edit mode only) */}
+              {editingId && (() => {
+                const editingTpl = templates.find(tp => tp.id === editingId)
+                const efName = editingTpl?.file_path ? (editingTpl.file_path.split(/[\\/]/).pop() || editingTpl.file_path) : ''
+                return (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
+                    padding: '10px 12px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)',
+                  }}>
+                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}
+                      title={efName || '未上传'}>
+                      {efName ? '📌 ' + efName : '📄 未上传模板文件'}
+                    </span>
+                    <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                      {efName ? '更换' : '上传 PPTX'}
+                      <input type="file" accept=".pptx" style={{ display: 'none' }}
+                        onChange={e => {
+                          const f = e.target.files?.[0]
+                          if (f && editingId) handleFileUpload(editingTpl!, f)
+                          e.target.value = ''
+                        }}
+                      />
+                    </label>
+                    {efName && (
+                      <button className="btn btn-primary btn-sm"
+                        onClick={() => editingTpl && handleAnalyze(editingTpl)}
+                        disabled={analyzingId === editingId}>
+                        {analyzingId === editingId ? '解析中...' : '智能解析'}
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+              {/* Name */}
               {/* Name */}
               <div>
                 <label style={labelStyle}>名称</label>
@@ -796,6 +737,17 @@ function TemplateManager() {
                 {saving ? '保存中...' : '保存'}
               </button>
             </div>
+
+            {/* Resize handle */}
+            <div
+              style={{
+                position: 'absolute', bottom: 0, right: 0,
+                width: '20px', height: '20px', cursor: 'nwse-resize',
+                background: 'linear-gradient(135deg, transparent 50%, var(--border) 50%)',
+                borderRadius: '0 0 var(--radius) 0',
+              }}
+              onMouseDown={onResizeStart}
+            />
           </div>
         </div>
       )}
