@@ -1647,11 +1647,85 @@ def list_column_configs():
         db.close()
 
 
+def _build_prompt_from_rules(rules: dict) -> str:
+    """从 rules JSON 自动生成 prompt"""
+    dr = rules.get("design_rules", {})
+    lts = rules.get("layout_types", [])
+    comp = rules.get("components", {})
+    imgr = rules.get("image_rules", {})
+    chk = rules.get("checklist", {})
+    pr = rules.get("page_rhythm", {})
+    dps = rules.get("design_principles", [])
+
+    parts = []
+
+    # Role
+    parts.append("你是国家级烹饪大师、食品科学家兼PPT内容设计专家。请根据提供的文案，生成一份专业PPT。")
+
+    # Constraints section
+    parts.append("\n## 约束规则")
+
+    # Color schemes
+    schemes = dr.get("color_schemes", [])
+    if schemes:
+        names = "/".join(s.get("name", "") for s in schemes)
+        parts.append(f"- 配色：仅从预设中选择（{names}）。{dr.get('color_discipline', '')}")
+
+    # Font hierarchy
+    fonts = comp.get("fonts", {})
+    if fonts:
+        parts.append(f"- 字体：标题={fonts.get('title', {}).get('weight', 'bold')} {fonts.get('title', {}).get('size', '')} / 二级={fonts.get('heading', {}).get('weight', '600')} {fonts.get('heading', {}).get('size', '')} / 正文={fonts.get('body', {}).get('weight', '400')} {fonts.get('body', {}).get('size', '')}")
+
+    # Layout sequence
+    if pr.get("sequence"):
+        parts.append(f"- 版式顺序：{' → '.join(pr['sequence'])}。{pr.get('alternation_rule', '')}")
+
+    # Image rules
+    img_types = imgr.get("types", [])
+    if img_types:
+        parts.append(f"- 配图：{imgr.get('placement', '每页最多1张')}。类型：{'/'.join(t.get('name','') for t in img_types)}")
+
+    # Components
+    callouts = comp.get("callouts", [])
+    if callouts:
+        parts.append(f"- 标注组件：{'/'.join(c.get('name','') for c in callouts)}")
+    stats = comp.get("stats", [])
+    if stats:
+        parts.append(f"- 数据组件：{'/'.join(s.get('name','') for s in stats)}")
+
+    # P0 checklist
+    p0 = chk.get("p0_must_pass", [])
+    if p0:
+        p0_items = "; ".join(item.get("item","") for item in p0[:4])
+        parts.append(f"- 硬约束（P0）：{p0_items}")
+
+    # Design principles
+    if dps:
+        dp_text = "；".join(f'{d.get("rule","")}' for d in dps[:4])
+        parts.append(f"- 设计原则：{dp_text}")
+        if len(dps) > 4:
+            parts[-1] += "等"
+
+    # Page count
+    p2 = chk.get("p2_suggested", [])
+    for item in p2:
+        if "页数" in item.get("item", ""):
+            parts.append(f"- {item['item']}")
+
+    parts.append("\n直接输出PPT内容，严格按下方SKILL模板结构。")
+    return "\n".join(parts)
+
+
+def _build_skill_from_rules(rules: dict) -> str:
+    """从 rules JSON 自动生成 skill（即 content_spec）"""
+    return rules.get("content_spec", "")
+
+
 @app.put("/api/column-configs/{config_id}")
 def update_column_config(config_id: str, req: dict):
     db = get_db()
     try:
-        existing = db.execute("SELECT id FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+        existing = db.execute("SELECT id, column_id FROM column_configs WHERE id = ?", (config_id,)).fetchone()
         if not existing:
             raise HTTPException(404, "Config not found")
         if 'prompt' in req:
@@ -1660,6 +1734,18 @@ def update_column_config(config_id: str, req: dict):
             db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
         if 'rules' in req:
             db.execute("UPDATE column_configs SET rules = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['rules'], config_id))
+            # Auto-regenerate prompt + skill from rules (only for PPT columns)
+            col_id = existing["column_id"]
+            if col_id in ("col4", "col5"):
+                try:
+                    rules = json.loads(req['rules'])
+                    if rules and rules != {}:
+                        new_prompt = _build_prompt_from_rules(rules)
+                        new_skill = _build_skill_from_rules(rules)
+                        db.execute("UPDATE column_configs SET prompt = ?, skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                   (new_prompt, new_skill, config_id))
+                except (json.JSONDecodeError, Exception):
+                    pass  # Keep existing prompt/skill if rules parse fails
         db.commit()
         row = db.execute("SELECT * FROM column_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)
