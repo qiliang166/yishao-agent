@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api, Voice, TTSProvider, LLMProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import TeachingDocPanel from '../components/TeachingDocPanel'
 
 // ── Types ──
 interface Project {
@@ -136,17 +137,13 @@ export default function ProjectPage() {
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('') // which sub is generating
   const [batchGenerating, setBatchGenerating] = useState(false)
+  const sopRef = useRef<{ triggerGenerate: () => void }>(null)
+  const daoRef = useRef<{ triggerGenerate: () => void }>(null)
+  const yanxiRef = useRef<{ triggerGenerate: () => void }>(null)
   const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
   const [stage1Skill, setStage1Skill] = useState('')
   const [stage4KouboPrompt, setStage4KouboPrompt] = useState('')
-  const [s2SopModel, setS2SopModel] = useState('')
-  const [s2DaoModel, setS2DaoModel] = useState('')
-  const [s2YanxiModel, setS2YanxiModel] = useState('')
-  const [s2SopDataSource, setS2SopDataSource] = useState('video')
-  const [s2DaoDataSource, setS2DaoDataSource] = useState('video')
-  const [s2YanxiDataSource, setS2YanxiDataSource] = useState('video')
-
   // Stage 3 state
   const [sopSelected, setSopSelected] = useState('sop-std')
   const [daoPptSelected, setDaoPptSelected] = useState('dao-std')
@@ -193,9 +190,6 @@ export default function ProjectPage() {
       setFileText(map['raw_file'] || '')
       // Restore saved model selections
       if (map['_model_step1']) { setStep1Model(map['_model_step1']); hasModelOverride = true }
-      if (map['_model_s2_sop']) { setS2SopModel(map['_model_s2_sop']); hasModelOverride = true }
-      if (map['_model_s2_dao']) { setS2DaoModel(map['_model_s2_dao']); hasModelOverride = true }
-      if (map['_model_s2_yanxi']) { setS2YanxiModel(map['_model_s2_yanxi']); hasModelOverride = true }
       if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
@@ -301,9 +295,6 @@ export default function ProjectPage() {
       const defVal = def && defModels.length > 0 ? `${def.id}:${defModels[0]}` : ''
       if (defVal) {
         setStep1Model((prev: string) => prev || defVal)
-        setS2SopModel((prev: string) => prev || defVal)
-        setS2DaoModel((prev: string) => prev || defVal)
-        setS2YanxiModel((prev: string) => prev || defVal)
         setS3SopModel((prev: string) => prev || defVal)
         setS3DaoPptModel((prev: string) => prev || defVal)
         setS3YanxiPptModel((prev: string) => prev || defVal)
@@ -328,16 +319,6 @@ export default function ProjectPage() {
   const step1Key = () => sub === '1a' ? 'step1_video' : sub === '1b' ? 'step1_text' : 'step1_file'
   const step2Key = () => `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
   const step3Key = () => sub === '3a' ? 'step3_sop_doc' : sub === '3b' ? 'step3_dao_ppt' : 'step3_yan_ppt'
-
-  // Get source text for Stage 2 based on selected data source
-  const getStage2Source = (source: string) => {
-    switch (source) {
-      case 'video': return steps.raw_video || ''
-      case 'text': return steps.raw_text || ''
-      case 'file': return steps.raw_file || ''
-      default: return ''
-    }
-  }
 
   // ── Stage nav ──
   const switchStage = (s: StageId) => {
@@ -425,42 +406,11 @@ export default function ProjectPage() {
 
   // ── Batch Generate All Stage 2 Docs ──
   const doBatchGenerate = async () => {
-    if (!id) return
-    const labels: Record<string, string> = { step2_sop: 'SOP文案', step2_daoshuyi: '道与术文案', step2_yanxi: '研学手册文案' }
-    const tasks: { key: string; label: string; promise: Promise<any> }[] = []
-    const sopSource = getStage2Source(s2SopDataSource)
-    if (sopSource && s2SopModel) {
-      const [pid, mdl] = s2SopModel.split(':')
-      tasks.push({ key: 'step2_sop', label: 'SOP文案', promise: doGenerate('step2_sop', stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。', sopSource, pid, mdl) })
-    }
-    const daoSource = getStage2Source(s2DaoDataSource)
-    if (daoSource && s2DaoModel) {
-      const [pid, mdl] = s2DaoModel.split(':')
-      tasks.push({ key: 'step2_daoshuyi', label: '道与术文案', promise: doGenerate('step2_daoshuyi', stage2Prompts.dao?.prompt || '请分析以下食谱内容的道与术。', daoSource, pid, mdl) })
-    }
-    const yanxiSource = getStage2Source(s2YanxiDataSource)
-    if (yanxiSource && s2YanxiModel) {
-      const [pid, mdl] = s2YanxiModel.split(':')
-      tasks.push({ key: 'step2_yanxi', label: '研学手册文案', promise: doGenerate('step2_yanxi', stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案。', yanxiSource, pid, mdl) })
-    }
-    if (tasks.length === 0) {
-      modal.toast('请先选择数据源和大模型', 'error')
-      return
-    }
     setBatchGenerating(true)
     try {
-      const results = await Promise.all(tasks.map(t => t.promise.then(r => ({ ...t, ok: r != null })).catch(() => ({ ...t, ok: false }))))
-      const ok = results.filter(r => r.ok)
-      const fail = results.filter(r => !r.ok)
-      if (fail.length === 0) {
-        modal.toast('三篇文案已全部生成', 'success')
-      } else if (ok.length === 0) {
-        modal.toast(`全部生成失败: ${fail.map(f => f.label).join('、')}`, 'error')
-      } else {
-        modal.toast(`${ok.map(o => o.label).join('、')} 生成成功; ${fail.map(f => f.label).join('、')} 失败`, 'error')
-      }
-    } catch (e: any) {
-      modal.toast('批量生成失败: ' + e.message, 'error')
+      sopRef.current?.triggerGenerate()
+      daoRef.current?.triggerGenerate()
+      yanxiRef.current?.triggerGenerate()
     } finally {
       setBatchGenerating(false)
     }
@@ -907,7 +857,7 @@ export default function ProjectPage() {
                         }
                       }}>📥 保存到项目</button>
                     <button className="btn btn-outline btn-sm"
-                      disabled={batchGenerating || (!(getStage2Source(s2SopDataSource) && s2SopModel) && !(getStage2Source(s2DaoDataSource) && s2DaoModel) && !(getStage2Source(s2YanxiDataSource) && s2YanxiModel))}
+                      disabled={batchGenerating || (!steps.raw_video && !steps.raw_text && !steps.raw_file)}
                       onClick={doBatchGenerate}>
                       {batchGenerating ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>
@@ -929,149 +879,45 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                {/* 2a: SOP文案 */}
-                {sub === '2a' && <>
-                  <div className="card-title" style={{ color: 'var(--success)' }}>📃 SOP文案生成</div>
-                  <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成标准SOP文案</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                    <div className="form-label">数据来源</div>
-                    <select className="form-select" style={{ marginBottom: 6 }} value={s2SopDataSource} onChange={e => setS2SopDataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
-                    </select>
-                  </div>
-                  <div className="form-label">大模型</div>
-                  <select className="form-select" style={{ marginBottom: 8 }} value={s2SopModel} onChange={e => { setS2SopModel(e.target.value); saveStep('_model_s2_sop', e.target.value) }}>
-                    <option value="">选择模型...</option>
-                    {llmProviders.filter(p => p.is_enabled).map(p =>
-                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
-                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
-                      ))
-                    )}
-                  </select>
-                  <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source(s2SopDataSource) || !s2SopModel || step2Generating === '2a'}
-                    onClick={async () => {
-                      setStep2Generating('2a')
-                      try {
-                        const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
-                        const [pid, mdl] = s2SopModel.split(':')
-                        await doGenerate('step2_sop', prompt, getStage2Source(s2SopDataSource), pid, mdl)
-                      } finally { setStep2Generating('') }
-                    }}>
-                    {step2Generating === '2a' ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
-                  </button>
-                </>}
-
-                {/* 2b: 道与术文案 */}
-                {sub === '2b' && <>
-                  <div className="card-title" style={{ color: 'var(--purple)' }}>💡 道与术文案生成</div>
-                  <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成「道与术」分析文案</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                    <div className="form-label">数据来源</div>
-                    <select className="form-select" style={{ marginBottom: 6 }} value={s2DaoDataSource} onChange={e => setS2DaoDataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
-                    </select>
-                  </div>
-                  <div className="form-label">大模型</div>
-                  <select className="form-select" style={{ marginBottom: 8 }} value={s2DaoModel} onChange={e => { setS2DaoModel(e.target.value); saveStep('_model_s2_dao', e.target.value) }}>
-                    <option value="">选择模型...</option>
-                    {llmProviders.filter(p => p.is_enabled).map(p =>
-                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
-                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
-                      ))
-                    )}
-                  </select>
-                  <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source(s2DaoDataSource) || !s2DaoModel || step2Generating === '2b'}
-                    onClick={async () => {
-                      setStep2Generating('2b')
-                      try {
-                        const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
-                        const [pid, mdl] = s2DaoModel.split(':')
-                        await doGenerate('step2_daoshuyi', prompt, getStage2Source(s2DaoDataSource), pid, mdl)
-                      } finally { setStep2Generating('') }
-                    }}>
-                    {step2Generating === '2b' ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
-                  </button>
-                </>}
-
-                {/* 2c: 研学手册文案 */}
-                {sub === '2c' && <>
-                  <div className="card-title" style={{ color: 'var(--warning)' }}>📖 研学手册文案生成</div>
-                  <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成研学手册文案</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                    <div className="form-label">数据来源</div>
-                    <select className="form-select" style={{ marginBottom: 6 }} value={s2YanxiDataSource} onChange={e => setS2YanxiDataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
-                    </select>
-                  </div>
-                  <div className="form-label">大模型</div>
-                  <select className="form-select" style={{ marginBottom: 8 }} value={s2YanxiModel} onChange={e => { setS2YanxiModel(e.target.value); saveStep('_model_s2_yanxi', e.target.value) }}>
-                    <option value="">选择模型...</option>
-                    {llmProviders.filter(p => p.is_enabled).map(p =>
-                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
-                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
-                      ))
-                    )}
-                  </select>
-                  <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source(s2YanxiDataSource) || !s2YanxiModel || step2Generating === '2c'}
-                    onClick={async () => {
-                      setStep2Generating('2c')
-                      try {
-                        const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
-                        const [pid, mdl] = s2YanxiModel.split(':')
-                        await doGenerate('step2_yanxi', prompt, getStage2Source(s2YanxiDataSource), pid, mdl)
-                      } finally { setStep2Generating('') }
-                    }}>
-                    {step2Generating === '2c' ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
-                  </button>
-                </>}
-              </div>
-            </div>
-            <div className="panel-right">
-              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="card-title">生成 / 编辑</div>
-                <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-                  value={steps[step2Key()] || ''}
-                  onChange={e => {
-                    setSteps(prev => ({ ...prev, [step2Key()]: e.target.value }))
-                  }}
-                  placeholder="点击生成按钮，AI生成后在此编辑..." />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                    {sub === '2a' ? '编辑完成后保存，即可供「标准SOP」栏目引用'
-                      : sub === '2b' ? '编辑完成后保存，即可供「合成PPT」栏目引用'
-                        : '编辑完成后保存，即可供「合成PPT」「口播文案」栏目引用'}
-                  </span>
-                  <span style={{ display: 'flex', gap: 5 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => {
-                      setSteps(prev => ({ ...prev, [step2Key()]: '' }))
-                      saveStep(step2Key(), '')
-                    }}>✕ 清空</button>
-                    <button className="btn btn-ghost btn-sm"
-                      disabled={!steps[step2Key()]}
-                      onClick={async () => {
-                        if (!id) return
-                        try {
-                          const label = sub === '2a' ? 'SOP文案' : sub === '2b' ? '道与术文案' : '研学手册文案'
-                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_${label}.txt`, steps[step2Key()] || '')
-                          modal.toast(`已保存到 ${resp.path}`, 'success')
-                        } catch (e: any) {
-                          modal.toast('保存失败: ' + e.message, 'error')
-                        }
-                      }}>📥 保存到项目</button>
-                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step2Key()] || '', step2Key())}`} onClick={() => {
-                      saveStep(step2Key(), steps[step2Key()] || ''); flashSave()
-                    }}>{getSaveBtnLabel(steps[step2Key()] || '', step2Key())}</button>
-                  </span>
-                </div>
+                {sub === '2a' && (
+                  <TeachingDocPanel ref={sopRef} docType="sop" projectId={id!}
+                    steps={steps} savedSteps={savedSteps}
+                    prompt={stage2Prompts.sop?.prompt || ''}
+                    skill={stage2Prompts.sop?.skill || ''}
+                    llmProviders={llmProviders}
+                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
+                      const map: Record<string, string> = {}
+                      s.forEach((x: any) => { map[x.step_name] = x.content })
+                      setSteps(map)
+                      setSavedSteps({...map})
+                    })} />
+                )}
+                {sub === '2b' && (
+                  <TeachingDocPanel ref={daoRef} docType="dao" projectId={id!}
+                    steps={steps} savedSteps={savedSteps}
+                    prompt={stage2Prompts.dao?.prompt || ''}
+                    skill={stage2Prompts.dao?.skill || ''}
+                    llmProviders={llmProviders}
+                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
+                      const map: Record<string, string> = {}
+                      s.forEach((x: any) => { map[x.step_name] = x.content })
+                      setSteps(map)
+                      setSavedSteps({...map})
+                    })} />
+                )}
+                {sub === '2c' && (
+                  <TeachingDocPanel ref={yanxiRef} docType="yanxi" projectId={id!}
+                    steps={steps} savedSteps={savedSteps}
+                    prompt={stage2Prompts.yanxi?.prompt || ''}
+                    skill={stage2Prompts.yanxi?.skill || ''}
+                    llmProviders={llmProviders}
+                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
+                      const map: Record<string, string> = {}
+                      s.forEach((x: any) => { map[x.step_name] = x.content })
+                      setSteps(map)
+                      setSavedSteps({...map})
+                    })} />
+                )}
               </div>
             </div>
           </div>

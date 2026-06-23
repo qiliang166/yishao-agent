@@ -32,8 +32,8 @@ const defaultProps = {
   prompt: 'test system prompt',
   skill: 'test skill template',
   llmProviders: [
-    { id: 'provider1', name: 'Provider 1', is_enabled: true, models: ['model-a', 'model-b'] },
-    { id: 'provider2', name: 'Provider 2', is_enabled: true, models: ['model-c'] },
+    { id: 'provider1', name: 'Provider 1', is_enabled: 1, models: ['model-a', 'model-b'] },
+    { id: 'provider2', name: 'Provider 2', is_enabled: 1, models: ['model-c'] },
   ],
   onRefresh: vi.fn(),
 }

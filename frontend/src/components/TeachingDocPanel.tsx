@@ -9,7 +9,7 @@ export interface TeachingDocPanelProps {
   savedSteps: Record<string, string>
   prompt: string
   skill: string
-  llmProviders: { id: string; name: string; is_enabled: boolean; models: string[] }[]
+  llmProviders: { id: string; name: string; is_enabled: number; models: string[] }[]
   onRefresh: () => void
 }
 
