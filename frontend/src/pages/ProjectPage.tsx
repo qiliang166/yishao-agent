@@ -193,6 +193,9 @@ export default function ProjectPage() {
     api.getSteps(id).then((s: any[]) => {
       const map: Record<string, string> = {}
       s.forEach((x: any) => { map[x.step_name] = x.content })
+      if (!map['step1'] && map['video_text']) {
+        map['step1'] = map['video_text']
+      }
       setSteps(map)
       if (map['video_text']) {
         setStep1Source(map['video_text'])
