@@ -32,8 +32,6 @@ dist/
 # Superpowers dev artifacts
 .superpowers/
 
-# Docs specs (auto-generated)
-docs/superpowers/specs/
 
 # OS
 .DS_Store
