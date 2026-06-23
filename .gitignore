@@ -9,7 +9,13 @@ build/
 *.db
 *.db-wal
 *.db-shm
-backend/data/backups/
+backend/data/
+backend/deps/
+backend/models/
+
+# User data
+data/
+output/
 
 # Environment
 .env
@@ -25,6 +31,9 @@ dist/
 
 # Superpowers dev artifacts
 .superpowers/
+
+# Docs specs (auto-generated)
+docs/superpowers/specs/
 
 # OS
 .DS_Store
