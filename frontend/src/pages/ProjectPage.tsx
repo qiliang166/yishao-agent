@@ -423,29 +423,40 @@ export default function ProjectPage() {
 
   // ── Batch Generate All Stage 2 Docs ──
   const doBatchGenerate = async () => {
+    const configs = [
+      { stepKey: 'step2_sop', modelKey: '_model_s2_sop', promptKey: 'sop', label: 'SOP文案', fallbackPrompt: '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。' },
+      { stepKey: 'step2_daoshuyi', modelKey: '_model_s2_dao', promptKey: 'dao', label: '道与术文案', fallbackPrompt: '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。' },
+      { stepKey: 'step2_yanxi', modelKey: '_model_s2_yanxi', promptKey: 'yanxi', label: '研学手册文案', fallbackPrompt: '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。' },
+    ]
+    const source = steps.raw_video || steps.raw_text || steps.raw_file || ''
+    const tasks = configs.map(c => {
+      const model = steps[c.modelKey]
+      if (!model || !source) return null
+      const [pid, mdl] = model.split(':')
+      const prompt = stage2Prompts[c.promptKey]?.prompt || c.fallbackPrompt
+      const skill = stage2Prompts[c.promptKey]?.skill || ''
+      const userMessage = skill
+        ? `请将以下内容按指定格式整理：\n\n${source}\n\n输出格式要求：\n${skill}`
+        : source
+      return doGenerate(c.stepKey, prompt, userMessage, pid, mdl)
+        .then(r => ({ label: c.label, ok: r != null }))
+        .catch(() => ({ label: c.label, ok: false }))
+    }).filter(Boolean)
+    if (tasks.length === 0) {
+      modal.toast('请先在 Stage 2 各栏目中选择大模型并确保有数据源内容', 'error')
+      return
+    }
     setBatchGenerating(true)
     try {
-      const tasks = [
-        { ref: sopRef, label: 'SOP文案' },
-        { ref: daoRef, label: '道与术文案' },
-        { ref: yanxiRef, label: '研学手册文案' },
-      ]
-      const results = await Promise.all(
-        tasks.map(t =>
-          t.ref.current?.triggerGenerate().then(
-            () => ({ label: t.label, ok: true }),
-            () => ({ label: t.label, ok: false }),
-          ) ?? Promise.resolve({ label: t.label, ok: false })
-        )
-      )
-      const ok = results.filter(r => r.ok)
-      const fail = results.filter(r => !r.ok)
+      const results = await Promise.all(tasks)
+      const ok = results.filter((r: any) => r.ok)
+      const fail = results.filter((r: any) => !r.ok)
       if (fail.length === 0) {
         modal.toast('三篇文案已全部生成', 'success')
       } else if (ok.length === 0) {
-        modal.toast(`全部生成失败: ${fail.map(f => f.label).join('、')}`, 'error')
+        modal.toast(`全部生成失败: ${fail.map((f: any) => f.label).join('、')}`, 'error')
       } else {
-        modal.toast(`${ok.map(o => o.label).join('、')} 生成成功; ${fail.map(f => f.label).join('、')} 失败`, 'error')
+        modal.toast(`${ok.map((o: any) => o.label).join('、')} 生成成功; ${fail.map((f: any) => f.label).join('、')} 失败`, 'error')
       }
     } catch (e: any) {
       modal.toast('批量生成失败: ' + e.message, 'error')
@@ -927,6 +938,7 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
                     llmProviders={llmProviders}
+                    batchGenerating={batchGenerating}
                     onRefresh={() => api.getSteps(id!).then((s: any[]) => {
                       const map: Record<string, string> = {}
                       s.forEach((x: any) => { map[x.step_name] = x.content })
@@ -940,6 +952,7 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
                     llmProviders={llmProviders}
+                    batchGenerating={batchGenerating}
                     onRefresh={() => api.getSteps(id!).then((s: any[]) => {
                       const map: Record<string, string> = {}
                       s.forEach((x: any) => { map[x.step_name] = x.content })
@@ -953,6 +966,7 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
                     llmProviders={llmProviders}
+                    batchGenerating={batchGenerating}
                     onRefresh={() => api.getSteps(id!).then((s: any[]) => {
                       const map: Record<string, string> = {}
                       s.forEach((x: any) => { map[x.step_name] = x.content })

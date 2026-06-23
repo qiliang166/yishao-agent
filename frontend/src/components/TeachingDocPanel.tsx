@@ -11,6 +11,7 @@ export interface TeachingDocPanelProps {
   skill: string
   llmProviders: { id: string; name: string; is_enabled: number; models: string[] }[]
   onRefresh: () => void
+  batchGenerating?: boolean
 }
 
 const DOC_LABELS: Record<string, string> = {
@@ -35,7 +36,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 }
 
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
-  docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
+  docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh, batchGenerating,
 }, ref) => {
   const modal = useModal()
 
@@ -202,9 +203,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         )}
       </select>
       <button className="btn btn-primary btn-sm w-full"
-        disabled={!getSourceText(dataSource) || !model || generating}
+        disabled={!getSourceText(dataSource) || !model || generating || batchGenerating}
         onClick={handleGenerate}>
-        {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
+        {(generating || batchGenerating) ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
       </button>
 
       {/* Content textarea */}
