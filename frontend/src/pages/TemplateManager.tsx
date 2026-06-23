@@ -98,6 +98,7 @@ function TemplateManager() {
   const [dragging, setDragging] = useState<{ startX: number; startY: number; posX: number; posY: number } | null>(null)
   const [resizing, setResizing] = useState<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
   const dragPosRef = useRef({ x: 0, y: 0 })
+  const modalRef = useRef<HTMLDivElement | null>(null)
 
 
   // drag effect — uses useEffect cleanup to guarantee listener removal
@@ -260,8 +261,9 @@ function TemplateManager() {
   const onResizeStart = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    const baseW = modalSize.w || 520
-    const baseH = modalSize.h || 560
+    const rect = modalRef.current?.getBoundingClientRect()
+    const baseW = modalSize.w || (rect ? rect.width : 720)
+    const baseH = modalSize.h || (rect ? rect.height : 560)
     setResizing({
       startX: e.clientX,
       startY: e.clientY,
@@ -575,7 +577,7 @@ function TemplateManager() {
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
         }} onMouseDown={e => { if (e.target === e.currentTarget) closeModal() }}>
-          <div style={{
+          <div ref={modalRef} style={{
             ...modalCard,
             width: modalSize.w ? modalSize.w : '720px',
             height: modalSize.h ? modalSize.h : 'auto',
