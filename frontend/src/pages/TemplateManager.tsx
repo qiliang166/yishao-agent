@@ -784,110 +784,113 @@ function TemplateManager() {
       {slidePreview && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 10001,
-          background: 'rgba(0,0,0,0.88)',
-          display: 'flex', flexDirection: 'column',
+          background: 'rgba(0,0,0,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
           animation: 'fadeIn 0.15s ease',
-        }}>
-          {/* Top bar */}
+        }} onClick={closeSlidePreview}>
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '12px 20px', color: '#ccc', flexShrink: 0,
-          }}>
-            <span style={{ fontSize: '13px', fontWeight: 600 }}>
-              {slidePreview.templateName}
-              <span style={{ fontWeight: 400, opacity: 0.6, marginLeft: 10 }}>
-                {slidePreview.slides.length > 0 ? `${slideIndex + 1} / ${slidePreview.slides.length}` : '加载中...'}
+            background: 'var(--card)',
+            borderRadius: '10px',
+            width: '85vw', maxWidth: '780px',
+            height: '75vh', maxHeight: '540px',
+            display: 'flex', flexDirection: 'column',
+            boxShadow: '0 16px 60px rgba(0,0,0,0.35)',
+            overflow: 'hidden',
+          }} onClick={e => e.stopPropagation()}>
+            {/* Top bar */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 18px', borderBottom: '1px solid var(--border)',
+              flexShrink: 0,
+            }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
+                {slidePreview.templateName}
+                <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 10 }}>
+                  {slidePreview.slides.length > 0 ? `${slideIndex + 1} / ${slidePreview.slides.length}` : '加载中...'}
+                </span>
               </span>
-            </span>
-            <span onClick={closeSlidePreview} style={{
-              cursor: 'pointer', fontSize: '20px', lineHeight: 1,
-              padding: '4px 8px', borderRadius: '4px',
-              background: 'rgba(255,255,255,0.08)',
-            }}>✕</span>
-          </div>
+              <span onClick={closeSlidePreview} style={{
+                cursor: 'pointer', fontSize: '18px', lineHeight: 1, color: 'var(--text-secondary)',
+                padding: '4px 8px', borderRadius: '4px',
+              }}>✕</span>
+            </div>
 
-          {/* Main slide area */}
-          <div style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            position: 'relative', minHeight: 0, padding: '0 60px',
-          }}>
-            {slideLoading ? (
-              <div style={{ color: '#999', fontSize: '14px' }}>正在导出幻灯片...</div>
-            ) : slidePreview.slides.length === 0 ? (
-              <div style={{ color: '#999', fontSize: '14px' }}>无幻灯片</div>
-            ) : (
-              <>
-                {/* Prev arrow */}
-                <button onClick={() => setSlideIndex(i => Math.max(0, i - 1))}
-                  disabled={slideIndex === 0}
-                  style={{
-                    position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: slideIndex === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.12)',
-                    border: 'none', borderRadius: '50%', width: 44, height: 44,
-                    cursor: slideIndex === 0 ? 'default' : 'pointer',
-                    color: slideIndex === 0 ? '#555' : '#fff', fontSize: '22px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'background 0.15s',
-                  }}>
-                  ‹
-                </button>
-                {/* Main slide image */}
-                <div style={{
-                  width: '100%', height: '100%', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
+            {/* Main slide area */}
+            <div style={{
+              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              position: 'relative', minHeight: 0, padding: '12px 56px',
+              background: 'var(--bg)',
+            }}>
+              {slideLoading ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>正在导出幻灯片...</div>
+              ) : slidePreview.slides.length === 0 ? (
+                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>无幻灯片</div>
+              ) : (
+                <>
+                  <button onClick={() => setSlideIndex(i => Math.max(0, i - 1))}
+                    disabled={slideIndex === 0}
+                    style={{
+                      position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                      background: slideIndex === 0 ? 'transparent' : 'var(--bg-hover)',
+                      border: '1px solid var(--border)', borderRadius: '50%', width: 38, height: 38,
+                      cursor: slideIndex === 0 ? 'default' : 'pointer',
+                      color: slideIndex === 0 ? 'var(--text-secondary)' : 'var(--text)', fontSize: '20px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: slideIndex === 0 ? 0.3 : 1,
+                    }}>
+                    ‹
+                  </button>
                   <img
                     src={api.slideUrl(slidePreview.slides[slideIndex])}
                     alt={`Slide ${slideIndex + 1}`}
                     style={{
                       maxWidth: '100%', maxHeight: '100%',
                       objectFit: 'contain',
-                      borderRadius: '6px',
-                      boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+                      borderRadius: '4px',
+                      boxShadow: '0 2px 16px rgba(0,0,0,0.12)',
                     }}
                   />
-                </div>
-                {/* Next arrow */}
-                <button onClick={() => setSlideIndex(i => Math.min(slidePreview.slides.length - 1, i + 1))}
-                  disabled={slideIndex === slidePreview.slides.length - 1}
-                  style={{
-                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: slideIndex === slidePreview.slides.length - 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.12)',
-                    border: 'none', borderRadius: '50%', width: 44, height: 44,
-                    cursor: slideIndex === slidePreview.slides.length - 1 ? 'default' : 'pointer',
-                    color: slideIndex === slidePreview.slides.length - 1 ? '#555' : '#fff', fontSize: '22px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'background 0.15s',
-                  }}>
-                  ›
-                </button>
-              </>
+                  <button onClick={() => setSlideIndex(i => Math.min(slidePreview.slides.length - 1, i + 1))}
+                    disabled={slideIndex === slidePreview.slides.length - 1}
+                    style={{
+                      position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                      background: slideIndex === slidePreview.slides.length - 1 ? 'transparent' : 'var(--bg-hover)',
+                      border: '1px solid var(--border)', borderRadius: '50%', width: 38, height: 38,
+                      cursor: slideIndex === slidePreview.slides.length - 1 ? 'default' : 'pointer',
+                      color: slideIndex === slidePreview.slides.length - 1 ? 'var(--text-secondary)' : 'var(--text)', fontSize: '20px',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      opacity: slideIndex === slidePreview.slides.length - 1 ? 0.3 : 1,
+                    }}>
+                    ›
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Thumbnail strip */}
+            {!slideLoading && slidePreview.slides.length > 0 && (
+              <div style={{
+                flexShrink: 0, padding: '10px 16px',
+                display: 'flex', gap: '8px', justifyContent: 'center',
+                overflowX: 'auto', borderTop: '1px solid var(--border)',
+              }}>
+                {slidePreview.slides.map((s, i) => (
+                  <div key={s} onClick={() => setSlideIndex(i)}
+                    style={{
+                      width: '72px', height: '41px', flexShrink: 0,
+                      cursor: 'pointer', overflow: 'hidden',
+                      borderRadius: '3px',
+                      border: i === slideIndex ? '2px solid var(--primary)' : '2px solid transparent',
+                      opacity: i === slideIndex ? 1 : 0.5,
+                      transition: 'opacity 0.15s, border 0.15s',
+                    }}>
+                    <img src={api.slideUrl(s)} alt={`缩略图 ${i + 1}`}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-
-          {/* Thumbnail strip */}
-          {!slideLoading && slidePreview.slides.length > 0 && (
-            <div style={{
-              flexShrink: 0, padding: '10px 20px 16px',
-              display: 'flex', gap: '8px', justifyContent: 'center',
-              overflowX: 'auto',
-            }}>
-              {slidePreview.slides.map((s, i) => (
-                <div key={s} onClick={() => setSlideIndex(i)}
-                  style={{
-                    width: '80px', height: '45px', flexShrink: 0,
-                    cursor: 'pointer', overflow: 'hidden',
-                    borderRadius: '3px',
-                    border: i === slideIndex ? '2px solid #fff' : '2px solid rgba(255,255,255,0.15)',
-                    opacity: i === slideIndex ? 1 : 0.45,
-                    transition: 'opacity 0.15s, border 0.15s',
-                  }}>
-                  <img src={api.slideUrl(s)} alt={`缩略图 ${i + 1}`}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       )}
     </div>
