@@ -516,8 +516,36 @@ function TemplateManager() {
                             )}
                             {fileName && (
                               <span style={{ fontSize: '10px', color: 'var(--text-secondary)', flexShrink: 0 }}
-                                title={fileName}>
-                                📄
+                                title={fileName}>📄</span>
+                            )}
+                            {/* Thumbnail controls on card */}
+                            {thumbUrl && (
+                              <img src={thumbUrl} alt="thumb" style={{
+                                width: '22px', height: '16px', objectFit: 'cover',
+                                borderRadius: '2px', border: '1px solid var(--border)', flexShrink: 0,
+                              }} />
+                            )}
+                            <label style={{
+                              fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
+                              flexShrink: 0, lineHeight: 1,
+                            }} title="上传缩略图">
+                              {thumbUrl ? '更换' : '缩略图'}
+                              <input type="file" accept="image/*" style={{ display: 'none' }}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => {
+                                  const f = e.target.files?.[0]
+                                  if (f) handleThumbnailUpload(t, f)
+                                  e.target.value = ''
+                                }}
+                              />
+                            </label>
+                            {thumbUrl && (
+                              <span style={{
+                                fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
+                                flexShrink: 0, lineHeight: 1,
+                              }} title="恢复默认缩略图"
+                                onClick={e => { e.stopPropagation(); handleResetThumbnail(t) }}>
+                                默认
                               </span>
                             )}
                             <div style={{ flex: 1 }} />
@@ -573,32 +601,6 @@ function TemplateManager() {
                                 disabled={analyzingId === t.id}
                               >
                                 {analyzingId === t.id ? '解析中...' : '智能解析'}
-                              </button>
-                            )}
-                            <div style={{ flex: 1 }} />
-                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                              缩略图:
-                            </span>
-                            {thumbUrl && (
-                              <img src={thumbUrl} alt="thumb" style={{
-                                width: '36px', height: '27px', objectFit: 'cover',
-                                borderRadius: '3px', border: '1px solid var(--border)',
-                              }} />
-                            )}
-                            <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                              {thumbUrl ? '更换' : '上传'}
-                              <input type="file" accept="image/*" style={{ display: 'none' }}
-                                onChange={e => {
-                                  const f = e.target.files?.[0]
-                                  if (f) handleThumbnailUpload(t, f)
-                                  e.target.value = ''
-                                }}
-                              />
-                            </label>
-                            {thumbUrl && (
-                              <button className="btn btn-ghost btn-sm"
-                                onClick={() => handleResetThumbnail(t)}>
-                                使用默认
                               </button>
                             )}
                           </div>
