@@ -818,7 +818,7 @@ export default function ProjectPage() {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
                       }}>📥 保存到项目</button>
-                    <button className="btn btn-primary btn-sm" style={{ background: 'var(--purple)', borderColor: 'var(--purple)', color: '#fff' }}
+                    <button className="btn btn-outline btn-sm"
                       disabled={batchGenerating || (!getStage2Source(s2SopDataSource) && !getStage2Source(s2DaoDataSource) && !getStage2Source(s2YanxiDataSource))}
                       onClick={doBatchGenerate}>
                       {batchGenerating ? '⏳ 生成中...' : '⚡ 生成所有文案'}
