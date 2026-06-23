@@ -817,15 +817,15 @@ export default function ProjectPage() {
                     )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || !s2SopModel || step2Generating !== ''}
+                    disabled={!getStage2Source() || !s2SopModel || step2Generating === '2a'}
                     onClick={async () => {
-                      setStep2Generating(sub)
+                      setStep2Generating('2a')
                       const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
                       const [pid, mdl] = s2SopModel.split(':')
                       await doGenerate('step2_sop', prompt, getStage2Source(), pid, mdl)
                       setStep2Generating('')
                     }}>
-                    {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
+                    {step2Generating === '2a' ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
                   </button>
                 </>}
 
@@ -851,15 +851,15 @@ export default function ProjectPage() {
                     )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || !s2DaoModel || step2Generating !== ''}
+                    disabled={!getStage2Source() || !s2DaoModel || step2Generating === '2b'}
                     onClick={async () => {
-                      setStep2Generating(sub)
+                      setStep2Generating('2b')
                       const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
                       const [pid, mdl] = s2DaoModel.split(':')
                       await doGenerate('step2_daoshuyi', prompt, getStage2Source(), pid, mdl)
                       setStep2Generating('')
                     }}>
-                    {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
+                    {step2Generating === '2b' ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
                   </button>
                 </>}
 
@@ -885,15 +885,15 @@ export default function ProjectPage() {
                     )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || !s2YanxiModel || step2Generating !== ''}
+                    disabled={!getStage2Source() || !s2YanxiModel || step2Generating === '2c'}
                     onClick={async () => {
-                      setStep2Generating(sub)
+                      setStep2Generating('2c')
                       const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
                       const [pid, mdl] = s2YanxiModel.split(':')
                       await doGenerate('step2_yanxi', prompt, getStage2Source(), pid, mdl)
                       setStep2Generating('')
                     }}>
-                    {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
+                    {step2Generating === '2c' ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
                   </button>
                 </>}
               </div>
