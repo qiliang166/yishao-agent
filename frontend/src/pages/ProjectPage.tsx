@@ -138,7 +138,7 @@ export default function ProjectPage() {
   const [sourceSubtitle, setSourceSubtitle] = useState('')
   const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
   const [step1Model, setStep1Model] = useState('')
-  const [step1Generating, setStep1Generating] = useState(false)
+  const [step1Generating, setStep1Generating] = useState('')
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('') // which sub is generating
@@ -339,7 +339,7 @@ export default function ProjectPage() {
   const doGenerateStep1 = async () => {
     const source = mode1 === 'text' ? textInput : mode1 === 'file' ? fileText : videoText
     if (!source.trim() || !id || !step1Model) return
-    setStep1Generating(true)
+    setStep1Generating(sub)
     try {
       const [providerId, model] = step1Model.split(':')
       const prompt = stage1Prompts[mode1Key] || STAGE1_PROMPTS_FALLBACK[mode1Key]
@@ -354,7 +354,7 @@ export default function ProjectPage() {
       setSteps(prev => ({ ...prev, [key]: content }))
       saveStep(key, content)
     } catch (e: any) { modal.toast('生成失败: ' + e.message, 'error') }
-    finally { setStep1Generating(false) }
+    finally { setStep1Generating('') }
   }
 
   // ── PPT / SOP Generation ──
@@ -568,9 +568,9 @@ export default function ProjectPage() {
                     📺 播放校验
                   </button>
                   <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 8 }}
-                    disabled={step1Generating || !step1Model || !videoText.trim()}
+                    disabled={step1Generating !== '' || !step1Model || !videoText.trim()}
                     onClick={doGenerateStep1}>
-                    {step1Generating ? '⏳ 生成中...' : '⚙ 整理文档'}
+                    {step1Generating === '1a' ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
                 </div>
                 {videoText && (
@@ -667,9 +667,9 @@ export default function ProjectPage() {
                     <button className="btn btn-primary btn-sm" disabled={!textInput.trim()}
                       onClick={() => { if (id && textInput.trim()) { saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : textInput !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : textInput !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-primary btn-sm"
-                      disabled={step1Generating || !step1Model || !textInput.trim()}
+                      disabled={step1Generating !== '' || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
-                      {step1Generating ? '⏳ 生成中...' : '⚙ 整理文档'}
+                      {step1Generating === '1b' ? '⏳ 生成中...' : '⚙ 整理文档'}
                     </button>
                   </div>
                 </div>
@@ -693,9 +693,9 @@ export default function ProjectPage() {
                       }
                     }} />
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={step1Generating || !step1Model || !fileText.trim()}
+                    disabled={step1Generating !== '' || !step1Model || !fileText.trim()}
                     onClick={doGenerateStep1}>
-                    {step1Generating ? '⏳ 生成中...' : '⚙ 整理文档'}
+                    {step1Generating === '1c' ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
                 </div>
                 <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
