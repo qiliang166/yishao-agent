@@ -980,6 +980,30 @@ def set_template_default(template_id: str):
         db.close()
 
 
+def _generate_pptx_thumbnail(pptx_path: str, template_id: str) -> str | None:
+    """Extract the first image from a PPTX as a thumbnail. Searches all slides."""
+    try:
+        from pptx import Presentation
+        from pptx.shapes.picture import Picture
+        prs = Presentation(pptx_path)
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if isinstance(shape, Picture):
+                    image = shape.image
+                    ext = image.content_type.split("/")[-1]
+                    if ext == "jpeg":
+                        ext = "jpg"
+                    thumb_name = f"{template_id}_thumb.{ext}"
+                    thumb_path = os.path.join(THUMBNAIL_DIR, thumb_name)
+                    with open(thumb_path, "wb") as f:
+                        f.write(image.blob)
+                    return thumb_path
+        return None
+    except Exception as e:
+        logging.getLogger("uvicorn").info(f"Thumbnail generation skipped: {e}")
+        return None
+
+
 @app.post("/api/templates/{template_id}/upload")
 async def upload_template_file(template_id: str, file: UploadFile = File(...)):
     db = get_db()
@@ -997,8 +1021,13 @@ async def upload_template_file(template_id: str, file: UploadFile = File(...)):
         with open(file_path, "wb") as f:
             f.write(content)
         db.execute("UPDATE templates SET file_path = ? WHERE id = ?", (file_path, template_id))
+        # Auto-generate thumbnail from first slide
+        thumb_path = _generate_pptx_thumbnail(file_path, template_id)
+        if thumb_path:
+            db.execute("UPDATE templates SET thumbnail_path = ? WHERE id = ?", (thumb_path, template_id))
         db.commit()
-        return {"ok": True, "file_path": file_path, "filename": file.filename}
+        return {"ok": True, "file_path": file_path, "filename": file.filename,
+                "thumbnail_path": thumb_path}
     finally:
         db.close()
 
@@ -1023,6 +1052,26 @@ async def upload_template_thumbnail(template_id: str, file: UploadFile = File(..
         db.execute("UPDATE templates SET thumbnail_path = ? WHERE id = ?", (file_path, template_id))
         db.commit()
         return {"ok": True, "thumbnail_path": file_path, "filename": file.filename}
+    finally:
+        db.close()
+
+
+@app.post("/api/templates/{template_id}/reset-thumbnail")
+def reset_template_thumbnail(template_id: str):
+    db = get_db()
+    try:
+        row = db.execute("SELECT id, file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        if not row["file_path"] or not os.path.exists(row["file_path"]):
+            raise HTTPException(400, "请先上传 PPTX 模板文件")
+        thumb_path = _generate_pptx_thumbnail(row["file_path"], template_id)
+        if thumb_path:
+            db.execute("UPDATE templates SET thumbnail_path = ? WHERE id = ?", (thumb_path, template_id))
+        else:
+            db.execute("UPDATE templates SET thumbnail_path = NULL WHERE id = ?", (template_id,))
+        db.commit()
+        return {"ok": True, "thumbnail_path": thumb_path}
     finally:
         db.close()
 

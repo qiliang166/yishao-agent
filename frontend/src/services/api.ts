@@ -322,6 +322,8 @@ export const api = {
     request(`/api/templates/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteTemplate: (id: string) => request(`/api/templates/${id}`, { method: 'DELETE' }),
   setDefaultTemplate: (id: string) => request(`/api/templates/${id}/set-default`, { method: 'POST' }),
+  resetTemplateThumbnail: (templateId: string) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/reset-thumbnail`, { method: 'POST' }),
   uploadTemplateThumbnail: async (templateId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)

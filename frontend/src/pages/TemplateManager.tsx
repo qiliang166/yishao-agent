@@ -38,11 +38,11 @@ function getThumbnailUrl(t: Template): string {
 
 const inputField: React.CSSProperties = {
   width: '100%',
-  height: '36px',
+  height: '34px',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius-sm)',
   padding: '0 10px',
-  fontSize: '14px',
+  fontSize: '12px',
   fontFamily: 'inherit',
   color: 'var(--text)',
   background: 'var(--card)',
@@ -56,7 +56,7 @@ const textareaStyle: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius-sm)',
   padding: '10px',
-  fontSize: '13px',
+  fontSize: '12px',
   fontFamily: 'var(--mono)',
   color: 'var(--text)',
   background: 'var(--card)',
@@ -74,7 +74,7 @@ const modalCard: React.CSSProperties = {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '13px',
+  fontSize: '11px',
   fontWeight: 600,
   color: 'var(--text)',
   display: 'block',
@@ -320,6 +320,16 @@ function TemplateManager() {
     }
   }
 
+  const handleResetThumbnail = async (t: Template) => {
+    try {
+      await api.resetTemplateThumbnail(t.id)
+      modal.toast('已恢复默认缩略图', 'success')
+      loadTemplates()
+    } catch (err: any) {
+      modal.toast('恢复失败: ' + err.message, 'error')
+    }
+  }
+
   const handleAnalyze = async (t: Template) => {
     if (!t.file_path) {
       modal.toast('请先上传 PPTX 模板文件', 'error')
@@ -414,12 +424,12 @@ function TemplateManager() {
 
             {/* Cards or empty */}
             {activeTemplates.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)', fontSize: '14px' }}>
+              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)', fontSize: '13px' }}>
                 <p style={{ marginBottom: '16px' }}>暂无{activeTabDef.label}模板</p>
                 <button className="btn btn-primary" onClick={openCreate}>+ 新建模板</button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '900px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
                 {activeTemplates.map(t => {
                   const thumbUrl = getThumbnailUrl(t)
                   const isExpanded = expandedId === t.id
@@ -441,7 +451,7 @@ function TemplateManager() {
                       >
                         {/* Thumbnail area */}
                         <div style={{
-                          height: '180px',
+                          height: '120px',
                           background: 'var(--bg)',
                           display: 'flex',
                           alignItems: 'center',
@@ -466,53 +476,61 @@ function TemplateManager() {
                             color: 'var(--text-secondary)',
                             opacity: thumbUrl ? 0 : 1,
                           }}>
-                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
                               <rect x="2" y="2" width="20" height="20" rx="2" />
                               <circle cx="8.5" cy="8.5" r="1.5" />
                               <path d="M21 15l-5-5L5 21" />
                             </svg>
-                            <span style={{ fontSize: '12px' }}>
-                              {t.type === 'ppt' ? 'PPT 模板预览' : 'SOP 模板预览'}
+                            <span style={{ fontSize: '11px' }}>
+                              {t.type === 'ppt' ? 'PPT 预览' : 'SOP 预览'}
                             </span>
                           </div>
                         </div>
 
                         {/* Card info bar */}
-                        <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <h4 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text)', margin: 0, flex: 1 }}>
+                        <div style={{ padding: '8px 10px' }}>
+                          <h4 style={{
+                            fontSize: '12px', fontWeight: 600, color: 'var(--text)', margin: 0,
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
                             {t.name}
                           </h4>
-                          <span style={{
-                            fontSize: '10px', fontWeight: 600,
-                            color: t.type === 'ppt' ? 'var(--primary)' : 'var(--color-accent)',
-                            background: t.type === 'ppt' ? 'rgba(139, 26, 26, 0.08)' : 'rgba(212, 165, 116, 0.15)',
-                            padding: '2px 8px', borderRadius: '4px',
-                          }}>
-                            {t.type === 'ppt' ? 'PPT' : 'SOP'}
-                          </span>
-                          {t.is_default === 1 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
                             <span style={{
-                              fontSize: '10px', fontWeight: 600,
-                              color: 'var(--success)',
-                              background: 'rgba(74, 139, 63, 0.1)',
-                              padding: '2px 8px', borderRadius: '4px',
+                              fontSize: '10px', fontWeight: 600, flexShrink: 0,
+                              color: t.type === 'ppt' ? 'var(--primary)' : 'var(--color-accent)',
+                              background: t.type === 'ppt' ? 'rgba(139, 26, 26, 0.08)' : 'rgba(212, 165, 116, 0.15)',
+                              padding: '1px 6px', borderRadius: '3px',
                             }}>
-                              默认
+                              {t.type === 'ppt' ? 'PPT' : 'SOP'}
                             </span>
-                          )}
-                          {fileName && (
-                            <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }} title={fileName}>
-                              📄 {fileName.length > 20 ? fileName.slice(0, 20) + '...' : fileName}
-                            </span>
-                          )}
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                            style={{
-                              color: 'var(--text-secondary)',
-                              transition: 'transform .15s',
-                              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                            }}>
-                            <path d="M6 9l6 6 6-6" />
-                          </svg>
+                            {t.is_default === 1 && (
+                              <span style={{
+                                fontSize: '10px', fontWeight: 600, flexShrink: 0,
+                                color: 'var(--success)',
+                                background: 'rgba(74, 139, 63, 0.1)',
+                                padding: '1px 6px', borderRadius: '3px',
+                              }}>
+                                默认
+                              </span>
+                            )}
+                            {fileName && (
+                              <span style={{ fontSize: '10px', color: 'var(--text-secondary)', flexShrink: 0 }}
+                                title={fileName}>
+                                📄
+                              </span>
+                            )}
+                            <div style={{ flex: 1 }} />
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                              style={{
+                                color: 'var(--text-secondary)',
+                                flexShrink: 0,
+                                transition: 'transform .15s',
+                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                              }}>
+                              <path d="M6 9l6 6 6-6" />
+                            </svg>
+                          </div>
                         </div>
                       </div>
 
@@ -523,7 +541,7 @@ function TemplateManager() {
                           background: 'var(--card)',
                           border: '1px solid var(--border)',
                           borderRadius: 'var(--radius)',
-                          padding: '20px',
+                          padding: '16px',
                         }}>
                           {/* File & thumbnail upload row */}
                           <div style={{
@@ -533,7 +551,9 @@ function TemplateManager() {
                             borderRadius: 'var(--radius-sm)',
                             marginBottom: '16px',
                           }}>
-                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)',
+                              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '200px' }}
+                              title={fileName || '未上传'}>
                               {fileName ? '📌 ' + fileName : '📄 未上传模板文件'}
                             </span>
                             <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
@@ -556,12 +576,12 @@ function TemplateManager() {
                               </button>
                             )}
                             <div style={{ flex: 1 }} />
-                            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                            <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
                               缩略图:
                             </span>
                             {thumbUrl && (
                               <img src={thumbUrl} alt="thumb" style={{
-                                width: '40px', height: '30px', objectFit: 'cover',
+                                width: '36px', height: '27px', objectFit: 'cover',
                                 borderRadius: '3px', border: '1px solid var(--border)',
                               }} />
                             )}
@@ -575,6 +595,12 @@ function TemplateManager() {
                                 }}
                               />
                             </label>
+                            {thumbUrl && (
+                              <button className="btn btn-ghost btn-sm"
+                                onClick={() => handleResetThumbnail(t)}>
+                                使用默认
+                              </button>
+                            )}
                           </div>
 
                           {/* Prompt + Skill + Rules */}
