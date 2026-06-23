@@ -153,6 +153,44 @@ function TemplateManager() {
   const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
   const [analyzeProvider, setAnalyzeProvider] = useState('')
   const [analyzeModel, setAnalyzeModel] = useState('')
+  const [slidePreview, setSlidePreview] = useState<{ slides: string[]; templateName: string } | null>(null)
+  const [slideLoading, setSlideLoading] = useState(false)
+  const [slideIndex, setSlideIndex] = useState(0)
+
+  // ---------- slide preview ----------
+
+  const openSlidePreview = async (t: Template) => {
+    if (!t.file_path) return
+    setSlidePreview({ slides: [], templateName: t.name })
+    setSlideIndex(0)
+    setSlideLoading(true)
+    try {
+      const slides = await api.previewSlides(t.id)
+      setSlidePreview({ slides, templateName: t.name })
+    } catch (err: any) {
+      console.error('Slide preview failed:', err)
+      setSlidePreview(null)
+    } finally {
+      setSlideLoading(false)
+    }
+  }
+
+  const closeSlidePreview = () => {
+    setSlidePreview(null)
+    setSlideIndex(0)
+  }
+
+  // Keyboard nav for slide preview
+  useEffect(() => {
+    if (!slidePreview) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') setSlideIndex(i => Math.max(0, i - 1))
+      else if (e.key === 'ArrowRight') setSlideIndex(i => Math.min(slidePreview.slides.length - 1, i + 1))
+      else if (e.key === 'Escape') closeSlidePreview()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [slidePreview])
 
   // ---------- data loading ----------
 
@@ -514,12 +552,12 @@ function TemplateManager() {
                                 title={fileName}>📄</span>
                             )}
                             {fileName && (
-                              <a href={api.previewTemplate(t.id)} target="_blank" rel="noreferrer"
+                              <span onClick={(e) => { e.preventDefault(); openSlidePreview(t); }}
                                 style={{ fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
-                                  flexShrink: 0, lineHeight: 1, textDecoration: 'none',
+                                  flexShrink: 0, lineHeight: 1,
                                 }}>
                                 预览
-                              </a>
+                              </span>
                             )}
                             {/* Thumbnail controls on card */}
                             {thumbUrl && (
@@ -739,6 +777,117 @@ function TemplateManager() {
               onMouseDown={onResizeStart}
             />
           </div>
+        </div>
+      )}
+
+      {/* Slide preview modal */}
+      {slidePreview && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10001,
+          background: 'rgba(0,0,0,0.88)',
+          display: 'flex', flexDirection: 'column',
+          animation: 'fadeIn 0.15s ease',
+        }}>
+          {/* Top bar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '12px 20px', color: '#ccc', flexShrink: 0,
+          }}>
+            <span style={{ fontSize: '13px', fontWeight: 600 }}>
+              {slidePreview.templateName}
+              <span style={{ fontWeight: 400, opacity: 0.6, marginLeft: 10 }}>
+                {slidePreview.slides.length > 0 ? `${slideIndex + 1} / ${slidePreview.slides.length}` : '加载中...'}
+              </span>
+            </span>
+            <span onClick={closeSlidePreview} style={{
+              cursor: 'pointer', fontSize: '20px', lineHeight: 1,
+              padding: '4px 8px', borderRadius: '4px',
+              background: 'rgba(255,255,255,0.08)',
+            }}>✕</span>
+          </div>
+
+          {/* Main slide area */}
+          <div style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'relative', minHeight: 0, padding: '0 60px',
+          }}>
+            {slideLoading ? (
+              <div style={{ color: '#999', fontSize: '14px' }}>正在导出幻灯片...</div>
+            ) : slidePreview.slides.length === 0 ? (
+              <div style={{ color: '#999', fontSize: '14px' }}>无幻灯片</div>
+            ) : (
+              <>
+                {/* Prev arrow */}
+                <button onClick={() => setSlideIndex(i => Math.max(0, i - 1))}
+                  disabled={slideIndex === 0}
+                  style={{
+                    position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: slideIndex === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.12)',
+                    border: 'none', borderRadius: '50%', width: 44, height: 44,
+                    cursor: slideIndex === 0 ? 'default' : 'pointer',
+                    color: slideIndex === 0 ? '#555' : '#fff', fontSize: '22px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.15s',
+                  }}>
+                  ‹
+                </button>
+                {/* Main slide image */}
+                <div style={{
+                  width: '100%', height: '100%', display: 'flex',
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <img
+                    src={api.slideUrl(slidePreview.slides[slideIndex])}
+                    alt={`Slide ${slideIndex + 1}`}
+                    style={{
+                      maxWidth: '100%', maxHeight: '100%',
+                      objectFit: 'contain',
+                      borderRadius: '6px',
+                      boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+                    }}
+                  />
+                </div>
+                {/* Next arrow */}
+                <button onClick={() => setSlideIndex(i => Math.min(slidePreview.slides.length - 1, i + 1))}
+                  disabled={slideIndex === slidePreview.slides.length - 1}
+                  style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: slideIndex === slidePreview.slides.length - 1 ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.12)',
+                    border: 'none', borderRadius: '50%', width: 44, height: 44,
+                    cursor: slideIndex === slidePreview.slides.length - 1 ? 'default' : 'pointer',
+                    color: slideIndex === slidePreview.slides.length - 1 ? '#555' : '#fff', fontSize: '22px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'background 0.15s',
+                  }}>
+                  ›
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Thumbnail strip */}
+          {!slideLoading && slidePreview.slides.length > 0 && (
+            <div style={{
+              flexShrink: 0, padding: '10px 20px 16px',
+              display: 'flex', gap: '8px', justifyContent: 'center',
+              overflowX: 'auto',
+            }}>
+              {slidePreview.slides.map((s, i) => (
+                <div key={s} onClick={() => setSlideIndex(i)}
+                  style={{
+                    width: '80px', height: '45px', flexShrink: 0,
+                    cursor: 'pointer', overflow: 'hidden',
+                    borderRadius: '3px',
+                    border: i === slideIndex ? '2px solid #fff' : '2px solid rgba(255,255,255,0.15)',
+                    opacity: i === slideIndex ? 1 : 0.45,
+                    transition: 'opacity 0.15s, border 0.15s',
+                  }}>
+                  <img src={api.slideUrl(s)} alt={`缩略图 ${i + 1}`}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

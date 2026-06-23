@@ -9,6 +9,7 @@ from database import init_db, get_db
 from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest
 from typing import Optional
 import json
+import logging
 from services.llm_service import test_connection, generate, generate_stream, refine, get_provider
 from services.prompt_service import (
     list_prompts, get_prompt, create_prompt, update_prompt, delete_prompt,
@@ -1091,6 +1092,70 @@ def serve_template_file(template_id: str):
                           filename=row["name"] + ".pptx")
     finally:
         db.close()
+
+
+SLIDES_DIR = os.path.join(BASE_DIR, "data", "slides")
+
+
+def _export_pptx_slides(pptx_path: str, template_id: str) -> list[str]:
+    """Export all slides of a PPTX as PNG images. Returns list of filenames."""
+    import subprocess, uuid
+    os.makedirs(SLIDES_DIR, exist_ok=True)
+    out_dir = os.path.join(SLIDES_DIR, f"{template_id}_slides")
+    os.makedirs(out_dir, exist_ok=True)
+    # Check if already exported
+    existing = [f for f in os.listdir(out_dir) if f.endswith(".png")]
+    if existing:
+        existing.sort()
+        return [f"{template_id}_slides/{f}" for f in existing]
+    # Use PowerShell + PowerPoint COM to export slides
+    ps = f'''
+$ppt = New-Object -ComObject PowerPoint.Application
+$ppt.Visible = $false
+$pres = $ppt.Presentations.Open("{pptx_path}")
+$count = $pres.Slides.Count
+for ($i = 1; $i -le $count; $i++) {{
+    $pres.Slides[$i].Export("{out_dir}\\slide_$i.png", "PNG", 960, 540)
+}}
+$pres.Close()
+$ppt.Quit()
+[System.Runtime.Interopservices.Marshal]::ReleaseComObject($ppt) | Out-Null
+Write-Output $count
+'''
+    try:
+        result = subprocess.run(["powershell", "-Command", ps], capture_output=True, text=True, timeout=60)
+        count = result.stdout.strip()
+        logging.getLogger("uvicorn").info(f"Exported {count} slides for {template_id}")
+    except Exception as e:
+        logging.getLogger("uvicorn").info(f"Slide export failed: {e}")
+    slides = sorted([f for f in os.listdir(out_dir) if f.endswith(".png")])
+    return [f"{template_id}_slides/{f}" for f in slides]
+
+
+@app.post("/api/templates/{template_id}/preview-slides")
+def preview_template_slides(template_id: str):
+    """Export all slides as images and return their URLs."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row or not row["file_path"]:
+            raise HTTPException(404, "Template file not found")
+        pptx_path = row["file_path"]
+        if not os.path.exists(pptx_path):
+            raise HTTPException(404, "PPTX file not found on disk")
+    finally:
+        db.close()
+    slides = _export_pptx_slides(pptx_path, template_id)
+    return {"slides": slides}
+
+
+@app.get("/api/slides/{path:path}")
+def serve_slide_image(path: str):
+    """Serve exported slide images."""
+    filepath = os.path.join(SLIDES_DIR, path)
+    if not os.path.exists(filepath):
+        raise HTTPException(404, "Slide not found")
+    return FileResponse(filepath, media_type="image/png")
 
 
 @app.get("/api/thumbnails/{filename}")
