@@ -304,6 +304,7 @@ export default function ProjectPage() {
 
   const step1Key = () => sub === '1a' ? 'step1_video' : sub === '1b' ? 'step1_text' : 'step1_file'
   const step2Key = () => `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
+  const step3Key = () => sub === '3a' ? 'step3_sop_doc' : sub === '3b' ? 'step3_dao_ppt' : 'step3_yan_ppt'
 
   // Get source text for Stage 2 based on selected data source
   const getStage2Source = (source: string) => {
@@ -1076,17 +1077,32 @@ export default function ProjectPage() {
             </div>
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="tmpl-preview-header">📃 模板预览 — {SOP_TEMPLATES.find(t => t.id === sopSelected)?.name}</div>
-                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
-                    <div className="prev-sop">
-                      <div className="prev-title">【标准SOP】菜品名称</div>
-                      <table><thead><tr><th>步骤</th><th>操作</th><th>标准</th><th>备注</th></tr></thead>
-                        <tbody><tr><td>1</td><td>备料</td><td>食材洗净切配</td><td>—</td></tr>
-                          <tr><td>2</td><td>烹饪</td><td>火候/时间</td><td>—</td></tr></tbody></table>
-                      <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>标准表格格式 · 清晰步骤划分</div>
-                    </div>
-                  </div>
+                <div className="card-title">生成 / 编辑</div>
+                <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+                  value={steps[step3Key()] || ''}
+                  onChange={e => setSteps(prev => ({ ...prev, [step3Key()]: e.target.value }))}
+                  placeholder="点击生成按钮，AI生成后在此编辑..." />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>编辑后保存，然后导出为 .docx 文档</span>
+                  <span style={{ display: 'flex', gap: 5 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => {
+                      setSteps(prev => ({ ...prev, [step3Key()]: '' }))
+                      saveStep(step3Key(), '')
+                    }}>✕ 清空</button>
+                    <button className="btn btn-ghost btn-sm"
+                      disabled={!steps[step3Key()]}
+                      onClick={async () => {
+                        if (!id) return
+                        try {
+                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_SOP文档.txt`, steps[step3Key()] || '')
+                          modal.toast(`已保存到 ${resp.path}`, 'success')
+                        } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
+                      }}>📥 保存到项目</button>
+                    <button className={`btn btn-primary btn-sm ${(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? 'btn-dirty' : ''}`}
+                      onClick={() => saveStep(step3Key(), steps[step3Key()] || '')}>
+                      {(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? '💾 保存' : '✓ 已保存'}
+                    </button>
+                  </span>
                 </div>
               </div>
             </div>
@@ -1122,20 +1138,32 @@ export default function ProjectPage() {
             </div>
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="tmpl-preview-header">📌 模板预览 — {DAO_PPT_TEMPLATES.find(t => t.id === daoPptSelected)?.name}</div>
-                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
-                    <div className="prev-ppt">
-                      <div className="prev-slide" style={{ borderTop: '3px solid var(--purple)' }}>
-                        <span style={{ fontWeight: 700 }}>标题页</span>
-                        <div className="slide-bar" style={{ background: 'var(--purple)' }} />
-                        <span style={{ fontSize: 7 }}>道与术分析</span>
-                      </div>
-                      <div className="prev-slide"><span>内容页</span><div className="slide-bar" /><span style={{ fontSize: 7 }}>分析要点</span></div>
-                      <div className="prev-slide"><span>内容页</span><div className="slide-bar" /><span style={{ fontSize: 7 }}>总结</span></div>
-                    </div>
-                    <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>深色商务风 · 3页布局 · 结构清晰</div>
-                  </div>
+                <div className="card-title">生成 / 编辑</div>
+                <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+                  value={steps[step3Key()] || ''}
+                  onChange={e => setSteps(prev => ({ ...prev, [step3Key()]: e.target.value }))}
+                  placeholder="点击生成按钮，AI生成后在此编辑..." />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>编辑后保存，然后合成为道术PPT</span>
+                  <span style={{ display: 'flex', gap: 5 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => {
+                      setSteps(prev => ({ ...prev, [step3Key()]: '' }))
+                      saveStep(step3Key(), '')
+                    }}>✕ 清空</button>
+                    <button className="btn btn-ghost btn-sm"
+                      disabled={!steps[step3Key()]}
+                      onClick={async () => {
+                        if (!id) return
+                        try {
+                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_道术PPT大纲.txt`, steps[step3Key()] || '')
+                          modal.toast(`已保存到 ${resp.path}`, 'success')
+                        } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
+                      }}>📥 保存到项目</button>
+                    <button className={`btn btn-primary btn-sm ${(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? 'btn-dirty' : ''}`}
+                      onClick={() => saveStep(step3Key(), steps[step3Key()] || '')}>
+                      {(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? '💾 保存' : '✓ 已保存'}
+                    </button>
+                  </span>
                 </div>
               </div>
             </div>
@@ -1171,21 +1199,32 @@ export default function ProjectPage() {
             </div>
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="tmpl-preview-header">📚 模板预览 — {YANXI_PPT_TEMPLATES.find(t => t.id === yanxiPptSelected)?.name}</div>
-                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
-                    <div className="prev-ppt">
-                      <div className="prev-slide" style={{ borderTop: '3px solid var(--success)' }}>
-                        <span style={{ fontWeight: 700 }}>研学封面</span>
-                        <div className="slide-bar" style={{ background: 'var(--success)' }} />
-                      </div>
-                      <div className="prev-slide"><span>背景</span><div className="slide-bar" /></div>
-                      <div className="prev-slide"><span>步骤</span><div className="slide-bar" /></div>
-                      <div className="prev-slide"><span>要点</span><div className="slide-bar" /></div>
-                      <div className="prev-slide"><span>总结</span><div className="slide-bar" /></div>
-                    </div>
-                    <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>清新学术风 · 5页布局 · 体系完整</div>
-                  </div>
+                <div className="card-title">生成 / 编辑</div>
+                <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+                  value={steps[step3Key()] || ''}
+                  onChange={e => setSteps(prev => ({ ...prev, [step3Key()]: e.target.value }))}
+                  placeholder="点击生成按钮，AI生成后在此编辑..." />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>编辑后保存，然后合成为研学PPT</span>
+                  <span style={{ display: 'flex', gap: 5 }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => {
+                      setSteps(prev => ({ ...prev, [step3Key()]: '' }))
+                      saveStep(step3Key(), '')
+                    }}>✕ 清空</button>
+                    <button className="btn btn-ghost btn-sm"
+                      disabled={!steps[step3Key()]}
+                      onClick={async () => {
+                        if (!id) return
+                        try {
+                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_研学PPT大纲.txt`, steps[step3Key()] || '')
+                          modal.toast(`已保存到 ${resp.path}`, 'success')
+                        } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
+                      }}>📥 保存到项目</button>
+                    <button className={`btn btn-primary btn-sm ${(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? 'btn-dirty' : ''}`}
+                      onClick={() => saveStep(step3Key(), steps[step3Key()] || '')}>
+                      {(steps[step3Key()] || '') !== (savedSteps[step3Key()] || '') ? '💾 保存' : '✓ 已保存'}
+                    </button>
+                  </span>
                 </div>
               </div>
             </div>
