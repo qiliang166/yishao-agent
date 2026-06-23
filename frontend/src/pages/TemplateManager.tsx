@@ -507,6 +507,7 @@ function TemplateManager() {
                           justifyContent: 'center',
                           position: 'relative',
                           overflow: 'hidden',
+                          padding: '10px',
                         }}>
                           {displayUrl ? (
                             <img
