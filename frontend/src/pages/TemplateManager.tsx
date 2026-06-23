@@ -156,6 +156,7 @@ function TemplateManager() {
   const [slidePreview, setSlidePreview] = useState<{ slides: string[]; templateName: string } | null>(null)
   const [slideLoading, setSlideLoading] = useState(false)
   const [slideIndex, setSlideIndex] = useState(0)
+  const [autoThumbnails, setAutoThumbnails] = useState<Record<string, string>>({})
 
   // ---------- slide preview ----------
 
@@ -207,6 +208,18 @@ function TemplateManager() {
     try {
       const data = await api.listTemplates()
       setTemplates(data)
+      // Auto-fetch slide thumbnails for PPT templates without uploaded thumbnails
+      const pptWithoutThumb = data.filter((t: Template) => t.type === 'ppt' && t.file_path && !t.thumbnail_path)
+      if (pptWithoutThumb.length > 0) {
+        const thumbs: Record<string, string> = {}
+        await Promise.all(pptWithoutThumb.map(async (t: Template) => {
+          try {
+            const slides = await api.previewSlides(t.id)
+            if (slides && slides.length > 0) thumbs[t.id] = slides[0]
+          } catch { /* ignore */ }
+        }))
+        setAutoThumbnails(thumbs)
+      }
     } catch (err: any) {
       console.error('Failed to load templates:', err)
     } finally {
@@ -470,6 +483,9 @@ function TemplateManager() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
                 {activeTemplates.map(t => {
                   const thumbUrl = getThumbnailUrl(t)
+                  const autoUrl = autoThumbnails[t.id] ? api.slideUrl(autoThumbnails[t.id]) : ''
+                  const displayUrl = thumbUrl || autoUrl
+                  const hasThumb = !!displayUrl
                   const fileName = t.file_path ? (t.file_path.split(/[\\/]/).pop() || t.file_path) : ''
 
                   return (
@@ -492,9 +508,9 @@ function TemplateManager() {
                           position: 'relative',
                           overflow: 'hidden',
                         }}>
-                          {thumbUrl ? (
+                          {displayUrl ? (
                             <img
-                              src={thumbUrl}
+                              src={displayUrl}
                               alt={t.name}
                               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
@@ -505,9 +521,9 @@ function TemplateManager() {
                             display: 'flex',
                             flexDirection: 'column',
                             alignItems: 'center',
-                            gap: '8px',
+                            gap: '6px',
                             color: 'var(--text-secondary)',
-                            opacity: thumbUrl ? 0 : 1,
+                            opacity: hasThumb ? 0 : 1,
                           }}>
                             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
                               <rect x="2" y="2" width="20" height="20" rx="2" />
@@ -517,6 +533,7 @@ function TemplateManager() {
                             <span style={{ fontSize: '11px' }}>
                               {t.type === 'ppt' ? 'PPT 预览' : 'SOP 预览'}
                             </span>
+                            <span style={{ fontSize: '9px', opacity: 0.5 }}>建议 320×240</span>
                           </div>
                         </div>
 
@@ -569,7 +586,7 @@ function TemplateManager() {
                             <label style={{
                               fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
                               flexShrink: 0, lineHeight: 1,
-                            }} >
+                            }} title="建议 320×240">
                               {thumbUrl ? '更换' : '缩略图'}
                               <input type="file" accept="image/*" style={{ display: 'none' }}
                                 onChange={e => {
