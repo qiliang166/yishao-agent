@@ -51,7 +51,7 @@ function SettingsPage() {
   }
 
   const SALT = 'yishao-agent-salt-2026'
-  const INITIAL_PASSWORD = '221031'
+  const INITIAL_PASSWORD = '11110000'
 
   const handlePasswordSave = async () => {
     setPasswordMsg('')
