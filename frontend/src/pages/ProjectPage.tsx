@@ -93,8 +93,6 @@ const STAGE1_PROMPTS_FALLBACK: Record<string, string> = {
   file: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请从上传文件中提取完整食谱内容，整理为标准SOP文档。',
 }
 
-const STAGE2_MODELS = ['DeepSeek (deepseek-v4-pro)', 'Kimi (moonshot-v1)', '通义千问 (qwen-plus)']
-
 // ── Main Component ──
 export default function ProjectPage() {
   const modal = useModal()
@@ -146,9 +144,9 @@ export default function ProjectPage() {
   const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
   const [stage1Skill, setStage1Skill] = useState('')
   const [stage4KouboPrompt, setStage4KouboPrompt] = useState('')
-  const [s2SopModel, setS2SopModel] = useState(STAGE2_MODELS[0])
-  const [s2DaoModel, setS2DaoModel] = useState(STAGE2_MODELS[0])
-  const [s2YanxiModel, setS2YanxiModel] = useState(STAGE2_MODELS[0])
+  const [s2SopModel, setS2SopModel] = useState('')
+  const [s2DaoModel, setS2DaoModel] = useState('')
+  const [s2YanxiModel, setS2YanxiModel] = useState('')
   const [s2DataSource, setS2DataSource] = useState('video')
 
   // Stage 3 state
@@ -243,11 +241,15 @@ export default function ProjectPage() {
     }).catch(() => {})
     api.listProviders().then((providers: LLMProvider[]) => {
       setLlmProviders(providers)
+      const def = providers.find(p => p.is_enabled) || providers[0]
+      const defModels = Array.isArray(def?.models) ? def.models : []
+      const defVal = def && defModels.length > 0 ? `${def.id}:${defModels[0]}` : ''
       if (providers.length > 0 && !step1Model) {
-        const def = providers.find(p => p.is_enabled) || providers[0]
-        const models = Array.isArray(def.models) ? def.models : []
-        if (models.length > 0) setStep1Model(`${def.id}:${models[0]}`)
+        if (defVal) setStep1Model(defVal)
       }
+      if (defVal && !s2SopModel) setS2SopModel(defVal)
+      if (defVal && !s2DaoModel) setS2DaoModel(defVal)
+      if (defVal && !s2YanxiModel) setS2YanxiModel(defVal)
     }).catch(() => {})
   }, [id, navigate])
 
@@ -315,11 +317,11 @@ export default function ProjectPage() {
     poll()
   }
   // ── LLM Generate ──
-  const doGenerate = async (stepKey: string, systemPrompt: string, userMessage: string) => {
+  const doGenerate = async (stepKey: string, systemPrompt: string, userMessage: string, providerId?: string, model?: string) => {
     if (!id) return
     try {
       const result: any = await api.llmGenerate({
-        provider_id: 'default', model: 'deepseek-v4-pro',
+        provider_id: providerId || 'default', model: model || 'deepseek-v4-pro',
         system_prompt: systemPrompt, user_message: userMessage,
       })
       const content = result.content
@@ -799,14 +801,20 @@ export default function ProjectPage() {
                   </div>
                   <div className="form-label">大模型</div>
                   <select className="form-select" style={{ marginBottom: 8 }} value={s2SopModel} onChange={e => setS2SopModel(e.target.value)}>
-                    {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+                    <option value="">选择模型...</option>
+                    {llmProviders.filter(p => p.is_enabled).map(p =>
+                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                      ))
+                    )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || step2Generating !== ''}
+                    disabled={!getStage2Source() || !s2SopModel || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
                       const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
-                      await doGenerate('step2_sop', prompt, getStage2Source())
+                      const [pid, mdl] = s2SopModel.split(':')
+                      await doGenerate('step2_sop', prompt, getStage2Source(), pid, mdl)
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
@@ -827,14 +835,20 @@ export default function ProjectPage() {
                   </div>
                   <div className="form-label">大模型</div>
                   <select className="form-select" style={{ marginBottom: 8 }} value={s2DaoModel} onChange={e => setS2DaoModel(e.target.value)}>
-                    {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+                    <option value="">选择模型...</option>
+                    {llmProviders.filter(p => p.is_enabled).map(p =>
+                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                      ))
+                    )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || step2Generating !== ''}
+                    disabled={!getStage2Source() || !s2DaoModel || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
                       const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
-                      await doGenerate('step2_daoshuyi', prompt, getStage2Source())
+                      const [pid, mdl] = s2DaoModel.split(':')
+                      await doGenerate('step2_daoshuyi', prompt, getStage2Source(), pid, mdl)
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
@@ -855,14 +869,20 @@ export default function ProjectPage() {
                   </div>
                   <div className="form-label">大模型</div>
                   <select className="form-select" style={{ marginBottom: 8 }} value={s2YanxiModel} onChange={e => setS2YanxiModel(e.target.value)}>
-                    {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+                    <option value="">选择模型...</option>
+                    {llmProviders.filter(p => p.is_enabled).map(p =>
+                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                      ))
+                    )}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!getStage2Source() || step2Generating !== ''}
+                    disabled={!getStage2Source() || !s2YanxiModel || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
                       const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
-                      await doGenerate('step2_yanxi', prompt, getStage2Source())
+                      const [pid, mdl] = s2YanxiModel.split(':')
+                      await doGenerate('step2_yanxi', prompt, getStage2Source(), pid, mdl)
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
