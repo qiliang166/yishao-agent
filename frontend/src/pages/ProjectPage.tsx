@@ -76,6 +76,107 @@ const STAGE1_PROMPTS_FALLBACK: Record<string, string> = {
   file: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请从上传文件中提取完整食谱内容，整理为标准SOP文档。',
 }
 
+// ── Stage 2 left-panel controls (split from TeachingDocPanel) ──
+const MODEL_KEYS_S2: Record<string, string> = {
+  sop: '_model_s2_sop', dao: '_model_s2_dao', yanxi: '_model_s2_yanxi',
+}
+const DOC_ICONS: Record<string, string> = { sop: '📃', dao: '💡', yanxi: '📖' }
+const DOC_COLORS_S2: Record<string, string> = {
+  sop: 'var(--success)', dao: 'var(--purple)', yanxi: 'var(--warning)',
+}
+
+function Stage2Controls({
+  docType, label, steps, llmProviders,
+  dataSource, onDataSourceChange,
+  generating, prompt, skill, projectId,
+  panelRef, setGenerating, onRefresh,
+}: {
+  docType: string; label: string
+  steps: Record<string, string>
+  llmProviders: LLMProvider[]
+  dataSource: string; onDataSourceChange: (v: string) => void
+  generating: boolean; prompt: string; skill: string; projectId: string
+  panelRef: React.RefObject<{ triggerGenerate: () => Promise<void> } | null>
+  setGenerating: (v: boolean) => void
+  onRefresh: () => void
+}) {
+  const modal = useModal()
+  const modelKey = MODEL_KEYS_S2[docType]
+  const icon = DOC_ICONS[docType]
+  const color = DOC_COLORS_S2[docType]
+
+  const model = (() => {
+    const saved = steps[modelKey] || ''
+    if (saved) return saved
+    const defP = llmProviders.find(p => p.is_enabled)
+    if (!defP) return ''
+    const defMs = Array.isArray(defP.models) ? defP.models : []
+    return defMs.length > 0 ? `${defP.id}:${defMs[0]}` : ''
+  })()
+
+  const sourceText = {
+    video: steps.raw_video ? '已有内容' : '暂无内容',
+    text: steps.raw_text ? '已有内容' : '暂无内容',
+    file: steps.raw_file ? '已有内容' : '暂无内容',
+  }
+  const getSourceText = (src: string) => {
+    switch (src) {
+      case 'video': return steps.raw_video || ''
+      case 'text': return steps.raw_text || ''
+      case 'file': return steps.raw_file || ''
+      default: return ''
+    }
+  }
+
+  const handleModelChange = (val: string) => {
+    api.saveStep(projectId, modelKey, val).then(onRefresh)
+  }
+
+  const handleGenerate = async () => {
+    const source = getSourceText(dataSource)
+    if (!source || !model) return
+    setGenerating(true)
+    try {
+      await panelRef.current?.triggerGenerate()
+      setGenerating(false)
+    } catch (e: any) {
+      modal.toast(`生成失败: ${e.message}`, 'error')
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="card-title" style={{ color }}>{icon} {label}生成</div>
+      <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成{label}</div>
+      <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+        <label className="form-label">数据来源</label>
+        <select className="form-select" style={{ marginBottom: 6 }}
+          value={dataSource} onChange={e => onDataSourceChange(e.target.value)}>
+          <option value="video">视频提取 — {sourceText.video}</option>
+          <option value="text">文字输入 — {sourceText.text}</option>
+          <option value="file">文件上传 — {sourceText.file}</option>
+        </select>
+      </div>
+      <label className="form-label">大模型</label>
+      <select className="form-select" style={{ marginBottom: 8 }}
+        value={model} onChange={e => handleModelChange(e.target.value)}>
+        <option value="">选择模型...</option>
+        {llmProviders.filter(p => p.is_enabled).map(p =>
+          (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+            <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+          ))
+        )}
+      </select>
+      <button className="btn btn-primary btn-sm w-full"
+        disabled={!getSourceText(dataSource) || !model || generating}
+        onClick={handleGenerate}>
+        {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
+      </button>
+    </>
+  )
+}
+
 // ── Main Component ──
 export default function ProjectPage() {
   const modal = useModal()
@@ -137,6 +238,7 @@ export default function ProjectPage() {
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('') // which sub is generating
+  const [s2DataSource, setS2DataSource] = useState('video')
   const [batchGenerating, setBatchGenerating] = useState(false)
   const sopRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
   const daoRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
@@ -933,12 +1035,68 @@ export default function ProjectPage() {
             <div className="panel-left">
               <div className="card">
                 {sub === '2a' && (
+                  <Stage2Controls docType="sop" label="SOP文案"
+                    steps={steps} llmProviders={llmProviders}
+                    dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
+                    generating={step2Generating === '2a'}
+                    prompt={stage2Prompts.sop?.prompt || ''}
+                    skill={stage2Prompts.sop?.skill || ''}
+                    projectId={id!}
+                    panelRef={sopRef}
+                    setGenerating={(v) => setStep2Generating(v ? '2a' : '')}
+                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
+                      const map: Record<string, string> = {}
+                      s.forEach((x: any) => { map[x.step_name] = x.content })
+                      setSteps(map)
+                      setSavedSteps({...map})
+                    })} />
+                )}
+                {sub === '2b' && (
+                  <Stage2Controls docType="dao" label="道与术文案"
+                    steps={steps} llmProviders={llmProviders}
+                    dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
+                    generating={step2Generating === '2b'}
+                    prompt={stage2Prompts.dao?.prompt || ''}
+                    skill={stage2Prompts.dao?.skill || ''}
+                    projectId={id!}
+                    panelRef={daoRef}
+                    setGenerating={(v) => setStep2Generating(v ? '2b' : '')}
+                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
+                      const map: Record<string, string> = {}
+                      s.forEach((x: any) => { map[x.step_name] = x.content })
+                      setSteps(map)
+                      setSavedSteps({...map})
+                    })} />
+                )}
+                {sub === '2c' && (
+                  <Stage2Controls docType="yanxi" label="研学手册文案"
+                    steps={steps} llmProviders={llmProviders}
+                    dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
+                    generating={step2Generating === '2c'}
+                    prompt={stage2Prompts.yanxi?.prompt || ''}
+                    skill={stage2Prompts.yanxi?.skill || ''}
+                    projectId={id!}
+                    panelRef={yanxiRef}
+                    setGenerating={(v) => setStep2Generating(v ? '2c' : '')}
+                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
+                      const map: Record<string, string> = {}
+                      s.forEach((x: any) => { map[x.step_name] = x.content })
+                      setSteps(map)
+                      setSavedSteps({...map})
+                    })} />
+                )}
+              </div>
+            </div>
+            <div className="panel-right">
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                {sub === '2a' && (
                   <TeachingDocPanel ref={sopRef} docType="sop" projectId={id!}
                     steps={steps} savedSteps={savedSteps}
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
+                    hideControls dataSource={s2DataSource}
                     onRefresh={() => api.getSteps(id!).then((s: any[]) => {
                       const map: Record<string, string> = {}
                       s.forEach((x: any) => { map[x.step_name] = x.content })
@@ -953,6 +1111,7 @@ export default function ProjectPage() {
                     skill={stage2Prompts.dao?.skill || ''}
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
+                    hideControls dataSource={s2DataSource}
                     onRefresh={() => api.getSteps(id!).then((s: any[]) => {
                       const map: Record<string, string> = {}
                       s.forEach((x: any) => { map[x.step_name] = x.content })
@@ -967,6 +1126,7 @@ export default function ProjectPage() {
                     skill={stage2Prompts.yanxi?.skill || ''}
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
+                    hideControls dataSource={s2DataSource}
                     onRefresh={() => api.getSteps(id!).then((s: any[]) => {
                       const map: Record<string, string> = {}
                       s.forEach((x: any) => { map[x.step_name] = x.content })

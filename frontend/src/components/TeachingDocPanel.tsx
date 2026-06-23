@@ -12,6 +12,9 @@ export interface TeachingDocPanelProps {
   llmProviders: { id: string; name: string; is_enabled: number; models: string[] }[]
   onRefresh: () => void
   batchGenerating?: boolean
+  hideControls?: boolean
+  dataSource?: string
+  onDataSourceChange?: (val: string) => void
 }
 
 const DOC_LABELS: Record<string, string> = {
@@ -37,6 +40,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
   docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh, batchGenerating,
+  hideControls, dataSource: dataSourceProp, onDataSourceChange,
 }, ref) => {
   const modal = useModal()
 
@@ -44,7 +48,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   const modelKey = MODEL_KEYS[docType]
   const [model, setModel] = useState(steps[modelKey] || '')
   const lastModelKey = useRef(modelKey)
-  const [dataSource, setDataSource] = useState('video')
+  const [_dataSource, _setDataSource] = useState('video')
+  const dataSource = dataSourceProp !== undefined ? dataSourceProp : _dataSource
+  const setDataSource = onDataSourceChange || _setDataSource
   const [generating, setGenerating] = useState(false)
   const [savedFlash, setSavedFlash] = useState(0)
 
@@ -76,12 +82,17 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     if (persisted) setModel(persisted)
   }
 
-  // ── Initialize model default on first mount ──
-  if (!model) {
+  // ── Initialize model default on first mount (persist so split panels stay in sync) ──
+  const modelInitedRef = useRef(false)
+  if (!model && !modelInitedRef.current) {
+    modelInitedRef.current = true
     const defProvider = llmProviders.find(p => p.is_enabled)
     const defModels = Array.isArray(defProvider?.models) ? defProvider.models : []
     const defVal = defProvider && defModels.length > 0 ? `${defProvider.id}:${defModels[0]}` : ''
-    if (defVal) setModel(defVal)
+    if (defVal) {
+      setModel(defVal)
+      api.saveStep(projectId, modelKey, defVal)
+    }
   }
 
   // ── Data source text ──
@@ -177,7 +188,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     file: steps.raw_file ? '已有内容' : '暂无内容',
   }
 
-  return (
+  const controls = (
     <>
       <div className="card-title" style={{ color }}>{icon} {label}生成</div>
       <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成{label}</div>
@@ -207,9 +218,12 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         onClick={handleGenerate}>
         {(generating || batchGenerating) ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
       </button>
+    </>
+  )
 
-      {/* Content textarea */}
-      <textarea className="form-textarea" style={{ flex: 1, minHeight: 120, marginTop: 12 }}
+  const editor = (
+    <>
+      <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
         value={localContent}
         onChange={e => {
           const newVal = e.target.value
@@ -219,7 +233,6 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         placeholder={`点击生成按钮，AI生成后在此编辑...`}
       />
 
-      {/* Action buttons */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
           {docType === 'sop' ? '编辑完成后即可供「标准SOP」栏目引用'
@@ -237,6 +250,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       </div>
     </>
   )
+
+  if (hideControls) return editor
+  return <>{controls}{editor}</>
 })
 
 export default TeachingDocPanel
