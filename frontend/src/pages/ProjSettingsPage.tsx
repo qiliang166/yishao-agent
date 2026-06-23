@@ -29,6 +29,15 @@ interface ColumnConfig {
 export default function ProjSettingsPage() {
   const modal = useModal()
   const [mainTab, setMainTab] = useState<MainTab>('models')
+
+  // Password gate state
+  const [passwordEnabled, setPasswordEnabled] = useState(false)
+  const [sessionVerified, setSessionVerified] = useState(false)
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [pendingTab, setPendingTab] = useState<MainTab | null>(null)
+  const [passwordInput, setPasswordInput] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordChecking, setPasswordChecking] = useState(false)
   const [providers, setProviders] = useState<any[]>([])
   const [prompts, setPrompts] = useState<Prompt[]>([])
 
@@ -119,6 +128,10 @@ export default function ProjSettingsPage() {
       configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
       setColValues(vals)
     }).catch(() => {})
+    api.getSettings().then(data => {
+      const s = data.settings || {}
+      if (s.admin_password_enabled === '1') setPasswordEnabled(true)
+    }).catch(() => {})
   }
   useEffect(() => { load() }, [])
 
@@ -128,6 +141,45 @@ export default function ProjSettingsPage() {
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
+  }
+
+  // Auto-show password dialog on load if protection enabled
+  useEffect(() => {
+    if (passwordEnabled && !sessionVerified) {
+      const timer = setTimeout(() => {
+        setPendingTab('models')
+        setShowPasswordDialog(true)
+        setPasswordInput('')
+        setPasswordError('')
+      }, 300)
+      return () => clearTimeout(timer)
+    }
+  }, [passwordEnabled])
+
+  // Tab click guard
+  const handleTabClick = (tab: MainTab) => {
+    if (passwordEnabled && !sessionVerified) {
+      setPendingTab(tab)
+      setShowPasswordDialog(true)
+      setPasswordInput('')
+      setPasswordError('')
+    } else {
+      setMainTab(tab)
+    }
+  }
+
+  // Password submission
+  const handlePasswordSubmit = async () => {
+    if (!passwordInput.trim()) { setPasswordError('请输入密码'); return }
+    setPasswordChecking(true); setPasswordError('')
+    try {
+      await api.verifyPassword(passwordInput)
+      setSessionVerified(true)
+      setShowPasswordDialog(false)
+      if (pendingTab) { setMainTab(pendingTab); setPendingTab(null) }
+    } catch (err: any) {
+      setPasswordError(err.message || '密码错误')
+    } finally { setPasswordChecking(false) }
   }
 
   // ── Prompt actions ──
@@ -429,14 +481,14 @@ export default function ProjSettingsPage() {
       {/* Tab Bar — mgmt-tabs style */}
       <div className="mgmt-tabs">
         <button className={`mgmt-tab${mainTab === 'models' ? ' active' : ''}`}
-          onClick={() => setMainTab('models')}>模型设置</button>
+          onClick={() => handleTabClick('models')}>模型设置</button>
         <button className={`mgmt-tab${mainTab === 'columns' ? ' active' : ''}`}
-          onClick={() => setMainTab('columns')}>栏目配置</button>
+          onClick={() => handleTabClick('columns')}>栏目配置</button>
       </div>
       <div className="mgmt-content">
-
-        {/* ═══ Tab: 模型设置 ═══ */}
-        {mainTab === 'models' && (
+        {(!passwordEnabled || sessionVerified) ? (<>
+          {/* ═══ Tab: 模型设置 ═══ */}
+          {mainTab === 'models' && (
           <div>
               <div>
                 <table className="output-table" style={{ marginBottom: 8, tableLayout: 'fixed' }}>
@@ -738,6 +790,18 @@ export default function ProjSettingsPage() {
             </div>
           </div>
         )}
+        </>) : (
+          <div style={{ textAlign: 'center' as const, padding: 40, color: 'var(--text-secondary)' }}>
+            <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+            <div style={{ fontSize: 13, marginBottom: 8 }}>此页面需要密码验证</div>
+            <button className="btn btn-primary btn-sm" onClick={() => {
+              setPendingTab('models')
+              setShowPasswordDialog(true)
+              setPasswordInput('')
+              setPasswordError('')
+            }}>输入密码</button>
+          </div>
+        )}
       </div>
 
       {/* ═══ Prompt Form Modal ═══ */}
@@ -913,6 +977,37 @@ export default function ProjSettingsPage() {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowAsrProviderForm(false)}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={saveAsrProvider} disabled={apvSaving}>{apvSaving ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Password Gate Dialog ═══ */}
+      {showPasswordDialog && (
+        <div className="dialog-overlay" onClick={e => {
+          if (e.target === e.currentTarget) { setShowPasswordDialog(false); setPendingTab(null) }
+        }}>
+          <div className="dialog-box" style={{ minWidth: 360 }}>
+            <div className="dialog-title">需要密码验证</div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              访问{pendingTab === 'models' ? '模型设置' : '栏目配置'}需要输入管理员密码。
+            </p>
+            <input className="form-input" type="password"
+              value={passwordInput}
+              onChange={e => { setPasswordInput(e.target.value); setPasswordError('') }}
+              onKeyDown={e => { if (e.key === 'Enter') handlePasswordSubmit() }}
+              placeholder="请输入密码" autoFocus />
+            {passwordError && (
+              <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6 }}>{passwordError}</div>
+            )}
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 8 }}>
+              忘记密码？在 data/yishao.db 的 settings 表中删除 admin_password 和 admin_password_enabled 记录即可重置。
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setShowPasswordDialog(false); setPendingTab(null) }}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handlePasswordSubmit} disabled={passwordChecking}>
+                {passwordChecking ? '验证中...' : '确认'}
+              </button>
             </div>
           </div>
         </div>

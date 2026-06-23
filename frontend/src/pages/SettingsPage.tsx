@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
+import { sha256 } from '../services/sha256'
 
 function SettingsPage() {
   const [brandLogo, setBrandLogo] = useState('🍽')
@@ -13,12 +14,19 @@ function SettingsPage() {
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [downloading, setDownloading] = useState(false)
 
+  // Password protection state
+  const [passwordEnabled, setPasswordEnabled] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordMsg, setPasswordMsg] = useState('')
+
   useEffect(() => {
     api.getSettings().then(data => {
       const s = data.settings || {}
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.brand_name) setBrandName(s.brand_name)
       if (s.save_path) setSavePath(s.save_path)
+      if (s.admin_password_enabled === '1') setPasswordEnabled(true)
     }).catch(() => {})
   }, [])
 
@@ -37,6 +45,33 @@ function SettingsPage() {
       setLogoUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
+  }
+
+  const SALT = 'yishao-agent-salt-2026'
+
+  const handlePasswordSave = async () => {
+    setPasswordMsg('')
+    if (!newPassword.trim()) { setPasswordMsg('密码不能为空'); return }
+    if (newPassword !== confirmPassword) { setPasswordMsg('两次输入的密码不一致'); return }
+    if (newPassword.length < 4) { setPasswordMsg('密码至少需要4个字符'); return }
+    try {
+      const hash = sha256(SALT + newPassword)
+      await api.updateSettings({ admin_password: hash, admin_password_enabled: '1' })
+      setPasswordEnabled(true)
+      setNewPassword(''); setConfirmPassword('')
+      setPasswordMsg('密码保护已启用')
+    } catch (err: any) { setPasswordMsg('保存失败: ' + err.message) }
+  }
+
+  const handlePasswordDisable = async () => {
+    const ok = window.confirm('确定要关闭密码保护吗？关闭后，项目配置中的敏感栏目将无需密码即可访问。')
+    if (!ok) return
+    try {
+      await api.updateSettings({ admin_password_enabled: '0' })
+      setPasswordEnabled(false)
+      setNewPassword(''); setConfirmPassword('')
+      setPasswordMsg('密码保护已关闭')
+    } catch (err: any) { setPasswordMsg('操作失败: ' + err.message) }
   }
 
   const handleGlobalSave = async () => {
@@ -124,6 +159,45 @@ function SettingsPage() {
         <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
           此路径作为所有项目的默认存储根目录，每个项目将在此路径下创建独立子文件夹。
         </div>
+      </div>
+
+      {/* 安全设置 */}
+      <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
+        <h3>安全设置</h3>
+        <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
+          开启后，访问「项目配置」中的模型设置和栏目配置需要输入密码。
+          忘记密码时，可在数据库 data/yishao.db 的 settings 表中删除 admin_password 和 admin_password_enabled 记录。
+        </p>
+        <div className="settings-row">
+          <label>密码保护</label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', minWidth: 'auto' }}>
+            <input type="checkbox" checked={passwordEnabled}
+              onChange={e => { if (e.target.checked) setPasswordEnabled(true); else handlePasswordDisable() }} />
+            <span style={{ fontSize: 12 }}>启用密码</span>
+          </label>
+        </div>
+        {passwordEnabled && (<>
+          <div className="settings-row">
+            <label>新密码</label>
+            <input className="form-input" type="password" value={newPassword}
+              onChange={e => setNewPassword(e.target.value)} placeholder="至少4位字符" style={{ maxWidth: 220 }} />
+          </div>
+          <div className="settings-row">
+            <label>确认密码</label>
+            <input className="form-input" type="password" value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)} placeholder="再次输入密码" style={{ maxWidth: 220 }} />
+          </div>
+          <div className="settings-row">
+            <label></label>
+            <button className="btn btn-primary btn-sm" onClick={handlePasswordSave}>保存密码</button>
+            {passwordMsg && (
+              <span style={{ marginLeft: 8, fontSize: 11,
+                color: passwordMsg.includes('失败') || passwordMsg.includes('错误') || passwordMsg.includes('不能') || passwordMsg.includes('不一致') ? 'var(--warning)' : 'var(--success)' }}>
+                {passwordMsg}
+              </span>
+            )}
+          </div>
+        </>)}
       </div>
 
       {/* 全局保存 */}

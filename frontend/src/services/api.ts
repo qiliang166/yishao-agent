@@ -260,6 +260,14 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Password verification
+  verifyPassword: (password: string) =>
+    request('/api/verify-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }),
+
   // Prompts
   listPrompts: (category?: string) => {
     const params = category ? `?category=${encodeURIComponent(category)}` : ''

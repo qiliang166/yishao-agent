@@ -1,6 +1,7 @@
 import os
 import shutil
 import uuid
+import hashlib
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
@@ -60,6 +61,13 @@ def _get_setting(key: str) -> str:
         return row["value"] if row else ""
     finally:
         db.close()
+
+
+SALT = "yishao-agent-salt-2026"
+
+
+def _hash_password(password: str) -> str:
+    return hashlib.sha256((SALT + password).encode("utf-8")).hexdigest()
 
 
 def _get_project(project_id: str):
@@ -1317,6 +1325,19 @@ def update_settings(req: dict):
         return {"ok": True}
     finally:
         db.close()
+
+
+@app.post("/api/verify-password")
+def verify_password(req: dict):
+    plain = req.get("password", "")
+    if not plain:
+        raise HTTPException(status_code=400, detail="密码不能为空")
+    stored_hash = _get_setting("admin_password")
+    if not stored_hash:
+        raise HTTPException(status_code=400, detail="未设置密码")
+    if _hash_password(plain) != stored_hash:
+        raise HTTPException(status_code=403, detail="密码错误")
+    return {"ok": True}
 
 
 @app.get("/api/browse-folder")
