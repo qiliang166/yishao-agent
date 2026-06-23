@@ -159,6 +159,7 @@ export default function ProjectPage() {
   const [s2SopTmpl, setS2SopTmpl] = useState('s2-sop-std')
   const [s2DaoTmpl, setS2DaoTmpl] = useState('s2-dao-std')
   const [s2YanxiTmpl, setS2YanxiTmpl] = useState('s2-yanxi-std')
+  const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [s2SopModel, setS2SopModel] = useState(STAGE2_MODELS[0])
   const [s2DaoModel, setS2DaoModel] = useState(STAGE2_MODELS[0])
   const [s2YanxiModel, setS2YanxiModel] = useState(STAGE2_MODELS[0])
@@ -202,6 +203,16 @@ export default function ProjectPage() {
         setTextInput(map['video_text'])
       }
     })
+    api.listPrompts('教学文档').then((ps: any[]) => {
+      const pmap: Record<string, { prompt: string; skill: string }> = {}
+      ps.forEach((p: any) => {
+        const key = p.name.includes('SOP') ? 'sop' :
+          p.name.includes('道与术') ? 'dao' :
+            p.name.includes('研学') ? 'yanxi' : ''
+        if (key) pmap[key] = { prompt: p.system_prompt, skill: p.skill_template }
+      })
+      setStage2Prompts(pmap)
+    }).catch(() => {})
     api.listTtsProviders().then((providers: TTSProvider[]) => {
       setTtsProviders(providers)
       if (providers.length > 0 && !ttsProviderId) {
@@ -777,9 +788,8 @@ export default function ProjectPage() {
                     disabled={!steps.step1 || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
-                      await doGenerate('step2_sop',
-                        '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。',
-                        steps.step1 || '')
+                      const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
+                      await doGenerate('step2_sop', prompt, steps.step1 || '')
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
@@ -808,9 +818,8 @@ export default function ProjectPage() {
                     disabled={!steps.step1 || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
-                      await doGenerate('step2_daoshuyi',
-                        '你是国家级烹饪大师、食品科学家、美食技术专家。请对以下食谱SOP进行"道与术"深度解析。\n\n核心规则：\n1. 根据SOP实际内容，自动识别并提炼3~5个核心烹饪原理，每个命名为"XX之道"（如：火之道、脆之道、发之道、去腥之道、时之道、色之道、层次之道等），名称需准确概括原理内涵\n2. 每个"道"需说明：SOP中的体现、背后的科学原理或经验法则、违反的后果\n3. 术的部分用表格列出关键操作步骤及参数、手法、目的\n4. 第二节提炼"通用流程"，适用于同类食材或工艺，包含：道术结合表、分步操作卡、主料替换调整、常见问题纠偏、扩展应用\n5. 所有数据（重量、温度、时间）必须来源于原文，缺失处标注"SOP未提供，建议为……"\n6. 输出Markdown格式，表格对齐，语言专业清晰\n7. 文末加版权声明：本文基于上传的SOP整理，保留原技术细节，仅作结构重组与原理提炼',
-                        steps.step1 || '')
+                      const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
+                      await doGenerate('step2_daoshuyi', prompt, steps.step1 || '')
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
@@ -839,9 +848,8 @@ export default function ProjectPage() {
                     disabled={!steps.step1 || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
-                      await doGenerate('step2_yanxi',
-                        '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。',
-                        steps.step1 || '')
+                      const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
+                      await doGenerate('step2_yanxi', prompt, steps.step1 || '')
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
