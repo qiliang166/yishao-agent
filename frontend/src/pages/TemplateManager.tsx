@@ -192,19 +192,28 @@ function TemplateManager() {
     setFormSkill(t.skill || '')
     setFormRules(t.rules || '{}')
     setFormError('')
+    setModalPos({ x: 0, y: 0 })
+    setModalSize({ w: 0, h: 0 })
     setShowModal(true)
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    setModalPos({ x: 0, y: 0 })
+    setModalSize({ w: 0, h: 0 })
   }
 
   // modal drag handlers
   const onDragStart = (e: React.MouseEvent) => {
+    e.preventDefault()
     dragRef.startX = e.clientX
     dragRef.startY = e.clientY
     dragRef.posX = modalPos.x
     dragRef.posY = modalPos.y
     const onMove = (ev: MouseEvent) => {
       setModalPos({
-        x: dragRef.posX + ev.clientX - dragRef.startX,
-        y: dragRef.posY + ev.clientY - dragRef.startY,
+        x: Math.max(-200, dragRef.posX + ev.clientX - dragRef.startX),
+        y: Math.max(-200, dragRef.posY + ev.clientY - dragRef.startY),
       })
     }
     const onUp = () => {
@@ -264,7 +273,7 @@ function TemplateManager() {
         })
         modal.toast('模板已创建', 'success')
       }
-      setShowModal(false)
+      closeModal()
       loadTemplates()
     } catch (err: any) {
       modal.toast('保存失败: ' + err.message, 'error')
@@ -541,7 +550,7 @@ function TemplateManager() {
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }} onMouseDown={e => { if (e.target === e.currentTarget) setShowModal(false) }}>
+        }} onMouseDown={e => { if (e.target === e.currentTarget) closeModal() }}>
           <div style={{
             ...modalCard,
             width: modalSize.w ? modalSize.w : '720px',
@@ -679,7 +688,7 @@ function TemplateManager() {
             )}
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)} disabled={saving}>取消</button>
+              <button className="btn btn-ghost btn-sm" onClick={closeModal} disabled={saving}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
                 {saving ? '保存中...' : '保存'}
               </button>
