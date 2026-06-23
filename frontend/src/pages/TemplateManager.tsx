@@ -599,44 +599,45 @@ function TemplateManager() {
                   </div>
                 )
               })()}
-              {/* Model selector */}
-              <div>
-                <label style={labelStyle}>模型选择</label>
-                <select
-                  style={{ ...inputField, cursor: 'pointer' }}
-                  value={analyzeProvider ? `${analyzeProvider}:${analyzeModel}` : ''}
-                  disabled={enabledProviders.length === 0}
-                  onChange={e => {
-                    const val = e.target.value
-                    if (val) {
-                      const [pid, mdl] = val.split(':')
-                      setAnalyzeProvider(pid)
-                      setAnalyzeModel(mdl)
-                    } else {
-                      setAnalyzeProvider('')
-                      setAnalyzeModel('')
-                    }
-                  }}
-                >
-                  <option value="">默认模型</option>
-                  {enabledProviders.map(p =>
-                    (Array.isArray(p.models) ? p.models : []).map((m: string) => (
-                      <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
-                    ))
-                  )}
-                </select>
-              </div>
-              {/* Name */}
-              <div>
-                <label style={labelStyle}>名称</label>
-                <input
-                  style={inputField}
-                  placeholder="输入模板名称"
-                  value={formName}
-                  onChange={e => setFormName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-                  autoFocus
-                />
+              {/* Row 1: Model + Name */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div>
+                  <label style={labelStyle}>模型选择</label>
+                  <select
+                    style={{ ...inputField, cursor: 'pointer' }}
+                    value={analyzeProvider ? `${analyzeProvider}:${analyzeModel}` : ''}
+                    disabled={enabledProviders.length === 0}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (val) {
+                        const [pid, mdl] = val.split(':')
+                        setAnalyzeProvider(pid)
+                        setAnalyzeModel(mdl)
+                      } else {
+                        setAnalyzeProvider('')
+                        setAnalyzeModel('')
+                      }
+                    }}
+                  >
+                    <option value="">默认模型</option>
+                    {enabledProviders.map(p =>
+                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+                      ))
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label style={labelStyle}>名称</label>
+                  <input
+                    style={inputField}
+                    placeholder="输入模板名称"
+                    value={formName}
+                    onChange={e => setFormName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+                    autoFocus
+                  />
+                </div>
               </div>
 
               {/* Prompt + Skill */}
