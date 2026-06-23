@@ -4,60 +4,38 @@ import { useModal } from '../components/ModalProvider'
 
 type MainTab = 'models' | 'columns'
 
-const CATEGORIES = ['文案提取', '教学文档', 'SOP文案', '标准SOP', '合成PPT', '口播文案']
+const CATEGORIES = ['笔记整理', '道与术分析', '研习手册', 'SOP', '口播稿', 'PPT Skill']
 
-// Column config accordion data
-interface ColumnDef {
-  id: string; label: string; hasTemplate: boolean; summary: string
-  subItems: { id: string; label: string; prompt: string; skill: string }[]
-}
-const COLUMNS: ColumnDef[] = [
-  {
-    id: 'col1', label: '文案提取', hasTemplate: false, summary: '无模板 · 3 个独立配置项',
-    subItems: [
-      { id: 'c1-text', label: '直接输入', prompt: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请将用户手打输入的食谱笔记整理为标准SOP文档。\n\n输入特征：口语化笔记，可能含简写、跳跃表述、隐含信息。\n\n提取策略：\n1. 术语标准化 — 「一点」「适量」等模糊词保留原样，标注「用量待确认」；「切碎」「剁」等动词统一为「切丁/切片/切末」\n2. 补全隐含步骤 — 如原文写「炒肉」，拆解为「热锅→凉油→下肉→翻炒至变色」\n3. 分离主料/辅料/调料 — 从笔记中归类食材用途\n4. 推断缺失字段 — 如原文提到了处理方式但未写工具，可从处理方式反推\n\n铁律：不得新增原文没有的食材或步骤；无法确定的信息标注「未提供」；所有数值（用量、时间、温度）原样保留，不得修改。', skill: '## 菜名\n**菜名**：\n**菜系**：\n**成品特征**：\n**出品标准**：\n**记录日期**：\n**制作人/来源**：\n\n### 一、食材清单\n| 序号 | 用途 | 食材名称 | 用量 | 处理方式 | 备注 |\n|------|------|----------|------|----------|------|\n| 1 | 主料 | | | | |\n| 2 | 辅料 | | | | |\n| 3 | 调料 | | | | |\n\n> **准备要点**：\n\n### 二、工具与器皿\n| 序号 | 用途 | 工具名称 |\n|------|------|----------|\n| 1 | | |\n\n### 三、制作步骤\n| 序号 | 步骤 | 步骤说明 | 关键技巧 |\n|------|------|----------|----------|\n| 1 | 预处理 | | |\n| 2 | 烹饪 | | |\n\n### 四、时间与火候总览\n| 阶段 | 时长 | 火力 | 注意事项 |\n|------|------|------|----------|\n| | | | |\n\n### 五、试吃与品鉴记录\n- **口味**：\n- **口感**：\n- **色泽**：\n\n### 六、总结与评分\n- **难度**：☆\n- **耗时**：\n- **一句话点评**：' },
-      { id: 'c1-video', label: '视频链接', prompt: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请根据视频相关内容提取完整的食谱SOP文档。\n\n输入特征：含时间戳的字幕碎片、创作者口语叙述、可能夹杂开场/互动/广告等非烹饪内容。\n\n多源提取优先级：\n1. 视频描述/简介 → 创作者常在此贴完整食谱（最高权重）\n2. 内嵌字幕文本 → 需过滤时间戳噪音，合并跨句碎片\n3. 音频转写文本（Whisper）→ 口语化表述需标准化\n\n提取策略：\n- 去噪：删除开场白、互动问答、广告口播、BGM歌词等非烹饪段落\n- 合并碎片：跨时间戳的同一操作步骤合并为一条完整说明\n- 重建顺序：如字幕顺序与操作顺序不一致，按烹饪逻辑重排\n- 量化识别：提取所有中文和西式计量单位（克/g、毫升/ml、汤匙/tbsp、茶匙/tsp、杯/cup），识别视频中提到的具体数值\n\n铁律：不得新增视频中没有的食材或步骤；无法确定的信息标注「视频未提及」；数值宁缺毋滥。', skill: '## 菜名\n**菜名**：\n**菜系**：\n**成品特征**：\n**出品标准**：\n**记录日期**：\n**制作人/来源**：\n\n### 一、食材清单\n| 序号 | 用途 | 食材名称 | 用量 | 处理方式 | 备注 |\n|------|------|----------|------|----------|------|\n| 1 | 主料 | | | | |\n| 2 | 辅料 | | | | |\n| 3 | 调料 | | | | |\n\n> **准备要点**：\n\n### 二、工具与器皿\n| 序号 | 用途 | 工具名称 |\n|------|------|----------|\n| 1 | | |\n\n### 三、制作步骤\n| 序号 | 步骤 | 步骤说明 | 关键技巧 |\n|------|------|----------|----------|\n| 1 | 预处理 | | |\n| 2 | 烹饪 | | |\n\n### 四、时间与火候总览\n| 阶段 | 时长 | 火力 | 注意事项 |\n|------|------|------|----------|\n| | | | |\n\n### 五、试吃与品鉴记录\n- **口味**：\n- **口感**：\n- **色泽**：\n\n### 六、总结与评分\n- **难度**：☆\n- **耗时**：\n- **一句话点评**：' },
-      { id: 'c1-file', label: '导入文件', prompt: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请从上传文件中提取完整食谱内容，整理为标准SOP文档。\n\n输入特征：可能是 Word/PDF/图片 OCR 文本，可能含格式杂讯、乱码、扫描错误，也可能已是半结构化文档。\n\n提取策略：\n- 格式清洗：去除页眉页脚、水印文字、行号等非内容标记\n- 结构识别：自动检测原文是否已分段（食材清单/步骤/工具），提取已有结构，不重复包装\n- 表格还原：如原文为表格形式，直接映射到输出模板对应列\n- 数值校对：扫描出的数字（尤其是 0/O、1/l、6/8 等混用）结合上下文纠正；如「30O克」→「300克」\n- 乱码处理：明显 OCR 错误的文本结合烹饪常识修正，无法修正的标注「原文模糊」\n\n铁律：不得新增文件没有的食材或步骤；无法辨识的内容标注「原文模糊」而非编造；所有可辨识的数值精确保留。', skill: '## 菜名\n**菜名**：\n**菜系**：\n**成品特征**：\n**出品标准**：\n**记录日期**：\n**制作人/来源**：\n\n### 一、食材清单\n| 序号 | 用途 | 食材名称 | 用量 | 处理方式 | 备注 |\n|------|------|----------|------|----------|------|\n| 1 | 主料 | | | | |\n| 2 | 辅料 | | | | |\n| 3 | 调料 | | | | |\n\n> **准备要点**：\n\n### 二、工具与器皿\n| 序号 | 用途 | 工具名称 |\n|------|------|----------|\n| 1 | | |\n\n### 三、制作步骤\n| 序号 | 步骤 | 步骤说明 | 关键技巧 |\n|------|------|----------|----------|\n| 1 | 预处理 | | |\n| 2 | 烹饪 | | |\n\n### 四、时间与火候总览\n| 阶段 | 时长 | 火力 | 注意事项 |\n|------|------|------|----------|\n| | | | |\n\n### 五、试吃与品鉴记录\n- **口味**：\n- **口感**：\n- **色泽**：\n\n### 六、总结与评分\n- **难度**：☆\n- **耗时**：\n- **一句话点评**：' },
-    ],
-  },
-  {
-    id: 'col2', label: '教学文档', hasTemplate: false, summary: '无模板 · 3 个独立配置项',
-    subItems: [
-      { id: 'c2-sop', label: 'SOP 文案', prompt: '你是一个SOP撰写专家。请将食谱内容转化为标准操作流程，每一步包含：操作名称、所需工具、操作时间、质量标准。', skill: '# SOP：{菜品名称}\n\n## 准备工作\n| 项目 | 规格 |\n\n## 操作步骤\n### 步骤1：{名称}\n- 时间：\n- 标准：' },
-      { id: 'c2-dao', label: '道与术文案', prompt: '你是国家级烹饪大师、食品科学家、美食技术专家。请对上传的食谱SOP进行"道与术"深度解析。\n\n核心规则：\n1. 根据SOP实际内容，自动识别并提炼3~5个核心烹饪原理，每个命名为"XX之道"（如：火之道、脆之道、发之道、去腥之道、时之道、色之道、层次之道等），名称需准确概括原理内涵\n2. 每个"道"需说明：SOP中的体现、背后的科学原理或经验法则、违反的后果\n3. 术的部分用表格列出关键操作步骤及参数、手法、目的\n4. 第二节提炼"通用流程"，适用于同类食材或工艺，包含：道术结合表、分步操作卡、主料替换调整、常见问题纠偏、扩展应用\n5. 所有数据（重量、温度、时间）必须来源于SOP原文，缺失处标注"SOP未提供，建议为……"\n6. 输出Markdown格式，表格对齐，语言专业清晰', skill: '# {菜品名称} — 道与术解析\n\n## 前端说明\n本文从"道"（烹饪原理）与"术"（操作技法）两个维度解读 `{菜品名称}` SOP，并提炼通用流程。\n\n---\n\n## 第一节：{菜品名称} SOP 的道与术\n\n### 一、道（烹饪理念与原理）\n\n#### {XX之道}\n- **SOP体现**：\n- **科学原理**：\n- **违反后果**：\n\n> 根据SOP实际内容提炼3~5个"道"\n\n### 二、术（具体操作技法）\n\n| 操作步骤 | 关键参数与手法 | 技术目的 |\n|---------|-------------|---------|\n| | | |\n\n---\n\n## 第二节：{工艺类型}通用流程\n\n### 一、道术结合总览\n\n| 阶段 | 核心道 | 关键术 | 可调参数 |\n|------|-------|-------|---------|\n| | | | |\n\n### 二、分步操作卡\n\n1. **选料与预处理**\n2. **腌制/调味**\n3. **挂浆/裹粉/静置**（如适用）\n4. **核心熟制工艺**\n5. **装盘与点缀**\n\n### 三、主料替换调整\n\n| 主料 | 预处理差异 | 调味调整 | 熟制时间变化 |\n|------|----------|---------|------------|\n| | | | |\n\n### 四、常见问题与纠偏\n\n| 问题 | 原因 | 解决方法 |\n|------|------|---------|\n| | | |\n\n### 五、扩展应用\n\n- 空气炸锅：\n- 烤箱：\n- 慢炖：\n\n---\n\n> 本文基于上传的 SOP 整理，保留原技术细节，仅作结构重组与原理提炼。\n' },
-      { id: 'c2-yanxi', label: '研学手册文案', prompt: '你是一个教学设计专家。请将食谱内容编写为研学手册，适合教学使用。', skill: '# 研学手册：{菜品名称}\n\n## 学习目标\n1. \n\n## 背景知识\n\n## 实操步骤' },
-    ],
-  },
-  {
-    id: 'col3', label: '标准SOP', hasTemplate: true, summary: '有模板 · 1 个配置项',
-    subItems: [
-      { id: 'c3-sop', label: 'SOP 生成+导出', prompt: '你是一个餐饮标准化专家。请根据食谱笔记，编写一份「食谱标准化操作流程（SOP）」。', skill: '| 步骤 | 操作 | 标准 | 备注 |\n|------|------|------|------|\n| 1 | | | |' },
-    ],
-  },
-  {
-    id: 'col4', label: '合成PPT', hasTemplate: true, summary: '有模板 · 2 个配置项',
-    subItems: [
-      { id: 'c4-dao', label: '道与术 PPT', prompt: '你是一个PPT内容设计专家。请将道与术分析文案转化为PPT大纲，每页一个核心观点。', skill: '## 标题页\n- 标题：\n- 副标题：\n\n## 内容页 (×3-5)' },
-      { id: 'c4-yanxi', label: '研学手册 PPT', prompt: '你是一个教学PPT设计专家。请将研学手册内容转化为PPT，图文并茂，适合教学展示。', skill: '## 封面\n- 标题：\n\n## 教学页 (×5-8)\n- 知识点：' },
-    ],
-  },
-  {
-    id: 'col5', label: '口播文案', hasTemplate: false, summary: '无模板 · 1 个配置项',
-    subItems: [
-      { id: 'c5-koubo', label: '口播稿生成', prompt: '你是一个短视频口播稿专家。请根据研学手册内容生成口播稿，风格亲切自然。', skill: '# 口播稿\n\n【开场】\n\n【核心内容】\n\n【结尾互动】' },
-    ],
-  },
-  {
-    id: 'col6', label: '语音合成', hasTemplate: false, summary: '音色库管理 · 自定义音色',
-    subItems: [],
-  },
+const COLUMN_GROUPS = [
+  { id: 'col1', label: '文案提取', hasTemplate: false, summary: '无模板 · 3 个配置项' },
+  { id: 'col2', label: '教学文档', hasTemplate: false, summary: '无模板 · 3 个配置项' },
+  { id: 'col3', label: '标准SOP', hasTemplate: true, summary: '有模板 · 1 个配置项', tmplFile: 'SOP标准模板.docx' },
+  { id: 'col4', label: '合成PPT', hasTemplate: true, summary: '有模板 · 2 个配置项', tmplFile: 'PPT模板.pptx' },
+  { id: 'col5', label: '口播文案', hasTemplate: false, summary: '无模板 · 1 个配置项' },
+  { id: 'col6', label: '语音合成', hasTemplate: false, summary: '音色库管理' },
 ]
+
+interface ColumnConfig {
+  id: string
+  column_id: string
+  label: string
+  prompt: string
+  skill: string
+  has_template: number
+  template_path: string | null
+  sort_order: number
+}
 
 export default function ProjSettingsPage() {
   const modal = useModal()
   const [mainTab, setMainTab] = useState<MainTab>('models')
   const [providers, setProviders] = useState<any[]>([])
   const [prompts, setPrompts] = useState<Prompt[]>([])
+
+  // Column configs state
+  const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([])
+  const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
+  const [colSaving, setColSaving] = useState<Record<string, boolean>>({})
 
   // Accordion state
   const [openCols, setOpenCols] = useState<Set<string>>(new Set())
@@ -135,6 +113,12 @@ export default function ProjSettingsPage() {
     api.listTtsProviders().then(setTtsProviders).catch(() => {})
     api.listVoices().then(setVoices).catch(() => {})
     api.listAsrProviders().then(setAsrProviders).catch(() => {})
+    api.listColumnConfigs().then((configs: ColumnConfig[]) => {
+      setColumnConfigs(configs)
+      const vals: Record<string, { prompt: string; skill: string }> = {}
+      configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
+      setColValues(vals)
+    }).catch(() => {})
   }
   useEffect(() => { load() }, [])
 
@@ -560,7 +544,7 @@ export default function ProjSettingsPage() {
               每个栏目配置模板/提示词/SKILL，新建项目时按栏目调取默认配置。有模板的栏目上传模板后AI自动分析生成提示词+SKILL，无模板的栏目直接手写。
             </div>
 
-            {COLUMNS.map(col => (
+            {COLUMN_GROUPS.map(col => (
               <div key={col.id} className={`ac-group${openCols.has(col.id) ? ' open' : ''}`}>
                 <div className="ac-head" onClick={() => toggleCol(col.id)}>
                   <span className={`ac-num${!col.hasTemplate ? ' no-tmpl' : ''}`}>{col.id.slice(-1)}</span>
@@ -605,37 +589,93 @@ export default function ProjSettingsPage() {
                       </table>
                       <button className="btn btn-outline btn-sm" onClick={openNewVoice}>+ 添加音色</button>
                     </div>
-                  ) : col.subItems.length === 0 ? (
-                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', padding: '4px 0' }}>
-                      CosyVoice TTS 引擎，无需配置提示词和 SKILL。音色和语速在「模型设置」→「TTS 语音」中统一配置。
-                    </div>
                   ) : (
-                    col.subItems.map(sub => (
-                      <div key={sub.id} className="ac-sub-item">
-                        <div className="ac-sub-item-header">{sub.label}</div>
-                        <div className="ac-field-row">
-                          <div className="ac-field">
-                            <label>提示词</label>
-                            <textarea defaultValue={sub.prompt} />
+                    <>
+                      {columnConfigs.filter(c => c.column_id === col.id).map(config => (
+                        <div key={config.id} className="ac-sub-item">
+                          <div className="ac-sub-item-header">{config.label}</div>
+                          <div className="ac-field-row">
+                            <div className="ac-field">
+                              <label>提示词</label>
+                              <textarea
+                                value={colValues[config.id]?.prompt || ''}
+                                onChange={e => setColValues(prev => ({
+                                  ...prev,
+                                  [config.id]: { ...prev[config.id], prompt: e.target.value }
+                                }))}
+                              />
+                            </div>
+                            <div className="ac-field">
+                              <label>SKILL 输出格式</label>
+                              <textarea
+                                value={colValues[config.id]?.skill || ''}
+                                onChange={e => setColValues(prev => ({
+                                  ...prev,
+                                  [config.id]: { ...prev[config.id], skill: e.target.value }
+                                }))}
+                              />
+                            </div>
                           </div>
-                          <div className="ac-field">
-                            <label>SKILL 输出格式</label>
-                            <textarea defaultValue={sub.skill} />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                            <button className="btn btn-primary btn-sm"
+                              disabled={colSaving[config.id]}
+                              onClick={async () => {
+                                setColSaving(prev => ({ ...prev, [config.id]: true }))
+                                try {
+                                  await api.updateColumnConfig(config.id, {
+                                    prompt: colValues[config.id]?.prompt || '',
+                                    skill: colValues[config.id]?.skill || '',
+                                  })
+                                  modal.toast('已保存', 'success')
+                                } catch (e: any) {
+                                  modal.toast('保存失败: ' + e.message, 'error')
+                                } finally {
+                                  setColSaving(prev => ({ ...prev, [config.id]: false }))
+                                }
+                              }}>
+                              {colSaving[config.id] ? '保存中...' : '保存'}
+                            </button>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      ))}
+                    </>
                   )}
-                  {col.hasTemplate && (
-                    <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {col.hasTemplate && columnConfigs.filter(c => c.column_id === col.id && c.has_template).map(config => (
+                    <div key={config.id} style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>模板文件：</span>
                       <span style={{ fontSize: 10, fontWeight: 600 }}>
-                        {col.id === 'col3' ? 'SOP标准模板.docx' : col.id === 'col4' ? '道与术PPT模板.pptx / 研学手册PPT模板.pptx' : ''}
+                        {config.template_path || '未上传'}
                       </span>
-                      <button className="btn btn-ghost btn-sm">替换</button>
-                      <button className="btn btn-ghost btn-sm">下载</button>
+                      <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                        替换
+                        <input type="file" accept=".docx,.pptx" style={{ display: 'none' }}
+                          onChange={async e => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            try {
+                              await api.uploadColumnTemplate(config.id, file)
+                              modal.toast('模板已上传', 'success')
+                              api.listColumnConfigs().then((configs: ColumnConfig[]) => {
+                                setColumnConfigs(configs)
+                                const vals: Record<string, { prompt: string; skill: string }> = {}
+                                configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
+                                setColValues(vals)
+                              }).catch(() => {})
+                            } catch (err: any) {
+                              modal.toast('上传失败: ' + err.message, 'error')
+                            }
+                          }} />
+                      </label>
+                      {config.template_path && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => {
+                          const a = document.createElement('a')
+                          a.href = '/api/download/' + encodeURIComponent(config.template_path || '')
+                          a.download = config.template_path || ''
+                          a.click()
+                        }}>下载</button>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
               </div>
             ))}

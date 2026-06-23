@@ -194,6 +194,40 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS column_configs (
+                id TEXT PRIMARY KEY,
+                column_id TEXT NOT NULL,
+                label TEXT NOT NULL,
+                prompt TEXT,
+                skill TEXT,
+                has_template INTEGER DEFAULT 0,
+                template_path TEXT,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Seed column configs if empty
+        existing = conn.execute("SELECT COUNT(*) FROM column_configs").fetchone()[0]
+        if existing == 0:
+            defaults = [
+                ('c1-text', 'col1', '直接输入', '你是国家高级烹饪技师、菜谱SOP规范整理专家。请将用户手打输入的食谱笔记整理为标准SOP文档。', '## 菜名\n**菜名**：\n...', 0, 0),
+                ('c1-video', 'col1', '视频链接', '你是国家高级烹饪技师、菜谱SOP规范整理专家。请根据视频相关内容提取完整的食谱SOP文档。', '## 菜名\n**菜名**：\n...', 0, 1),
+                ('c1-file', 'col1', '导入文件', '你是国家高级烹饪技师、菜谱SOP规范整理专家。请从上传文件中提取完整食谱内容，整理为标准SOP文档。', '## 菜名\n**菜名**：\n...', 0, 2),
+                ('c2-sop', 'col2', 'SOP 文案', '你是一个SOP撰写专家。请将食谱内容转化为标准操作流程。', '# SOP：{菜品名称}\n\n## 操作步骤', 0, 3),
+                ('c2-dao', 'col2', '道与术文案', '你是国家级烹饪大师、食品科学家。请对食谱SOP进行道与术深度解析。', '# {菜品名称} — 道与术解析', 0, 4),
+                ('c2-yanxi', 'col2', '研学手册文案', '你是一个教学设计专家。请将食谱内容编写为研学手册。', '# 研学手册：{菜品名称}', 0, 5),
+                ('c3-sop', 'col3', 'SOP 生成+导出', '你是一个餐饮标准化专家。请根据食谱笔记，编写SOP。', '| 步骤 | 操作 | 标准 |\n|------|------|------|', 1, 6),
+                ('c4-dao', 'col4', '道与术 PPT', '你是一个PPT内容设计专家。请将道与术文案转化为PPT大纲。', '## 标题页\n## 内容页', 1, 7),
+                ('c4-yanxi', 'col4', '研学手册 PPT', '你是一个教学PPT设计专家。请将研学手册内容转化为PPT。', '## 封面\n## 教学页', 1, 8),
+                ('c5-koubo', 'col5', '口播稿生成', '你是一个短视频口播稿专家。请生成口播稿。', '# 口播稿\n\n【开场】\n【内容】\n【结尾】', 0, 9),
+            ]
+            for d in defaults:
+                conn.execute(
+                    "INSERT INTO column_configs (id, column_id, label, prompt, skill, has_template, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    d
+                )
         conn.commit()
     finally:
         conn.close()

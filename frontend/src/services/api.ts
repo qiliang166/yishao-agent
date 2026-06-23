@@ -341,6 +341,19 @@ export const api = {
   openFolder: (path: string) =>
     request('/api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) }),
 
+  // Column Configs
+  listColumnConfigs: () => request('/api/column-configs').then(d => d.configs),
+  updateColumnConfig: (id: string, data: { prompt?: string; skill?: string }) =>
+    request(`/api/column-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  uploadColumnTemplate: async (id: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`/api/column-configs/${id}/upload-template`, { method: 'POST', body: formData })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Upload failed')
+    return data as { ok: boolean; path: string; content?: string }
+  },
+
   // Version
   getVersion: () => request('/api/version'),
   checkUpdate: () => request('/api/check-update'),

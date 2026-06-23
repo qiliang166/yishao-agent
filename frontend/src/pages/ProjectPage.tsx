@@ -98,13 +98,13 @@ const STAGE2_YANXI_TMPL: TemplateItem[] = [
   { id: 's2-yanxi-detail', name: '研学手册详细 v0.9', isDefault: false, meta: '提示词: 研学手册详细 v0.9 · SKILL: 研学手册详细技能', color: '#C75B39', icon: '📚', previewHtml: '' },
 ]
 
-// Stage 1 mode-specific prompts + shared SKILL
-const STAGE1_SKILL = '## 菜名\n**菜名**：\n**菜系**：\n**成品特征**：\n**出品标准**：\n**记录日期**：\n**制作人/来源**：\n\n### 一、食材清单\n| 序号 | 用途 | 食材名称 | 用量 | 处理方式 | 备注 |\n|------|------|----------|------|----------|------|\n| 1 | 主料 | | | | |\n| 2 | 辅料 | | | | |\n| 3 | 调料 | | | | |\n\n> **准备要点**：\n\n### 二、工具与器皿\n| 序号 | 用途 | 工具名称 |\n|------|------|----------|\n| 1 | | |\n\n### 三、制作步骤\n| 序号 | 步骤 | 步骤说明 | 关键技巧 |\n|------|------|----------|----------|\n| 1 | 预处理 | | |\n| 2 | 烹饪 | | |\n\n### 四、时间与火候总览\n| 阶段 | 时长 | 火力 | 注意事项 |\n|------|------|------|----------|\n| | | | |\n\n### 五、试吃与品鉴记录\n- **口味**：\n- **口感**：\n- **色泽**：\n\n### 六、总结与评分\n- **难度**：☆\n- **耗时**：\n- **一句话点评**：'
+// Dynamic stage1 prompts — loaded from column_configs, with fallbacks
+const STAGE1_SKILL_FALLBACK = '## 菜名\n**菜名**：\n**菜系**：\n**成品特征**：\n**出品标准**：\n**记录日期**：\n**制作人/来源**：\n\n### 一、食材清单\n| 序号 | 用途 | 食材名称 | 用量 | 处理方式 | 备注 |\n|------|------|----------|------|----------|------|\n| 1 | 主料 | | | | |\n| 2 | 辅料 | | | | |\n| 3 | 调料 | | | | |\n\n> **准备要点**：\n\n### 二、工具与器皿\n| 序号 | 用途 | 工具名称 |\n|------|------|----------|\n| 1 | | |\n\n### 三、制作步骤\n| 序号 | 步骤 | 步骤说明 | 关键技巧 |\n|------|------|----------|----------|\n| 1 | 预处理 | | |\n| 2 | 烹饪 | | |\n\n### 四、时间与火候总览\n| 阶段 | 时长 | 火力 | 注意事项 |\n|------|------|------|----------|\n| | | | |\n\n### 五、试吃与品鉴记录\n- **口味**：\n- **口感**：\n- **色泽**：\n\n### 六、总结与评分\n- **难度**：☆\n- **耗时**：\n- **一句话点评**：'
 
-const STAGE1_PROMPTS: Record<string, string> = {
-  text: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请将用户手打输入的食谱笔记整理为标准SOP文档。\n\n输入特征：口语化笔记，可能含简写、跳跃表述、隐含信息。\n\n提取策略：\n1. 术语标准化 — 「一点」「适量」等模糊词保留原样，标注「用量待确认」；「切碎」「剁」等动词统一为「切丁/切片/切末」\n2. 补全隐含步骤 — 如原文写「炒肉」，拆解为「热锅→凉油→下肉→翻炒至变色」\n3. 分离主料/辅料/调料 — 从笔记中归类食材用途\n4. 推断缺失字段 — 如原文提到了处理方式但未写工具，可从处理方式反推\n\n铁律：不得新增原文没有的食材或步骤；无法确定的信息标注「未提供」；所有数值（用量、时间、温度）原样保留，不得修改。',
-  video: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请根据视频相关内容提取完整的食谱SOP文档。\n\n输入特征：含时间戳的字幕碎片、创作者口语叙述、可能夹杂开场/互动/广告等非烹饪内容。\n\n多源提取优先级：\n1. 视频描述/简介 → 创作者常在此贴完整食谱（最高权重）\n2. 内嵌字幕文本 → 需过滤时间戳噪音，合并跨句碎片\n3. 音频转写文本（Whisper）→ 口语化表述需标准化\n\n提取策略：\n- 去噪：删除开场白、互动问答、广告口播、BGM歌词等非烹饪段落\n- 合并碎片：跨时间戳的同一操作步骤合并为一条完整说明\n- 重建顺序：如字幕顺序与操作顺序不一致，按烹饪逻辑重排\n- 量化识别：提取所有中文和西式计量单位（克/g、毫升/ml、汤匙/tbsp、茶匙/tsp、杯/cup），识别视频中提到的具体数值\n\n铁律：不得新增视频中没有的食材或步骤；无法确定的信息标注「视频未提及」；数值宁缺毋滥。',
-  file: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请从上传文件中提取完整食谱内容，整理为标准SOP文档。\n\n输入特征：可能是 Word/PDF/图片 OCR 文本，可能含格式杂讯、乱码、扫描错误，也可能已是半结构化文档。\n\n提取策略：\n- 格式清洗：去除页眉页脚、水印文字、行号等非内容标记\n- 结构识别：自动检测原文是否已分段（食材清单/步骤/工具），提取已有结构，不重复包装\n- 表格还原：如原文为表格形式，直接映射到输出模板对应列\n- 数值校对：扫描出的数字（尤其是 0/O、1/l、6/8 等混用）结合上下文纠正；如「30O克」→「300克」\n- 乱码处理：明显 OCR 错误的文本结合烹饪常识修正，无法修正的标注「原文模糊」\n\n铁律：不得新增文件没有的食材或步骤；无法辨识的内容标注「原文模糊」而非编造；所有可辨识的数值精确保留。',
+const STAGE1_PROMPTS_FALLBACK: Record<string, string> = {
+  text: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请将用户手打输入的食谱笔记整理为标准SOP文档。',
+  video: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请根据视频相关内容提取完整的食谱SOP文档。',
+  file: '你是国家高级烹饪技师、菜谱SOP规范整理专家。请从上传文件中提取完整食谱内容，整理为标准SOP文档。',
 }
 
 const STAGE2_MODELS = ['DeepSeek (deepseek-v4-pro)', 'Kimi (moonshot-v1)', '通义千问 (qwen-plus)']
@@ -160,6 +160,9 @@ export default function ProjectPage() {
   const [s2DaoTmpl, setS2DaoTmpl] = useState('s2-dao-std')
   const [s2YanxiTmpl, setS2YanxiTmpl] = useState('s2-yanxi-std')
   const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
+  const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
+  const [stage1Skill, setStage1Skill] = useState('')
+  const [stage4KouboPrompt, setStage4KouboPrompt] = useState('')
   const [s2SopModel, setS2SopModel] = useState(STAGE2_MODELS[0])
   const [s2DaoModel, setS2DaoModel] = useState(STAGE2_MODELS[0])
   const [s2YanxiModel, setS2YanxiModel] = useState(STAGE2_MODELS[0])
@@ -212,6 +215,23 @@ export default function ProjectPage() {
         if (key) pmap[key] = { prompt: p.system_prompt, skill: p.skill_template }
       })
       setStage2Prompts(pmap)
+    }).catch(() => {})
+    api.listColumnConfigs().then((configs: any[]) => {
+      const s1p: Record<string, string> = {}
+      let s1s = ''
+      let kouboP = ''
+      configs.forEach((c: any) => {
+        if (c.column_id === 'col1') {
+          const key = c.id === 'c1-text' ? 'text' : c.id === 'c1-video' ? 'video' : c.id === 'c1-file' ? 'file' : ''
+          if (key) { s1p[key] = c.prompt; if (!s1s) s1s = c.skill }
+        }
+        if (c.column_id === 'col5' && c.id === 'c5-koubo') {
+          kouboP = c.prompt
+        }
+      })
+      setStage1Prompts(s1p)
+      if (s1s) setStage1Skill(s1s)
+      if (kouboP) setStage4KouboPrompt(kouboP)
     }).catch(() => {})
     api.listTtsProviders().then((providers: TTSProvider[]) => {
       setTtsProviders(providers)
@@ -322,11 +342,12 @@ export default function ProjectPage() {
     setStep1Generating(true)
     try {
       const [providerId, model] = step1Model.split(':')
-      const prompt = STAGE1_PROMPTS[mode1Key]
+      const prompt = stage1Prompts[mode1Key] || STAGE1_PROMPTS_FALLBACK[mode1Key]
+      const skill = stage1Skill || STAGE1_SKILL_FALLBACK
       const result: any = await api.llmGenerate({
         provider_id: providerId, model,
         system_prompt: prompt,
-        user_message: `请将以下内容按指定格式整理：\n\n${source}\n\n输出格式要求：\n${STAGE1_SKILL}`,
+        user_message: `请将以下内容按指定格式整理：\n\n${source}\n\n输出格式要求：\n${skill}`,
       })
       const content = result.content
       setSteps(prev => ({ ...prev, step1: content }))
@@ -1023,7 +1044,7 @@ export default function ProjectPage() {
                   onClick={async () => {
                     setStep2Generating('koubo')
                     const content = await doGenerate('step4_koubo',
-                      '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。',
+                      stage4KouboPrompt || '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。',
                       steps.step2_yanxi || steps.step1 || '')
                     if (content) setKouboText(content)
                     setStep2Generating('')

@@ -1457,6 +1457,67 @@ def open_folder(req: OpenFolderRequest):
     except Exception as e:
         raise HTTPException(500, str(e))
 
+# ── Column Configs ──
+
+@app.get("/api/column-configs")
+def list_column_configs():
+    db = get_db()
+    try:
+        rows = db.execute("SELECT * FROM column_configs ORDER BY sort_order").fetchall()
+        return {"configs": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.put("/api/column-configs/{config_id}")
+def update_column_config(config_id: str, req: dict):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Config not found")
+        if 'prompt' in req:
+            db.execute("UPDATE column_configs SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['prompt'], config_id))
+        if 'skill' in req:
+            db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
+        db.commit()
+        row = db.execute("SELECT * FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.post("/api/column-configs/{config_id}/upload-template")
+async def upload_column_template(config_id: str, file: UploadFile = File(...)):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id, has_template FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Config not found")
+        if not existing["has_template"]:
+            raise HTTPException(400, "此栏目不支持模板上传")
+        # Save template file
+        tmpl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "templates")
+        os.makedirs(tmpl_dir, exist_ok=True)
+        name = f"{config_id}_{file.filename}"
+        path = os.path.join(tmpl_dir, name)
+        content = await file.read()
+        with open(path, "wb") as f:
+            f.write(content)
+        db.execute("UPDATE column_configs SET template_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (path, config_id))
+        db.commit()
+        # If it's a text file, read and return for AI analysis
+        if file.filename.endswith(('.txt', '.md', '.docx')):
+            try:
+                text = content.decode('utf-8')
+            except Exception:
+                text = content.decode('gbk', errors='ignore')
+            return {"ok": True, "path": path, "content": text}
+        return {"ok": True, "path": path}
+    finally:
+        db.close()
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8765)
