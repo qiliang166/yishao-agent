@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, Prompt, LLMProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
@@ -95,8 +95,46 @@ function TemplateManager() {
   // modal drag & resize
   const [modalPos, setModalPos] = useState({ x: 0, y: 0 })
   const [modalSize, setModalSize] = useState({ w: 0, h: 0 })
-  const dragRef = { startX: 0, startY: 0, posX: 0, posY: 0 }
-  const resizeRef = { startX: 0, startY: 0, startW: 0, startH: 0 }
+  const [dragging, setDragging] = useState<{ startX: number; startY: number; posX: number; posY: number } | null>(null)
+  const [resizing, setResizing] = useState<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
+  const dragPosRef = useRef({ x: 0, y: 0 })
+
+
+  // drag effect — uses useEffect cleanup to guarantee listener removal
+  useEffect(() => {
+    if (!dragging) return
+    const onMove = (ev: MouseEvent) => {
+      const x = Math.max(-200, dragging.posX + ev.clientX - dragging.startX)
+      const y = Math.max(-200, dragging.posY + ev.clientY - dragging.startY)
+      dragPosRef.current = { x, y }
+      setModalPos({ x, y })
+    }
+    const onUp = () => setDragging(null)
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [dragging])
+
+  // resize effect
+  useEffect(() => {
+    if (!resizing) return
+    const onMove = (ev: MouseEvent) => {
+      setModalSize({
+        w: Math.max(380, resizing.startW + ev.clientX - resizing.startX),
+        h: Math.max(300, resizing.startH + ev.clientY - resizing.startY),
+      })
+    }
+    const onUp = () => setResizing(null)
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [resizing])
 
   // create / edit modal
   const [showModal, setShowModal] = useState(false)
@@ -171,6 +209,14 @@ function TemplateManager() {
 
   // ---------- modal handlers ----------
 
+  const resetModalGeometry = () => {
+    dragPosRef.current = { x: 0, y: 0 }
+    setModalPos({ x: 0, y: 0 })
+    setModalSize({ w: 0, h: 0 })
+    setDragging(null)
+    setResizing(null)
+  }
+
   const openCreate = () => {
     setEditingId(null)
     setFormName('')
@@ -179,8 +225,7 @@ function TemplateManager() {
     setFormSkill('')
     setFormRules('{}')
     setFormError('')
-    setModalPos({ x: 0, y: 0 })
-    setModalSize({ w: 0, h: 0 })
+    resetModalGeometry()
     setShowModal(true)
   }
 
@@ -192,58 +237,37 @@ function TemplateManager() {
     setFormSkill(t.skill || '')
     setFormRules(t.rules || '{}')
     setFormError('')
-    setModalPos({ x: 0, y: 0 })
-    setModalSize({ w: 0, h: 0 })
+    resetModalGeometry()
     setShowModal(true)
   }
 
   const closeModal = () => {
     setShowModal(false)
-    setModalPos({ x: 0, y: 0 })
-    setModalSize({ w: 0, h: 0 })
+    resetModalGeometry()
   }
 
-  // modal drag handlers
   const onDragStart = (e: React.MouseEvent) => {
     e.preventDefault()
-    dragRef.startX = e.clientX
-    dragRef.startY = e.clientY
-    dragRef.posX = modalPos.x
-    dragRef.posY = modalPos.y
-    const onMove = (ev: MouseEvent) => {
-      setModalPos({
-        x: Math.max(-200, dragRef.posX + ev.clientX - dragRef.startX),
-        y: Math.max(-200, dragRef.posY + ev.clientY - dragRef.startY),
-      })
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    e.stopPropagation()
+    setDragging({
+      startX: e.clientX,
+      startY: e.clientY,
+      posX: dragPosRef.current.x,
+      posY: dragPosRef.current.y,
+    })
   }
 
   const onResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault()
     e.stopPropagation()
     const baseW = modalSize.w || 520
     const baseH = modalSize.h || 560
-    resizeRef.startX = e.clientX
-    resizeRef.startY = e.clientY
-    resizeRef.startW = baseW
-    resizeRef.startH = baseH
-    const onMove = (ev: MouseEvent) => {
-      setModalSize({
-        w: Math.max(380, resizeRef.startW + ev.clientX - resizeRef.startX),
-        h: Math.max(300, resizeRef.startH + ev.clientY - resizeRef.startY),
-      })
-    }
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+    setResizing({
+      startX: e.clientX,
+      startY: e.clientY,
+      startW: baseW,
+      startH: baseH,
+    })
   }
 
   const handleSave = async () => {
