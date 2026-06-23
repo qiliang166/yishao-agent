@@ -29,6 +29,8 @@ function SettingsPage() {
   const [brandLogo, setBrandLogo] = useState('🍽')
   const [brandName, setBrandName] = useState('一勺笔录(SOP)智能体')
   const [savePath, setSavePath] = useState('D:\\YISHAOAGENT\\data\\output')
+  const [brandingCopyright, setBrandingCopyright] = useState('')
+  const [brandingSignature, setBrandingSignature] = useState('')
   const [saveMsg, setSaveMsg] = useState('')
   const [logoUploading, setLogoUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -56,6 +58,8 @@ function SettingsPage() {
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.brand_name) setBrandName(s.brand_name)
       if (s.save_path) setSavePath(s.save_path)
+      if (s.branding_copyright) setBrandingCopyright(s.branding_copyright)
+      if (s.branding_signature) setBrandingSignature(s.branding_signature)
       if (s.admin_password_enabled === '1') setPasswordEnabled(true)
 
       // 加载主题数据
@@ -125,7 +129,7 @@ function SettingsPage() {
   const handleGlobalSave = async () => {
     setSaveMsg('')
     try {
-      await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath })
+      await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature })
       setSaveMsg('保存成功')
     } catch (err: any) {
       setSaveMsg('保存失败: ' + err.message)
@@ -251,6 +255,19 @@ function SettingsPage() {
               <label>应用名称</label>
               <input className="form-input" type="text" value={brandName}
                 onChange={e => setBrandName(e.target.value)} style={{ maxWidth: 300 }} />
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 8px' }}>
+              以下信息将作为页脚嵌入导出的 SOP / PPT 文档中。
+            </p>
+            <div className="settings-row">
+              <label>版权信息</label>
+              <input className="form-input" type="text" value={brandingCopyright}
+                onChange={e => setBrandingCopyright(e.target.value)} placeholder="例如：© 2026 一勺笔录" style={{ maxWidth: 300 }} />
+            </div>
+            <div className="settings-row">
+              <label>签名/作者</label>
+              <input className="form-input" type="text" value={brandingSignature}
+                onChange={e => setBrandingSignature(e.target.value)} placeholder="例如：Chef Zhang" style={{ maxWidth: 300 }} />
             </div>
           </div>
 

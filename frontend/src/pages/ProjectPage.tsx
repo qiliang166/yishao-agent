@@ -167,8 +167,7 @@ export default function ProjectPage() {
   const [s3SopModel, setS3SopModel] = useState('')
   const [s3DaoPptModel, setS3DaoPptModel] = useState('')
   const [s3YanxiPptModel, setS3YanxiPptModel] = useState('')
-  const [brandingCopyright, setBrandingCopyright] = useState('')
-  const [brandingSignature, setBrandingSignature] = useState('')
+  const [globalBranding, setGlobalBranding] = useState<{ copyright: string; signature: string }>({ copyright: '', signature: '' })
   const [pptGenerating, setPptGenerating] = useState('')
 
   // Stage 4 state
@@ -208,8 +207,6 @@ export default function ProjectPage() {
       if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
-      if (map['_branding_copyright']) setBrandingCopyright(map['_branding_copyright'])
-      if (map['_branding_signature']) setBrandingSignature(map['_branding_signature'])
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
@@ -287,6 +284,12 @@ export default function ProjectPage() {
         setS3SopModel(defVal)
         setS3DaoPptModel(defVal)
         setS3YanxiPptModel(defVal)
+      }
+    }).catch(() => {})
+    api.getSettings().then(data => {
+      const s = data.settings || {}
+      if (s.branding_copyright || s.branding_signature) {
+        setGlobalBranding({ copyright: s.branding_copyright || '', signature: s.branding_signature || '' })
       }
     }).catch(() => {})
   }, [id, navigate])
@@ -442,7 +445,8 @@ export default function ProjectPage() {
         if (result) aiContent = result
       }
       // Step 2: Format as PPTX
-      const result: any = await api.generatePPT(aiContent, tmplId, undefined, id)
+      const branding = (globalBranding.copyright || globalBranding.signature) ? globalBranding : undefined
+      const result: any = await api.generatePPT(aiContent, tmplId, branding, id)
       setGenFiles(prev => [...prev, {
         name: result.filename, type: 'PPT',
         source: label,
@@ -1052,12 +1056,11 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <div className="form-label" style={{ marginTop: 10 }}>品牌信息（可选）</div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <input className="form-input" placeholder="版权" style={{ flex: 1 }}
-                    value={brandingCopyright} onChange={e => { setBrandingCopyright(e.target.value); saveStep('_branding_copyright', e.target.value) }} />
-                  <input className="form-input" placeholder="签名" style={{ flex: 1 }}
-                    value={brandingSignature} onChange={e => { setBrandingSignature(e.target.value); saveStep('_branding_signature', e.target.value) }} />
+                <div className="form-label" style={{ marginTop: 10 }}>品牌信息</div>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                  {globalBranding.copyright || globalBranding.signature
+                    ? `版权: ${globalBranding.copyright || '—'} · 签名: ${globalBranding.signature || '—'}`
+                    : '未配置，在「全局设置」→ 通用设置 中配置'}
                 </div>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
                   disabled={!s3SopModel}
@@ -1065,7 +1068,7 @@ export default function ProjectPage() {
                     steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '',
                     stage3Prompts.sop?.prompt || '你是一个餐饮标准化专家。请根据食谱笔记，编写SOP。',
                     s3SopModel,
-                    (brandingCopyright || brandingSignature) ? { copyright: brandingCopyright, signature: brandingSignature } : undefined
+                    (globalBranding.copyright || globalBranding.signature) ? globalBranding : undefined
                   )}>
                   📄 AI 生成 + 导出 .docx
                 </button>
