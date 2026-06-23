@@ -20,6 +20,7 @@ function SettingsPage() {
   const [passwordEnabled, setPasswordEnabled] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [initialPassword, setInitialPassword] = useState('')
   const [passwordMsg, setPasswordMsg] = useState('')
 
   useEffect(() => {
@@ -50,9 +51,11 @@ function SettingsPage() {
   }
 
   const SALT = 'yishao-agent-salt-2026'
+  const INITIAL_PASSWORD = '221031'
 
   const handlePasswordSave = async () => {
     setPasswordMsg('')
+    if (initialPassword !== INITIAL_PASSWORD) { setPasswordMsg('初始密码错误，无法修改密码'); return }
     if (!newPassword.trim()) { setPasswordMsg('密码不能为空'); return }
     if (newPassword !== confirmPassword) { setPasswordMsg('两次输入的密码不一致'); return }
     if (newPassword.length < 4) { setPasswordMsg('密码至少需要4个字符'); return }
@@ -60,7 +63,7 @@ function SettingsPage() {
       const hash = sha256(SALT + newPassword)
       await api.updateSettings({ admin_password: hash, admin_password_enabled: '1' })
       setPasswordEnabled(true)
-      setNewPassword(''); setConfirmPassword('')
+      setNewPassword(''); setConfirmPassword(''); setInitialPassword('')
       setPasswordMsg('密码保护已启用')
     } catch (err: any) { setPasswordMsg('保存失败: ' + err.message) }
   }
@@ -71,7 +74,7 @@ function SettingsPage() {
     try {
       await api.updateSettings({ admin_password_enabled: '0' })
       setPasswordEnabled(false)
-      setNewPassword(''); setConfirmPassword('')
+      setNewPassword(''); setConfirmPassword(''); setInitialPassword('')
       setPasswordMsg('密码保护已关闭')
     } catch (err: any) { setPasswordMsg('操作失败: ' + err.message) }
   }
@@ -179,6 +182,12 @@ function SettingsPage() {
           </label>
         </div>
         {passwordEnabled && (<>
+          <div className="settings-row">
+            <label>初始密码</label>
+            <input className="form-input" type="password" value={initialPassword}
+              onChange={e => setInitialPassword(e.target.value)}
+              placeholder="输入初始密码" style={{ maxWidth: 220 }} />
+          </div>
           <div className="settings-row">
             <label>新密码</label>
             <input className="form-input" type="password" value={newPassword}
