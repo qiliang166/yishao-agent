@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
-import { api, Prompt, PromptVersion, Voice } from '../services/api'
+import { api, Voice } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
 type MainTab = 'models' | 'columns'
-
-const CATEGORIES = ['笔记整理', '道与术分析', '研习手册', 'SOP', '口播稿', 'PPT Skill']
 
 const COLUMN_GROUPS = [
   { id: 'col1', label: '文案提取', hasTemplate: false, summary: '无模板 · 3 个配置项' },
@@ -39,8 +37,6 @@ export default function ProjSettingsPage() {
   const [passwordError, setPasswordError] = useState('')
   const [passwordChecking, setPasswordChecking] = useState(false)
   const [providers, setProviders] = useState<any[]>([])
-  const [prompts, setPrompts] = useState<Prompt[]>([])
-
   // Column configs state
   const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([])
   const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
@@ -48,26 +44,6 @@ export default function ProjSettingsPage() {
 
   // Accordion state
   const [openCols, setOpenCols] = useState<Set<string>>(new Set())
-
-  // Prompt modals
-  const [showPromptForm, setShowPromptForm] = useState(false)
-  const [editPromptId, setEditPromptId] = useState<string | null>(null)
-  const [pfName, setPfName] = useState('')
-  const [pfCat, setPfCat] = useState('')
-  const [pfSystem, setPfSystem] = useState('')
-  const [pfSkill, setPfSkill] = useState('')
-  const [pfNote, setPfNote] = useState('')
-  const [pfSaving, setPfSaving] = useState(false)
-  const [showVersions, setShowVersions] = useState<{ promptName: string; versions: PromptVersion[] } | null>(null)
-
-  // Template modals
-  const [showTmplForm, setShowTmplForm] = useState(false)
-  const [editTmplId, setEditTmplId] = useState<string | null>(null)
-  const [tfName, setTfName] = useState('')
-  const [tfType, setTfType] = useState('ppt')
-  const [tfSkill, setTfSkill] = useState('')
-  const [tfSaving, setTfSaving] = useState(false)
-  const [templates, setTemplates] = useState<any[]>([])
 
   // Provider form
   const [showProviderForm, setShowProviderForm] = useState(false)
@@ -117,8 +93,6 @@ export default function ProjSettingsPage() {
 
   const load = () => {
     api.listProviders().then(setProviders).catch(() => {})
-    api.listPrompts().then(setPrompts).catch(() => {})
-    api.listTemplates().then(setTemplates).catch(() => {})
     api.listTtsProviders().then(setTtsProviders).catch(() => {})
     api.listVoices().then(setVoices).catch(() => {})
     api.listAsrProviders().then(setAsrProviders).catch(() => {})
@@ -180,72 +154,6 @@ export default function ProjSettingsPage() {
     } catch (err: any) {
       setPasswordError(err.message || '密码错误')
     } finally { setPasswordChecking(false) }
-  }
-
-  // ── Prompt actions ──
-  const openNewPrompt = () => {
-    setEditPromptId(null); setPfName(''); setPfCat('')
-    setPfSystem(''); setPfSkill(''); setPfNote('')
-    setShowPromptForm(true)
-  }
-  const openEditPrompt = (p: Prompt) => {
-    setEditPromptId(p.id); setPfName(p.name); setPfCat(p.category)
-    setPfSystem((p as any).system_prompt || ''); setPfSkill((p as any).skill_template || '')
-    setPfNote(''); setShowPromptForm(true)
-  }
-  const savePrompt = async () => {
-    if (!pfName.trim() || !pfCat.trim()) return
-    setPfSaving(true)
-    try {
-      if (editPromptId) {
-        await api.updatePrompt(editPromptId, { name: pfName, category: pfCat, system_prompt: pfSystem || undefined, skill_template: pfSkill || undefined, change_note: pfNote || undefined })
-      } else {
-        await api.createPrompt({ name: pfName, category: pfCat, system_prompt: pfSystem, skill_template: pfSkill })
-      }
-      setShowPromptForm(false); load()
-    } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
-    finally { setPfSaving(false) }
-  }
-  const deletePrompt = async (id: string) => {
-    const ok = await modal.confirm('确定删除此提示词？')
-    if (!ok) return
-    try { await api.deletePrompt(id); load() } catch (e: any) { modal.toast('删除失败: ' + e.message, 'error') }
-  }
-  const viewVersions = async (p: Prompt) => {
-    try {
-      const versions = await api.getPromptVersions(p.id)
-      setShowVersions({ promptName: p.name, versions })
-    } catch (e: any) { modal.toast('获取版本失败: ' + e.message, 'error') }
-  }
-
-  // ── Template actions ──
-  const openNewTmpl = () => {
-    setEditTmplId(null); setTfName(''); setTfType('ppt'); setTfSkill('')
-    setShowTmplForm(true)
-  }
-  const saveTmpl = async () => {
-    if (!tfName.trim()) return
-    setTfSaving(true)
-    try {
-      if (editTmplId) {
-        await api.updateTemplate(editTmplId, { name: tfName, type: tfType, linked_skill_id: tfSkill || undefined } as any)
-      } else {
-        await api.createTemplate({ name: tfName, type: tfType, linked_skill_id: tfSkill || undefined })
-      }
-      setShowTmplForm(false); load()
-    } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
-    finally { setTfSaving(false) }
-  }
-  const deleteTmpl = async (id: string) => {
-    const ok = await modal.confirm('确定删除此模板？')
-    if (!ok) return
-    try { await api.deleteTemplate(id); load() } catch (e: any) { modal.toast('删除失败: ' + e.message, 'error') }
-  }
-  const downloadTmpl = (t: any) => {
-    const a = document.createElement('a')
-    a.href = '/api/download/' + encodeURIComponent(t.file_path || t.name)
-    a.download = t.file_path || t.name
-    a.click()
   }
 
   // ── Provider actions ──
@@ -732,62 +640,6 @@ export default function ProjSettingsPage() {
               </div>
             ))}
 
-            {/* 提示词快速管理入口 */}
-            <div style={{ marginTop: 16, padding: '10px 0', borderTop: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>提示词库</span>
-                <button className="btn btn-primary btn-sm" onClick={openNewPrompt}>+ 新建提示词</button>
-              </div>
-              <table className="output-table">
-                <thead><tr><th>名称</th><th>分类</th><th>当前版本</th><th>默认</th><th>操作</th></tr></thead>
-                <tbody>
-                  {prompts.map((p: any) => (
-                    <tr key={p.id}>
-                      <td style={{ fontWeight: 600 }}>{p.name}</td>
-                      <td>{p.category}</td>
-                      <td>{p.current_version || 'v1.0'}</td>
-                      <td>{p.is_default ? '✓' : ''}</td>
-                      <td>
-                        <button className="btn btn-ghost btn-sm" onClick={() => openEditPrompt(p)}>编辑</button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => viewVersions(p)}>版本</button>
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deletePrompt(p.id)}>删除</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {prompts.length === 0 && (
-                    <tr><td colSpan={5} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>暂无提示词</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* 模板快速管理入口 */}
-            <div style={{ marginTop: 16, padding: '10px 0', borderTop: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span style={{ fontSize: 12, fontWeight: 600 }}>模板库</span>
-                <button className="btn btn-primary btn-sm" onClick={openNewTmpl}>+ 新建模板</button>
-              </div>
-              <table className="output-table">
-                <thead><tr><th>名称</th><th>类型</th><th>关联 Skill</th><th>默认</th><th>操作</th></tr></thead>
-                <tbody>
-                  {templates.map((t: any) => (
-                    <tr key={t.id}>
-                      <td style={{ fontWeight: 600 }}>{t.name}</td>
-                      <td>{t.type === 'ppt' ? 'PPT' : t.type === 'sop' ? 'SOP' : t.type}</td>
-                      <td style={{ fontSize: 12 }}>{t.linked_skill_id || '—'}</td>
-                      <td>{t.is_default ? '✓' : ''}</td>
-                      <td>
-                        <button className="btn btn-ghost btn-sm" onClick={() => downloadTmpl(t)}>下载</button>
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deleteTmpl(t.id)}>删除</button>
-                      </td>
-                    </tr>
-                  ))}
-                  {templates.length === 0 && (
-                    <tr><td colSpan={5} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>暂无模板</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
           </div>
         )}
         </>) : (
@@ -803,85 +655,6 @@ export default function ProjSettingsPage() {
           </div>
         )}
       </div>
-
-      {/* ═══ Prompt Form Modal ═══ */}
-      {showPromptForm && (
-        <div className="dialog-overlay" onClick={e => { if (e.target === e.currentTarget) setShowPromptForm(false) }}>
-          <div className="dialog-box" style={{ minWidth: 500 }}>
-            <div className="dialog-title">{editPromptId ? '编辑提示词' : '新建提示词'}</div>
-            <div className="form-label">名称</div>
-            <input className="form-input" value={pfName} onChange={e => setPfName(e.target.value)} placeholder="提示词名称" />
-            <div className="form-label" style={{ marginTop: 12 }}>分类</div>
-            <select className="form-select" value={pfCat} onChange={e => setPfCat(e.target.value)}>
-              <option value="">选择分类...</option>
-              {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <div className="form-label" style={{ marginTop: 12 }}>System Prompt</div>
-            <textarea className="form-textarea" rows={4} value={pfSystem} onChange={e => setPfSystem(e.target.value)} placeholder="系统提示词..." />
-            <div className="form-label" style={{ marginTop: 12 }}>Skill Template</div>
-            <textarea className="form-textarea" rows={4} value={pfSkill} onChange={e => setPfSkill(e.target.value)} placeholder="输出格式模板..." />
-            {editPromptId && (
-              <>
-                <div className="form-label" style={{ marginTop: 12 }}>变更说明</div>
-                <input className="form-input" value={pfNote} onChange={e => setPfNote(e.target.value)} placeholder="此次修改的说明（可选）" />
-              </>
-            )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowPromptForm(false)}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={savePrompt} disabled={pfSaving}>{pfSaving ? '保存中...' : '保存'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ Version History Modal ═══ */}
-      {showVersions && (
-        <div className="dialog-overlay" onClick={e => { if (e.target === e.currentTarget) setShowVersions(null) }}>
-          <div className="dialog-box" style={{ minWidth: 500 }}>
-            <div className="dialog-title">版本历史 — {showVersions.promptName}</div>
-            <table className="output-table">
-              <thead><tr><th>版本</th><th>变更说明</th><th>时间</th></tr></thead>
-              <tbody>
-                {showVersions.versions.map((v: PromptVersion) => (
-                  <tr key={v.version}>
-                    <td style={{ fontWeight: 600 }}>{v.version}</td>
-                    <td style={{ fontSize: 12 }}>{v.change_note || '—'}</td>
-                    <td style={{ fontSize: 11 }}>{v.created_at}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowVersions(null)}>关闭</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ Template Form Modal ═══ */}
-      {showTmplForm && (
-        <div className="dialog-overlay" onClick={e => { if (e.target === e.currentTarget) setShowTmplForm(false) }}>
-          <div className="dialog-box" style={{ minWidth: 420 }}>
-            <div className="dialog-title">{editTmplId ? '编辑模板' : '新建模板'}</div>
-            <div className="form-label">名称</div>
-            <input className="form-input" value={tfName} onChange={e => setTfName(e.target.value)} placeholder="模板名称" />
-            <div className="form-label" style={{ marginTop: 12 }}>类型</div>
-            <select className="form-select" value={tfType} onChange={e => setTfType(e.target.value)}>
-              <option value="ppt">PPT</option>
-              <option value="sop">SOP</option>
-            </select>
-            <div className="form-label" style={{ marginTop: 12 }}>关联 Skill</div>
-            <select className="form-select" value={tfSkill} onChange={e => setTfSkill(e.target.value)}>
-              <option value="">无</option>
-              {prompts.map(p => <option key={p.id} value={p.id}>{p.name} ({p.category})</option>)}
-            </select>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowTmplForm(false)}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={saveTmpl} disabled={tfSaving}>{tfSaving ? '保存中...' : '保存'}</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ═══ Provider Form Modal ═══ */}
       {showProviderForm && (
