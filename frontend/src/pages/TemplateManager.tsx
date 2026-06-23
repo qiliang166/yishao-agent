@@ -507,14 +507,12 @@ function TemplateManager() {
                           justifyContent: 'center',
                           position: 'relative',
                           overflow: 'hidden',
-                          padding: '10px',
-                          boxSizing: 'border-box',
                         }}>
                           {displayUrl ? (
                             <img
                               src={displayUrl}
                               alt={t.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                              style={{ width: '100%', height: '100%', objectFit: 'contain', transform: 'scale(0.9)' }}
                               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                             />
                           ) : null}
