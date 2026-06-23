@@ -116,6 +116,8 @@ export default function ProjectPage() {
   const [dlTaskId, setDlTaskId] = useState('')
   const [videoPath, setVideoPath] = useState('')
   const [textInput, setTextInput] = useState('')
+  const [videoText, setVideoText] = useState('')
+  const [fileText, setFileText] = useState('')
   const mode1 = sub === '1a' ? 'link' : sub === '1b' ? 'text' : 'file' as 'link' | 'text' | 'file'
   const mode1Key = sub === '1a' ? 'video' : sub === '1b' ? 'text' : 'file'
   const [vcOpen, setVcOpen] = useState(false)
@@ -137,7 +139,6 @@ export default function ProjectPage() {
   const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
   const [step1Model, setStep1Model] = useState('')
   const [step1Generating, setStep1Generating] = useState(false)
-  const [step1Source, setStep1Source] = useState('')
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('') // which sub is generating
@@ -179,15 +180,11 @@ export default function ProjectPage() {
     api.getSteps(id).then((s: any[]) => {
       const map: Record<string, string> = {}
       s.forEach((x: any) => { map[x.step_name] = x.content })
-      if (!map['step1'] && map['video_text']) {
-        map['step1'] = map['video_text']
-      }
       setSteps(map)
       setSavedSteps({...map})
-      if (map['video_text']) {
-        setStep1Source(map['video_text'])
-        setTextInput(map['video_text'])
-      }
+      setVideoText(map['raw_video'] || map['video_text'] || '')
+      setTextInput(map['raw_text'] || '')
+      setFileText(map['raw_file'] || '')
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
@@ -263,17 +260,18 @@ export default function ProjectPage() {
     setSavedSteps(prev => ({ ...prev, [stepName]: content }))
   }, [id])
 
+  const step1Key = () => sub === '1a' ? 'step1_video' : sub === '1b' ? 'step1_text' : 'step1_file'
   const step2Key = () => `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
 
   // Get source text for Stage 2 based on selected data source
   const getStage2Source = useCallback(() => {
     switch (s2DataSource) {
-      case 'video': return steps.raw_video || steps.video_text || ''
-      case 'text': return steps.raw_text || textInput || ''
-      case 'file': return steps.raw_file || step1Source || ''
-      default: return steps.step1 || ''
+      case 'video': return steps.raw_video || ''
+      case 'text': return steps.raw_text || ''
+      case 'file': return steps.raw_file || ''
+      default: return ''
     }
-  }, [s2DataSource, steps, textInput, step1Source])
+  }, [s2DataSource, steps])
 
   // ── Stage nav ──
   const switchStage = (s: StageId) => {
@@ -299,10 +297,10 @@ export default function ProjectPage() {
     const poll = async () => {
       const p: any = await api.getVideoProgress(taskId)
       setDlPercent(p.percent); setDlStatus(p.status)
-      if (p.text) setStep1Source(p.text)
+      if (p.text) setVideoText(p.text)
       if (p.subtitle_text) setSourceSubtitle(p.subtitle_text)
       if (p.asr_text) setSourceAsr(p.asr_text)
-      if (p.merged_text) { setSourceMerged(p.merged_text); setStep1Source(p.merged_text); setSourceTab('merged') }
+      if (p.merged_text) { setSourceMerged(p.merged_text); setVideoText(p.merged_text); setSourceTab('merged') }
       else if (p.asr_text) { setSourceTab('asr') }
       else if (p.subtitle_text) { setSourceTab('subtitle') }
       if (p.video_path) setVideoPath(p.video_path)
@@ -339,7 +337,7 @@ export default function ProjectPage() {
 
   // ── Stage 1 Generate ──
   const doGenerateStep1 = async () => {
-    const source = mode1 === 'text' ? textInput : step1Source
+    const source = mode1 === 'text' ? textInput : mode1 === 'file' ? fileText : videoText
     if (!source.trim() || !id || !step1Model) return
     setStep1Generating(true)
     try {
@@ -352,8 +350,9 @@ export default function ProjectPage() {
         user_message: `请将以下内容按指定格式整理：\n\n${source}\n\n输出格式要求：\n${skill}`,
       })
       const content = result.content
-      setSteps(prev => ({ ...prev, step1: content }))
-      saveStep('step1', content)
+      const key = step1Key()
+      setSteps(prev => ({ ...prev, [key]: content }))
+      saveStep(key, content)
     } catch (e: any) { modal.toast('生成失败: ' + e.message, 'error') }
     finally { setStep1Generating(false) }
   }
@@ -412,7 +411,7 @@ export default function ProjectPage() {
   // ── Stage status dots ──
   const stageDot = (s: StageId) => {
     const st = steps
-    if (s === 1 && st.step1) return 'done'
+    if (s === 1 && (st.step1_video || st.step1_text || st.step1_file)) return 'done'
     if (s === 2 && (st.step2_sop || st.step2_daoshuyi || st.step2_yanxi)) return 'done'
     if (s === 3 && (st.step3_sop_doc || st.step3_dao_ppt || st.step3_yan_ppt)) return 'done'
     if (s === 4 && (st.step4_koubo || st.step4_tts)) return 'done'
@@ -569,12 +568,12 @@ export default function ProjectPage() {
                     📺 播放校验
                   </button>
                   <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 8 }}
-                    disabled={step1Generating || !step1Model || !step1Source.trim()}
+                    disabled={step1Generating || !step1Model || !videoText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
                 </div>
-                {step1Source && (
+                {videoText && (
                   <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                     <div className="card-title">📝 提取的原始文本</div>
                     <div className="card-hint">视频提取的原始字幕内容，可编辑后重新生成</div>
@@ -583,21 +582,21 @@ export default function ProjectPage() {
                         {sourceMerged && (
                           <button
                             className={`btn ${sourceTab === 'merged' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                            onClick={() => { setSourceTab('merged'); setStep1Source(sourceMerged) }}>
+                            onClick={() => { setSourceTab('merged'); setVideoText(sourceMerged) }}>
                             合并版
                           </button>
                         )}
                         {sourceAsr && (
                           <button
                             className={`btn ${sourceTab === 'asr' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                            onClick={() => { setSourceTab('asr'); setStep1Source(sourceAsr) }}>
+                            onClick={() => { setSourceTab('asr'); setVideoText(sourceAsr) }}>
                             语音识别
                           </button>
                         )}
                         {sourceSubtitle && (
                           <button
                             className={`btn ${sourceTab === 'subtitle' ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                            onClick={() => { setSourceTab('subtitle'); setStep1Source(sourceSubtitle) }}
+                            onClick={() => { setSourceTab('subtitle'); setVideoText(sourceSubtitle) }}
                             disabled={!sourceSubtitle}>
                             字幕
                           </button>
@@ -605,13 +604,13 @@ export default function ProjectPage() {
                       </div>
                     )}
                     <textarea className="form-textarea" style={{ flex: 1, minHeight: 150 }}
-                      value={step1Source}
-                      onChange={e => setStep1Source(e.target.value)}
+                      value={videoText}
+                      onChange={e => setVideoText(e.target.value)}
                       placeholder="视频字幕将显示在此..." />
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>🗑 清空</button>
-                      <button className="btn btn-primary btn-sm" disabled={!step1Source.trim()}
-                        onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_video', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : step1Source !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : step1Source !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>🗑 清空</button>
+                      <button className="btn btn-primary btn-sm" disabled={!videoText.trim()}
+                        onClick={() => { if (id && videoText.trim()) { saveStep('video_text', videoText); saveStep('raw_video', videoText); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : videoText !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : videoText !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     </div>
                   </div>
                 )}
@@ -666,7 +665,7 @@ export default function ProjectPage() {
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
                     <button className="btn btn-primary btn-sm" disabled={!textInput.trim()}
-                      onClick={() => { if (id && textInput.trim()) { setStep1Source(textInput); saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : textInput !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : textInput !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
+                      onClick={() => { if (id && textInput.trim()) { saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : textInput !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : textInput !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-primary btn-sm"
                       disabled={step1Generating || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
@@ -686,7 +685,7 @@ export default function ProjectPage() {
                       const f = e.target.files?.[0]
                       if (!f) return
                       const text = await f.text()
-                      setStep1Source(text)
+                      setFileText(text)
                       if (id && text) {
                         api.saveStep(id, 'raw_file', text)
                         setSteps(prev => ({ ...prev, raw_file: text }))
@@ -694,7 +693,7 @@ export default function ProjectPage() {
                       }
                     }} />
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={step1Generating || !step1Model || !step1Source.trim()}
+                    disabled={step1Generating || !step1Model || !fileText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
@@ -703,13 +702,13 @@ export default function ProjectPage() {
                   <div className="card-title">📝 文件原始内容</div>
                   <div className="card-hint">文件读取的原始内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 200 }}
-                    value={step1Source}
-                    onChange={e => setStep1Source(e.target.value)}
+                    value={fileText}
+                    onChange={e => setFileText(e.target.value)}
                     placeholder="文件内容将显示在此..." />
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>🗑 清空</button>
-                    <button className="btn btn-primary btn-sm" disabled={!step1Source.trim()}
-                      onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_file', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : step1Source !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : step1Source !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setFileText('')}>🗑 清空</button>
+                    <button className="btn btn-primary btn-sm" disabled={!fileText.trim()}
+                      onClick={() => { if (id && fileText.trim()) { saveStep('video_text', fileText); saveStep('raw_file', fileText); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : fileText !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : fileText !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                   </div>
                 </div>
                 <div className="card">
@@ -757,8 +756,8 @@ export default function ProjectPage() {
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div className="card-title">🤖 AI 生成结果</div>
                 <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
-                  value={steps.step1 || ''}
-                  onChange={e => { setSteps(prev => ({ ...prev, step1: e.target.value })) }}
+                  value={steps[step1Key()] || ''}
+                  onChange={e => { setSteps(prev => ({ ...prev, [step1Key()]: e.target.value })) }}
                   placeholder="点击左侧「生成」按钮，AI 整理后的标准 SOP 文档将显示在此..." />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
@@ -766,23 +765,23 @@ export default function ProjectPage() {
                   </span>
                   <span style={{ display: 'flex', gap: 5 }}>
                     <button className="btn btn-ghost btn-sm"
-                      disabled={!steps.step1}
+                      disabled={!steps[step1Key()]}
                       onClick={async () => {
                         if (!id) return
                         try {
-                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_AI整理.txt`, steps.step1 || '')
+                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_AI整理.txt`, steps[step1Key()] || '')
                           modal.toast(`已保存到 ${resp.path}`, 'success')
                         } catch (e: any) {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
                       }}>📥 保存到项目</button>
                     <button className="btn btn-primary btn-sm"
-                      disabled={!steps.step1}
-                      style={steps.step1 !== (savedSteps.step1 || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}
-                      onClick={() => saveStep('step1', steps.step1 || '')}>{steps.step1 !== (savedSteps.step1 || '') ? '💾 保存' : '✓ 已保存'}</button>
+                      disabled={!steps[step1Key()]}
+                      style={(steps[step1Key()] || '') !== (savedSteps[step1Key()] || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}
+                      onClick={() => saveStep(step1Key(), steps[step1Key()] || '')}>{(steps[step1Key()] || '') !== (savedSteps[step1Key()] || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-ghost btn-sm"
-                      disabled={!steps.step1}
-                      onClick={() => { setSteps(prev => ({ ...prev, step1: '' })); saveStep('step1', '') }}>✕ 清空</button>
+                      disabled={!steps[step1Key()]}
+                      onClick={() => { setSteps(prev => ({ ...prev, [step1Key()]: '' })); saveStep(step1Key(), '') }}>✕ 清空</button>
                   </span>
                 </div>
               </div>
@@ -802,9 +801,9 @@ export default function ProjectPage() {
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
                     <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.raw_video || steps.video_text ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.raw_text || textInput ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — {steps.raw_file || step1Source ? '已有内容' : '暂无内容'}</option>
+                      <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
                     </select>
                   </div>
                   <div className="form-label">大模型</div>
@@ -836,9 +835,9 @@ export default function ProjectPage() {
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
                     <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.raw_video || steps.video_text ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.raw_text || textInput ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — {steps.raw_file || step1Source ? '已有内容' : '暂无内容'}</option>
+                      <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
                     </select>
                   </div>
                   <div className="form-label">大模型</div>
@@ -870,9 +869,9 @@ export default function ProjectPage() {
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
                     <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.raw_video || steps.video_text ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.raw_text || textInput ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — {steps.raw_file || step1Source ? '已有内容' : '暂无内容'}</option>
+                      <option value="video">视频提取 — {steps.raw_video ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.raw_text ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — {steps.raw_file ? '已有内容' : '暂无内容'}</option>
                     </select>
                   </div>
                   <div className="form-label">大模型</div>
@@ -944,7 +943,7 @@ export default function ProjectPage() {
                   <input className="form-input" placeholder="签名" style={{ flex: 1 }} />
                 </div>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  onClick={() => doExportSOP(steps.step2_sop || steps.step1 || '')}>
+                  onClick={() => doExportSOP(steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '')}>
                   📄 AI 生成 + 导出 .docx
                 </button>
               </div>
@@ -1062,7 +1061,7 @@ export default function ProjectPage() {
                     setStep2Generating('koubo')
                     const content = await doGenerate('step4_koubo',
                       stage4KouboPrompt || '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。',
-                      steps.step2_yanxi || steps.step1 || '')
+                      steps.step2_yanxi || steps.step1_video || steps.step1_text || steps.step1_file || '')
                     if (content) setKouboText(content)
                     setStep2Generating('')
                   }}>
@@ -1271,17 +1270,17 @@ export default function ProjectPage() {
               </div>
               <div style={{ flex: 2, display: 'flex', flexDirection: 'column' }}>
                 <textarea className="form-textarea" style={{ flex: 1, minHeight: 360 }}
-                  value={step1Source}
-                  onChange={e => setStep1Source(e.target.value)} />
+                  value={videoText}
+                  onChange={e => setVideoText(e.target.value)} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>
                     🗑 清空
                   </button>
-                  <button className="btn btn-primary btn-sm" style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : step1Source !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined} onClick={() => {
-                    if (id && step1Source.trim()) { saveStep('video_text', step1Source); flashSave() }
+                  <button className="btn btn-primary btn-sm" style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : videoText !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined} onClick={() => {
+                    if (id && videoText.trim()) { saveStep('video_text', videoText); flashSave() }
                     setVcOpen(false)
                   }}>
-                    {savedFlash ? '✓ 已保存' : step1Source !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}
+                    {savedFlash ? '✓ 已保存' : videoText !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}
                   </button>
                 </div>
               </div>
