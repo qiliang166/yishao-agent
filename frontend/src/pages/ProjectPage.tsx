@@ -142,6 +142,7 @@ export default function ProjectPage() {
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('') // which sub is generating
+  const [batchGenerating, setBatchGenerating] = useState(false)
   const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
   const [stage1Skill, setStage1Skill] = useState('')
@@ -187,6 +188,11 @@ export default function ProjectPage() {
       setVideoText(map['raw_video'] || map['video_text'] || '')
       setTextInput(map['raw_text'] || '')
       setFileText(map['raw_file'] || '')
+      // Restore saved model selections
+      if (map['_model_step1']) setStep1Model(map['_model_step1'])
+      if (map['_model_s2_sop']) setS2SopModel(map['_model_s2_sop'])
+      if (map['_model_s2_dao']) setS2DaoModel(map['_model_s2_dao'])
+      if (map['_model_s2_yanxi']) setS2YanxiModel(map['_model_s2_yanxi'])
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
@@ -359,6 +365,40 @@ export default function ProjectPage() {
     finally { setStep1Generating('') }
   }
 
+  // ── Batch Generate All Stage 2 Docs ──
+  const doBatchGenerate = async () => {
+    if (!id) return
+    setBatchGenerating(true)
+    try {
+      const tasks: Promise<any>[] = []
+      const sopSource = getStage2Source(s2SopDataSource)
+      if (sopSource && s2SopModel) {
+        const [pid, mdl] = s2SopModel.split(':')
+        tasks.push(doGenerate('step2_sop', stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。', sopSource, pid, mdl))
+      }
+      const daoSource = getStage2Source(s2DaoDataSource)
+      if (daoSource && s2DaoModel) {
+        const [pid, mdl] = s2DaoModel.split(':')
+        tasks.push(doGenerate('step2_daoshuyi', stage2Prompts.dao?.prompt || '请分析以下食谱内容的道与术。', daoSource, pid, mdl))
+      }
+      const yanxiSource = getStage2Source(s2YanxiDataSource)
+      if (yanxiSource && s2YanxiModel) {
+        const [pid, mdl] = s2YanxiModel.split(':')
+        tasks.push(doGenerate('step2_yanxi', stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案。', yanxiSource, pid, mdl))
+      }
+      if (tasks.length === 0) {
+        modal.toast('没有可生成的数据源或模型', 'error')
+        return
+      }
+      await Promise.all(tasks)
+      modal.toast('三篇文案已全部生成', 'success')
+    } catch (e: any) {
+      modal.toast('批量生成失败: ' + e.message, 'error')
+    } finally {
+      setBatchGenerating(false)
+    }
+  }
+
   // ── PPT / SOP Generation ──
   const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string) => {
     setPptGenerating(stepKey)
@@ -496,7 +536,7 @@ export default function ProjectPage() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <select className="form-select" style={{ flex: 1 }}
                     value={step1Model}
-                    onChange={e => setStep1Model(e.target.value)}>
+                    onChange={e => { setStep1Model(e.target.value); saveStep('_model_step1', e.target.value) }}>
                     <option value="">选择模型...</option>
                     {llmProviders.filter(p => p.is_enabled).map(p =>
                       (Array.isArray(p.models) ? p.models : []).map((m: string) => (
@@ -778,6 +818,11 @@ export default function ProjectPage() {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
                       }}>📥 保存到项目</button>
+                    <button className="btn btn-primary btn-sm" style={{ background: 'var(--purple)', borderColor: 'var(--purple)', color: '#fff' }}
+                      disabled={batchGenerating || (!getStage2Source(s2SopDataSource) && !getStage2Source(s2DaoDataSource) && !getStage2Source(s2YanxiDataSource))}
+                      onClick={doBatchGenerate}>
+                      {batchGenerating ? '⏳ 生成中...' : '⚡ 生成所有文案'}
+                    </button>
                     <button className="btn btn-primary btn-sm"
                       disabled={!steps[step1Key()]}
                       style={(steps[step1Key()] || '') !== (savedSteps[step1Key()] || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}
@@ -810,7 +855,7 @@ export default function ProjectPage() {
                     </select>
                   </div>
                   <div className="form-label">大模型</div>
-                  <select className="form-select" style={{ marginBottom: 8 }} value={s2SopModel} onChange={e => setS2SopModel(e.target.value)}>
+                  <select className="form-select" style={{ marginBottom: 8 }} value={s2SopModel} onChange={e => { setS2SopModel(e.target.value); saveStep('_model_s2_sop', e.target.value) }}>
                     <option value="">选择模型...</option>
                     {llmProviders.filter(p => p.is_enabled).map(p =>
                       (Array.isArray(p.models) ? p.models : []).map((m: string) => (
@@ -844,7 +889,7 @@ export default function ProjectPage() {
                     </select>
                   </div>
                   <div className="form-label">大模型</div>
-                  <select className="form-select" style={{ marginBottom: 8 }} value={s2DaoModel} onChange={e => setS2DaoModel(e.target.value)}>
+                  <select className="form-select" style={{ marginBottom: 8 }} value={s2DaoModel} onChange={e => { setS2DaoModel(e.target.value); saveStep('_model_s2_dao', e.target.value) }}>
                     <option value="">选择模型...</option>
                     {llmProviders.filter(p => p.is_enabled).map(p =>
                       (Array.isArray(p.models) ? p.models : []).map((m: string) => (
@@ -878,7 +923,7 @@ export default function ProjectPage() {
                     </select>
                   </div>
                   <div className="form-label">大模型</div>
-                  <select className="form-select" style={{ marginBottom: 8 }} value={s2YanxiModel} onChange={e => setS2YanxiModel(e.target.value)}>
+                  <select className="form-select" style={{ marginBottom: 8 }} value={s2YanxiModel} onChange={e => { setS2YanxiModel(e.target.value); saveStep('_model_s2_yanxi', e.target.value) }}>
                     <option value="">选择模型...</option>
                     {llmProviders.filter(p => p.is_enabled).map(p =>
                       (Array.isArray(p.models) ? p.models : []).map((m: string) => (
