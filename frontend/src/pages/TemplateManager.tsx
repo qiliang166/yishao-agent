@@ -38,11 +38,11 @@ function getThumbnailUrl(t: Template): string {
 
 const inputField: React.CSSProperties = {
   width: '100%',
-  height: '34px',
+  height: '32px',
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius-sm)',
-  padding: '0 10px',
-  fontSize: '12px',
+  padding: '0 8px',
+  fontSize: '11px',
   fontFamily: 'inherit',
   color: 'var(--text)',
   background: 'var(--card)',
@@ -56,7 +56,7 @@ const textareaStyle: React.CSSProperties = {
   border: '1px solid var(--border)',
   borderRadius: 'var(--radius-sm)',
   padding: '10px',
-  fontSize: '12px',
+  fontSize: '11px',
   fontFamily: 'var(--mono)',
   color: 'var(--text)',
   background: 'var(--card)',
@@ -74,7 +74,7 @@ const modalCard: React.CSSProperties = {
 }
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '11px',
+  fontSize: '10px',
   fontWeight: 600,
   color: 'var(--text)',
   display: 'block',
@@ -490,7 +490,7 @@ function TemplateManager() {
                         {/* Card info bar */}
                         <div style={{ padding: '8px 10px' }}>
                           <h4 style={{
-                            fontSize: '12px', fontWeight: 600, color: 'var(--text)', margin: 0,
+                            fontSize: '11px', fontWeight: 600, color: 'var(--text)', margin: 0,
                             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                           }}>
                             {t.name}
