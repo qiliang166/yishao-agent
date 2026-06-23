@@ -34,7 +34,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   yanxi: '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。',
 }
 
-const TeachingDocPanel = forwardRef<{ triggerGenerate: () => void }, TeachingDocPanelProps>(({
+const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
   docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
 }, ref) => {
   const modal = useModal()
@@ -48,8 +48,25 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => void }, TeachingDoc
   const [savedFlash, setSavedFlash] = useState(0)
 
   const stepKey = STEP_KEYS[docType]
-  const content = steps[stepKey] || ''
+  const propContent = steps[stepKey] || ''
   const savedContent = savedSteps[stepKey] || ''
+
+  // ── Local content state (decoupled from props for dirty-state tracking) ──
+  const [localContent, setLocalContent] = useState(propContent)
+
+  // Re-sync localContent when stepKey changes (tab switch)
+  const prevStepKeyRef = useRef(stepKey)
+  if (stepKey !== prevStepKeyRef.current) {
+    prevStepKeyRef.current = stepKey
+    setLocalContent(steps[stepKey] || '')
+  }
+
+  // Re-sync localContent when prop content changes externally (AI gen, parent refresh)
+  const prevPropContentRef = useRef(propContent)
+  if (propContent !== prevPropContentRef.current) {
+    prevPropContentRef.current = propContent
+    setLocalContent(propContent)
+  }
 
   // ── Re-sync model when docType/modelKey changes ──
   if (modelKey !== lastModelKey.current) {
@@ -104,29 +121,30 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => void }, TeachingDoc
 
   // ── Save ──
   const handleSave = useCallback(async () => {
-    await api.saveStep(projectId, stepKey, content)
+    await api.saveStep(projectId, stepKey, localContent)
     setSavedFlash(Date.now())
     setTimeout(() => setSavedFlash(0), 1500)
     onRefresh()
-  }, [projectId, stepKey, content, onRefresh])
+  }, [projectId, stepKey, localContent, onRefresh])
 
   // ── Clear ──
   const handleClear = useCallback(async () => {
+    setLocalContent('')
     await api.saveStep(projectId, stepKey, '')
     onRefresh()
   }, [projectId, stepKey, onRefresh])
 
   // ── Save to project file ──
   const handleSaveToProject = useCallback(async () => {
-    if (!content) return
+    if (!localContent) return
     try {
       const label = DOC_LABELS[docType]
-      const resp = await api.saveFileToProject(projectId, `${label}.txt`, content)
+      const resp = await api.saveFileToProject(projectId, `${label}.txt`, localContent)
       modal.toast(`已保存到 ${resp.path}`, 'success')
     } catch (e: any) {
       modal.toast('保存失败: ' + e.message, 'error')
     }
-  }, [projectId, content, docType])
+  }, [projectId, localContent, docType])
 
   // ── Model change ──
   const handleModelChange = useCallback((val: string) => {
@@ -134,18 +152,18 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => void }, TeachingDoc
     api.saveStep(projectId, MODEL_KEYS[docType], val)
   }, [projectId, docType])
 
-  // ── Expose triggerGenerate for batch ──
+  // ── Expose triggerGenerate for batch (returns Promise for await) ──
   useImperativeHandle(ref, () => ({ triggerGenerate: handleGenerate }), [handleGenerate])
 
   // ── Button helpers ──
   const getSaveLabel = () => {
-    if (!content.trim()) return '💾 保存'
-    if (content !== savedContent) return '💾 保存'
+    if (!localContent.trim()) return '💾 保存'
+    if (localContent !== savedContent) return '💾 保存'
     return '✓ 已保存'
   }
   const getSaveClass = () => {
     if (savedFlash) return 'btn-saved-flash'
-    if (!content.trim() || content !== savedContent) return 'btn-dirty'
+    if (!localContent.trim() || localContent !== savedContent) return 'btn-dirty'
     return ''
   }
 
@@ -191,10 +209,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => void }, TeachingDoc
 
       {/* Content textarea */}
       <textarea className="form-textarea" style={{ flex: 1, minHeight: 120, marginTop: 12 }}
-        value={content}
-        onChange={async e => {
-          await api.saveStep(projectId, stepKey, e.target.value)
-          onRefresh()
+        value={localContent}
+        onChange={e => {
+          const newVal = e.target.value
+          setLocalContent(newVal)
+          api.saveStep(projectId, stepKey, newVal)
         }}
         placeholder={`点击生成按钮，AI生成后在此编辑...`}
       />
@@ -208,9 +227,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => void }, TeachingDoc
         </span>
         <span style={{ display: 'flex', gap: 5 }}>
           <button className="btn btn-ghost btn-sm" onClick={handleClear}
-            disabled={!content}>✕ 清空</button>
+            disabled={!localContent}>✕ 清空</button>
           <button className="btn btn-ghost btn-sm" onClick={handleSaveToProject}
-            disabled={!content}>📥 存到项目</button>
+            disabled={!localContent}>📥 存到项目</button>
           <button className={`btn btn-primary btn-sm ${getSaveClass()}`}
             onClick={handleSave}>{getSaveLabel()}</button>
         </span>

@@ -137,9 +137,9 @@ export default function ProjectPage() {
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('') // which sub is generating
   const [batchGenerating, setBatchGenerating] = useState(false)
-  const sopRef = useRef<{ triggerGenerate: () => void }>(null)
-  const daoRef = useRef<{ triggerGenerate: () => void }>(null)
-  const yanxiRef = useRef<{ triggerGenerate: () => void }>(null)
+  const sopRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
+  const daoRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
+  const yanxiRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
   const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
   const [stage1Skill, setStage1Skill] = useState('')
@@ -407,9 +407,30 @@ export default function ProjectPage() {
   const doBatchGenerate = async () => {
     setBatchGenerating(true)
     try {
-      sopRef.current?.triggerGenerate()
-      daoRef.current?.triggerGenerate()
-      yanxiRef.current?.triggerGenerate()
+      const tasks = [
+        { ref: sopRef, label: 'SOP文案' },
+        { ref: daoRef, label: '道与术文案' },
+        { ref: yanxiRef, label: '研学手册文案' },
+      ]
+      const results = await Promise.all(
+        tasks.map(t =>
+          t.ref.current?.triggerGenerate().then(
+            () => ({ label: t.label, ok: true }),
+            () => ({ label: t.label, ok: false }),
+          ) ?? Promise.resolve({ label: t.label, ok: false })
+        )
+      )
+      const ok = results.filter(r => r.ok)
+      const fail = results.filter(r => !r.ok)
+      if (fail.length === 0) {
+        modal.toast('三篇文案已全部生成', 'success')
+      } else if (ok.length === 0) {
+        modal.toast(`全部生成失败: ${fail.map(f => f.label).join('、')}`, 'error')
+      } else {
+        modal.toast(`${ok.map(o => o.label).join('、')} 生成成功; ${fail.map(f => f.label).join('、')} 失败`, 'error')
+      }
+    } catch (e: any) {
+      modal.toast('批量生成失败: ' + e.message, 'error')
     } finally {
       setBatchGenerating(false)
     }
