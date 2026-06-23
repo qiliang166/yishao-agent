@@ -46,7 +46,14 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
   // ── Internal state ──
   const modelKey = MODEL_KEYS[docType]
-  const [model, setModel] = useState(steps[modelKey] || '')
+  const getDefaultModel = () => {
+    const saved = steps[modelKey]
+    if (saved) return saved
+    const defP = llmProviders.find(p => p.is_enabled)
+    const defMs = Array.isArray(defP?.models) ? defP.models : []
+    return defP && defMs.length > 0 ? `${defP.id}:${defMs[0]}` : ''
+  }
+  const [model, setModel] = useState(() => getDefaultModel())
   const lastModelKey = useRef(modelKey)
   const [_dataSource, _setDataSource] = useState('video')
   const dataSource = dataSourceProp !== undefined ? dataSourceProp : _dataSource
@@ -82,17 +89,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     if (persisted) setModel(persisted)
   }
 
-  // ── Initialize model default on first mount (persist so split panels stay in sync) ──
-  const modelInitedRef = useRef(false)
-  if (!model && !modelInitedRef.current) {
-    modelInitedRef.current = true
-    const defProvider = llmProviders.find(p => p.is_enabled)
-    const defModels = Array.isArray(defProvider?.models) ? defProvider.models : []
-    const defVal = defProvider && defModels.length > 0 ? `${defProvider.id}:${defModels[0]}` : ''
-    if (defVal) {
-      setModel(defVal)
-      api.saveStep(projectId, modelKey, defVal)
-    }
+  // ── Persist default model to API if not yet saved ──
+  const modelSavedRef = useRef(false)
+  if (!steps[modelKey] && !modelSavedRef.current) {
+    modelSavedRef.current = true
+    if (model) api.saveStep(projectId, modelKey, model)
   }
 
   // ── Data source text ──
