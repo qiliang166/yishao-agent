@@ -103,6 +103,7 @@ export default function ProjectPage() {
   const [stage, setStage] = useState<StageId>(1)
   const [sub, setSub] = useState<SubId>('1a')
   const [steps, setSteps] = useState<Record<string, string>>({})
+  const [savedSteps, setSavedSteps] = useState<Record<string, string>>({})
 
   // Stage 1 state
   const [asrProviders, setAsrProviders] = useState<any[]>([])
@@ -182,6 +183,7 @@ export default function ProjectPage() {
         map['step1'] = map['video_text']
       }
       setSteps(map)
+      setSavedSteps({...map})
       if (map['video_text']) {
         setStep1Source(map['video_text'])
         setTextInput(map['video_text'])
@@ -258,7 +260,10 @@ export default function ProjectPage() {
     if (!id) return
     api.saveStep(id, stepName, content)
     setSteps(prev => ({ ...prev, [stepName]: content }))
+    setSavedSteps(prev => ({ ...prev, [stepName]: content }))
   }, [id])
+
+  const step2Key = () => `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
 
   // Get source text for Stage 2 based on selected data source
   const getStage2Source = useCallback(() => {
@@ -308,6 +313,7 @@ export default function ProjectPage() {
         if (rawText && id) {
           api.saveStep(id, 'raw_video', rawText)
           setSteps(prev => ({ ...prev, raw_video: rawText }))
+          setSavedSteps(prev => ({ ...prev, raw_video: rawText }))
         }
         return
       }
@@ -605,7 +611,7 @@ export default function ProjectPage() {
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>🗑 清空</button>
                       <button className="btn btn-primary btn-sm" disabled={!step1Source.trim()}
-                        onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_video', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
+                        onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_video', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : step1Source !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : step1Source !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     </div>
                   </div>
                 )}
@@ -660,7 +666,7 @@ export default function ProjectPage() {
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
                     <button className="btn btn-primary btn-sm" disabled={!textInput.trim()}
-                      onClick={() => { if (id && textInput.trim()) { setStep1Source(textInput); saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
+                      onClick={() => { if (id && textInput.trim()) { setStep1Source(textInput); saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : textInput !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : textInput !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-primary btn-sm"
                       disabled={step1Generating || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
@@ -684,6 +690,7 @@ export default function ProjectPage() {
                       if (id && text) {
                         api.saveStep(id, 'raw_file', text)
                         setSteps(prev => ({ ...prev, raw_file: text }))
+                        setSavedSteps(prev => ({ ...prev, raw_file: text }))
                       }
                     }} />
                   <button className="btn btn-primary btn-sm w-full"
@@ -702,7 +709,7 @@ export default function ProjectPage() {
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>🗑 清空</button>
                     <button className="btn btn-primary btn-sm" disabled={!step1Source.trim()}
-                      onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_file', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
+                      onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_file', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : step1Source !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : step1Source !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                   </div>
                 </div>
                 <div className="card">
@@ -771,7 +778,8 @@ export default function ProjectPage() {
                       }}>📥 保存到项目</button>
                     <button className="btn btn-primary btn-sm"
                       disabled={!steps.step1}
-                      onClick={() => saveStep('step1', steps.step1 || '')}>✓ 保存</button>
+                      style={steps.step1 !== (savedSteps.step1 || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}
+                      onClick={() => saveStep('step1', steps.step1 || '')}>{steps.step1 !== (savedSteps.step1 || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-ghost btn-sm"
                       disabled={!steps.step1}
                       onClick={() => { setSteps(prev => ({ ...prev, step1: '' })); saveStep('step1', '') }}>✕ 清空</button>
@@ -894,10 +902,9 @@ export default function ProjectPage() {
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div className="card-title">生成 / 编辑</div>
                 <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-                  value={steps[`step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`] || ''}
+                  value={steps[step2Key()] || ''}
                   onChange={e => {
-                    const key = `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
-                    setSteps(prev => ({ ...prev, [key]: e.target.value }))
+                    setSteps(prev => ({ ...prev, [step2Key()]: e.target.value }))
                   }}
                   placeholder="点击生成按钮，AI生成后在此编辑..." />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
@@ -908,14 +915,12 @@ export default function ProjectPage() {
                   </span>
                   <span style={{ display: 'flex', gap: 5 }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => {
-                      const key = `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
-                      setSteps(prev => ({ ...prev, [key]: '' }))
-                      saveStep(key, '')
+                      setSteps(prev => ({ ...prev, [step2Key()]: '' }))
+                      saveStep(step2Key(), '')
                     }}>✕ 清空</button>
                     <button className="btn btn-primary btn-sm" onClick={() => {
-                      const key = `step2_${sub === '2a' ? 'sop' : sub === '2b' ? 'daoshuyi' : 'yanxi'}`
-                      saveStep(key, steps[key] || '')
-                    }}>✓ 保存</button>
+                      saveStep(step2Key(), steps[step2Key()] || '')
+                    }} style={(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? '💾 保存' : '✓ 已保存'}</button>
                   </span>
                 </div>
               </div>
@@ -1272,11 +1277,11 @@ export default function ProjectPage() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>
                     🗑 清空
                   </button>
-                  <button className="btn btn-primary btn-sm" style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined} onClick={() => {
+                  <button className="btn btn-primary btn-sm" style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : step1Source !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined} onClick={() => {
                     if (id && step1Source.trim()) { saveStep('video_text', step1Source); flashSave() }
                     setVcOpen(false)
                   }}>
-                    {savedFlash ? '✓ 已保存' : '💾 保存'}
+                    {savedFlash ? '✓ 已保存' : step1Source !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}
                   </button>
                 </div>
               </div>
