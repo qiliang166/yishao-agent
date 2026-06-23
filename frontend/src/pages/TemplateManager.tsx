@@ -106,8 +106,6 @@ function TemplateManager() {
   const [formPrompt, setFormPrompt] = useState('')
   const [formSkill, setFormSkill] = useState('')
   const [formRules, setFormRules] = useState('{}')
-  const [formSkillId, setFormSkillId] = useState('')
-  const [formBrandingConfig, setFormBrandingConfig] = useState('{}')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -180,8 +178,6 @@ function TemplateManager() {
     setFormPrompt('')
     setFormSkill('')
     setFormRules('{}')
-    setFormSkillId('')
-    setFormBrandingConfig('{}')
     setFormError('')
     setModalPos({ x: 0, y: 0 })
     setModalSize({ w: 0, h: 0 })
@@ -195,8 +191,6 @@ function TemplateManager() {
     setFormPrompt(t.prompt || '')
     setFormSkill(t.skill || '')
     setFormRules(t.rules || '{}')
-    setFormSkillId(t.linked_skill_id || '')
-    setFormBrandingConfig(t.branding_config || '{}')
     setFormError('')
     setShowModal(true)
   }
@@ -258,8 +252,6 @@ function TemplateManager() {
           prompt: formPrompt,
           skill: formSkill,
           rules: formRules,
-          linked_skill_id: formSkillId || undefined as any,
-          branding_config: formBrandingConfig,
         })
         modal.toast('模板已更新', 'success')
       } else {
@@ -269,8 +261,6 @@ function TemplateManager() {
           prompt: formPrompt,
           skill: formSkill,
           rules: formRules,
-          linked_skill_id: formSkillId || undefined as any,
-          branding_config: formBrandingConfig,
         })
         modal.toast('模板已创建', 'success')
       }
@@ -636,40 +626,27 @@ function TemplateManager() {
                   )}
                 </select>
               </div>
-              {/* Row 1: Name + Type */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label style={labelStyle}>名称</label>
-                  <input
-                    style={inputField}
-                    placeholder="输入模板名称"
-                    value={formName}
-                    onChange={e => setFormName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>类型</label>
-                  <select
-                    style={{ ...inputField, cursor: 'pointer' }}
-                    value={formType}
-                    onChange={e => setFormType(e.target.value)}
-                  >
-                    <option value="ppt">PPT</option>
-                    <option value="sop">SOP</option>
-                  </select>
-                </div>
+              {/* Name */}
+              <div>
+                <label style={labelStyle}>名称</label>
+                <input
+                  style={inputField}
+                  placeholder="输入模板名称"
+                  value={formName}
+                  onChange={e => setFormName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+                  autoFocus
+                />
               </div>
 
-              {/* Row 2: Prompt + Skill side by side */}
+              {/* Prompt + Skill */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                 <div>
                   <label style={labelStyle}>提示词 (Prompt)</label>
                   <textarea
                     value={formPrompt}
                     onChange={e => setFormPrompt(e.target.value)}
-                    placeholder="输入AI提示词"
+                    placeholder="由智能解析自动生成"
                     style={{ ...textareaStyle, height: '100px' }}
                   />
                 </div>
@@ -678,53 +655,21 @@ function TemplateManager() {
                   <textarea
                     value={formSkill}
                     onChange={e => setFormSkill(e.target.value)}
-                    placeholder="输入SKILL模板"
+                    placeholder="由智能解析自动生成"
                     style={{ ...textareaStyle, height: '100px' }}
                   />
                 </div>
               </div>
 
-              {/* Row 3: Rules + (Linked Skill / Branding) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label style={labelStyle}>设计规则 (Rules JSON)</label>
-                  <textarea
-                    value={formRules}
-                    onChange={e => setFormRules(e.target.value)}
-                    placeholder='{}'
-                    style={{ ...textareaStyle, height: '60px' }}
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div>
-                    <label style={labelStyle}>关联 Skill</label>
-                    <select
-                      style={{ ...inputField, cursor: 'pointer' }}
-                      value={formSkillId}
-                      onChange={e => setFormSkillId(e.target.value)}
-                    >
-                      <option value="">（无）</option>
-                      {prompts
-                        .filter(p => {
-                          if (formType === 'ppt') return p.category === 'PPT Skill'
-                          if (formType === 'sop') return p.category === 'SOP'
-                          return false
-                        })
-                        .map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>品牌配置 (JSON)</label>
-                    <textarea
-                      value={formBrandingConfig}
-                      onChange={e => setFormBrandingConfig(e.target.value)}
-                      placeholder='{"logo_position":"top-right"}'
-                      style={{ ...textareaStyle, height: '44px' }}
-                    />
-                  </div>
-                </div>
+              {/* Rules */}
+              <div>
+                <label style={labelStyle}>设计规则 (Rules JSON)</label>
+                <textarea
+                  value={formRules}
+                  onChange={e => setFormRules(e.target.value)}
+                  placeholder='{}'
+                  style={{ ...textareaStyle, height: '60px' }}
+                />
               </div>
             </div>
 
