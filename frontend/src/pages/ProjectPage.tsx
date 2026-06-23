@@ -167,6 +167,8 @@ export default function ProjectPage() {
   const [s3SopModel, setS3SopModel] = useState('')
   const [s3DaoPptModel, setS3DaoPptModel] = useState('')
   const [s3YanxiPptModel, setS3YanxiPptModel] = useState('')
+  const [brandingCopyright, setBrandingCopyright] = useState('')
+  const [brandingSignature, setBrandingSignature] = useState('')
   const [pptGenerating, setPptGenerating] = useState('')
 
   // Stage 4 state
@@ -206,6 +208,8 @@ export default function ProjectPage() {
       if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
+      if (map['_branding_copyright']) setBrandingCopyright(map['_branding_copyright'])
+      if (map['_branding_signature']) setBrandingSignature(map['_branding_signature'])
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
@@ -448,7 +452,7 @@ export default function ProjectPage() {
     } catch (e: any) { modal.toast('PPT生成失败: ' + e.message, 'error') }
     finally { setPptGenerating('') }
   }
-  const doExportSOP = async (content: string, prompt: string, model: string) => {
+  const doExportSOP = async (content: string, prompt: string, model: string, branding?: Record<string, string>) => {
     try {
       // Step 1: AI generation with column prompt
       let aiContent = content
@@ -458,7 +462,7 @@ export default function ProjectPage() {
         if (result) aiContent = result
       }
       // Step 2: Export as DOCX
-      const result: any = await api.exportSOP(aiContent, undefined, id)
+      const result: any = await api.exportSOP(aiContent, branding, id)
       setGenFiles(prev => [...prev, {
         name: result.filename, type: 'Word',
         source: 'SOP课件',
@@ -1050,15 +1054,18 @@ export default function ProjectPage() {
                 </select>
                 <div className="form-label" style={{ marginTop: 10 }}>品牌信息（可选）</div>
                 <div style={{ display: 'flex', gap: 4 }}>
-                  <input className="form-input" placeholder="版权" style={{ flex: 1 }} />
-                  <input className="form-input" placeholder="签名" style={{ flex: 1 }} />
+                  <input className="form-input" placeholder="版权" style={{ flex: 1 }}
+                    value={brandingCopyright} onChange={e => { setBrandingCopyright(e.target.value); saveStep('_branding_copyright', e.target.value) }} />
+                  <input className="form-input" placeholder="签名" style={{ flex: 1 }}
+                    value={brandingSignature} onChange={e => { setBrandingSignature(e.target.value); saveStep('_branding_signature', e.target.value) }} />
                 </div>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
                   disabled={!s3SopModel}
                   onClick={() => doExportSOP(
                     steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '',
                     stage3Prompts.sop?.prompt || '你是一个餐饮标准化专家。请根据食谱笔记，编写SOP。',
-                    s3SopModel
+                    s3SopModel,
+                    (brandingCopyright || brandingSignature) ? { copyright: brandingCopyright, signature: brandingSignature } : undefined
                   )}>
                   📄 AI 生成 + 导出 .docx
                 </button>
