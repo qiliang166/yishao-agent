@@ -2412,7 +2412,7 @@ def _build_prompt_from_rules(rules: dict) -> str:
 
 def _build_skill_from_rules(rules: dict) -> str:
     """从 rules JSON 自动生成 skill（即 content_spec）"""
-    return rules.get("content_spec", "")
+    return rules.get("skill_template", rules.get("content_spec", ""))
 
 
 @app.put("/api/column-configs/{config_id}")
@@ -2428,15 +2428,20 @@ def update_column_config(config_id: str, req: dict):
             db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
         if 'rules' in req:
             db.execute("UPDATE column_configs SET rules = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['rules'], config_id))
-            # Auto-regenerate prompt + skill from rules (only for PPT columns)
+            # Auto-regenerate skill from rules only if current skill is empty/default
             col_id = existing["column_id"]
             if col_id in ("col4", "col5"):
                 try:
                     rules = json.loads(req['rules'])
                     if rules and rules != {}:
-                        new_skill = _build_skill_from_rules(rules)
-                        db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                                   (new_skill, config_id))
+                        current = db.execute("SELECT skill FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+                        current_skill = current["skill"] if current else ""
+                        # Only overwrite if current skill is empty or matches a known default
+                        if not current_skill or not current_skill.strip() or current_skill == rules.get("content_spec", ""):
+                            new_skill = rules.get("skill_template", rules.get("content_spec", ""))
+                            if new_skill and new_skill != current_skill:
+                                db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                                           (new_skill, config_id))
                 except (json.JSONDecodeError, Exception):
                     pass  # Keep existing prompt/skill if rules parse fails
         db.commit()
