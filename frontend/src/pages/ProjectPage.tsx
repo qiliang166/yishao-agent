@@ -88,14 +88,15 @@ const DOC_COLORS_S2: Record<string, string> = {
 function Stage2Controls({
   docType, label, steps, llmProviders,
   dataSource, onDataSourceChange,
-  generating, prompt, skill, projectId,
+  generating, batchGenerating, prompt, skill, projectId,
   panelRef, setGenerating, onRefresh,
 }: {
   docType: string; label: string
   steps: Record<string, string>
   llmProviders: LLMProvider[]
   dataSource: string; onDataSourceChange: (v: string) => void
-  generating: boolean; prompt: string; skill: string; projectId: string
+  generating: boolean; batchGenerating?: boolean
+  prompt: string; skill: string; projectId: string
   panelRef: React.RefObject<{ triggerGenerate: () => Promise<void> } | null>
   setGenerating: (v: boolean) => void
   onRefresh: () => void
@@ -169,9 +170,9 @@ function Stage2Controls({
         )}
       </select>
       <button className="btn btn-primary btn-sm w-full"
-        disabled={!getSourceText(dataSource) || !model || generating}
+        disabled={!getSourceText(dataSource) || !model || generating || batchGenerating}
         onClick={handleGenerate}>
-        {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
+        {(generating || batchGenerating) ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
       </button>
     </>
   )
@@ -1038,7 +1039,7 @@ export default function ProjectPage() {
                   <Stage2Controls docType="sop" label="SOP文案"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
-                    generating={step2Generating === '2a'}
+                    generating={step2Generating === '2a'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
                     projectId={id!}
@@ -1055,7 +1056,7 @@ export default function ProjectPage() {
                   <Stage2Controls docType="dao" label="道与术文案"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
-                    generating={step2Generating === '2b'}
+                    generating={step2Generating === '2b'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
                     projectId={id!}
@@ -1072,7 +1073,7 @@ export default function ProjectPage() {
                   <Stage2Controls docType="yanxi" label="研学手册文案"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
-                    generating={step2Generating === '2c'}
+                    generating={step2Generating === '2c'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
                     projectId={id!}
