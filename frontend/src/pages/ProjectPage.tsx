@@ -83,20 +83,6 @@ const KOUBO_TEMPLATES: TemplateItem[] = [
   { id: 'koubo-std', name: '标准口播模板', isDefault: true, meta: '提示词: 口播稿生成 v1.0 · SKILL: 口播风格', color: '#0891B2', icon: '📢', previewHtml: '' },
   { id: 'koubo-fast', name: '快节奏口播模板', isDefault: false, meta: '提示词: 口播稿 v0.8 · SKILL: 快节奏口播', color: '#C75B39', icon: '⚡', previewHtml: '' },
 ]
-// Stage 2 prompt/SKILL templates
-const STAGE2_SOP_TMPL: TemplateItem[] = [
-  { id: 's2-sop-std', name: 'SOP标准格式 v2.0', isDefault: true, meta: '提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充', color: '#4A8B3F', icon: '📃', previewHtml: '' },
-  { id: 's2-sop-simple', name: 'SOP简约格式 v1.0', isDefault: false, meta: '提示词: SOP简约格式 v1.0 · SKILL: SOP简约填充', color: '#4A8B3F', icon: '📄', previewHtml: '' },
-  { id: 's2-sop-detail', name: 'SOP详细格式 v1.2', isDefault: false, meta: '提示词: SOP详细格式 v1.2 · SKILL: SOP详细填充', color: '#4A8B3F', icon: '📋', previewHtml: '' },
-]
-const STAGE2_DAO_TMPL: TemplateItem[] = [
-  { id: 's2-dao-std', name: '道与术标准分析 v1.0', isDefault: true, meta: '提示词: 道与术分析 v1.0 · SKILL: 道与术分析技能', color: '#7C3AED', icon: '💡', previewHtml: '' },
-  { id: 's2-dao-deep', name: '道与术深度分析 v0.9', isDefault: false, meta: '提示词: 道与术深度 v0.9 · SKILL: 道与术深度技能', color: '#7C3AED', icon: '🔬', previewHtml: '' },
-]
-const STAGE2_YANXI_TMPL: TemplateItem[] = [
-  { id: 's2-yanxi-std', name: '研学手册标准 v1.0', isDefault: true, meta: '提示词: 研学手册标准 v1.0 · SKILL: 研学手册技能', color: '#C75B39', icon: '📖', previewHtml: '' },
-  { id: 's2-yanxi-detail', name: '研学手册详细 v0.9', isDefault: false, meta: '提示词: 研学手册详细 v0.9 · SKILL: 研学手册详细技能', color: '#C75B39', icon: '📚', previewHtml: '' },
-]
 
 // Dynamic stage1 prompts — loaded from column_configs, with fallbacks
 const STAGE1_SKILL_FALLBACK = '## 菜名\n**菜名**：\n**菜系**：\n**成品特征**：\n**出品标准**：\n**记录日期**：\n**制作人/来源**：\n\n### 一、食材清单\n| 序号 | 用途 | 食材名称 | 用量 | 处理方式 | 备注 |\n|------|------|----------|------|----------|------|\n| 1 | 主料 | | | | |\n| 2 | 辅料 | | | | |\n| 3 | 调料 | | | | |\n\n> **准备要点**：\n\n### 二、工具与器皿\n| 序号 | 用途 | 工具名称 |\n|------|------|----------|\n| 1 | | |\n\n### 三、制作步骤\n| 序号 | 步骤 | 步骤说明 | 关键技巧 |\n|------|------|----------|----------|\n| 1 | 预处理 | | |\n| 2 | 烹饪 | | |\n\n### 四、时间与火候总览\n| 阶段 | 时长 | 火力 | 注意事项 |\n|------|------|------|----------|\n| | | | |\n\n### 五、试吃与品鉴记录\n- **口味**：\n- **口感**：\n- **色泽**：\n\n### 六、总结与评分\n- **难度**：☆\n- **耗时**：\n- **一句话点评**：'
@@ -156,9 +142,6 @@ export default function ProjectPage() {
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('') // which sub is generating
-  const [s2SopTmpl, setS2SopTmpl] = useState('s2-sop-std')
-  const [s2DaoTmpl, setS2DaoTmpl] = useState('s2-dao-std')
-  const [s2YanxiTmpl, setS2YanxiTmpl] = useState('s2-yanxi-std')
   const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
   const [stage1Skill, setStage1Skill] = useState('')
@@ -206,24 +189,19 @@ export default function ProjectPage() {
         setTextInput(map['video_text'])
       }
     })
-    api.listPrompts('教学文档').then((ps: any[]) => {
-      const pmap: Record<string, { prompt: string; skill: string }> = {}
-      ps.forEach((p: any) => {
-        const key = p.name.includes('SOP') ? 'sop' :
-          p.name.includes('道与术') ? 'dao' :
-            p.name.includes('研学') ? 'yanxi' : ''
-        if (key) pmap[key] = { prompt: p.system_prompt, skill: p.skill_template }
-      })
-      setStage2Prompts(pmap)
-    }).catch(() => {})
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
       let s1s = ''
+      const s2p: Record<string, { prompt: string; skill: string }> = {}
       let kouboP = ''
       configs.forEach((c: any) => {
         if (c.column_id === 'col1') {
           const key = c.id === 'c1-text' ? 'text' : c.id === 'c1-video' ? 'video' : c.id === 'c1-file' ? 'file' : ''
           if (key) { s1p[key] = c.prompt; if (!s1s) s1s = c.skill }
+        }
+        if (c.column_id === 'col2') {
+          const key = c.id === 'c2-sop' ? 'sop' : c.id === 'c2-dao' ? 'dao' : c.id === 'c2-yanxi' ? 'yanxi' : ''
+          if (key) s2p[key] = { prompt: c.prompt, skill: c.skill }
         }
         if (c.column_id === 'col5' && c.id === 'c5-koubo') {
           kouboP = c.prompt
@@ -231,6 +209,7 @@ export default function ProjectPage() {
       })
       setStage1Prompts(s1p)
       if (s1s) setStage1Skill(s1s)
+      setStage2Prompts(s2p)
       if (kouboP) setStage4KouboPrompt(kouboP)
     }).catch(() => {})
     api.listTtsProviders().then((providers: TTSProvider[]) => {
@@ -279,6 +258,16 @@ export default function ProjectPage() {
     setSteps(prev => ({ ...prev, [stepName]: content }))
   }, [id])
 
+  // Get source text for Stage 2 based on selected data source
+  const getStage2Source = useCallback(() => {
+    switch (s2DataSource) {
+      case 'video': return steps.raw_video || steps.video_text || ''
+      case 'text': return steps.raw_text || textInput || ''
+      case 'file': return steps.raw_file || step1Source || ''
+      default: return steps.step1 || ''
+    }
+  }, [s2DataSource, steps, textInput, step1Source])
+
   // ── Stage nav ──
   const switchStage = (s: StageId) => {
     setStage(s)
@@ -313,6 +302,11 @@ export default function ProjectPage() {
       if (p.status === 'completed') {
         setDlStatus('done')
         modal.toast('✅ 视频下载完成', 'success')
+        const rawText = p.merged_text || p.asr_text || p.text || ''
+        if (rawText && id) {
+          api.saveStep(id, 'raw_video', rawText)
+          setSteps(prev => ({ ...prev, raw_video: rawText }))
+        }
         return
       }
       if (p.status === 'failed') { setDlStatus('failed'); modal.toast('❌ 下载失败', 'error'); return }
@@ -609,7 +603,7 @@ export default function ProjectPage() {
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>🗑 清空</button>
                       <button className="btn btn-primary btn-sm" disabled={!step1Source.trim()}
-                        onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
+                        onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_video', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
                     </div>
                   </div>
                 )}
@@ -664,7 +658,7 @@ export default function ProjectPage() {
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
                     <button className="btn btn-primary btn-sm" disabled={!textInput.trim()}
-                      onClick={() => { if (id && textInput.trim()) { setStep1Source(textInput); saveStep('video_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
+                      onClick={() => { if (id && textInput.trim()) { setStep1Source(textInput); saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
                     <button className="btn btn-primary btn-sm"
                       disabled={step1Generating || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
@@ -685,6 +679,10 @@ export default function ProjectPage() {
                       if (!f) return
                       const text = await f.text()
                       setStep1Source(text)
+                      if (id && text) {
+                        api.saveStep(id, 'raw_file', text)
+                        setSteps(prev => ({ ...prev, raw_file: text }))
+                      }
                     }} />
                   <button className="btn btn-primary btn-sm w-full"
                     disabled={step1Generating || !step1Model || !step1Source.trim()}
@@ -702,7 +700,7 @@ export default function ProjectPage() {
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setStep1Source('')}>🗑 清空</button>
                     <button className="btn btn-primary btn-sm" disabled={!step1Source.trim()}
-                      onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
+                      onClick={() => { if (id && step1Source.trim()) { saveStep('video_text', step1Source); saveStep('raw_file', step1Source); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : '💾 保存'}</button>
                   </div>
                 </div>
                 <div className="card">
@@ -790,27 +788,25 @@ export default function ProjectPage() {
                 {/* 2a: SOP文案 */}
                 {sub === '2a' && <>
                   <div className="card-title" style={{ color: 'var(--success)' }}>📃 SOP文案生成</div>
-                  <div className="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成标准SOP文案</div>
+                  <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成标准SOP文案</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
                     <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — 暂无内容</option>
+                      <option value="video">视频提取 — {steps.raw_video || steps.video_text ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.raw_text || textInput ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — {steps.raw_file || step1Source ? '已有内容' : '暂无内容'}</option>
                     </select>
                   </div>
-                  <div className="form-label">选择模板</div>
-                  <TemplateSelector items={STAGE2_SOP_TMPL} selectedId={s2SopTmpl} onSelect={t => setS2SopTmpl(t.id)} previewTarget="prev2a" />
                   <div className="form-label">大模型</div>
                   <select className="form-select" style={{ marginBottom: 8 }} value={s2SopModel} onChange={e => setS2SopModel(e.target.value)}>
                     {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!steps.step1 || step2Generating !== ''}
+                    disabled={!getStage2Source() || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
                       const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
-                      await doGenerate('step2_sop', prompt, steps.step1 || '')
+                      await doGenerate('step2_sop', prompt, getStage2Source())
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
@@ -820,27 +816,25 @@ export default function ProjectPage() {
                 {/* 2b: 道与术文案 */}
                 {sub === '2b' && <>
                   <div className="card-title" style={{ color: 'var(--purple)' }}>💡 道与术文案生成</div>
-                  <div className="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成「道与术」分析文案</div>
+                  <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成「道与术」分析文案</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
                     <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — 暂无内容</option>
+                      <option value="video">视频提取 — {steps.raw_video || steps.video_text ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.raw_text || textInput ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — {steps.raw_file || step1Source ? '已有内容' : '暂无内容'}</option>
                     </select>
                   </div>
-                  <div className="form-label">选择模板</div>
-                  <TemplateSelector items={STAGE2_DAO_TMPL} selectedId={s2DaoTmpl} onSelect={t => setS2DaoTmpl(t.id)} previewTarget="prev2b" />
                   <div className="form-label">大模型</div>
                   <select className="form-select" style={{ marginBottom: 8 }} value={s2DaoModel} onChange={e => setS2DaoModel(e.target.value)}>
                     {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!steps.step1 || step2Generating !== ''}
+                    disabled={!getStage2Source() || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
                       const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
-                      await doGenerate('step2_daoshuyi', prompt, steps.step1 || '')
+                      await doGenerate('step2_daoshuyi', prompt, getStage2Source())
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
@@ -850,27 +844,25 @@ export default function ProjectPage() {
                 {/* 2c: 研学手册文案 */}
                 {sub === '2c' && <>
                   <div className="card-title" style={{ color: 'var(--warning)' }}>📖 研学手册文案生成</div>
-                  <div className="card-hint">基于文案提取结果，用选定的模板（提示词+SKILL）生成研学手册文案</div>
+                  <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成研学手册文案</div>
                   <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
                     <div className="form-label">数据来源</div>
                     <select className="form-select" style={{ marginBottom: 6 }} value={s2DataSource} onChange={e => setS2DataSource(e.target.value)}>
-                      <option value="video">视频提取 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
-                      <option value="text">文字输入 — {steps.step1 ? '已有内容' : '暂无内容'}</option>
-                      <option value="file">文件上传 — 暂无内容</option>
+                      <option value="video">视频提取 — {steps.raw_video || steps.video_text ? '已有内容' : '暂无内容'}</option>
+                      <option value="text">文字输入 — {steps.raw_text || textInput ? '已有内容' : '暂无内容'}</option>
+                      <option value="file">文件上传 — {steps.raw_file || step1Source ? '已有内容' : '暂无内容'}</option>
                     </select>
                   </div>
-                  <div className="form-label">选择模板</div>
-                  <TemplateSelector items={STAGE2_YANXI_TMPL} selectedId={s2YanxiTmpl} onSelect={t => setS2YanxiTmpl(t.id)} previewTarget="prev2c" />
                   <div className="form-label">大模型</div>
                   <select className="form-select" style={{ marginBottom: 8 }} value={s2YanxiModel} onChange={e => setS2YanxiModel(e.target.value)}>
                     {STAGE2_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                   <button className="btn btn-primary btn-sm w-full"
-                    disabled={!steps.step1 || step2Generating !== ''}
+                    disabled={!getStage2Source() || step2Generating !== ''}
                     onClick={async () => {
                       setStep2Generating(sub)
                       const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
-                      await doGenerate('step2_yanxi', prompt, steps.step1 || '')
+                      await doGenerate('step2_yanxi', prompt, getStage2Source())
                       setStep2Generating('')
                     }}>
                     {step2Generating === sub ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
