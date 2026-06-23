@@ -27,7 +27,7 @@ function SettingsPage() {
 
   // -- 通用设置 state --
   const [brandLogo, setBrandLogo] = useState('🍽')
-  const [brandName, setBrandName] = useState('一勺笔录(SOP)智能体')
+  const [brandName, setBrandName] = useState('')
   const [savePath, setSavePath] = useState('D:\\YISHAOAGENT\\data\\output')
   const [brandingCopyright, setBrandingCopyright] = useState('')
   const [brandingSignature, setBrandingSignature] = useState('')
@@ -130,6 +130,7 @@ function SettingsPage() {
     setSaveMsg('')
     try {
       await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature })
+      document.title = brandName || 'SOP 智能体'
       setSaveMsg('保存成功')
     } catch (err: any) {
       setSaveMsg('保存失败: ' + err.message)
@@ -262,7 +263,7 @@ function SettingsPage() {
             <div className="settings-row">
               <label>版权信息</label>
               <input className="form-input" type="text" value={brandingCopyright}
-                onChange={e => setBrandingCopyright(e.target.value)} placeholder="例如：© 2026 一勺笔录" style={{ maxWidth: 300 }} />
+                onChange={e => setBrandingCopyright(e.target.value)} placeholder="例如：© 2026 你的站点名称" style={{ maxWidth: 300 }} />
             </div>
             <div className="settings-row">
               <label>签名/作者</label>

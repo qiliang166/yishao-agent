@@ -147,51 +147,15 @@ function TemplateManager() {
   const [formRules, setFormRules] = useState('{}')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [createFileName, setCreateFileName] = useState('')
+  const createFileRef = useRef<File | null>(null)
 
   // analyze
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
   const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
   const [analyzeProvider, setAnalyzeProvider] = useState('')
   const [analyzeModel, setAnalyzeModel] = useState('')
-  const [slidePreview, setSlidePreview] = useState<{ slides: string[]; templateName: string } | null>(null)
-  const [slideLoading, setSlideLoading] = useState(false)
-  const [slideIndex, setSlideIndex] = useState(0)
   const [autoThumbnails, setAutoThumbnails] = useState<Record<string, string>>({})
-
-  // ---------- slide preview ----------
-
-  const openSlidePreview = async (t: Template) => {
-    if (!t.file_path) return
-    setSlidePreview({ slides: [], templateName: t.name })
-    setSlideIndex(0)
-    setSlideLoading(true)
-    try {
-      const slides = await api.previewSlides(t.id)
-      setSlidePreview({ slides, templateName: t.name })
-    } catch (err: any) {
-      console.error('Slide preview failed:', err)
-      setSlidePreview(null)
-    } finally {
-      setSlideLoading(false)
-    }
-  }
-
-  const closeSlidePreview = () => {
-    setSlidePreview(null)
-    setSlideIndex(0)
-  }
-
-  // Keyboard nav for slide preview
-  useEffect(() => {
-    if (!slidePreview) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') setSlideIndex(i => Math.max(0, i - 1))
-      else if (e.key === 'ArrowRight') setSlideIndex(i => Math.min(slidePreview.slides.length - 1, i + 1))
-      else if (e.key === 'Escape') closeSlidePreview()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [slidePreview])
 
   // ---------- data loading ----------
 
@@ -208,16 +172,11 @@ function TemplateManager() {
     try {
       const data = await api.listTemplates()
       setTemplates(data)
-      // Auto-fetch slide thumbnails for PPT templates without uploaded thumbnails
+      // Auto-thumbnails: use slide-thumb endpoint for PPT templates without manual thumbnails
       const pptWithoutThumb = data.filter((t: Template) => t.type === 'ppt' && t.file_path && !t.thumbnail_path)
       if (pptWithoutThumb.length > 0) {
         const thumbs: Record<string, string> = {}
-        await Promise.all(pptWithoutThumb.map(async (t: Template) => {
-          try {
-            const slides = await api.previewSlides(t.id)
-            if (slides && slides.length > 0) thumbs[t.id] = slides[0]
-          } catch { /* ignore */ }
-        }))
+        pptWithoutThumb.forEach((t: Template) => { thumbs[t.id] = t.id })
         setAutoThumbnails(thumbs)
       }
     } catch (err: any) {
@@ -244,12 +203,7 @@ function TemplateManager() {
 
   const activeTabDef = TEMPLATE_TABS.find(t => t.key === activeTab) || TEMPLATE_TABS[0]
 
-  const activeTemplates = templates.filter(t => {
-    if (activeTabDef.matchId) {
-      return t.id === activeTabDef.matchId
-    }
-    return t.type === activeTabDef.type
-  })
+  const activeTemplates = templates.filter(t => t.type === activeTabDef.type)
 
   const getSkillName = (skillId: string): string => {
     if (!skillId) return ''
@@ -277,6 +231,8 @@ function TemplateManager() {
     setFormSkill('')
     setFormRules('{}')
     setFormError('')
+    setCreateFileName('')
+    createFileRef.current = null
     resetModalGeometry()
     setShowModal(true)
   }
@@ -287,7 +243,11 @@ function TemplateManager() {
     setFormType(t.type)
     setFormPrompt(t.prompt || '')
     setFormSkill(t.skill || '')
-    setFormRules(t.rules || '{}')
+    try {
+      setFormRules(JSON.stringify(JSON.parse(t.rules || '{}'), null, 2))
+    } catch {
+      setFormRules(t.rules || '{}')
+    }
     setFormError('')
     resetModalGeometry()
     setShowModal(true)
@@ -331,27 +291,62 @@ function TemplateManager() {
     setFormError('')
     setSaving(true)
     try {
+      let rulesToSave = formRules
+      try {
+        rulesToSave = JSON.stringify(JSON.parse(formRules), null, 2)
+        setFormRules(rulesToSave)
+      } catch {}
       if (editingId) {
         await api.updateTemplate(editingId, {
           name: formName.trim(),
           type: formType,
           prompt: formPrompt,
           skill: formSkill,
-          rules: formRules,
+          rules: rulesToSave,
         })
         modal.toast('模板已更新', 'success')
+        closeModal()
+        loadTemplates()
       } else {
-        await api.createTemplate({
+        const created: any = await api.createTemplate({
           name: formName.trim(),
           type: formType,
           prompt: formPrompt,
           skill: formSkill,
-          rules: formRules,
+          rules: rulesToSave,
         })
-        modal.toast('模板已创建', 'success')
+        const newId = created.id
+        if (!newId) {
+          modal.toast('创建成功但未获取到模板ID', 'error')
+          closeModal()
+          loadTemplates()
+          return
+        }
+        // Upload PPTX if selected
+        const file = createFileRef.current
+        if (file) {
+          try {
+            await api.uploadTemplateFile(newId, file)
+          } catch (err: any) {
+            modal.toast('模板已创建，但文件上传失败: ' + err.message, 'error')
+          }
+        }
+        // Analyze if file was uploaded
+        if (file) {
+          const stageType = newId.includes('yanxi') ? 'yanxiPpt' : 'daoPpt'
+          try {
+            setAnalyzingId(newId)
+            await api.analyzeTemplate(newId, stageType, analyzeProvider, analyzeModel)
+            setAnalyzingId(null)
+          } catch (err: any) {
+            setAnalyzingId(null)
+            console.warn('智能解析失败:', err.message)
+          }
+        }
+        modal.toast('模板已创建' + (file ? '并完成智能解析' : ''), 'success')
+        closeModal()
+        loadTemplates()
       }
-      closeModal()
-      loadTemplates()
     } catch (err: any) {
       modal.toast('保存失败: ' + err.message, 'error')
     } finally {
@@ -483,7 +478,7 @@ function TemplateManager() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
                 {activeTemplates.map(t => {
                   const thumbUrl = getThumbnailUrl(t)
-                  const autoUrl = autoThumbnails[t.id] ? api.slideUrl(autoThumbnails[t.id]) : ''
+                  const autoUrl = autoThumbnails[t.id] ? api.getSlideThumbUrl(t.id) : ''
                   const displayUrl = thumbUrl || autoUrl
                   const hasThumb = !!displayUrl
                   const fileName = t.file_path ? (t.file_path.split(/[\\/]/).pop() || t.file_path) : ''
@@ -501,7 +496,7 @@ function TemplateManager() {
                         {/* Thumbnail area — 16:9 to match PPT slide ratio */}
                         <div style={{
                           aspectRatio: '16 / 9',
-                          background: '#1a1a1a',
+                          background: 'var(--bg-hover)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -512,7 +507,7 @@ function TemplateManager() {
                             <img
                               src={displayUrl}
                               alt={t.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'contain', transform: 'scale(0.9)' }}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                               onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                             />
                           ) : null}
@@ -557,24 +552,23 @@ function TemplateManager() {
                             {t.is_default === 1 && (
                               <span style={{
                                 fontSize: '10px', fontWeight: 600, flexShrink: 0,
-                                color: 'var(--success)',
-                                background: 'rgba(74, 139, 63, 0.1)',
+                                color: 'var(--text-secondary)',
+                                background: 'var(--bg-hover)',
                                 padding: '1px 6px', borderRadius: '3px',
                               }}>
                                 默认
                               </span>
                             )}
                             {fileName && (
-                              <span style={{ fontSize: '10px', color: 'var(--text-secondary)', flexShrink: 0 }}
-                                title={fileName}>📄</span>
+                              <span style={{ fontSize: '10px', color: 'var(--text-secondary)', flexShrink: 0 }}>📄</span>
                             )}
                             {fileName && (
-                              <span onClick={(e) => { e.preventDefault(); openSlidePreview(t); }}
+                              <a href={api.previewTemplate(t.id)}
                                 style={{ fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
-                                  flexShrink: 0, lineHeight: 1,
+                                  flexShrink: 0, lineHeight: 1, textDecoration: 'none',
                                 }}>
                                 预览
-                              </span>
+                              </a>
                             )}
                             {/* Thumbnail controls on card */}
                             {thumbUrl && (
@@ -643,30 +637,32 @@ function TemplateManager() {
           <div ref={modalRef} style={{
             ...modalCard,
             width: modalSize.w ? modalSize.w : '720px',
-            height: modalSize.h ? modalSize.h : 'auto',
             maxWidth: '95vw',
             maxHeight: '95vh',
             minWidth: '380px',
             minHeight: '300px',
             padding: '24px',
             position: 'relative',
-            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
             transform: `translate(${modalPos.x}px, ${modalPos.y}px)`,
           }} onClick={e => e.stopPropagation()}>
             {/* Draggable title bar */}
             <div style={{
               cursor: 'move', userSelect: 'none',
-              marginBottom: '20px',
+              marginBottom: '16px', flexShrink: 0,
             }} onMouseDown={onDragStart}>
               <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
                 {editingId ? '编辑模板' : '新建模板'}
               </h3>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* File upload row (edit mode only) */}
-              {editingId && (() => {
-                const editingTpl = templates.find(tp => tp.id === editingId)
+            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* File upload row */}
+              {(() => {
+                const editingTpl = editingId ? templates.find(tp => tp.id === editingId) : null
                 const efName = editingTpl?.file_path ? (editingTpl.file_path.split(/[\\/]/).pop() || editingTpl.file_path) : ''
+                const cfName = createFileName || ''
+                const displayName = editingId ? (efName || '') : (cfName || '')
                 return (
                   <div style={{
                     display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
@@ -674,22 +670,31 @@ function TemplateManager() {
                   }}>
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}
-                      title={efName || '未上传'}>
-                      {efName ? '📌 ' + efName : '📄 未上传模板文件'}
+                      title={displayName || '未上传'}>
+                      {displayName ? '📌 ' + displayName : '📄 未上传模板文件'}
                     </span>
                     <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                      {efName ? '更换' : '上传 PPTX'}
+                      {displayName ? '更换' : '上传 PPTX'}
                       <input type="file" accept=".pptx" style={{ display: 'none' }}
                         onChange={e => {
                           const f = e.target.files?.[0]
-                          if (f && editingId) handleFileUpload(editingTpl!, f)
+                          if (!f) return
+                          if (editingId && editingTpl) {
+                            handleFileUpload(editingTpl, f)
+                          } else {
+                            createFileRef.current = f
+                            setCreateFileName(f.name)
+                          }
                           e.target.value = ''
                         }}
                       />
                     </label>
-                    {efName && (
+                    {editingId && efName && (
                       <button className="btn btn-primary btn-sm"
-                        onClick={() => editingTpl && handleAnalyze(editingTpl)}
+                        onClick={() => {
+                          const et = templates.find(tp => tp.id === editingId)
+                          if (et) handleAnalyze(et)
+                        }}
                         disabled={analyzingId === editingId}>
                         {analyzingId === editingId ? '解析中...' : '智能解析'}
                       </button>
@@ -767,7 +772,7 @@ function TemplateManager() {
                   value={formRules}
                   onChange={e => setFormRules(e.target.value)}
                   placeholder='{}'
-                  style={{ ...textareaStyle, height: '60px' }}
+                  style={{ ...textareaStyle, height: '200px', fontFamily: 'var(--font-mono, monospace)', fontSize: '11px', lineHeight: '1.5' }}
                 />
               </div>
             </div>
@@ -779,7 +784,7 @@ function TemplateManager() {
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
               <button className="btn btn-ghost btn-sm" onClick={closeModal} disabled={saving}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-                {saving ? '保存中...' : '保存'}
+                {saving ? (editingId ? '保存中...' : (createFileName ? '保存并解析中...' : '保存中...')) : (editingId ? '保存' : (createFileName ? '保存并智能解析' : '保存'))}
               </button>
             </div>
 
@@ -797,119 +802,6 @@ function TemplateManager() {
         </div>
       )}
 
-      {/* Slide preview modal */}
-      {slidePreview && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 10001,
-          background: 'rgba(0,0,0,0.55)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          animation: 'fadeIn 0.15s ease',
-        }} onClick={closeSlidePreview}>
-          <div style={{
-            background: 'var(--card)',
-            borderRadius: '10px',
-            width: '85vw', maxWidth: '780px',
-            height: '75vh', maxHeight: '540px',
-            display: 'flex', flexDirection: 'column',
-            boxShadow: '0 16px 60px rgba(0,0,0,0.35)',
-            overflow: 'hidden',
-          }} onClick={e => e.stopPropagation()}>
-            {/* Top bar */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 18px', borderBottom: '1px solid var(--border)',
-              flexShrink: 0,
-            }}>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }}>
-                {slidePreview.templateName}
-                <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 10 }}>
-                  {slidePreview.slides.length > 0 ? `${slideIndex + 1} / ${slidePreview.slides.length}` : '加载中...'}
-                </span>
-              </span>
-              <span onClick={closeSlidePreview} style={{
-                cursor: 'pointer', fontSize: '18px', lineHeight: 1, color: 'var(--text-secondary)',
-                padding: '4px 8px', borderRadius: '4px',
-              }}>✕</span>
-            </div>
-
-            {/* Main slide area */}
-            <div style={{
-              flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              position: 'relative', minHeight: 0, padding: '12px 56px',
-              background: 'var(--bg)',
-            }}>
-              {slideLoading ? (
-                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>正在导出幻灯片...</div>
-              ) : slidePreview.slides.length === 0 ? (
-                <div style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>无幻灯片</div>
-              ) : (
-                <>
-                  <button onClick={() => setSlideIndex(i => Math.max(0, i - 1))}
-                    disabled={slideIndex === 0}
-                    style={{
-                      position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
-                      background: slideIndex === 0 ? 'transparent' : 'var(--bg-hover)',
-                      border: '1px solid var(--border)', borderRadius: '50%', width: 38, height: 38,
-                      cursor: slideIndex === 0 ? 'default' : 'pointer',
-                      color: slideIndex === 0 ? 'var(--text-secondary)' : 'var(--text)', fontSize: '20px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      opacity: slideIndex === 0 ? 0.3 : 1,
-                    }}>
-                    ‹
-                  </button>
-                  <img
-                    src={api.slideUrl(slidePreview.slides[slideIndex])}
-                    alt={`Slide ${slideIndex + 1}`}
-                    style={{
-                      maxWidth: '100%', maxHeight: '100%',
-                      objectFit: 'contain',
-                      borderRadius: '4px',
-                      boxShadow: '0 2px 16px rgba(0,0,0,0.12)',
-                    }}
-                  />
-                  <button onClick={() => setSlideIndex(i => Math.min(slidePreview.slides.length - 1, i + 1))}
-                    disabled={slideIndex === slidePreview.slides.length - 1}
-                    style={{
-                      position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
-                      background: slideIndex === slidePreview.slides.length - 1 ? 'transparent' : 'var(--bg-hover)',
-                      border: '1px solid var(--border)', borderRadius: '50%', width: 38, height: 38,
-                      cursor: slideIndex === slidePreview.slides.length - 1 ? 'default' : 'pointer',
-                      color: slideIndex === slidePreview.slides.length - 1 ? 'var(--text-secondary)' : 'var(--text)', fontSize: '20px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      opacity: slideIndex === slidePreview.slides.length - 1 ? 0.3 : 1,
-                    }}>
-                    ›
-                  </button>
-                </>
-              )}
-            </div>
-
-            {/* Thumbnail strip */}
-            {!slideLoading && slidePreview.slides.length > 0 && (
-              <div style={{
-                flexShrink: 0, padding: '10px 16px',
-                display: 'flex', gap: '8px', justifyContent: 'center',
-                overflowX: 'auto', borderTop: '1px solid var(--border)',
-              }}>
-                {slidePreview.slides.map((s, i) => (
-                  <div key={s} onClick={() => setSlideIndex(i)}
-                    style={{
-                      width: '72px', height: '41px', flexShrink: 0,
-                      cursor: 'pointer', overflow: 'hidden',
-                      borderRadius: '3px',
-                      border: i === slideIndex ? '2px solid var(--primary)' : '2px solid transparent',
-                      opacity: i === slideIndex ? 1 : 0.5,
-                      transition: 'opacity 0.15s, border 0.15s',
-                    }}>
-                    <img src={api.slideUrl(s)} alt={`缩略图 ${i + 1}`}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -452,26 +452,12 @@ export default function ProjectPage() {
   }
 
   // ── PPT / SOP Generation ──
-  const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, prompt: string, model: string) => {
+  const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, _prompt: string, model: string) => {
     setPptGenerating(stepKey)
     try {
-      // Use template prompt/skill if available, otherwise fall back to column config
-      const selectedTemplate = templatesMap[tmplId]
-      const effectivePrompt = selectedTemplate?.prompt || prompt
-      const effectiveSkill = selectedTemplate?.skill || ''
-
-      let aiContent = content
-      if (model && effectivePrompt) {
-        const [pid, mdl] = model.split(':')
-        const userMsg = effectiveSkill
-          ? `${effectiveSkill}\n\n${content}`
-          : content
-        const result = await doGenerate(stepKey, effectivePrompt, userMsg, pid, mdl)
-        if (result) aiContent = result
-      }
-      // Step 2: Format as PPTX
       const branding = (globalBranding.copyright || globalBranding.signature) ? globalBranding : undefined
-      const result: any = await api.generatePPT(aiContent, tmplId, branding, id)
+      const [pid, mdl] = model ? model.split(':') : ['', '']
+      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl)
       setGenFiles(prev => [...prev, {
         name: result.filename, type: 'PPT',
         source: label,

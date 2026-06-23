@@ -342,6 +342,10 @@ export const api = {
   },
   previewSlides: (templateId: string) =>
     request(`/api/templates/${encodeURIComponent(templateId)}/preview-slides`, { method: 'POST' }).then(d => d.slides as string[]),
+  getSlidesContent: (templateId: string) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/slides-content`),
+  getSlideThumbUrl: (templateId: string) =>
+    `${BASE}/api/templates/${encodeURIComponent(templateId)}/slide-thumb`,
   previewTemplate: (templateId: string) =>
     `${BASE}/api/templates/${encodeURIComponent(templateId)}/file`,
   slideUrl: (slidePath: string) =>
@@ -350,8 +354,8 @@ export const api = {
     request(`/api/templates/for-stage/${encodeURIComponent(stageType)}`).then(d => d.templates),
 
   // PPT
-  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string) =>
-    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null}) }),
+  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string) =>
+    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || ''}) }),
 
   // SOP Export
   exportSOP: (content: string, branding?: Record<string, string>, projectId?: string) =>

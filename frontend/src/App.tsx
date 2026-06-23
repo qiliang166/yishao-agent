@@ -14,7 +14,7 @@ function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const [brandLogo, setBrandLogo] = useState('🍽')
-  const [brandName, setBrandName] = useState('一勺笔录(SOP)智能体')
+  const [brandName, setBrandName] = useState('')
   const [projName, setProjName] = useState('')
   const isWorkspace = location.pathname.startsWith('/project/')
 
@@ -22,7 +22,10 @@ function Sidebar() {
     api.getSettings().then(data => {
       const s = data.settings || {}
       if (s.brand_logo) setBrandLogo(s.brand_logo)
-      if (s.brand_name) setBrandName(s.brand_name)
+      if (s.brand_name) {
+        setBrandName(s.brand_name)
+        document.title = s.brand_name
+      }
     }).catch(() => {})
   }, [])
 

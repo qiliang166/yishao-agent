@@ -16,9 +16,11 @@ from services.prompt_service import (
     rollback_version, diff_versions, set_default, export_prompts, import_prompts,
 )
 
+DEFAULT_SITE_NAME = "SOP Agent"
+
 init_db()
 
-app = FastAPI(title="一勺笔录(SOP)智能体")
+app = FastAPI(title=DEFAULT_SITE_NAME)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -64,6 +66,12 @@ def _get_setting(key: str) -> str:
         return row["value"] if row else ""
     finally:
         db.close()
+
+
+def _get_site_name() -> str:
+    """Read site name from settings (brand_name), with fallback."""
+    name = _get_setting("brand_name")
+    return name if name else DEFAULT_SITE_NAME
 
 
 SALT = "yishao-agent-salt-2026"
@@ -116,7 +124,7 @@ def resolve_project_storage(project_id: str, auto_create: bool = True) -> str:
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "一勺笔录(SOP)智能体"}
+    return {"status": "ok", "app": _get_site_name()}
 
 
 # ── Projects ──
@@ -941,9 +949,14 @@ def create_template(req: TemplateCreate):
 def update_template(template_id: str, req: TemplateCreate):
     db = get_db()
     try:
+        existing = db.execute("SELECT file_path, thumbnail_path FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Template not found")
+        # Guard: never overwrite a valid file_path with an empty one
+        final_file_path = req.file_path if req.file_path else (existing["file_path"] or "")
         db.execute(
             "UPDATE templates SET name=?, type=?, file_path=?, prompt=?, skill=?, rules=?, linked_skill_id=?, branding_config=? WHERE id=?",
-            (req.name, req.type, req.file_path, req.prompt, req.skill, req.rules, req.linked_skill_id, req.branding_config, template_id))
+            (req.name, req.type, final_file_path, req.prompt, req.skill, req.rules, req.linked_skill_id, req.branding_config, template_id))
         db.commit()
         return {"ok": True}
     finally:
@@ -982,13 +995,19 @@ def set_template_default(template_id: str):
 
 
 def _generate_pptx_thumbnail(pptx_path: str, template_id: str) -> str | None:
-    """Extract the first image from a PPTX as a thumbnail. Searches all slides."""
+    """Export slide 1 as a full-slide thumbnail PNG. Falls back to extracting first embedded image."""
+    # Preferred: full-slide PNG via PowerPoint COM
+    thumb_path = _export_slide_thumbnail(pptx_path, template_id)
+    if thumb_path:
+        return thumb_path
+
+    # Fallback: extract first embedded picture from slide 1
     try:
         from pptx import Presentation
         from pptx.shapes.picture import Picture
         prs = Presentation(pptx_path)
-        for slide in prs.slides:
-            for shape in slide.shapes:
+        if prs.slides:
+            for shape in prs.slides[0].shapes:
                 if isinstance(shape, Picture):
                     image = shape.image
                     ext = image.content_type.split("/")[-1]
@@ -999,10 +1018,38 @@ def _generate_pptx_thumbnail(pptx_path: str, template_id: str) -> str | None:
                     with open(thumb_path, "wb") as f:
                         f.write(image.blob)
                     return thumb_path
-        return None
     except Exception as e:
-        logging.getLogger("uvicorn").info(f"Thumbnail generation skipped: {e}")
-        return None
+        logging.getLogger("uvicorn").info(f"Thumbnail picture fallback failed: {e}")
+
+    return None
+
+
+def _export_slide_thumbnail(pptx_path: str, template_id: str) -> str | None:
+    """Export slide 1 as a PNG thumbnail using PowerPoint COM."""
+    try:
+        import subprocess
+        thumb_name = f"{template_id}_thumb.png"
+        thumb_path = os.path.join(THUMBNAIL_DIR, thumb_name)
+        ps_script = f'''
+$ppt = New-Object -ComObject PowerPoint.Application
+$ppt.Visible = 0
+try {{
+    $pres = $ppt.Presentations.Open("{pptx_path}", $true, $false, $false)
+    $pres.Slides[1].Export("{thumb_path}", "PNG", 960, 540)
+    $pres.Close()
+}} finally {{
+    $ppt.Quit()
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($ppt) | Out-Null
+}}
+Write-Output "1"
+'''
+        result = subprocess.run(["powershell", "-Command", ps_script],
+                              capture_output=True, text=True, timeout=30)
+        if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
+            return thumb_path
+    except Exception as e:
+        logging.getLogger("uvicorn").info(f"Slide thumbnail fallback failed: {e}")
+    return None
 
 
 @app.post("/api/templates/{template_id}/upload")
@@ -1079,17 +1126,85 @@ def reset_template_thumbnail(template_id: str):
 
 @app.get("/api/templates/{template_id}/file")
 def serve_template_file(template_id: str):
-    """Serve the template PPTX file for preview/download."""
+    """Serve the template PPTX file — generated from prompt+SKILL+rules, or original upload as fallback."""
     db = get_db()
     try:
-        row = db.execute("SELECT file_path, name FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row or not row["file_path"]:
-            raise HTTPException(404, "Template file not found")
-        file_path = row["file_path"]
-        if not os.path.exists(file_path):
+        row = db.execute(
+            "SELECT file_path, name, prompt, skill, rules FROM templates WHERE id = ?",
+            (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Template not found")
+        name = row["name"]
+        prompt = row["prompt"] or ""
+        skill = row["skill"] or ""
+        rules_str = row["rules"] or "{}"
+        original_path = row["file_path"]
+
+        # Generated template cache path
+        gen_dir = os.path.join(BASE_DIR, "data", "templates", "_generated")
+        os.makedirs(gen_dir, exist_ok=True)
+        gen_path = os.path.join(gen_dir, f"{template_id}.pptx")
+
+        # Serve cached generated template if available
+        if os.path.exists(gen_path):
+            serve_path = gen_path
+        elif skill and prompt:
+            # Find original upload for layout source
+            layout_source = original_path if (original_path and os.path.exists(original_path)) else None
+            if not layout_source:
+                raise HTTPException(404, "No layout source file available")
+
+            # Try AI generation from prompt+SKILL+rules
+            rules = {}
+            try:
+                rules = json.loads(rules_str)
+            except Exception:
+                pass
+
+            prov = db.execute(
+                "SELECT id, models FROM llm_providers WHERE is_enabled=1 LIMIT 1").fetchone()
+            if prov:
+                models = json.loads(prov["models"] or "[]")
+                model = models[0] if models else ""
+                if model:
+                    from pptx import Presentation
+                    from services.ppt_service import generate_template_pptx
+                    try:
+                        prs = Presentation(layout_source)
+                        generate_template_pptx(prs, prompt, skill, rules, prov["id"], model, gen_path)
+                        # DO NOT overwrite file_path — keep original as layout source for future regenerations
+                        logging.getLogger("uvicorn").info(f"Template {template_id} generated from SKILL")
+                        serve_path = gen_path
+                    except Exception as e:
+                        logging.getLogger("uvicorn").warning(
+                            f"Template generation failed, serving original: {e}")
+                        serve_path = layout_source
+                else:
+                    serve_path = layout_source
+            else:
+                serve_path = layout_source
+        elif original_path and os.path.exists(original_path):
+            serve_path = original_path
+        else:
+            raise HTTPException(404, "No template file available")
+
+        if not os.path.exists(serve_path):
             raise HTTPException(404, "Template file not found on disk")
-        return FileResponse(file_path, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                          filename=row["name"] + ".pptx")
+
+        # Also copy to global save path
+        try:
+            save_dir = _get_global_save_path()
+            os.makedirs(save_dir, exist_ok=True)
+            dest = os.path.join(save_dir, name + ".pptx")
+            shutil.copy2(serve_path, dest)
+            logging.getLogger("uvicorn").info(f"Template copied to {dest}")
+        except Exception as e:
+            logging.getLogger("uvicorn").warning(f"Failed to copy template to save path: {e}")
+
+        return FileResponse(serve_path,
+                          media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                          filename=name + ".pptx",
+                          headers={"Content-Disposition": f"inline; filename=\"{name}.pptx\""})
     finally:
         db.close()
 
@@ -1111,7 +1226,7 @@ def _export_pptx_slides(pptx_path: str, template_id: str) -> list[str]:
     # Use PowerShell + PowerPoint COM to export slides
     ps = f'''
 $ppt = New-Object -ComObject PowerPoint.Application
-$ppt.Visible = $false
+$ppt.Visible = 0
 $pres = $ppt.Presentations.Open("{pptx_path}")
 $count = $pres.Slides.Count
 for ($i = 1; $i -le $count; $i++) {{
@@ -1132,6 +1247,293 @@ Write-Output $count
     return [f"{template_id}_slides/{f}" for f in slides]
 
 
+@app.get("/api/templates/{template_id}/slide-thumb")
+def get_template_slide_thumb(template_id: str):
+    """Generate a simple PNG thumbnail of the first slide using python-pptx + Pillow.
+    No COM required — reads shapes and text from the PPTX, renders a basic representation."""
+    from pptx import Presentation
+    from pptx.util import Inches, Pt, Emu
+    from pptx.dml.color import RGBColor
+    from PIL import Image, ImageDraw, ImageFont
+    import io
+
+    db = get_db()
+    try:
+        row = db.execute("SELECT file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row or not row["file_path"]:
+            raise HTTPException(404, "Template file not found")
+        pptx_path = row["file_path"]
+        # Prefer original upload for thumbnail
+        gen_path = os.path.join(BASE_DIR, "data", "templates", "_generated", f"{template_id}.pptx")
+        if os.path.exists(gen_path):
+            pptx_path = gen_path
+        if not os.path.exists(pptx_path):
+            raise HTTPException(404, "PPTX file not found on disk")
+    finally:
+        db.close()
+
+    prs = Presentation(pptx_path)
+    if not prs.slides:
+        raise HTTPException(404, "No slides in template")
+
+    slide = prs.slides[0]
+    sw = prs.slide_width or 12192000   # EMU
+    sh = prs.slide_height or 6858000
+
+    # Thumbnail size
+    THUMB_W, THUMB_H = 640, 360
+    scale_x = THUMB_W / sw
+    scale_y = THUMB_H / sh
+
+    img = Image.new("RGB", (THUMB_W, THUMB_H), "#F0EDE8")
+    draw = ImageDraw.Draw(img)
+
+    # Try to detect background from first shape that covers most of the slide
+    bg_color = None
+    for shape in slide.shapes:
+        try:
+            fill = shape.fill
+            if fill and fill.type is not None:
+                fc = fill.fore_color
+                if fc and fc.type is not None:
+                    try:
+                        bg_color = fc.rgb
+                        break
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    if bg_color:
+        try:
+            hex_str = str(bg_color)
+            if len(hex_str) == 6:
+                r = int(hex_str[0:2], 16)
+                g = int(hex_str[2:4], 16)
+                b = int(hex_str[4:6], 16)
+            else:
+                r, g, b = 240, 237, 232
+        except Exception:
+            r, g, b = 240, 237, 232
+        # Only use if not pure white/black
+        if (r, g, b) not in ((255, 255, 255), (0, 0, 0)):
+            img = Image.new("RGB", (THUMB_W, THUMB_H), (r, g, b))
+            draw = ImageDraw.Draw(img)
+
+    # Load a basic font
+    font_paths = [
+        "C:/Windows/Fonts/msyh.ttc",       # Microsoft YaHei
+        "C:/Windows/Fonts/simsun.ttc",      # SimSun
+        "C:/Windows/Fonts/arial.ttf",
+    ]
+    font_lg = None
+    font_sm = None
+    for fp in font_paths:
+        if os.path.exists(fp):
+            try:
+                font_lg = ImageFont.truetype(fp, 24)
+                font_sm = ImageFont.truetype(fp, 14)
+                break
+            except Exception:
+                pass
+    if font_lg is None:
+        font_lg = ImageFont.load_default()
+        font_sm = ImageFont.load_default()
+
+    # Render text shapes
+    for shape in slide.shapes:
+        if not shape.has_text_frame:
+            continue
+        tf = shape.text_frame
+        text = tf.text.strip()
+        if not text:
+            continue
+        x = int(shape.left * scale_x) if shape.left else 0
+        y = int(shape.top * scale_y) if shape.top else 0
+        w = int(shape.width * scale_x) if shape.width else THUMB_W
+        h = int(shape.height * scale_y) if shape.height else THUMB_H
+
+        # Clip to image bounds
+        x = max(0, min(x, THUMB_W - 10))
+        y = max(0, min(y, THUMB_H - 10))
+        w = min(w, THUMB_W - x)
+        h = min(h, THUMB_H - y)
+
+        # Determine text color from first run
+        text_color = (40, 40, 40)
+        try:
+            for p in tf.paragraphs:
+                for r in p.runs:
+                    if r.font.color and r.font.color.rgb:
+                        cr = r.font.color.rgb
+                        text_color = ((cr >> 16) & 0xFF, (cr >> 8) & 0xFF, cr & 0xFF)
+                    break
+                break
+        except Exception:
+            pass
+
+        font = font_lg if any(r.font.size and r.font.size >= Pt(18) for p in tf.paragraphs for r in p.runs) else font_sm
+
+        # Draw first 2 lines of text
+        lines = text.split('\n')[:3]
+        line_h = 16
+        for li, line in enumerate(lines):
+            if li * line_h >= h - 4:
+                break
+            # Truncate long lines
+            max_chars = max(4, int(w / 10))
+            if len(line) > max_chars:
+                line = line[:max_chars - 2] + '..'
+            draw.text((x + 4, y + 4 + li * line_h), line, fill=text_color, font=font_sm)
+
+    # Save to in-memory PNG
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png",
+                             headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/api/templates/{template_id}/slides-content")
+def get_template_slides_content(template_id: str):
+    """Return full slide shape data (position, color, font, text) for visual in-browser preview.
+    Each shape is rendered as a positioned HTML element in the frontend."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row or not row["file_path"]:
+            raise HTTPException(404, "Template file not found")
+        pptx_path = row["file_path"]
+        gen_path = os.path.join(BASE_DIR, "data", "templates", "_generated", f"{template_id}.pptx")
+        if os.path.exists(gen_path):
+            pptx_path = gen_path
+        if not os.path.exists(pptx_path):
+            raise HTTPException(404, "PPTX file not found on disk")
+    finally:
+        db.close()
+
+    from pptx import Presentation
+    from pptx.util import Inches, Pt, Emu
+    from pptx.dml.color import RGBColor
+    import copy
+
+    prs = Presentation(pptx_path)
+
+    def _rgb_str(fc):
+        """Convert python-pptx color to '#RRGGBB' string or None."""
+        try:
+            if fc is None or fc.type is None:
+                return None
+            s = str(fc.rgb)
+            if len(s) == 6:
+                return '#' + s
+        except Exception:
+            pass
+        return None
+
+    def _extract_fill(shape):
+        """Extract fill color from shape."""
+        try:
+            fill = shape.fill
+            if fill and fill.type is not None:
+                return _rgb_str(fill.fore_color)
+        except Exception:
+            pass
+        return None
+
+    def _extract_text_runs(shape):
+        """Extract rich text runs from shape."""
+        runs_data = []
+        try:
+            if not shape.has_text_frame:
+                return []
+            tf = shape.text_frame
+            for p in tf.paragraphs:
+                align = None
+                try:
+                    from pptx.enum.text import PP_ALIGN
+                    align_map = {
+                        PP_ALIGN.LEFT: 'left', PP_ALIGN.CENTER: 'center',
+                        PP_ALIGN.RIGHT: 'right', PP_ALIGN.JUSTIFY: 'justify',
+                    }
+                    align = align_map.get(p.alignment, 'left')
+                except Exception:
+                    align = 'left'
+                for r in p.runs:
+                    size_pt = None
+                    try:
+                        if r.font.size:
+                            size_pt = round(r.font.size / 12700.0, 1)
+                    except Exception:
+                        pass
+                    color = None
+                    try:
+                        if r.font.color and r.font.color.rgb:
+                            color = _rgb_str(r.font.color)
+                    except Exception:
+                        pass
+                    bold = r.font.bold if r.font.bold is not None else False
+                    italic = r.font.italic if r.font.italic is not None else False
+                    runs_data.append({
+                        "text": r.text,
+                        "size": size_pt,
+                        "color": color,
+                        "bold": bold,
+                        "italic": italic,
+                        "align": align,
+                    })
+        except Exception:
+            pass
+        return runs_data
+
+    def _shape_type_name(shape):
+        """Get a simple shape type name."""
+        try:
+            name = shape.shape_type
+            return str(name).split('.')[-1].split('(')[0].strip().upper() if name else 'UNKNOWN'
+        except Exception:
+            return 'UNKNOWN'
+
+    slides = []
+    for idx, slide in enumerate(prs.slides):
+        shapes_data = []
+        # Try to get slide background
+        bg_color = None
+        try:
+            bg = slide.background
+            if bg.fill and bg.fill.type is not None:
+                bg_color = _rgb_str(bg.fill.fore_color)
+        except Exception:
+            pass
+
+        for shape in slide.shapes:
+            shape_info = {
+                "left": shape.left if shape.left is not None else 0,
+                "top": shape.top if shape.top is not None else 0,
+                "width": shape.width if shape.width is not None else 0,
+                "height": shape.height if shape.height is not None else 0,
+                "rotation": shape.rotation if shape.rotation else 0,
+                "fill": _extract_fill(shape),
+                "name": shape.name or "",
+                "s_type": _shape_type_name(shape),
+                "runs": _extract_text_runs(shape),
+            }
+            shapes_data.append(shape_info)
+
+        slides.append({
+            "num": idx + 1,
+            "bg_color": bg_color,
+            "shapes": shapes_data,
+        })
+
+    return {
+        "slides": slides,
+        "total": len(slides),
+        "slide_width": prs.slide_width,
+        "slide_height": prs.slide_height,
+    }
+
+
 @app.post("/api/templates/{template_id}/preview-slides")
 def preview_template_slides(template_id: str):
     """Export all slides as images and return their URLs."""
@@ -1141,6 +1543,10 @@ def preview_template_slides(template_id: str):
         if not row or not row["file_path"]:
             raise HTTPException(404, "Template file not found")
         pptx_path = row["file_path"]
+        # Prefer cached generated template over original upload
+        gen_path = os.path.join(BASE_DIR, "data", "templates", "_generated", f"{template_id}.pptx")
+        if os.path.exists(gen_path):
+            pptx_path = gen_path
         if not os.path.exists(pptx_path):
             raise HTTPException(404, "PPTX file not found on disk")
     finally:
@@ -1201,10 +1607,40 @@ def list_templates_for_stage(stage_type: str):
 
 def extract_pptx_structure(file_path: str) -> dict:
     from pptx import Presentation
+    from lxml import etree
     prs = Presentation(file_path)
     slides = []
     all_fonts = set()
     all_colors = set()
+    all_theme_colors = set()
+    all_theme_fonts = set()
+
+    # Extract theme colors from slide master XML
+    for master in prs.slide_masters:
+        master_xml = master.element
+        ns = {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
+        # Theme colors (dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink)
+        for clr in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}srgbClr'):
+            val = clr.get('val')
+            if val:
+                all_theme_colors.add(val)
+                all_colors.add(val)
+        for clr in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}sysClr'):
+            val = clr.get('lastClr')
+            if val:
+                all_theme_colors.add(val)
+                all_colors.add(val)
+        # Theme fonts (latin, ea, cs)
+        for font_elem in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}latin'):
+            typeface = font_elem.get('typeface')
+            if typeface:
+                all_theme_fonts.add(typeface)
+                all_fonts.add(typeface)
+        for font_elem in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}ea'):
+            typeface = font_elem.get('typeface')
+            if typeface:
+                all_theme_fonts.add(typeface)
+                all_fonts.add(typeface)
 
     for i, slide in enumerate(prs.slides):
         info = {"index": i + 1, "layout": slide.slide_layout.name, "placeholders": [], "shapes": []}
@@ -1265,7 +1701,10 @@ def extract_pptx_structure(file_path: str) -> dict:
         "slide_layouts": [lyt.name for lyt in prs.slide_layouts],
         "master_layouts": master_layouts,
         "fonts_used": sorted(list(all_fonts))[:30],
+        "theme_fonts": sorted(list(all_theme_fonts))[:10],
         "colors_used": sorted(list(all_colors))[:30],
+        "theme_colors": sorted(list(all_theme_colors))[:20],
+        "typography_extracted": _extract_typography(prs),
         "slides": slides
     }
 
@@ -1308,6 +1747,11 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
             models_list = json.loads(provider_row["models"] or "[]")
             model = models_list[0] if models_list else "gpt-4o"
 
+        # Build typography spec section for the prompt
+        ty_spec = rules.get("design_rules", {}).get("typography_spec", {})
+        ty_spec_text = json.dumps(ty_spec, ensure_ascii=False, indent=2) if ty_spec else "（无 typography_spec 配置）"
+        ty_extracted = structure.get("typography_extracted", {})
+
         system_prompt = f"""你是一位专业的 PPT 模板分析专家。请严格遵循栏目预设的角色定义完成分析任务。
 
 ## 栏目角色定义（分析的身份立场和领域知识）
@@ -1321,12 +1765,22 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
 2. 从提取的 PPTX 结构中获取实际配色（colors_used）和字体（fonts_used），不预设任何配色方案
 3. 按 design_rules 中的约束条文审视模板的视觉样式，确保符合设计纪律
 4. prompt 应完整包含：角色设定、从模板提取的实际样式描述（颜色/字体/版式/尺寸）、内容规范引用、版式选择规则、约束规则引用、输出格式要求
-5. skill 应为完整的 Markdown 模板，包含 content_spec 规定的完整结构
+5. skill 应为完整的 Markdown 结构模板，描述幻灯片从封面到总结的完整页面结构、每页的段落和字段（用 {{占位符}} 标记待填内容）。包含所有章节（道/术/流程/附录）的页面框架，但不包含原模板的特定菜品名称或具体参数值。模板的页数结构是可复用的框架，具体页数由内容量动态决定
 6. 遵守 design_principles 中的所有铁律
 7. 遵守 page_rhythm 中的页面节奏规则
-8. 从模板中提取的实际样式信息必须如实写入 prompt，不编造不预设"""
+8. 从模板中提取的实际样式信息必须如实写入 prompt，不编造不预设
 
-        user_message = f"请分析以下 PPTX 文件结构（含实际提取的颜色和字体），基于约束规则生成该模板专属的 prompt 和 SKILL：\n\n```json\n{json.dumps(structure, ensure_ascii=False, indent=2)}\n```\n\n请直接输出 JSON，格式为：{{\"prompt\": \"...\", \"skill\": \"...\"}}"
+## 排版属性提取与补全（核心任务）
+typography_spec 定义了必须从模板中提取的排版属性及其规范兜底值：
+{ty_spec_text}
+
+typography_extracted 是代码从模板 PPTX 中自动提取到的排版值（null 表示未提取到）。你的任务是：
+- 分析 typography_extracted 中的实际值和缺失值
+- 对于缺失（null）的字段，按 typography_spec 的 fallback + rationale 补全合理的值
+- 输出 typography_profile，必须包含 typography_spec 中定义的三个字段（body_font_size_pt, title_font_size_pt, line_height_ratio），所有值均不得为 null
+- 将 typography_profile 作为顶层字段与 prompt、skill 一起输出"""
+
+        user_message = f"请分析以下 PPTX 文件结构，基于约束规则生成该模板专属的 prompt、SKILL 和 typography_profile：\n\n## 模板结构数据\n```json\n{json.dumps(structure, ensure_ascii=False, indent=2)}\n```\n\n## typography_extracted（代码提取值，null 项需要你补全）\n```json\n{json.dumps(ty_extracted, ensure_ascii=False, indent=2)}\n```\n\n请直接输出 JSON，格式为：{{\"prompt\": \"...\", \"skill\": \"...\", \"typography_profile\": {{\"body_font_size_pt\": 数字, \"title_font_size_pt\": 数字, \"line_height_ratio\": 数字}}}}"
 
         ai_response = await llm_generate(provider_row["id"], model, system_prompt, user_message, temperature=0.3)
 
@@ -1341,14 +1795,23 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
         result = json.loads(ai_response)
         prompt = result.get("prompt", "")
         skill = result.get("skill", "")
+        typography_profile = result.get("typography_profile", None)
 
         if not prompt or not skill:
             raise HTTPException(400, "AI 未能生成完整的 prompt 和 skill，请重试")
 
-        db.execute("UPDATE templates SET prompt = ?, skill = ? WHERE id = ?", (prompt, skill, template_id))
+        if not typography_profile or not isinstance(typography_profile, dict):
+            # Fallback: use code-extracted typography from structure
+            ty = structure.get("typography_extracted", {}) or {}
+            typography_profile = {"body_font_size_pt": ty.get("body_font_size_pt") or 18,
+                                  "title_font_size_pt": ty.get("title_font_size_pt") or 36,
+                                  "line_height_ratio": ty.get("line_height_ratio") or 1.2}
+        rules_json = json.dumps(rules, ensure_ascii=False)
+        db.execute("UPDATE templates SET prompt = ?, skill = ?, typography_profile = ?, rules = ? WHERE id = ?",
+                   (prompt, skill, json.dumps(typography_profile, ensure_ascii=False), rules_json, template_id))
         db.commit()
 
-        return {"ok": True, "prompt": prompt, "skill": skill}
+        return {"ok": True, "prompt": prompt, "skill": skill, "typography_profile": typography_profile, "rules": rules}
     except json.JSONDecodeError:
         raise HTTPException(500, "AI 返回格式异常，请重试")
     finally:
@@ -1462,13 +1925,15 @@ def api_extract_subtitles(req: dict):
 
 # ── PPT Generation ──
 
-from services.ppt_service import generate_ppt
+from services.ppt_service import generate_ppt, _extract_typography
 
 class PPTGenerateRequest(BaseModel):
     content: str
     template_id: str = ""
-    branding: dict = None
+    branding: Optional[dict] = None
     project_id: Optional[str] = None
+    provider_id: str = ""
+    model: str = ""
 
 
 @app.post("/api/ppt/generate")
@@ -1481,7 +1946,7 @@ def api_generate_ppt(req: PPTGenerateRequest):
             proj = _get_project(req.project_id)
             if proj:
                 project_name = proj["name"]
-        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir)
+        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model)
         filename = os.path.basename(filepath)
         params = []
         if req.project_id:
@@ -1746,7 +2211,7 @@ UPDATE_CHECK_URL = "https://raw.githubusercontent.com/qiliang166/yishao-agent/ma
 
 @app.get("/api/version")
 def api_version():
-    return {"version": VERSION, "app": "一勺笔录(SOP)智能体"}
+    return {"version": VERSION, "app": _get_site_name()}
 
 
 @app.get("/api/check-update")
