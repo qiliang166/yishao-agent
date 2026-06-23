@@ -426,30 +426,39 @@ export default function ProjectPage() {
   // ── Batch Generate All Stage 2 Docs ──
   const doBatchGenerate = async () => {
     if (!id) return
+    const labels: Record<string, string> = { step2_sop: 'SOP文案', step2_daoshuyi: '道与术文案', step2_yanxi: '研学手册文案' }
+    const tasks: { key: string; label: string; promise: Promise<any> }[] = []
+    const sopSource = getStage2Source(s2SopDataSource)
+    if (sopSource && s2SopModel) {
+      const [pid, mdl] = s2SopModel.split(':')
+      tasks.push({ key: 'step2_sop', label: 'SOP文案', promise: doGenerate('step2_sop', stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。', sopSource, pid, mdl) })
+    }
+    const daoSource = getStage2Source(s2DaoDataSource)
+    if (daoSource && s2DaoModel) {
+      const [pid, mdl] = s2DaoModel.split(':')
+      tasks.push({ key: 'step2_daoshuyi', label: '道与术文案', promise: doGenerate('step2_daoshuyi', stage2Prompts.dao?.prompt || '请分析以下食谱内容的道与术。', daoSource, pid, mdl) })
+    }
+    const yanxiSource = getStage2Source(s2YanxiDataSource)
+    if (yanxiSource && s2YanxiModel) {
+      const [pid, mdl] = s2YanxiModel.split(':')
+      tasks.push({ key: 'step2_yanxi', label: '研学手册文案', promise: doGenerate('step2_yanxi', stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案。', yanxiSource, pid, mdl) })
+    }
+    if (tasks.length === 0) {
+      modal.toast('请先选择数据源和大模型', 'error')
+      return
+    }
     setBatchGenerating(true)
     try {
-      const tasks: Promise<any>[] = []
-      const sopSource = getStage2Source(s2SopDataSource)
-      if (sopSource && s2SopModel) {
-        const [pid, mdl] = s2SopModel.split(':')
-        tasks.push(doGenerate('step2_sop', stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。', sopSource, pid, mdl))
+      const results = await Promise.all(tasks.map(t => t.promise.then(r => ({ ...t, ok: r != null })).catch(() => ({ ...t, ok: false }))))
+      const ok = results.filter(r => r.ok)
+      const fail = results.filter(r => !r.ok)
+      if (fail.length === 0) {
+        modal.toast('三篇文案已全部生成', 'success')
+      } else if (ok.length === 0) {
+        modal.toast(`全部生成失败: ${fail.map(f => f.label).join('、')}`, 'error')
+      } else {
+        modal.toast(`${ok.map(o => o.label).join('、')} 生成成功; ${fail.map(f => f.label).join('、')} 失败`, 'error')
       }
-      const daoSource = getStage2Source(s2DaoDataSource)
-      if (daoSource && s2DaoModel) {
-        const [pid, mdl] = s2DaoModel.split(':')
-        tasks.push(doGenerate('step2_daoshuyi', stage2Prompts.dao?.prompt || '请分析以下食谱内容的道与术。', daoSource, pid, mdl))
-      }
-      const yanxiSource = getStage2Source(s2YanxiDataSource)
-      if (yanxiSource && s2YanxiModel) {
-        const [pid, mdl] = s2YanxiModel.split(':')
-        tasks.push(doGenerate('step2_yanxi', stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案。', yanxiSource, pid, mdl))
-      }
-      if (tasks.length === 0) {
-        modal.toast('没有可生成的数据源或模型', 'error')
-        return
-      }
-      await Promise.all(tasks)
-      modal.toast('三篇文案已全部生成', 'success')
     } catch (e: any) {
       modal.toast('批量生成失败: ' + e.message, 'error')
     } finally {
@@ -898,7 +907,7 @@ export default function ProjectPage() {
                         }
                       }}>📥 保存到项目</button>
                     <button className="btn btn-outline btn-sm"
-                      disabled={batchGenerating || (!getStage2Source(s2SopDataSource) && !getStage2Source(s2DaoDataSource) && !getStage2Source(s2YanxiDataSource))}
+                      disabled={batchGenerating || (!(getStage2Source(s2SopDataSource) && s2SopModel) && !(getStage2Source(s2DaoDataSource) && s2DaoModel) && !(getStage2Source(s2YanxiDataSource) && s2YanxiModel))}
                       onClick={doBatchGenerate}>
                       {batchGenerating ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>
@@ -945,10 +954,11 @@ export default function ProjectPage() {
                     disabled={!getStage2Source(s2SopDataSource) || !s2SopModel || step2Generating === '2a'}
                     onClick={async () => {
                       setStep2Generating('2a')
-                      const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
-                      const [pid, mdl] = s2SopModel.split(':')
-                      await doGenerate('step2_sop', prompt, getStage2Source(s2SopDataSource), pid, mdl)
-                      setStep2Generating('')
+                      try {
+                        const prompt = stage2Prompts.sop?.prompt || '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。'
+                        const [pid, mdl] = s2SopModel.split(':')
+                        await doGenerate('step2_sop', prompt, getStage2Source(s2SopDataSource), pid, mdl)
+                      } finally { setStep2Generating('') }
                     }}>
                     {step2Generating === '2a' ? '⏳ 生成中...' : '⚙ AI 生成 SOP文案'}
                   </button>
@@ -979,10 +989,11 @@ export default function ProjectPage() {
                     disabled={!getStage2Source(s2DaoDataSource) || !s2DaoModel || step2Generating === '2b'}
                     onClick={async () => {
                       setStep2Generating('2b')
-                      const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
-                      const [pid, mdl] = s2DaoModel.split(':')
-                      await doGenerate('step2_daoshuyi', prompt, getStage2Source(s2DaoDataSource), pid, mdl)
-                      setStep2Generating('')
+                      try {
+                        const prompt = stage2Prompts.dao?.prompt || '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。'
+                        const [pid, mdl] = s2DaoModel.split(':')
+                        await doGenerate('step2_daoshuyi', prompt, getStage2Source(s2DaoDataSource), pid, mdl)
+                      } finally { setStep2Generating('') }
                     }}>
                     {step2Generating === '2b' ? '⏳ 生成中...' : '⚙ AI 生成 道与术文案'}
                   </button>
@@ -1013,10 +1024,11 @@ export default function ProjectPage() {
                     disabled={!getStage2Source(s2YanxiDataSource) || !s2YanxiModel || step2Generating === '2c'}
                     onClick={async () => {
                       setStep2Generating('2c')
-                      const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
-                      const [pid, mdl] = s2YanxiModel.split(':')
-                      await doGenerate('step2_yanxi', prompt, getStage2Source(s2YanxiDataSource), pid, mdl)
-                      setStep2Generating('')
+                      try {
+                        const prompt = stage2Prompts.yanxi?.prompt || '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。'
+                        const [pid, mdl] = s2YanxiModel.split(':')
+                        await doGenerate('step2_yanxi', prompt, getStage2Source(s2YanxiDataSource), pid, mdl)
+                      } finally { setStep2Generating('') }
                     }}>
                     {step2Generating === '2c' ? '⏳ 生成中...' : '⚙ AI 生成 研学手册文案'}
                   </button>
@@ -1280,14 +1292,15 @@ export default function ProjectPage() {
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
                   onClick={async () => {
                     setStep2Generating('koubo')
-                    let prompt = stage4KouboPrompt || '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。'
-                    let pid = '', mdl = ''
-                    if (s4KouboModel) { [pid, mdl] = s4KouboModel.split(':') }
-                    const content = await doGenerate('step4_koubo', prompt,
-                      steps.step2_yanxi || steps.step1_video || steps.step1_text || steps.step1_file || '',
-                      pid, mdl)
-                    if (content) setKouboText(content)
-                    setStep2Generating('')
+                    try {
+                      let prompt = stage4KouboPrompt || '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。'
+                      let pid = '', mdl = ''
+                      if (s4KouboModel) { [pid, mdl] = s4KouboModel.split(':') }
+                      const content = await doGenerate('step4_koubo', prompt,
+                        steps.step2_yanxi || steps.step1_video || steps.step1_text || steps.step1_file || '',
+                        pid, mdl)
+                      if (content) setKouboText(content)
+                    } finally { setStep2Generating('') }
                   }}>
                   {step2Generating === 'koubo' ? '⏳ 生成中...' : '📢 生成口播稿'}
                 </button>
