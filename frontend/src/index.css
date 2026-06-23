@@ -16,6 +16,13 @@
   --warning: #C75B39;
   --purple: #7C3AED;
   --cyan: #0891B2;
+  --primary-hover: #6E1515;
+  --bg-secondary: #F5F3F0;
+  --bg-hover: #F0EFEC;
+  --muted: #D4C8B8;
+  --success-light: #EDF7EB;
+  --btn-dirty-bg: #A0522D;
+  --btn-dirty-text: #fff;
   --font: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   --mono: "SF Mono", "Cascadia Code", Consolas, monospace;
   --radius: 8px;

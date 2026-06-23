@@ -126,6 +126,11 @@ export default function ProjectPage() {
     setSavedFlash(Date.now())
     setTimeout(() => setSavedFlash(0), 1500)
   }
+  const getSaveBtnClass = (content: string, savedKey: string) => {
+    if (savedFlash) return 'btn-saved-flash'
+    if (content !== (savedSteps[savedKey] || '')) return 'btn-dirty'
+    return ''
+  }
   const vcRef = useRef<HTMLDivElement>(null)
   const [vcPos, setVcPos] = useState({ x: 0, y: 0 })
   const [vcSize, setVcSize] = useState({ w: 0, h: 0 })
@@ -651,8 +656,8 @@ export default function ProjectPage() {
                       placeholder="视频字幕将显示在此..." />
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>🗑 清空</button>
-                      <button className="btn btn-primary btn-sm" disabled={!videoText.trim()}
-                        onClick={() => { if (id && videoText.trim()) { saveStep('video_text', videoText); saveStep('raw_video', videoText); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : videoText !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : videoText !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
+                      <button className={`btn btn-primary btn-sm ${getSaveBtnClass(videoText, 'video_text')}`} disabled={!videoText.trim()}
+                        onClick={() => { if (id && videoText.trim()) { saveStep('video_text', videoText); saveStep('raw_video', videoText); flashSave() } }}>{savedFlash ? '✓ 已保存' : videoText !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     </div>
                   </div>
                 )}
@@ -706,8 +711,8 @@ export default function ProjectPage() {
                     value={textInput} onChange={e => setTextInput(e.target.value)} />
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
-                    <button className="btn btn-primary btn-sm" disabled={!textInput.trim()}
-                      onClick={() => { if (id && textInput.trim()) { saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : textInput !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : textInput !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'video_text')}`} disabled={!textInput.trim()}
+                      onClick={() => { if (id && textInput.trim()) { saveStep('video_text', textInput); saveStep('raw_text', textInput); flashSave() } }}>{savedFlash ? '✓ 已保存' : textInput !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-primary btn-sm"
                       disabled={step1Generating === '1b' || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
@@ -749,8 +754,8 @@ export default function ProjectPage() {
                     placeholder="文件内容将显示在此..." />
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setFileText('')}>🗑 清空</button>
-                    <button className="btn btn-primary btn-sm" disabled={!fileText.trim()}
-                      onClick={() => { if (id && fileText.trim()) { saveStep('video_text', fileText); saveStep('raw_file', fileText); flashSave() } }} style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : fileText !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{savedFlash ? '✓ 已保存' : fileText !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(fileText, 'video_text')}`} disabled={!fileText.trim()}
+                      onClick={() => { if (id && fileText.trim()) { saveStep('video_text', fileText); saveStep('raw_file', fileText); flashSave() } }}>{savedFlash ? '✓ 已保存' : fileText !== (savedSteps.video_text || '') ? '💾 保存' : '✓ 已保存'}</button>
                   </div>
                 </div>
                 <div className="card">
@@ -823,9 +828,8 @@ export default function ProjectPage() {
                       onClick={doBatchGenerate}>
                       {batchGenerating ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>
-                    <button className="btn btn-primary btn-sm"
+                    <button className={`btn btn-primary btn-sm ${(steps[step1Key()] || '') !== (savedSteps[step1Key()] || '') ? 'btn-dirty' : ''}`}
                       disabled={!steps[step1Key()]}
-                      style={(steps[step1Key()] || '') !== (savedSteps[step1Key()] || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}
                       onClick={() => saveStep(step1Key(), steps[step1Key()] || '')}>{(steps[step1Key()] || '') !== (savedSteps[step1Key()] || '') ? '💾 保存' : '✓ 已保存'}</button>
                     <button className="btn btn-ghost btn-sm"
                       disabled={!steps[step1Key()]}
@@ -977,9 +981,9 @@ export default function ProjectPage() {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
                       }}>📥 保存到项目</button>
-                    <button className="btn btn-primary btn-sm" onClick={() => {
+                    <button className={`btn btn-primary btn-sm ${(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? 'btn-dirty' : ''}`} onClick={() => {
                       saveStep(step2Key(), steps[step2Key()] || '')
-                    }} style={(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined}>{(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? '💾 保存' : '✓ 已保存'}</button>
+                    }}>{(steps[step2Key()] || '') !== (savedSteps[step2Key()] || '') ? '💾 保存' : '✓ 已保存'}</button>
                   </span>
                 </div>
               </div>
@@ -1336,7 +1340,7 @@ export default function ProjectPage() {
                   <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>
                     🗑 清空
                   </button>
-                  <button className="btn btn-primary btn-sm" style={savedFlash ? { background: '#22c55e', borderColor: '#22c55e', color: '#fff' } : videoText !== (savedSteps.video_text || '') ? { background: 'var(--warning)', borderColor: 'var(--warning)', color: '#fff' } : undefined} onClick={() => {
+                  <button className={`btn btn-primary btn-sm ${getSaveBtnClass(videoText, 'video_text')}`} onClick={() => {
                     if (id && videoText.trim()) { saveStep('video_text', videoText); flashSave() }
                     setVcOpen(false)
                   }}>

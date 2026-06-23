@@ -6,6 +6,7 @@ import SettingsPage from './pages/SettingsPage'
 import ProjSettingsPage from './pages/ProjSettingsPage'
 import { ModalProvider } from './components/ModalProvider'
 import { api } from './services/api'
+import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
 
 function Sidebar() {
@@ -80,6 +81,31 @@ function Sidebar() {
 function App() {
   const location = useLocation()
   const isWorkspace = location.pathname.startsWith('/project/')
+
+  useEffect(() => {
+    api.getSettings().then(data => {
+      const s = data.settings || {}
+      const themeId = s.theme || 'classic'
+      const presetsJson = s.theme_presets
+
+      localStorage.setItem('theme', themeId)
+      if (presetsJson) {
+        localStorage.setItem('theme_presets', presetsJson)
+      } else {
+        localStorage.removeItem('theme_presets')
+      }
+
+      if (themeId === 'classic') {
+        resetThemeToDefault()
+      } else if (presetsJson) {
+        try {
+          const presets = JSON.parse(presetsJson)
+          const preset = presets.find((p: any) => p.id === themeId)
+          if (preset) applyThemeToDOM(preset.colors, themeId)
+        } catch {}
+      }
+    }).catch(() => {})
+  }, [])
 
   return (
     <ModalProvider>
