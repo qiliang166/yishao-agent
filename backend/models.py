@@ -44,3 +44,12 @@ class SynthesizeRequest(BaseModel):
     speed: float = 1.0
     project_id: Optional[str] = None
     provider_id: Optional[str] = None
+
+
+class PPTGenerateRequest(BaseModel):
+    content: str
+    template_id: str = ""
+    branding: Optional[dict] = None
+    project_id: Optional[str] = None
+    provider_id: str = ""
+    model: str = ""

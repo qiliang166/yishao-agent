@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from database import init_db, get_db
-from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest
+from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest
 from typing import Optional
 import json
 import logging
@@ -1201,10 +1201,12 @@ def serve_template_file(template_id: str):
         except Exception as e:
             logging.getLogger("uvicorn").warning(f"Failed to copy template to save path: {e}")
 
+        from urllib.parse import quote
+        safe_name = name + ".pptx"
         return FileResponse(serve_path,
                           media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                          filename=name + ".pptx",
-                          headers={"Content-Disposition": f"inline; filename=\"{name}.pptx\""})
+                          filename=safe_name,
+                          headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(safe_name)}"})
     finally:
         db.close()
 
@@ -1926,15 +1928,6 @@ def api_extract_subtitles(req: dict):
 # ── PPT Generation ──
 
 from services.ppt_service import generate_ppt, _extract_typography
-
-class PPTGenerateRequest(BaseModel):
-    content: str
-    template_id: str = ""
-    branding: Optional[dict] = None
-    project_id: Optional[str] = None
-    provider_id: str = ""
-    model: str = ""
-
 
 @app.post("/api/ppt/generate")
 def api_generate_ppt(req: PPTGenerateRequest):
