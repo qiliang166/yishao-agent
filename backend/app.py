@@ -1830,6 +1830,231 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
         db.close()
 
 
+@app.post("/api/templates/{template_id}/generate-plan")
+def generate_template_plan(template_id: str, req: PPTPlanRequest):
+    """Generate a slide plan for a template style and save it.
+
+    Reads the template's design_rules (colors/fonts) plus guizang layout
+    definitions from ppt_engine/references/, then calls the AI to produce
+    a slide_plan JSON that is saved to the templates table.
+    """
+    from services.ppt_service import _generate_slides_staged
+    db = get_db()
+    try:
+        tmpl = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not tmpl:
+            raise HTTPException(404, "模板不存在")
+
+        # Load template's design_rules
+        rules = {}
+        if tmpl["rules"]:
+            try:
+                rules = json.loads(tmpl["rules"])
+            except Exception:
+                pass
+
+        design_rules = rules.get("design_rules", {})
+        style_family = design_rules.get("style_family", "swiss")
+
+        # Load guizang layout definitions
+        layouts_data = _load_guizang_layouts(style_family)
+        if layouts_data:
+            rules["layout_types"] = layouts_data.get("layout_types", rules.get("layout_types", []))
+            rules["page_rhythm"] = layouts_data.get("page_rhythm", rules.get("page_rhythm", {}))
+
+        # Load column config for content logic
+        column_id = req.column_id or "col4"
+        cfg = db.execute(
+            "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
+            (column_id,)).fetchone()
+        if not cfg:
+            cfg = db.execute(
+                "SELECT prompt, skill, rules FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
+            ).fetchone()
+
+        col_prompt = cfg["prompt"] if cfg else ""
+        col_skill = cfg["skill"] if cfg else ""
+
+        # Generate slide plan via AI
+        slide_plan = _generate_slides_staged(
+            req.provider_id, req.model, rules, req.content,
+            col_prompt, col_skill
+        )
+
+        if not slide_plan:
+            raise HTTPException(400, "AI 大纲生成失败，请重试")
+
+        # Save slide_plan to template
+        db.execute(
+            "UPDATE templates SET slide_plan = ? WHERE id = ?",
+            (json.dumps(slide_plan, ensure_ascii=False), template_id))
+        db.commit()
+
+        return {"ok": True, "slide_plan": slide_plan, "count": len(slide_plan)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+
+def _load_guizang_layouts(style_family: str) -> dict | None:
+    """Load layout definitions from guizang ppt_engine references."""
+    ref_dir = os.path.join(os.path.dirname(__file__), "services", "ppt_engine", "references")
+    layout_file = "layouts-swiss.md" if style_family == "swiss" else "layouts.md"
+    layout_path = os.path.join(ref_dir, layout_file)
+    if not os.path.exists(layout_path):
+        return None
+
+    try:
+        with open(layout_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return None
+
+    # Extract layout type definitions from the markdown
+    # Each layout is a ## section with an id, name, and zones
+    layout_types = []
+    current = None
+    for line in content.split("\n"):
+        if line.startswith("## "):
+            if current and current.get("id"):
+                layout_types.append(current)
+            heading = line[3:].strip()
+            # Parse "S01 Cover" or "Layout 1: Cover" patterns
+            parts = heading.split(" ", 1)
+            lid = parts[0].lower() if parts else ""
+            name = parts[1] if len(parts) > 1 else heading
+            current = {"id": lid, "name": name, "zones": [], "description": ""}
+        elif current and line.startswith("- **Zones**:"):
+            zones_str = line.split("**Zones**:", 1)[-1].strip()
+            current["zones"] = [z.strip() for z in zones_str.split(",") if z.strip()]
+        elif current and line.startswith("- **用途**:"):
+            current["description"] = line.split("**用途**:", 1)[-1].strip()
+
+    if current and current.get("id"):
+        layout_types.append(current)
+
+    # If parsing failed, return None
+    if not layout_types:
+        return None
+
+    return {
+        "layout_types": layout_types,
+        "page_rhythm": {
+            "sequence": ["cover", "toc", "content*N", "closing"],
+            "alternation_rule": "内容页之间应交替不同版式",
+            "p0_violation": "连续3页同一版式类型 = P0",
+        },
+    }
+
+
+@app.get("/api/templates/presets/available")
+def list_available_presets():
+    """Return guizang theme presets that can be used to create new styles.
+
+    Reads the theme definitions from ppt_engine/references/ and returns
+    structured data the frontend can use in the "new style" modal.
+    """
+    ref_dir = os.path.join(os.path.dirname(__file__), "services", "ppt_engine", "references")
+    presets = []
+    for family, theme_file, style_family in [
+        ("Magazine", "themes.md", "magazine"),
+        ("Swiss", "themes-swiss.md", "swiss"),
+    ]:
+        path = os.path.join(ref_dir, theme_file)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception:
+            continue
+        # Parse theme sections — each starts with "## " and has a CSS block
+        import re
+        sections = re.split(r"\n## ", content)
+        for section in sections:
+            lines = section.strip().split("\n")
+            if not lines:
+                continue
+            name_line = lines[0].strip()
+            # Extract emoji+name e.g. "🔵 克莱因蓝 (IKB · International Klein Blue)"
+            name = re.sub(r"\(.*?\)", "", name_line).strip()
+            if not name or name.startswith("#") or "使用方法" in name or "推荐" in name or "切换" in name or "不要" in name or "关于" in name:
+                continue
+            # Extract CSS variables
+            css_vars = {}
+            for line in lines:
+                m = re.match(r"--([\w-]+):\s*([^;]+);", line)
+                if m:
+                    css_vars[m.group(1)] = m.group(2).strip()
+            if css_vars:
+                presets.append({
+                    "name": name,
+                    "style_family": style_family,
+                    "css_vars": css_vars,
+                    "colors": {
+                        "accent": css_vars.get("accent", css_vars.get("ink", "")),
+                        "ink": css_vars.get("ink", ""),
+                        "paper": css_vars.get("paper", ""),
+                    },
+                })
+    return {"presets": presets}
+
+
+@app.post("/api/templates/presets")
+def create_preset_template(req: PresetCreateRequest):
+    """Create a new template from a guizang theme preset."""
+    import uuid
+    db = get_db()
+    try:
+        tid = uuid.uuid4().hex[:8]
+
+        design_rules = {
+            "style_family": req.style_family,
+            "colors": req.colors,
+            "fonts": req.fonts or {"title": "微软雅黑", "body": "微软雅黑", "title_size": "36pt", "body_size": "18pt"},
+            "spacing": req.spacing or {"margin_top": 1.0, "margin_bottom": 1.0, "margin_left": 1.5, "margin_right": 1.5, "line_height": 1.3},
+        }
+        layout_types = req.layout_types or [
+            {"id": "cover", "name": "封面", "zones": ["title", "subtitle", "date"]},
+            {"id": "toc", "name": "目录", "zones": ["heading", "items"]},
+            {"id": "content", "name": "内容", "zones": ["heading", "body"]},
+            {"id": "closing", "name": "封底", "zones": ["quote", "signature"]},
+        ]
+        rules = json.dumps({"design_rules": design_rules, "layout_types": layout_types}, ensure_ascii=False)
+
+        template_file = "template-swiss.html" if req.style_family == "swiss" else "template.html"
+        file_path = f"backend/services/ppt_engine/assets/{template_file}"
+
+        db.execute(
+            "INSERT INTO templates (id, name, type, file_path, prompt, skill, rules, "
+            "linked_skill_id, branding_config, is_default, typography_profile, slide_plan) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (tid, req.name, "preset", file_path,
+             req.prompt or "", req.skill or "", rules,
+             req.linked_skill_id or "", req.branding_config or "",
+             0, "", ""))
+        db.commit()
+        return {"id": tid, "name": req.name}
+    finally:
+        db.close()
+
+
+class PresetCreateRequest(BaseModel):
+    name: str
+    style_family: str = "swiss"  # magazine or swiss
+    colors: dict = {}
+    fonts: dict | None = None
+    spacing: dict | None = None
+    layout_types: list | None = None
+    prompt: str = ""
+    skill: str = ""
+    linked_skill_id: str = ""
+    branding_config: str = ""
+
+
 # ── Video ──
 
 from services.video_service import download_video, get_progress
@@ -1954,7 +2179,25 @@ def api_generate_ppt(req: PPTGenerateRequest):
             proj = _get_project(req.project_id)
             if proj:
                 project_name = proj["name"]
-        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, req.slide_plan)
+
+        # Use saved slide_plan from template if not provided in request
+        slide_plan = req.slide_plan
+        if slide_plan is None and req.template_id:
+            db = get_db()
+            try:
+                row = db.execute(
+                    "SELECT slide_plan FROM templates WHERE id = ?",
+                    (req.template_id,)).fetchone()
+                if row and row["slide_plan"]:
+                    try:
+                        slide_plan = json.loads(row["slide_plan"])
+                        print(f"[PPT-REQ] Using saved slide_plan ({len(slide_plan)} slides)", flush=True)
+                    except Exception:
+                        pass
+            finally:
+                db.close()
+
+        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, slide_plan)
         filename = os.path.basename(filepath)
         params = []
         if req.project_id:

@@ -1,4 +1,4 @@
-# Task 1 Report: Backend Core Setup
+# Task 1 Report: 测试基础设施 + 3 个失败测试
 
 ## Status: DONE
 
@@ -6,56 +6,51 @@
 
 | Hash | Message |
 |------|---------|
-| `074f675` | feat: 搭建 FastAPI 后端骨架（SQLite + 项目管理 API） |
-| `e80ce69` | chore: 添加 .gitignore，移除 **pycache** 和数据库文件追踪 |
+| `8f38ce4` | test: add Vitest setup + 3 failing tests for TeachingDocPanel |
 
 ## Files Created
 
-- `backend/requirements.txt` -- fastapi, uvicorn, python-multipart
-- `backend/.env.example` -- template for DASHSCOPE_API_KEY
-- `backend/config.py` -- env loader + constants (AVAILABLE_MODELS, LANGUAGES, STYLES)
-- `backend/models.py` -- Pydantic schemas (ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest)
-- `backend/database.py` -- SQLite init with 8 tables, get_db(), init_db(), backup_database()
-- `backend/app.py` -- FastAPI app with CORS, health check, project CRUD, step results endpoints
+- `frontend/vitest.config.ts` -- Vitest config with jsdom environment, React plugin, and test setup file
+- `frontend/src/test/setup.ts` -- Global test setup importing `@testing-library/jest-dom`
+- `frontend/src/components/TeachingDocPanel.tsx` -- Minimal stub component with full props interface (forwardRef, all 7 props)
+- `frontend/src/components/__tests__/TeachingDocPanel.test.tsx` -- 3 TDD tests expecting failure
+
+## Files Modified
+
+- `frontend/package.json` -- Added `"test": "vitest run"` and `"test:watch": "vitest"` scripts
+- `frontend/package-lock.json` -- Updated by npm install
 
 ## Test Results
 
-All endpoints tested via curl on http://localhost:8765:
+Command: `npx vitest run`
 
-| Endpoint | Method | Result |
-|----------|--------|--------|
-| `/api/health` | GET | `{"status":"ok","app":"一勺笔录 Agent"}` |
-| `/api/projects` | POST | Creates project with id/name/status/timestamps |
-| `/api/projects` | GET | Returns list of projects |
-| `/api/projects/{id}` | GET | Returns single project |
-| `/api/projects/{id}` | PUT | Updates name/status |
-| `/api/projects/{id}` | DELETE | Returns `{"ok":true}`, cascade deletes steps |
-| `/api/projects/{id}/steps` | GET | Returns step list |
-| `/api/projects/{id}/steps/{step_name}` | PUT | Creates or updates step (upsert) |
+```
+ RUN  v4.1.9 D:/YISHAOAGENT/frontend
+
+ ❯ src/components/__tests__/TeachingDocPanel.test.tsx (3 tests | 3 failed) 77ms
+     × 生成按钮独立 — 点击生成不影响其他按钮状态 18ms
+     × 空内容时保存按钮不显示"已保存" 2ms
+     × 修改模型选择器不影响其他 Panel 的模型值 56ms
+```
+
+All 3 tests FAIL as expected. The stub component renders only `<div>TeachingDocPanel stub</div>`, so all queries (AI 生成, 保存, 大模型 combobox) correctly fail.
+
+## Build Result
+
+Command: `npm run build`
+
+```
+> tsc && vite build
+vite v5.4.21 building for production...
+✓ 44 modules transformed.
+✓ built in 680ms
+```
+
+Build passes cleanly. No existing code was modified.
 
 ## Concerns / Notes
 
-1. **Bug fix in brief's app.py**: The brief's endpoint handlers used bare `req` parameters without Pydantic type annotations (e.g., `def create_project(req):`). FastAPI requires `req: ProjectCreate` to parse JSON body. This was corrected in the implementation. Without this fix, all POST/PUT endpoints would fail with 422/400.
-
-2. **DB connection safety**: Added `try/finally` blocks to all endpoint functions to ensure `db.close()` is always called, preventing "database is locked" errors when exceptions occur (e.g., foreign key violations).
-
-3. **Environment quirks**: The system's default `python` command resolves to a Windows Store shim that exits with code 49. The project Python lives at `C:\Users\17206\.kimi-venv\Scripts\python.exe` (v3.13.13). This is noted for future tasks that need to run the backend.
-
-4. Python version used: 3.13.13 (satisfies the 3.11+ requirement)
-
-## Fixes Applied
-
-| Issue | File | Change |
-|-------|------|--------|
-| 1 | `start.bat` | Replaced hardcoded `d:\YISHAOAGENT` with `%~dp0` for relative path; added `venv\` and `node_modules\` checks before running pip install / npm install |
-| 2 | `start.sh` | Added `venv` and `node_modules` existence checks with automatic dependency installation |
-| 3 | `backend/app.py` | Added `fetchone()` None check in `update_project()` — returns 404 if project not found (same pattern as `get_project`) |
-| 4 | `backend/database.py` | Wrapped `init_db()` body in try/finally to ensure `conn.close()` always executes |
-
-### Verification
-
-- `start.bat` runs without errors (relative paths resolve correctly)
-- Backend starts and all endpoints respond properly
-- `GET /api/health` returns `{"status":"ok","app":"一勺笔录 Agent"}`
-- `PUT /api/projects/nonexistent` returns `{"detail":"Project not found"}` with HTTP 404 (was returning 500 before the fix)
-- `init_db()` acquires and releases connection cleanly
+1. No business code was modified. Only new files created and package.json scripts added.
+2. The `@testing-library/jest-dom` version installed is `^6.9.1` and `@testing-library/react` is `^16.3.2` -- these are compatible with the existing React 18 setup.
+3. Vitest v4.1.9 was installed, which is the latest stable release matching the existing Vite 5.4 setup.
+4. All 3 tests fail with `TestingLibraryElementError` as expected for a stub component -- proving the test infrastructure works and the tests are meaningful.

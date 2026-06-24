@@ -69,13 +69,21 @@ def extract_design(rules: dict, typography_profile: Optional[dict] = None) -> De
     fonts = design_rules.get("fonts", {})
     if "font_name" in fonts:
         ds.font_name = fonts["font_name"]
+    elif "title" in fonts:
+        ds.font_name = fonts["title"]
     # Theme font reference (e.g. +mj-ea) — fall back
     if ds.font_name.startswith('+'):
         ds.font_name = "Microsoft YaHei"
     if "title_size" in fonts:
-        ds.title_size_pt = fonts["title_size"]
+        val = fonts["title_size"]
+        if isinstance(val, str):
+            val = val.replace("pt", "").strip()
+        ds.title_size_pt = int(val)
     if "body_size" in fonts:
-        ds.body_size_pt = fonts["body_size"]
+        val = fonts["body_size"]
+        if isinstance(val, str):
+            val = val.replace("pt", "").strip()
+        ds.body_size_pt = int(val)
 
     # Typography profile overrides
     if typography_profile:
@@ -386,6 +394,551 @@ def build_section(prs: Presentation, zones: dict, design: DesignSystem):
                      subtitle, font_size_pt=design.subtitle_size_pt,
                      color=design.light_text_color, bold=False,
                      alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+
+# ── Swiss / Extended builders ──
+
+@_register("chapter")
+def build_chapter(prs: Presentation, zones: dict, design: DesignSystem):
+    """Chapter divider: large number + heading on accent background."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+    bg = slide.background
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = _rgb(design.accent_color)
+
+    number = zones.get("number", "").strip()
+    heading = zones.get("heading", "").strip()
+
+    if number:
+        _add_textbox(slide, Emu(design.margin_left), Emu(int(1.5 * 914400)),
+                     Emu(int(11.3 * 914400)), Emu(int(2.0 * 914400)),
+                     number, font_size_pt=design.title_size_pt + 24,
+                     color=design.light_text_color, bold=True,
+                     alignment=PP_ALIGN.LEFT, font_name=design.font_name)
+    if heading:
+        _add_textbox(slide, Emu(design.margin_left), Emu(int(3.8 * 914400)),
+                     Emu(int(11.3 * 914400)), Emu(int(1.2 * 914400)),
+                     heading, font_size_pt=design.title_size_pt,
+                     color=design.light_text_color, bold=True,
+                     font_name=design.font_name)
+    # Accent line
+    _add_rect(slide, Emu(design.margin_left), Emu(int(5.1 * 914400)),
+              Emu(int(2.0 * 914400)), Emu(int(0.05 * 914400)),
+              design.light_text_color)
+
+
+@_register("closing")
+def build_closing(prs: Presentation, zones: dict, design: DesignSystem):
+    """Closing slide: quote + signature, centered."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+    bg = slide.background
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = _rgb(design.primary_color)
+
+    quote = zones.get("quote", "").strip()
+    signature = zones.get("signature", "").strip()
+    summary = zones.get("summary", "").strip()
+
+    y = int(2.0 * 914400)
+    display_text = quote or summary
+    if display_text:
+        _, tf = _add_textbox(slide, Emu(int(1.5 * 914400)), Emu(y),
+                             Emu(int(10.3 * 914400)), Emu(int(2.5 * 914400)),
+                             display_text, font_size_pt=design.title_size_pt - 4,
+                             color=design.light_text_color, bold=False,
+                             alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+        y += int(3.0 * 914400)
+    if signature:
+        _add_textbox(slide, Emu(int(1.5 * 914400)), Emu(y),
+                     Emu(int(10.3 * 914400)), Emu(int(0.6 * 914400)),
+                     f"— {signature}", font_size_pt=design.body_size_pt,
+                     color=design.light_text_color, bold=False,
+                     alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+
+@_register("data_hero", "key_params")
+def build_data_hero(prs: Presentation, zones: dict, design: DesignSystem):
+    """Big number KPI with label and context."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    heading = zones.get("heading", "").strip()
+    big_number = zones.get("big_number", "").strip()
+    label = zones.get("label", "").strip()
+    context = zones.get("context", zones.get("notes", "")).strip()
+
+    # Heading
+    if heading:
+        _add_textbox(slide, Emu(design.margin_left), Emu(design.margin_top),
+                     Emu(int(11.3 * 914400)), Emu(int(0.8 * 914400)), heading,
+                     font_size_pt=design.title_size_pt,
+                     color=design.primary_color, bold=True,
+                     font_name=design.font_name)
+        _add_rect(slide, Emu(design.margin_left), Emu(int(1.2 * 914400)),
+                  Emu(int(11.3 * 914400)), Emu(int(0.03 * 914400)),
+                  design.primary_color)
+
+    # Big number — centered, huge
+    if big_number:
+        _add_textbox(slide, Emu(int(2.0 * 914400)), Emu(int(1.8 * 914400)),
+                     Emu(int(9.3 * 914400)), Emu(int(2.5 * 914400)),
+                     big_number, font_size_pt=design.title_size_pt + 24,
+                     color=design.accent_color, bold=True,
+                     alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+    # Label under the number
+    if label:
+        _add_textbox(slide, Emu(int(2.0 * 914400)), Emu(int(4.3 * 914400)),
+                     Emu(int(9.3 * 914400)), Emu(int(0.6 * 914400)),
+                     label, font_size_pt=design.body_size_pt,
+                     color=design.text_color, bold=False,
+                     alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+    # Context / notes
+    if context:
+        _add_textbox(slide, Emu(int(2.0 * 914400)), Emu(int(5.2 * 914400)),
+                     Emu(int(9.3 * 914400)), Emu(int(1.5 * 914400)),
+                     context, font_size_pt=design.small_size_pt,
+                     color=design.text_color, bold=False,
+                     alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+
+@_register("duo_compare", "comparison")
+def build_duo_compare(prs: Presentation, zones: dict, design: DesignSystem):
+    """Two-column comparison: left vs right with divider."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    heading = zones.get("heading", "").strip()
+    left = zones.get("left", "").strip()
+    right = zones.get("right", "").strip()
+    left_label = zones.get("left_label", "传统").strip()
+    right_label = zones.get("right_label", "创新").strip()
+
+    if heading:
+        _add_textbox(slide, Emu(design.margin_left), Emu(design.margin_top),
+                     Emu(int(11.3 * 914400)), Emu(int(0.8 * 914400)), heading,
+                     font_size_pt=design.title_size_pt,
+                     color=design.primary_color, bold=True,
+                     font_name=design.font_name)
+
+    # Vertical divider
+    mid_x = int(6.5 * 914400)
+    _add_rect(slide, Emu(mid_x), Emu(int(1.2 * 914400)),
+              Emu(int(0.03 * 914400)), Emu(int(5.8 * 914400)),
+              design.accent_color)
+
+    col_w = int(4.8 * 914400)
+    y = int(1.5 * 914400)
+
+    # Left
+    _add_textbox(slide, Emu(design.margin_left), Emu(y),
+                 Emu(col_w), Emu(int(0.5 * 914400)),
+                 left_label, font_size_pt=design.subtitle_size_pt,
+                 color=design.primary_color, bold=True,
+                 alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+    if left:
+        _add_textbox(slide, Emu(design.margin_left), Emu(int(2.2 * 914400)),
+                     Emu(col_w), Emu(int(4.5 * 914400)),
+                     left, font_size_pt=design.body_size_pt,
+                     color=design.text_color, bold=False,
+                     alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+    # Right
+    right_x = int(7.2 * 914400)
+    _add_textbox(slide, Emu(right_x), Emu(y),
+                 Emu(col_w), Emu(int(0.5 * 914400)),
+                 right_label, font_size_pt=design.subtitle_size_pt,
+                 color=design.accent_color, bold=True,
+                 alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+    if right:
+        _add_textbox(slide, Emu(right_x), Emu(int(2.2 * 914400)),
+                     Emu(col_w), Emu(int(4.5 * 914400)),
+                     right, font_size_pt=design.body_size_pt,
+                     color=design.text_color, bold=False,
+                     alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+
+@_register("process_flow")
+def build_process_flow(prs: Presentation, zones: dict, design: DesignSystem):
+    """Horizontal process flow: step circles connected by arrows."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    heading = zones.get("heading", "").strip()
+    steps_text = zones.get("steps", "").strip()
+
+    if heading:
+        _add_textbox(slide, Emu(design.margin_left), Emu(design.margin_top),
+                     Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)), heading,
+                     font_size_pt=design.title_size_pt,
+                     color=design.primary_color, bold=True,
+                     font_name=design.font_name)
+
+    if steps_text:
+        steps = [s.strip() for s in steps_text.replace('\n', '|').split('|') if s.strip()]
+        if not steps:
+            steps = [steps_text]
+        n = len(steps)
+        total_w = int(10.0 * 914400)
+        start_x = int(1.6 * 914400)
+        gap = total_w // max(n, 1) if n > 0 else total_w
+        y = int(3.0 * 914400)
+        circle_r = int(0.35 * 914400)
+
+        for i, step in enumerate(steps):
+            cx = start_x + gap * i + gap // 2
+            # Circle
+            shape = slide.shapes.add_shape(
+                9,  # MSO_SHAPE.OVAL
+                Emu(cx - circle_r), Emu(y - circle_r),
+                Emu(circle_r * 2), Emu(circle_r * 2))
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = _rgb(design.accent_color)
+            shape.line.fill.background()
+            # Number in circle
+            tf = shape.text_frame
+            tf.word_wrap = False
+            p = tf.paragraphs[0]
+            p.text = str(i + 1)
+            p.font.size = Pt(design.body_size_pt)
+            p.font.bold = True
+            p.font.color.rgb = _rgb(design.light_text_color)
+            p.font.name = design.font_name
+            p.alignment = PP_ALIGN.CENTER
+            # Step label
+            _add_textbox(slide, Emu(cx - int(1.2 * 914400)), Emu(y + circle_r + int(0.15 * 914400)),
+                         Emu(int(2.4 * 914400)), Emu(int(0.6 * 914400)),
+                         step, font_size_pt=design.small_size_pt,
+                         color=design.text_color, bold=False,
+                         alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+        # Arrow connector line
+        if n > 1:
+            line_y = y
+            line_start = start_x + gap // 2 + circle_r
+            line_end = start_x + gap * (n - 1) + gap // 2 - circle_r
+            _add_rect(slide, Emu(line_start), Emu(line_y),
+                      Emu(line_end - line_start), Emu(int(0.04 * 914400)),
+                      design.accent_color)
+
+
+@_register("grid_cards")
+def build_grid_cards(prs: Presentation, zones: dict, design: DesignSystem):
+    """2x2 or 3x2 card grid with accent top border."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    heading = zones.get("heading", "").strip()
+    cards_text = zones.get("cards", zones.get("items", "")).strip()
+
+    if heading:
+        _add_textbox(slide, Emu(design.margin_left), Emu(design.margin_top),
+                     Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)), heading,
+                     font_size_pt=design.title_size_pt,
+                     color=design.primary_color, bold=True,
+                     font_name=design.font_name)
+        _add_rect(slide, Emu(design.margin_left), Emu(int(1.1 * 914400)),
+                  Emu(int(11.3 * 914400)), Emu(int(0.03 * 914400)),
+                  design.primary_color)
+
+    if cards_text:
+        cards = [c.strip() for c in cards_text.replace('\n', '|').split('|') if c.strip()]
+        if not cards:
+            cards = [cards_text]
+        n = len(cards)
+        cols = 3 if n >= 6 else (2 if n >= 4 else n)
+        rows = (n + cols - 1) // cols
+        card_w = int(10.0 / cols * 914400)
+        card_h = int(4.5 / max(rows, 1) * 914400)
+        x0 = int(1.5 * 914400)
+        y0 = int(1.4 * 914400)
+
+        for i, card in enumerate(cards):
+            col = i % cols
+            row = i // cols
+            cx = x0 + col * (card_w + int(0.3 * 914400))
+            cy = y0 + row * (card_h + int(0.2 * 914400))
+
+            # Card background
+            _add_rect(slide, Emu(cx), Emu(cy), Emu(card_w), Emu(card_h),
+                      design.background_color if design.background_color != (0xFF, 0xFF, 0xFF)
+                      else (0xF5, 0xF5, 0xF5))
+            # Accent top bar
+            _add_rect(slide, Emu(cx), Emu(cy), Emu(card_w), Emu(int(0.06 * 914400)),
+                      design.accent_color)
+            # Card text
+            _add_textbox(slide, Emu(cx + int(0.3 * 914400)),
+                         Emu(cy + int(0.2 * 914400)),
+                         Emu(card_w - int(0.6 * 914400)),
+                         Emu(card_h - int(0.4 * 914400)),
+                         card, font_size_pt=design.body_size_pt - 2,
+                         color=design.text_color, bold=False,
+                         font_name=design.font_name)
+
+
+@_register("food_archive")
+def build_food_archive(prs: Presentation, zones: dict, design: DesignSystem):
+    """Ingredient archive card: food name + params + mechanism + substitutes."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    food_name = zones.get("food_name", "").strip()
+    params = zones.get("params", "").strip()
+    mechanism = zones.get("mechanism", "").strip()
+    substitutes = zones.get("substitutes", "").strip()
+
+    # Title bar
+    _add_rect(slide, 0, 0, design.slide_width, int(1.0 * 914400), design.primary_color)
+    if food_name:
+        _add_textbox(slide, Emu(design.margin_left), Emu(int(0.15 * 914400)),
+                     Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)),
+                     food_name, font_size_pt=design.title_size_pt,
+                     color=design.light_text_color, bold=True,
+                     font_name=design.font_name)
+
+    y = int(1.3 * 914400)
+    sections = [
+        ("黄金参数", params, design.accent_color),
+        ("作用机理", mechanism, design.primary_color),
+        ("替代与风险", substitutes, design.text_color),
+    ]
+
+    for label, content, label_color in sections:
+        if not content:
+            continue
+        _add_textbox(slide, Emu(design.margin_left), Emu(y),
+                     Emu(int(2.5 * 914400)), Emu(int(0.4 * 914400)),
+                     f"▎{label}", font_size_pt=design.subtitle_size_pt,
+                     color=label_color, bold=True,
+                     font_name=design.font_name)
+        y += int(0.5 * 914400)
+        line_count = max(1, len(content) // 50 + content.count('\n') + 1)
+        _add_textbox(slide, Emu(int(1.0 * 914400)), Emu(y),
+                     Emu(int(11.3 * 914400)), Emu(int(line_count * 0.45 * 914400)),
+                     content, font_size_pt=design.body_size_pt,
+                     color=design.text_color, bold=False,
+                     font_name=design.font_name)
+        y += int(line_count * 0.5 * 914400)
+
+
+@_register("skill_card")
+def build_skill_card(prs: Presentation, zones: dict, design: DesignSystem):
+    """Technique skill card: name + description + flowchart ref + migration."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    skill_name = zones.get("skill_name", "").strip()
+    description = zones.get("description", "").strip()
+    flowchart = zones.get("flowchart", "").strip()
+    migration = zones.get("migration", "").strip()
+
+    # Header — accent background
+    _add_rect(slide, 0, 0, design.slide_width, int(1.0 * 914400), design.accent_color)
+    if skill_name:
+        _add_textbox(slide, Emu(design.margin_left), Emu(int(0.15 * 914400)),
+                     Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)),
+                     skill_name, font_size_pt=design.title_size_pt,
+                     color=design.light_text_color, bold=True,
+                     font_name=design.font_name)
+
+    y = int(1.3 * 914400)
+    sections = [
+        ("技法描述", description),
+        ("可迁移至", migration),
+    ]
+
+    for label, content in sections:
+        if not content:
+            continue
+        _add_textbox(slide, Emu(design.margin_left), Emu(y),
+                     Emu(int(3.0 * 914400)), Emu(int(0.4 * 914400)),
+                     f"▎{label}", font_size_pt=design.subtitle_size_pt,
+                     color=design.primary_color, bold=True,
+                     font_name=design.font_name)
+        y += int(0.5 * 914400)
+        line_count = max(1, len(content) // 50 + content.count('\n') + 1)
+        _add_textbox(slide, Emu(int(1.0 * 914400)), Emu(y),
+                     Emu(int(11.3 * 914400)), Emu(int(line_count * 0.45 * 914400)),
+                     content, font_size_pt=design.body_size_pt,
+                     color=design.text_color, bold=False,
+                     font_name=design.font_name)
+        y += int(line_count * 0.5 * 914400)
+
+    if flowchart:
+        y += int(0.2 * 914400)
+        _add_textbox(slide, Emu(design.margin_left), Emu(y),
+                     Emu(int(11.3 * 914400)), Emu(int(0.5 * 914400)),
+                     f"→ 流程: {flowchart}", font_size_pt=design.small_size_pt,
+                     color=design.accent_color, bold=False,
+                     font_name=design.font_name)
+
+
+@_register("troubleshoot")
+def build_troubleshoot(prs: Presentation, zones: dict, design: DesignSystem):
+    """Troubleshooting diagnosis page: problem → cause → solution → prevention."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    heading = zones.get("heading", "故障诊断").strip()
+    problem = zones.get("problem", "").strip()
+    cause = zones.get("cause", "").strip()
+    solution = zones.get("solution", "").strip()
+    prevention = zones.get("prevention", "").strip()
+
+    # Header
+    _add_rect(slide, 0, 0, design.slide_width, int(0.9 * 914400), design.primary_color)
+    _add_textbox(slide, Emu(design.margin_left), Emu(int(0.1 * 914400)),
+                 Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)),
+                 f"⚠️ {heading}", font_size_pt=design.title_size_pt,
+                 color=design.light_text_color, bold=True,
+                 font_name=design.font_name)
+
+    y = int(1.2 * 914400)
+    items = [
+        ("问题现象", problem, (0xD4, 0x3E, 0x2E)),
+        ("原因分析", cause, design.accent_color),
+        ("解决方案", solution, (0x1A, 0x8D, 0x3F)),
+        ("预防措施", prevention, design.primary_color),
+    ]
+
+    for label, content, item_color in items:
+        if not content:
+            continue
+        _add_textbox(slide, Emu(design.margin_left), Emu(y),
+                     Emu(int(3.0 * 914400)), Emu(int(0.4 * 914400)),
+                     f"▎{label}", font_size_pt=design.subtitle_size_pt,
+                     color=item_color, bold=True,
+                     font_name=design.font_name)
+        y += int(0.45 * 914400)
+        line_count = max(1, len(content) // 55 + content.count('\n') + 1)
+        _add_textbox(slide, Emu(int(1.0 * 914400)), Emu(y),
+                     Emu(int(11.3 * 914400)), Emu(int(line_count * 0.4 * 914400)),
+                     content, font_size_pt=design.body_size_pt,
+                     color=design.text_color, bold=False,
+                     font_name=design.font_name)
+        y += int(line_count * 0.45 * 914400)
+
+
+@_register("quote")
+def build_quote(prs: Presentation, zones: dict, design: DesignSystem):
+    """Large quote slide with accent left bar and attribution."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    quote_text = zones.get("quote", zones.get("body", "")).strip()
+    author = zones.get("author", zones.get("signature", "")).strip()
+    context = zones.get("context", "").strip()
+
+    # Accent left bar
+    _add_rect(slide, Emu(int(1.0 * 914400)), Emu(int(1.5 * 914400)),
+              Emu(int(0.1 * 914400)), Emu(int(4.5 * 914400)),
+              design.accent_color)
+
+    # Quote text
+    if quote_text:
+        _add_textbox(slide, Emu(int(1.6 * 914400)), Emu(int(2.0 * 914400)),
+                     Emu(int(9.7 * 914400)), Emu(int(3.0 * 914400)),
+                     quote_text, font_size_pt=design.title_size_pt - 2,
+                     color=design.text_color, bold=False,
+                     font_name=design.font_name)
+
+    # Author
+    if author:
+        _add_textbox(slide, Emu(int(1.6 * 914400)), Emu(int(5.5 * 914400)),
+                     Emu(int(9.7 * 914400)), Emu(int(0.5 * 914400)),
+                     f"— {author}", font_size_pt=design.body_size_pt,
+                     color=design.accent_color, bold=False,
+                     alignment=PP_ALIGN.RIGHT, font_name=design.font_name)
+
+    # Context
+    if context:
+        _add_textbox(slide, Emu(int(1.6 * 914400)), Emu(int(6.0 * 914400)),
+                     Emu(int(9.7 * 914400)), Emu(int(0.4 * 914400)),
+                     context, font_size_pt=design.small_size_pt,
+                     color=design.text_color, bold=False,
+                     alignment=PP_ALIGN.RIGHT, font_name=design.font_name)
+
+
+@_register("timeline")
+def build_timeline(prs: Presentation, zones: dict, design: DesignSystem):
+    """Vertical timeline: events along an accent line."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    heading = zones.get("heading", "").strip()
+    events_texts = zones.get("events", zones.get("items", "")).strip()
+
+    if heading:
+        _add_textbox(slide, Emu(design.margin_left), Emu(design.margin_top),
+                     Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)), heading,
+                     font_size_pt=design.title_size_pt,
+                     color=design.primary_color, bold=True,
+                     font_name=design.font_name)
+
+    # Vertical line
+    _add_rect(slide, Emu(int(2.5 * 914400)), Emu(int(1.5 * 914400)),
+              Emu(int(0.04 * 914400)), Emu(int(5.2 * 914400)),
+              design.accent_color)
+
+    if events_texts:
+        events = [e.strip() for e in events_texts.replace('\n', '|').split('|') if e.strip()]
+        if not events:
+            events = [events_texts]
+        y = int(1.8 * 914400)
+        for i, event in enumerate(events):
+            # Dot on timeline
+            dot = slide.shapes.add_shape(
+                9, Emu(int(2.32 * 914400)), Emu(y + int(0.1 * 914400)),
+                Emu(int(0.2 * 914400)), Emu(int(0.2 * 914400)))
+            dot.fill.solid()
+            dot.fill.fore_color.rgb = _rgb(design.accent_color)
+            dot.line.fill.background()
+            # Event text
+            _add_textbox(slide, Emu(int(3.0 * 914400)), Emu(y),
+                         Emu(int(9.0 * 914400)), Emu(int(0.6 * 914400)),
+                         event, font_size_pt=design.body_size_pt,
+                         color=design.text_color, bold=False,
+                         font_name=design.font_name)
+            y += int(0.8 * 914400)
+
+
+@_register("image_hero")
+def build_image_hero(prs: Presentation, zones: dict, design: DesignSystem):
+    """Full-width image placeholder with caption."""
+    slide_layout = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(slide_layout)
+
+    caption = zones.get("caption", zones.get("heading", "")).strip()
+    image_zone = zones.get("image", "").strip()
+
+    # Image placeholder (gray block)
+    _add_rect(slide, Emu(int(0.5 * 914400)), Emu(int(0.5 * 914400)),
+              Emu(int(12.3 * 914400)), Emu(int(5.5 * 914400)),
+              (0xE0, 0xE0, 0xE0))
+    # Placeholder icon text
+    _add_textbox(slide, Emu(int(3.0 * 914400)), Emu(int(2.5 * 914400)),
+                 Emu(int(7.3 * 914400)), Emu(int(1.0 * 914400)),
+                 "📷 图片区域", font_size_pt=design.title_size_pt,
+                 color=(0x99, 0x99, 0x99), bold=False,
+                 alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+    if image_zone:
+        _add_textbox(slide, Emu(int(3.0 * 914400)), Emu(int(3.5 * 914400)),
+                     Emu(int(7.3 * 914400)), Emu(int(0.6 * 914400)),
+                     image_zone, font_size_pt=design.small_size_pt,
+                     color=(0x99, 0x99, 0x99), bold=False,
+                     alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+    # Caption at bottom
+    if caption:
+        _add_textbox(slide, Emu(design.margin_left), Emu(int(6.3 * 914400)),
+                     Emu(int(11.3 * 914400)), Emu(int(0.6 * 914400)),
+                     caption, font_size_pt=design.body_size_pt,
+                     color=design.text_color, bold=False,
+                     font_name=design.font_name)
 
 
 def _extract_dominant_colors(pptx_path: str) -> dict:

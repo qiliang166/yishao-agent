@@ -630,13 +630,8 @@ export default function ProjectPage() {
     try {
       const branding = (globalBranding.copyright || globalBranding.signature) ? globalBranding : undefined
       const [pid, mdl] = model ? model.split(':') : ['', '']
-      let slidePlan = null
-      const planText = steps[stepKey] || ''
-      if (planText.trim()) {
-        try { slidePlan = JSON.parse(planText) }
-        catch { modal.toast('大纲 JSON 格式错误，请检查', 'error'); setPptGenerating(''); return }
-      }
-      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl, slidePlan)
+      // Template's saved slide_plan is used by backend when slidePlan is null
+      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl, undefined)
       setGenFiles(prev => [...prev, {
         name: result.filename, type: 'PPT',
         source: label,
@@ -1347,15 +1342,9 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button className="btn btn-outline btn-sm"
-                    style={{ flex: 1 }}
-                    disabled={pptGenerating !== '' || !s3DaoPptModel || !(steps.step2_daoshuyi || '')}
-                    onClick={() => doGeneratePlan('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, s3DaoPptModel, 'col4')}>
-                    {pptGenerating === 'step3_dao_ppt' ? '⏳ 生成中...' : '📝 生成大纲'}
-                  </button>
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
-                    disabled={pptGenerating !== '' || !(steps.step3_dao_ppt || '')}
+                    disabled={pptGenerating !== '' || !daoPptSelected || !(steps.step2_daoshuyi || '')}
                     onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '道术PPT',
                       stage3Prompts.daoPpt?.prompt || '你是一个PPT内容设计专家。请将道与术文案转化为PPT大纲。',
                       s3DaoPptModel)}>
@@ -1417,15 +1406,9 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                  <button className="btn btn-outline btn-sm"
-                    style={{ flex: 1 }}
-                    disabled={pptGenerating !== '' || !s3YanxiPptModel || !(steps.step2_yanxi || '')}
-                    onClick={() => doGeneratePlan('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, s3YanxiPptModel, 'col5')}>
-                    {pptGenerating === 'step3_yan_ppt' ? '⏳ 生成中...' : '📝 生成大纲'}
-                  </button>
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
-                    disabled={pptGenerating !== '' || !(steps.step3_yan_ppt || '')}
+                    disabled={pptGenerating !== '' || !yanxiPptSelected || !(steps.step2_yanxi || '')}
                     onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '研学PPT',
                       stage3Prompts.yanxiPpt?.prompt || '你是一个教学PPT设计专家。请将研学手册内容转化为PPT。',
                       s3YanxiPptModel)}>

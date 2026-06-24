@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { api, Prompt, LLMProvider } from '../services/api'
+import { api, LLMProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
 // ---------- types ----------
@@ -17,69 +17,31 @@ interface Template {
   branding_config: string
   is_default: number
   created_at: string
+  slide_plan: string
+  typography_profile: string
 }
 
-const TEMPLATE_TABS = [
-  { key: 'col4', label: '道与术 PPT', type: 'ppt', matchId: 'default-dao' },
-  { key: 'col5', label: '研学 PPT', type: 'ppt', matchId: 'default-yanxi' },
-  { key: 'col3', label: '标准 SOP', type: 'sop', matchId: '' },
-]
-
-// ---------- helpers ----------
-
-function getThumbnailUrl(t: Template): string {
-  if (!t.thumbnail_path) return ''
-  const filename = t.thumbnail_path.split(/[\\/]/).pop() || ''
-  if (!filename) return ''
-  return `/api/thumbnails/${encodeURIComponent(filename)}`
+interface PresetInfo {
+  name: string
+  style_family: string
+  css_vars: Record<string, string>
+  colors: { accent: string; ink: string; paper: string }
 }
 
-// ---------- inline styles ----------
-
-const inputField: React.CSSProperties = {
-  width: '100%',
-  height: '32px',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-sm)',
-  padding: '0 8px',
-  fontSize: '11px',
-  fontFamily: 'inherit',
-  color: 'var(--text)',
-  background: 'var(--card)',
-  outline: 'none',
-  boxSizing: 'border-box',
+interface StyleCardData {
+  id: string
+  name: string
+  styleFamily: string
+  colors: { primary: string; accent: string; background: string; ink: string; paper: string }
+  hasOutline: boolean
+  outlineCount: number
+  fileName: string
+  isDefault: boolean
+  template: Template
 }
 
-const textareaStyle: React.CSSProperties = {
-  width: '100%',
-  height: '100px',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius-sm)',
-  padding: '10px',
-  fontSize: '11px',
-  fontFamily: 'inherit',
-  color: 'var(--text)',
-  background: 'var(--card)',
-  outline: 'none',
-  resize: 'vertical',
-  boxSizing: 'border-box',
-  lineHeight: 1.5,
-}
-
-const modalCard: React.CSSProperties = {
-  background: 'var(--card)',
-  border: '1px solid var(--border)',
-  borderRadius: 'var(--radius)',
-  padding: '16px',
-}
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '10px',
-  fontWeight: 600,
-  color: 'var(--text)',
-  display: 'block',
-  marginBottom: '6px',
-}
+const FAMILY_LABELS: Record<string, string> = { magazine: '杂志风', swiss: '瑞士风', preset: '预设', '' : '自定义' }
+const FAMILY_COLORS: Record<string, string> = { magazine: '#8b5e3c', swiss: '#002FA7', preset: '#666', '' : 'var(--text-secondary)' }
 
 // ---------- component ----------
 
@@ -88,281 +50,233 @@ function TemplateManager() {
 
   // ---------- state ----------
   const [templates, setTemplates] = useState<Template[]>([])
-  const [prompts, setPrompts] = useState<Prompt[]>([])
-  const [activeTab, setActiveTab] = useState('col4')
+  const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
   const [loading, setLoading] = useState(true)
+  const [familyFilter, setFamilyFilter] = useState<string>('all')
 
-  // modal drag & resize
-  const [modalPos, setModalPos] = useState({ x: 0, y: 0 })
-  const [modalSize, setModalSize] = useState({ w: 0, h: 0 })
-  const [dragging, setDragging] = useState<{ startX: number; startY: number; posX: number; posY: number } | null>(null)
-  const [resizing, setResizing] = useState<{ startX: number; startY: number; startW: number; startH: number } | null>(null)
-  const dragPosRef = useRef({ x: 0, y: 0 })
-  const modalRef = useRef<HTMLDivElement | null>(null)
-
-
-  // drag effect — uses useEffect cleanup to guarantee listener removal
-  useEffect(() => {
-    if (!dragging) return
-    const onMove = (ev: MouseEvent) => {
-      const x = Math.max(-200, dragging.posX + ev.clientX - dragging.startX)
-      const y = Math.max(-200, dragging.posY + ev.clientY - dragging.startY)
-      dragPosRef.current = { x, y }
-      setModalPos({ x, y })
-    }
-    const onUp = () => setDragging(null)
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    return () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-  }, [dragging])
-
-  // resize effect
-  useEffect(() => {
-    if (!resizing) return
-    const onMove = (ev: MouseEvent) => {
-      setModalSize({
-        w: Math.max(380, resizing.startW + ev.clientX - resizing.startX),
-        h: Math.max(300, resizing.startH + ev.clientY - resizing.startY),
-      })
-    }
-    const onUp = () => setResizing(null)
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-    return () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-  }, [resizing])
-
-  // create / edit modal
+  // modal state
   const [showModal, setShowModal] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
+  const [modalTab, setModalTab] = useState<'preset' | 'upload'>('preset')
+  const [presets, setPresets] = useState<PresetInfo[]>([])
+  const [selectedPreset, setSelectedPreset] = useState<PresetInfo | null>(null)
   const [formName, setFormName] = useState('')
-  const [formType, setFormType] = useState('ppt')
-  const [formPrompt, setFormPrompt] = useState('')
-  const [formSkill, setFormSkill] = useState('')
-  const [formRules, setFormRules] = useState('{}')
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [createFileName, setCreateFileName] = useState('')
-  const createFileRef = useRef<File | null>(null)
+  const [uploadFileName, setUploadFileName] = useState('')
+  const uploadFileRef = useRef<File | null>(null)
 
-  // analyze
+  // action states
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
-  const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
+  const [planningId, setPlanningId] = useState<string | null>(null)
   const [analyzeProvider, setAnalyzeProvider] = useState('')
   const [analyzeModel, setAnalyzeModel] = useState('')
   const [autoThumbnails, setAutoThumbnails] = useState<Record<string, string>>({})
 
-  // ---------- data loading ----------
-
-  const loadProviders = useCallback(async () => {
-    try {
-      const providers = await api.listProviders()
-      setLlmProviders(providers || [])
-    } catch (err: any) {
-      console.error('Failed to load LLM providers:', err)
-    }
-  }, [])
+  // ---------- loading ----------
 
   const loadTemplates = useCallback(async () => {
     try {
       const data = await api.listTemplates()
-      setTemplates(data)
-      // Auto-thumbnails: use slide-thumb endpoint for PPT templates without manual thumbnails
-      const pptWithoutThumb = data.filter((t: Template) => t.type === 'ppt' && t.file_path && !t.thumbnail_path)
+      setTemplates(data || [])
+      const pptWithoutThumb = (data || []).filter((t: Template) => t.type === 'ppt' && t.file_path && !t.thumbnail_path)
       if (pptWithoutThumb.length > 0) {
         const thumbs: Record<string, string> = {}
         pptWithoutThumb.forEach((t: Template) => { thumbs[t.id] = t.id })
         setAutoThumbnails(thumbs)
       }
-    } catch (err: any) {
-      console.error('Failed to load templates:', err)
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }, [])
 
-  const loadPrompts = useCallback(async () => {
-    try {
-      const data = await api.listPrompts()
-      setPrompts(data)
-    } catch (err: any) {
-      console.error('Failed to load prompts:', err)
-    }
+  const loadProviders = useCallback(async () => {
+    try { setLlmProviders(await api.listProviders() || []) } catch {}
+  }, [])
+
+  const loadPresets = useCallback(async () => {
+    try { setPresets(await api.listAvailablePresets() || []) } catch {}
   }, [])
 
   useEffect(() => { loadTemplates() }, [loadTemplates])
-  useEffect(() => { loadPrompts() }, [loadPrompts])
   useEffect(() => { loadProviders() }, [loadProviders])
+  useEffect(() => { loadPresets() }, [loadPresets])
+
+  // ---------- parse style card from template ----------
+
+  const parseStyleCard = (t: Template): StyleCardData => {
+    let rules: any = {}
+    try { rules = JSON.parse(t.rules || '{}') } catch {}
+    const dr = rules.design_rules || {}
+    const colors = dr.colors || {}
+    const sf = dr.style_family || (t.type === 'preset' ? 'preset' : '')
+    let slidePlan: any[] = []
+    try { slidePlan = JSON.parse(t.slide_plan || '[]') } catch {}
+
+    return {
+      id: t.id,
+      name: t.name,
+      styleFamily: sf,
+      colors: {
+        primary: colors.primary || colors.accent || '#333',
+        accent: colors.accent || colors.primary || '#666',
+        background: colors.background || colors.paper || '#fff',
+        ink: colors.ink || '#333',
+        paper: colors.paper || colors.background || '#f5f5f5',
+      },
+      hasOutline: slidePlan.length > 0,
+      outlineCount: slidePlan.length,
+      fileName: t.file_path ? (t.file_path.split(/[\\/]/).pop() || t.file_path) : '',
+      isDefault: t.is_default === 1,
+      template: t,
+    }
+  }
 
   // ---------- derived ----------
 
-  const activeTabDef = TEMPLATE_TABS.find(t => t.key === activeTab) || TEMPLATE_TABS[0]
+  const allCards = templates.map(parseStyleCard)
+  const filteredCards = familyFilter === 'all'
+    ? allCards
+    : allCards.filter(c => c.styleFamily === familyFilter)
 
-  const activeTemplates = templates.filter(t => t.type === activeTabDef.type)
-
-  const getSkillName = (skillId: string): string => {
-    if (!skillId) return ''
-    const p = prompts.find(pp => pp.id === skillId)
-    return p ? p.name : skillId
-  }
-
+  const families = [...new Set(allCards.map(c => c.styleFamily).filter(Boolean))]
   const enabledProviders = llmProviders.filter(p => p.is_enabled)
 
-  // ---------- modal handlers ----------
+  // ---------- handlers ----------
 
-  const resetModalGeometry = () => {
-    dragPosRef.current = { x: 0, y: 0 }
-    setModalPos({ x: 0, y: 0 })
-    setModalSize({ w: 0, h: 0 })
-    setDragging(null)
-    setResizing(null)
-  }
-
-  const openCreate = () => {
-    setEditingId(null)
+  const openCreateModal = () => {
+    setModalTab('preset')
+    setSelectedPreset(null)
     setFormName('')
-    setFormType(activeTabDef.type)
-    setFormPrompt('')
-    setFormSkill('')
-    setFormRules('{}')
     setFormError('')
-    setCreateFileName('')
-    createFileRef.current = null
-    resetModalGeometry()
+    setUploadFileName('')
+    uploadFileRef.current = null
     setShowModal(true)
   }
 
-  const openEdit = (t: Template) => {
-    setEditingId(t.id)
-    setFormName(t.name)
-    setFormType(t.type)
-    setFormPrompt(t.prompt || '')
-    setFormSkill(t.skill || '')
-    try {
-      setFormRules(JSON.stringify(JSON.parse(t.rules || '{}'), null, 2))
-    } catch {
-      setFormRules(t.rules || '{}')
+  const handleCreateFromPreset = async () => {
+    if (!selectedPreset) {
+      setFormError('请选择一套主题色')
+      return
     }
-    setFormError('')
-    resetModalGeometry()
-    setShowModal(true)
-  }
-
-  const closeModal = () => {
-    setShowModal(false)
-    resetModalGeometry()
-  }
-
-  const onDragStart = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragging({
-      startX: e.clientX,
-      startY: e.clientY,
-      posX: dragPosRef.current.x,
-      posY: dragPosRef.current.y,
-    })
-  }
-
-  const onResizeStart = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const rect = modalRef.current?.getBoundingClientRect()
-    const baseW = modalSize.w || (rect ? rect.width : 720)
-    const baseH = modalSize.h || (rect ? rect.height : 560)
-    setResizing({
-      startX: e.clientX,
-      startY: e.clientY,
-      startW: baseW,
-      startH: baseH,
-    })
-  }
-
-  const handleSave = async () => {
     if (!formName.trim()) {
-      setFormError('请输入模板名称')
+      setFormError('请输入风格名称')
       return
     }
     setFormError('')
     setSaving(true)
     try {
-      let rulesToSave = formRules
-      try {
-        rulesToSave = JSON.stringify(JSON.parse(formRules), null, 2)
-        setFormRules(rulesToSave)
-      } catch {}
-      if (editingId) {
-        await api.updateTemplate(editingId, {
-          name: formName.trim(),
-          type: formType,
-          prompt: formPrompt,
-          skill: formSkill,
-          rules: rulesToSave,
-        })
-        modal.toast('模板已更新', 'success')
-        closeModal()
-        loadTemplates()
-      } else {
-        const created: any = await api.createTemplate({
-          name: formName.trim(),
-          type: formType,
-          prompt: formPrompt,
-          skill: formSkill,
-          rules: rulesToSave,
-        })
-        const newId = created.id
-        if (!newId) {
-          modal.toast('创建成功但未获取到模板ID', 'error')
-          closeModal()
-          loadTemplates()
-          return
-        }
-        // Upload PPTX if selected
-        const file = createFileRef.current
-        if (file) {
-          try {
-            await api.uploadTemplateFile(newId, file)
-          } catch (err: any) {
-            modal.toast('模板已创建，但文件上传失败: ' + err.message, 'error')
-          }
-        }
-        // Analyze if file was uploaded
-        if (file) {
-          const stageType = newId.includes('yanxi') ? 'yanxiPpt' : 'daoPpt'
-          try {
-            setAnalyzingId(newId)
-            await api.analyzeTemplate(newId, stageType, analyzeProvider, analyzeModel)
-            setAnalyzingId(null)
-          } catch (err: any) {
-            setAnalyzingId(null)
-            console.warn('智能解析失败:', err.message)
-          }
-        }
-        modal.toast('模板已创建' + (file ? '并完成智能解析' : ''), 'success')
-        closeModal()
-        loadTemplates()
+      const cssVars = selectedPreset.css_vars
+      const colors: Record<string, string> = {
+        primary: cssVars.accent || cssVars.ink || '#333',
+        accent: cssVars.accent || cssVars.ink || '#333',
+        ink: cssVars.ink || '#0a0a0a',
+        paper: cssVars.paper || '#fafaf8',
+        background: cssVars.paper || '#fafaf8',
       }
-    } catch (err: any) {
-      modal.toast('保存失败: ' + err.message, 'error')
-    } finally {
+      if (cssVars.accent_on) colors.accent_on = cssVars.accent_on
+      if (cssVars.accent_rgb) colors.accent_rgb = cssVars.accent_rgb
+      if (cssVars.ink_rgb) colors.ink_rgb = cssVars.ink_rgb
+      if (cssVars.paper_rgb) colors.paper_rgb = cssVars.paper_rgb
+
+      await api.createPresetTemplate({
+        name: formName.trim(),
+        style_family: selectedPreset.style_family,
+        colors,
+        fonts: { title: '微软雅黑', body: '微软雅黑', title_size: '36pt', body_size: '18pt' },
+      })
+      modal.toast('风格已创建', 'success')
+      setShowModal(false)
+      loadTemplates()
+    } catch (e: any) {
+      setFormError(e.message || '创建失败')
+    } finally { setSaving(false) }
+  }
+
+  const handleCreateFromUpload = async () => {
+    if (!uploadFileRef.current) {
+      setFormError('请选择 PPTX 文件')
+      return
+    }
+    if (!formName.trim()) {
+      setFormError('请输入风格名称')
+      return
+    }
+    setFormError('')
+    setSaving(true)
+    try {
+      const created: any = await api.createTemplate({
+        name: formName.trim(),
+        type: 'ppt',
+        prompt: '',
+        skill: '',
+        rules: '{}',
+      })
+      const newId = created.id
+      if (!newId) { modal.toast('创建失败', 'error'); return }
+
+      await api.uploadTemplateFile(newId, uploadFileRef.current)
+      // Auto-analyze to extract colors/fonts
+      setSaving(false)
+      setShowModal(false)
+      setAnalyzingId(newId)
+      try {
+        await api.analyzeTemplate(newId, 'daoPpt', analyzeProvider, analyzeModel)
+        modal.toast('风格已创建并完成色彩提取', 'success')
+      } catch {
+        modal.toast('风格已创建，但色彩提取失败', 'error')
+      }
+      setAnalyzingId(null)
+      loadTemplates()
+    } catch (e: any) {
+      setFormError(e.message || '创建失败')
       setSaving(false)
     }
   }
 
+  const handleAnalyze = async (t: Template) => {
+    if (!t.file_path) { modal.toast('请先上传 PPTX 文件', 'error'); return }
+    setAnalyzingId(t.id)
+    try {
+      await api.analyzeTemplate(t.id, 'daoPpt', analyzeProvider, analyzeModel)
+      modal.toast('色彩与字体已提取', 'success')
+      loadTemplates()
+    } catch (e: any) {
+      modal.toast('提取失败: ' + e.message, 'error')
+    } finally { setAnalyzingId(null) }
+  }
+
+  const handleGenerateOutline = async (card: StyleCardData) => {
+    if (!enabledProviders.length) {
+      modal.toast('请先在设置中配置大模型', 'error')
+      return
+    }
+    setPlanningId(card.id)
+    try {
+      const defaultModel = enabledProviders[0]
+      const models = Array.isArray(defaultModel.models) ? defaultModel.models : []
+      const model = models[0] || ''
+      const pid = defaultModel.id
+
+      const result: any = await api.generateTemplatePlan(
+        card.id, '', pid, model, 'col4')
+      if (result?.ok) {
+        modal.toast(`大纲已生成 (${result.count || 0} 页)`, 'success')
+      } else {
+        modal.toast('大纲生成失败', 'error')
+      }
+      loadTemplates()
+    } catch (e: any) {
+      modal.toast('生成失败: ' + e.message, 'error')
+    } finally { setPlanningId(null) }
+  }
+
   const handleDelete = async (t: Template) => {
-    const ok = await modal.confirm(`删除模板「${t.name}」？此操作不可撤销。`)
+    const ok = await modal.confirm(`删除风格「${t.name}」？此操作不可撤销。`)
     if (!ok) return
     try {
       await api.deleteTemplate(t.id)
       modal.toast('已删除', 'success')
       loadTemplates()
-    } catch (err: any) {
-      modal.toast('删除失败: ' + err.message, 'error')
+    } catch (e: any) {
+      modal.toast('删除失败: ' + e.message, 'error')
     }
   }
 
@@ -371,437 +285,313 @@ function TemplateManager() {
       await api.setDefaultTemplate(t.id)
       modal.toast('已设为默认', 'success')
       loadTemplates()
-    } catch (err: any) {
-      modal.toast('设置失败: ' + err.message, 'error')
-    }
+    } catch (e: any) { modal.toast('设置失败: ' + e.message, 'error') }
   }
 
-  const handleFileUpload = async (t: Template, file: File) => {
-    try {
-      const result = await api.uploadTemplateFile(t.id, file)
-      modal.toast('文件已上传' + (result.file_path ? ` → ${result.filename}` : ''), 'success')
-      loadTemplates()
-    } catch (err: any) {
-      modal.toast('上传失败: ' + err.message, 'error')
-    }
-  }
+  // ---------- render helpers ----------
 
-  const handleThumbnailUpload = async (t: Template, file: File) => {
-    try {
-      await api.uploadTemplateThumbnail(t.id, file)
-      modal.toast('缩略图已上传', 'success')
-      loadTemplates()
-    } catch (err: any) {
-      modal.toast('缩略图上传失败: ' + err.message, 'error')
-    }
-  }
-
-  const handleResetThumbnail = async (t: Template) => {
-    try {
-      await api.resetTemplateThumbnail(t.id)
-      modal.toast('已恢复默认缩略图', 'success')
-      loadTemplates()
-    } catch (err: any) {
-      modal.toast('恢复失败: ' + err.message, 'error')
-    }
-  }
-
-  const handleAnalyze = async (t: Template) => {
-    if (!t.file_path) {
-      modal.toast('请先上传 PPTX 模板文件', 'error')
-      return
-    }
-    const stageType = t.id.includes('yanxi') ? 'yanxiPpt' : 'daoPpt'
-    setAnalyzingId(t.id)
-    try {
-      const result = await api.analyzeTemplate(t.id, stageType, analyzeProvider, analyzeModel)
-      const prompt = result.prompt || ''
-      const skill = result.skill || ''
-      if (prompt) {
-        await api.updateTemplate(t.id, {
-          name: t.name,
-          type: t.type,
-          prompt,
-          skill,
-        })
-        modal.toast('智能解析完成，prompt + SKILL 已更新', 'success')
-      } else {
-        modal.toast('解析完成，但未返回 prompt。请重试或检查 LLM 配置。', 'error')
-      }
-      loadTemplates()
-    } catch (err: any) {
-      modal.toast('解析失败: ' + err.message, 'error')
-    } finally {
-      setAnalyzingId(null)
-    }
+  const renderColorSwatch = (card: StyleCardData) => {
+    const c = card.colors
+    const swatches = [
+      { color: c.accent || c.primary, label: '主色' },
+      { color: c.ink, label: '字色' },
+      { color: c.paper || c.background, label: '底色' },
+    ].filter(s => s.color)
+    return (
+      <div style={{ display: 'flex', gap: 3, marginTop: 4 }}>
+        {swatches.map((sw, i) => (
+          <div key={i} style={{
+            width: 18, height: 18, borderRadius: 3,
+            background: sw.color,
+            border: sw.color.toLowerCase() === '#ffffff' || sw.color.toLowerCase() === '#fafaf8'
+              ? '1px solid #ddd' : '1px solid transparent',
+          }} title={sw.label} />
+        ))}
+      </div>
+    )
   }
 
   // ---------- render ----------
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
-      {/* ====== mgmt-tabs bar ====== */}
-      <div className="mgmt-tabs">
-        {TEMPLATE_TABS.map(tab => (
-          <button
-            key={tab.key}
-            className={`mgmt-tab${activeTab === tab.key ? ' active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Header */}
+      <div style={{ padding: '16px 0 0 0' }}>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
+          PPT 风格库
+        </h2>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
+          风格 = 颜色 + 字体。从这里制造风格，在项目页选择风格一键合成PPT。
+        </p>
       </div>
 
-      {/* ====== Content ====== */}
-      <div className="mgmt-content">
+      {/* Filter bar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0' }}>
+        {['all', ...families].map(f => (
+          <button key={f}
+            className={familyFilter === f ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
+            onClick={() => setFamilyFilter(f)}
+          >
+            {f === 'all' ? '全部' : (FAMILY_LABELS[f] || f)}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <button className="btn btn-primary btn-sm" onClick={openCreateModal}>
+          + 新增风格
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="mgmt-content" style={{ flex: 1 }}>
         {loading ? (
-          <p style={{ color: 'var(--text-secondary)', fontSize: '14px', textAlign: 'center', padding: '40px 0' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, textAlign: 'center', padding: '40px 0' }}>
             加载中...
           </p>
+        ) : filteredCards.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)', fontSize: 13 }}>
+            <p style={{ marginBottom: 16 }}>暂无风格，创建一个吧</p>
+            <button className="btn btn-primary" onClick={openCreateModal}>+ 新增风格</button>
+          </div>
         ) : (
-          <>
-            {/* Toolbar: new button */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <button className="btn btn-primary btn-sm" onClick={openCreate}>
-                + 新建模板
-              </button>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+            {filteredCards.map(card => (
+              <div key={card.id} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                {/* Color preview bar */}
+                <div style={{
+                  height: 6,
+                  background: `linear-gradient(90deg, ${card.colors.accent || card.colors.primary} 60%, ${card.colors.paper || card.colors.background} 100%)`,
+                }} />
 
-            {/* Cards or empty */}
-            {activeTemplates.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)', fontSize: '13px' }}>
-                <p style={{ marginBottom: '16px' }}>暂无{activeTabDef.label}模板</p>
-                <button className="btn btn-primary" onClick={openCreate}>+ 新建模板</button>
+                {/* Card body */}
+                <div style={{ padding: 12 }}>
+                  <h4 style={{
+                    fontSize: 12, fontWeight: 600, color: 'var(--text)', margin: 0,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {card.name}
+                  </h4>
+
+                  {/* Tags */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                    {card.styleFamily && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 600,
+                        color: FAMILY_COLORS[card.styleFamily] || 'var(--text-secondary)',
+                        background: `${FAMILY_COLORS[card.styleFamily] || 'var(--text-secondary)'}15`,
+                        padding: '1px 5px', borderRadius: 2,
+                      }}>
+                        {FAMILY_LABELS[card.styleFamily] || card.styleFamily}
+                      </span>
+                    )}
+                    {card.isDefault && (
+                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-secondary)',
+                        background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 2 }}>
+                        默认
+                      </span>
+                    )}
+                    {card.hasOutline && (
+                      <span style={{ fontSize: 9, fontWeight: 600, color: 'var(--success)',
+                        background: 'rgba(34,197,94,0.1)', padding: '1px 5px', borderRadius: 2 }}>
+                        {card.outlineCount}页大纲
+                      </span>
+                    )}
+                    {card.fileName && !card.styleFamily && (
+                      <span style={{ fontSize: 9, color: 'var(--text-secondary)' }} title={card.fileName}>
+                        📄
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Color swatches */}
+                  {renderColorSwatch(card)}
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+                    {card.fileName && (
+                      <button className="btn btn-ghost btn-sm"
+                        style={{ fontSize: 10, padding: '2px 6px' }}
+                        onClick={() => handleAnalyze(card.template)}
+                        disabled={analyzingId === card.id}>
+                        {analyzingId === card.id ? '提取中...' : '分析'}
+                      </button>
+                    )}
+                    <button className="btn btn-ghost btn-sm"
+                      style={{ fontSize: 10, padding: '2px 6px' }}
+                      onClick={() => handleGenerateOutline(card)}
+                      disabled={planningId === card.id}>
+                      {planningId === card.id ? '生成中...' : '大纲'}
+                    </button>
+                    <div style={{ flex: 1 }} />
+                    {!card.isDefault && (
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)', cursor: 'pointer' }}
+                        onClick={() => handleSetDefault(card.template)} title="设为默认">
+                        默认
+                      </span>
+                    )}
+                    <span style={{ fontSize: 10, color: 'var(--warning)', cursor: 'pointer' }}
+                      onClick={() => handleDelete(card.template)} title="删除">
+                      删
+                    </span>
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-                {activeTemplates.map(t => {
-                  const thumbUrl = getThumbnailUrl(t)
-                  const autoUrl = autoThumbnails[t.id] ? api.getSlideThumbUrl(t.id) : ''
-                  const displayUrl = thumbUrl || autoUrl
-                  const hasThumb = !!displayUrl
-                  const fileName = t.file_path ? (t.file_path.split(/[\\/]/).pop() || t.file_path) : ''
-
-                  return (
-                    <div key={t.id}>
-                      {/* ====== Card ====== */}
-                      <div
-                        className="card"
-                        style={{
-                          padding: 0,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {/* Thumbnail area — 16:9 to match PPT slide ratio */}
-                        <div style={{
-                          aspectRatio: '16 / 9',
-                          background: 'var(--bg-hover)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          position: 'relative',
-                          overflow: 'hidden',
-                        }}>
-                          {displayUrl ? (
-                            <img
-                              src={displayUrl}
-                              alt={t.name}
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-                            />
-                          ) : null}
-                          <div style={{
-                            position: 'absolute',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: '6px',
-                            color: 'var(--text-secondary)',
-                            opacity: hasThumb ? 0 : 1,
-                          }}>
-                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.4 }}>
-                              <rect x="2" y="2" width="20" height="20" rx="2" />
-                              <circle cx="8.5" cy="8.5" r="1.5" />
-                              <path d="M21 15l-5-5L5 21" />
-                            </svg>
-                            <span style={{ fontSize: '11px' }}>
-                              {t.type === 'ppt' ? 'PPT 预览' : 'SOP 预览'}
-                            </span>
-                            <span style={{ fontSize: '9px', opacity: 0.5 }}>建议 320×240</span>
-                          </div>
-                        </div>
-
-                        {/* Card info bar */}
-                        <div style={{ padding: '8px 10px' }}>
-                          <h4 style={{
-                            fontSize: '11px', fontWeight: 600, color: 'var(--text)', margin: 0,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>
-                            {t.name}
-                          </h4>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6 }}>
-                            <span style={{
-                              fontSize: '10px', fontWeight: 600, flexShrink: 0,
-                              color: t.type === 'ppt' ? 'var(--primary)' : 'var(--color-accent)',
-                              background: t.type === 'ppt' ? 'rgba(139, 26, 26, 0.08)' : 'rgba(212, 165, 116, 0.15)',
-                              padding: '1px 6px', borderRadius: '3px',
-                            }}>
-                              {t.type === 'ppt' ? 'PPT' : 'SOP'}
-                            </span>
-                            {t.is_default === 1 && (
-                              <span style={{
-                                fontSize: '10px', fontWeight: 600, flexShrink: 0,
-                                color: 'var(--text-secondary)',
-                                background: 'var(--bg-hover)',
-                                padding: '1px 6px', borderRadius: '3px',
-                              }}>
-                                默认
-                              </span>
-                            )}
-                            {fileName && (
-                              <span style={{ fontSize: '10px', color: 'var(--text-secondary)', flexShrink: 0 }}>📄</span>
-                            )}
-                            {fileName && (
-                              <a href={api.previewTemplate(t.id)}
-                                style={{ fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
-                                  flexShrink: 0, lineHeight: 1, textDecoration: 'none',
-                                }}>
-                                预览
-                              </a>
-                            )}
-                            {/* Thumbnail controls on card */}
-                            {thumbUrl && (
-                              <img src={thumbUrl} alt="thumb" style={{
-                                width: '22px', height: '16px', objectFit: 'cover',
-                                borderRadius: '2px', border: '1px solid var(--border)', flexShrink: 0,
-                              }} />
-                            )}
-                            <label style={{
-                              fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
-                              flexShrink: 0, lineHeight: 1,
-                            }} title="建议 320×240">
-                              {thumbUrl ? '更换' : '缩略图'}
-                              <input type="file" accept="image/*" style={{ display: 'none' }}
-                                onChange={e => {
-                                  const f = e.target.files?.[0]
-                                  if (f) handleThumbnailUpload(t, f)
-                                  e.target.value = ''
-                                }}
-                              />
-                            </label>
-                            {thumbUrl && (
-                              <span style={{
-                                fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
-                                flexShrink: 0, lineHeight: 1,
-                              }}
-                                onClick={() => handleResetThumbnail(t)}>
-                                默认
-                              </span>
-                            )}
-                            <div style={{ flex: 1 }} />
-                            <span style={{
-                              fontSize: '10px', color: 'var(--text-secondary)', cursor: 'pointer',
-                              flexShrink: 0, lineHeight: 1,
-                            }} title="编辑模板"
-                              onClick={() => openEdit(t)}>
-                              编辑
-                            </span>
-                            {t.is_default !== 1 && (
-                              <span style={{
-                                fontSize: '10px', color: 'var(--warning)', cursor: 'pointer',
-                                flexShrink: 0, lineHeight: 1,
-                              }} title="删除模板"
-                                onClick={() => handleDelete(t)}>
-                                删除
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* ====== Create / Edit Modal ====== */}
+      {/* ====== New Style Modal ====== */}
       {showModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }} onMouseDown={e => { if (e.target === e.currentTarget) closeModal() }}>
-          <div ref={modalRef} style={{
-            ...modalCard,
-            width: modalSize.w ? modalSize.w : '720px',
-            maxWidth: '95vw',
-            maxHeight: '95vh',
-            minWidth: '380px',
-            minHeight: '300px',
-            padding: '24px',
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            transform: `translate(${modalPos.x}px, ${modalPos.y}px)`,
+        }} onMouseDown={e => { if (e.target === e.currentTarget) setShowModal(false) }}>
+          <div style={{
+            background: 'var(--card)', border: '1px solid var(--border)',
+            borderRadius: 'var(--radius)', padding: 24,
+            width: 600, maxWidth: '95vw', maxHeight: '90vh', overflow: 'auto',
           }} onClick={e => e.stopPropagation()}>
-            {/* Draggable title bar */}
-            <div style={{
-              cursor: 'move', userSelect: 'none',
-              marginBottom: '16px', flexShrink: 0,
-            }} onMouseDown={onDragStart}>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, margin: 0 }}>
-                {editingId ? '编辑模板' : '新建模板'}
-              </h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 16px 0' }}>新增风格</h3>
+
+            {/* Tab switcher */}
+            <div style={{ display: 'flex', gap: 0, marginBottom: 16, borderBottom: '1px solid var(--border)' }}>
+              {[
+                { key: 'preset' as const, label: '从预设创建' },
+                { key: 'upload' as const, label: '上传 PPTX' },
+              ].map(tab => (
+                <button key={tab.key}
+                  style={{
+                    padding: '8px 16px', fontSize: 12, background: 'none',
+                    border: 'none', borderBottom: modalTab === tab.key ? '2px solid var(--primary)' : '2px solid transparent',
+                    color: modalTab === tab.key ? 'var(--primary)' : 'var(--text-secondary)',
+                    fontWeight: modalTab === tab.key ? 600 : 400,
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => { setModalTab(tab.key); setFormError('') }}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
-            <div style={{ flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* File upload row */}
-              {(() => {
-                const editingTpl = editingId ? templates.find(tp => tp.id === editingId) : null
-                const efName = editingTpl?.file_path ? (editingTpl.file_path.split(/[\\/]/).pop() || editingTpl.file_path) : ''
-                const cfName = createFileName || ''
-                const displayName = editingId ? (efName || '') : (cfName || '')
-                return (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap',
-                    padding: '10px 12px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)',
-                  }}>
-                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '180px' }}
-                      title={displayName || '未上传'}>
-                      {displayName ? '📌 ' + displayName : '📄 未上传模板文件'}
-                    </span>
-                    <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                      {displayName ? '更换' : '上传 PPTX'}
-                      <input type="file" accept=".pptx" style={{ display: 'none' }}
-                        onChange={e => {
-                          const f = e.target.files?.[0]
-                          if (!f) return
-                          if (editingId && editingTpl) {
-                            handleFileUpload(editingTpl, f)
-                          } else {
-                            createFileRef.current = f
-                            setCreateFileName(f.name)
-                          }
-                          e.target.value = ''
+
+            {/* Preset picker tab */}
+            {modalTab === 'preset' && (
+              <>
+                {/* Family filter */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+                  {['all', 'magazine', 'swiss'].map(f => (
+                    <button key={f} className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        setSelectedPreset(null)
+                        // filter presets by family
+                      }}
+                      style={{ fontSize: 10, padding: '2px 8px' }}>
+                      {f === 'all' ? '全部' : FAMILY_LABELS[f] || f}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxHeight: 200, overflow: 'auto', marginBottom: 14 }}>
+                  {presets.map((p, i) => {
+                    const c = p.colors
+                    const isSelected = selectedPreset === p
+                    return (
+                      <div key={i}
+                        style={{
+                          padding: 10, borderRadius: 6, cursor: 'pointer',
+                          border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
+                          background: isSelected ? 'var(--bg-hover)' : 'var(--bg)',
                         }}
-                      />
-                    </label>
-                    {editingId && efName && (
-                      <button className="btn btn-primary btn-sm"
-                        onClick={() => {
-                          const et = templates.find(tp => tp.id === editingId)
-                          if (et) handleAnalyze(et)
-                        }}
-                        disabled={analyzingId === editingId}>
-                        {analyzingId === editingId ? '解析中...' : '智能解析'}
-                      </button>
-                    )}
-                  </div>
-                )
-              })()}
-              {/* Row 1: Model + Name */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label style={labelStyle}>模型选择</label>
-                  <select
-                    style={{ ...inputField, cursor: 'pointer' }}
-                    value={analyzeProvider ? `${analyzeProvider}:${analyzeModel}` : ''}
-                    disabled={enabledProviders.length === 0}
-                    onChange={e => {
-                      const val = e.target.value
-                      if (val) {
-                        const [pid, mdl] = val.split(':')
-                        setAnalyzeProvider(pid)
-                        setAnalyzeModel(mdl)
-                      } else {
-                        setAnalyzeProvider('')
-                        setAnalyzeModel('')
-                      }
-                    }}
-                  >
-                    <option value="">默认模型</option>
-                    {enabledProviders.map(p =>
-                      (Array.isArray(p.models) ? p.models : []).map((m: string) => (
-                        <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
-                      ))
-                    )}
-                  </select>
+                        onClick={() => { setSelectedPreset(p); setFormError('') }}
+                      >
+                        <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6 }}>{p.name}</div>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <div style={{ width: 16, height: 16, borderRadius: 3, background: c.accent, border: '1px solid #ddd' }} />
+                          <div style={{ width: 16, height: 16, borderRadius: 3, background: c.ink, border: '1px solid #ddd' }} />
+                          <div style={{ width: 16, height: 16, borderRadius: 3, background: c.paper, border: '1px solid #ddd' }} />
+                        </div>
+                        {isSelected && <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 4 }}>✓ 已选择</div>}
+                      </div>
+                    )
+                  })}
                 </div>
                 <div>
-                  <label style={labelStyle}>名称</label>
+                  <label style={{ fontSize: 10, fontWeight: 600, display: 'block', marginBottom: 6 }}>风格名称</label>
                   <input
-                    style={inputField}
-                    placeholder="输入模板名称"
+                    style={{
+                      width: '100%', height: 32, border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 12,
+                      color: 'var(--text)', background: 'var(--bg)', outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                    placeholder={selectedPreset ? selectedPreset.name : '输入风格名称'}
                     value={formName}
-                    onChange={e => setFormName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleSave() }}
+                    onChange={e => { setFormName(e.target.value); setFormError('') }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleCreateFromPreset() }}
                     autoFocus
                   />
                 </div>
-              </div>
-
-              {/* Prompt + Skill */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-                <div>
-                  <label style={labelStyle}>提示词 (Prompt)</label>
-                  <textarea
-                    value={formPrompt}
-                    onChange={e => setFormPrompt(e.target.value)}
-                    placeholder="由智能解析自动生成"
-                    style={{ ...textareaStyle, height: '100px' }}
-                  />
-                </div>
-                <div>
-                  <label style={labelStyle}>输出格式 (SKILL)</label>
-                  <textarea
-                    value={formSkill}
-                    onChange={e => setFormSkill(e.target.value)}
-                    placeholder="由智能解析自动生成"
-                    style={{ ...textareaStyle, height: '100px' }}
-                  />
-                </div>
-              </div>
-
-              {/* Rules */}
-              <div>
-                <label style={labelStyle}>设计规则 (Rules JSON)</label>
-                <textarea
-                  value={formRules}
-                  onChange={e => setFormRules(e.target.value)}
-                  placeholder='{}'
-                  style={{ ...textareaStyle, height: '200px', fontFamily: 'var(--font-mono, monospace)', fontSize: '11px', lineHeight: '1.5' }}
-                />
-              </div>
-            </div>
-
-            {formError && (
-              <p style={{ color: 'var(--warning)', fontSize: '13px', marginTop: '12px' }}>{formError}</p>
+              </>
             )}
 
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '20px' }}>
-              <button className="btn btn-ghost btn-sm" onClick={closeModal} disabled={saving}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-                {saving ? (editingId ? '保存中...' : (createFileName ? '保存并解析中...' : '保存中...')) : (editingId ? '保存' : (createFileName ? '保存并智能解析' : '保存'))}
+            {/* Upload tab */}
+            {modalTab === 'upload' && (
+              <>
+                <div style={{
+                  padding: '12px', background: 'var(--bg)', borderRadius: 'var(--radius-sm)',
+                  marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8,
+                }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                    {uploadFileName || '未选择文件'}
+                  </span>
+                  <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                    {uploadFileName ? '更换' : '选择 PPTX'}
+                    <input type="file" accept=".pptx" style={{ display: 'none' }}
+                      onChange={e => {
+                        const f = e.target.files?.[0]
+                        if (f) { uploadFileRef.current = f; setUploadFileName(f.name) }
+                        e.target.value = ''
+                      }}
+                    />
+                  </label>
+                </div>
+                <div>
+                  <label style={{ fontSize: 10, fontWeight: 600, display: 'block', marginBottom: 6 }}>风格名称</label>
+                  <input
+                    style={{
+                      width: '100%', height: 32, border: '1px solid var(--border)',
+                      borderRadius: 'var(--radius-sm)', padding: '0 8px', fontSize: 12,
+                      color: 'var(--text)', background: 'var(--bg)', outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                    placeholder="输入风格名称"
+                    value={formName}
+                    onChange={e => { setFormName(e.target.value); setFormError('') }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleCreateFromUpload() }}
+                    autoFocus
+                  />
+                </div>
+              </>
+            )}
+
+            {formError && (
+              <p style={{ color: 'var(--warning)', fontSize: 12, marginTop: 12 }}>{formError}</p>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowModal(false)} disabled={saving}>
+                取消
+              </button>
+              <button className="btn btn-primary btn-sm"
+                onClick={modalTab === 'preset' ? handleCreateFromPreset : handleCreateFromUpload}
+                disabled={saving}>
+                {saving ? '创建中...' :
+                  (modalTab === 'preset' ? (selectedPreset ? '创建风格' : '请先选择主题') :
+                    (uploadFileName ? '创建并提取色彩' : '请先选择文件'))}
               </button>
             </div>
-
-            {/* Resize handle */}
-            <div
-              style={{
-                position: 'absolute', bottom: 0, right: 0,
-                width: '20px', height: '20px', cursor: 'nwse-resize',
-                background: 'linear-gradient(135deg, transparent 50%, var(--border) 50%)',
-                borderRadius: '0 0 var(--radius) 0',
-              }}
-              onMouseDown={onResizeStart}
-            />
           </div>
         </div>
       )}
-
     </div>
   )
 }

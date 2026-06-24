@@ -396,6 +396,20 @@ export const api = {
     if (model) params.set('model', model)
     return request(`/api/templates/${encodeURIComponent(templateId)}/analyze?${params.toString()}`, { method: 'POST' })
   },
+  generateTemplatePlan: (templateId: string, content: string, providerId?: string, model?: string, columnId?: string) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/generate-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, provider_id: providerId || '', model: model || '', column_id: columnId || 'col4' }),
+    }),
+  listAvailablePresets: () =>
+    request('/api/templates/presets/available').then(d => d.presets),
+  createPresetTemplate: (data: { name: string; style_family: string; colors: Record<string, string>; fonts?: Record<string, string>; spacing?: Record<string, number>; layout_types?: any[] }) =>
+    request('/api/templates/presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
   uploadColumnTemplate: async (id: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
