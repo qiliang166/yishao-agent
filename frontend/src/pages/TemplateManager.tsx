@@ -38,6 +38,7 @@ interface StyleCardData {
   outlineCount: number
   fileName: string
   isDefault: boolean
+  locked: boolean
   template: Template
 }
 
@@ -131,6 +132,7 @@ function TemplateManager() {
       outlineCount: slidePlan.length,
       fileName: t.file_path ? (t.file_path.split(/[\\/]/).pop() || t.file_path) : '',
       isDefault: t.is_default === 1,
+      locked: rules.hasOwnProperty('locked') ? rules.locked === true : !t.file_path,
       template: t,
     }
   }
@@ -287,6 +289,20 @@ function TemplateManager() {
       modal.toast('已设为默认', 'success')
       loadTemplates()
     } catch (e: any) { modal.toast('设置失败: ' + e.message, 'error') }
+  }
+
+  const toggleLock = async (t: Template) => {
+    let rules: any = {}
+    try { rules = JSON.parse(t.rules || '{}') } catch {}
+    const newLocked = !rules.locked
+    rules.locked = newLocked
+    try {
+      await api.updateTemplate(t.id, {
+        name: t.name, type: t.type, rules: JSON.stringify(rules),
+      })
+      modal.toast(newLocked ? '已锁定' : '已解锁', 'success')
+      loadTemplates()
+    } catch (e: any) { modal.toast('操作失败: ' + e.message, 'error') }
   }
 
   // ---------- outline editor ----------
@@ -453,15 +469,20 @@ function TemplateManager() {
                       {planningId === card.id ? '生成中...' : '大纲'}
                     </button>
                     <div style={{ flex: 1 }} />
+                    <span style={{ fontSize: 10, color: 'var(--text-secondary)', cursor: 'pointer' }}
+                      onClick={() => toggleLock(card.template)}
+                      title={card.locked ? '点击解锁' : '点击锁定'}>
+                      {card.locked ? '🔒' : '🔓'}
+                    </span>
                     {!card.isDefault && (
                       <span style={{ fontSize: 10, color: 'var(--text-secondary)', cursor: 'pointer' }}
                         onClick={() => handleSetDefault(card.template)} title="设为默认">
                         默认
                       </span>
                     )}
-                    <span style={{ fontSize: 10, color: 'var(--warning)', cursor: 'pointer' }}
-                      onClick={() => handleDelete(card.template)} title="删除">
-                      删
+                    <span style={{ fontSize: 10, color: card.locked ? 'var(--text-secondary)' : 'var(--warning)', cursor: card.locked ? 'not-allowed' : 'pointer' }}
+                      onClick={() => { if (!card.locked) handleDelete(card.template) }} title={card.locked ? '已锁定，请先解锁' : '删除'}>
+                      {card.locked ? '🔒' : '删'}
                     </span>
                   </div>
                 </div>
