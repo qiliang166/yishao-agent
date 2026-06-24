@@ -186,7 +186,7 @@ function TemplateManager() {
 
       await api.createPresetTemplate({
         name: formName.trim(),
-        style_family: selectedPreset.style_family,
+        style_family: '',
         colors,
         fonts: { title: '微软雅黑', body: '微软雅黑', title_size: '36pt', body_size: '18pt' },
       })
