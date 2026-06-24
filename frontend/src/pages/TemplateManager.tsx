@@ -144,7 +144,7 @@ function TemplateManager() {
     ? allCards
     : allCards.filter(c => c.styleFamily === familyFilter)
 
-  const families = [...new Set(allCards.map(c => c.styleFamily).filter(Boolean))]
+  const families = [...new Set(allCards.map(c => c.styleFamily))]
   const enabledProviders = llmProviders.filter(p => p.is_enabled)
 
   // ---------- handlers ----------
