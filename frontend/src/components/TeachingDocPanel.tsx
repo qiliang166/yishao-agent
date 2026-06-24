@@ -1,4 +1,4 @@
-import { useState, forwardRef, useImperativeHandle, useCallback, useRef } from 'react'
+import { useState, useEffect, forwardRef, useImperativeHandle, useCallback, useRef } from 'react'
 import { api } from '../services/api'
 import { useModal } from './ModalProvider'
 
@@ -55,6 +55,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   }
   const [model, setModel] = useState(() => getDefaultModel())
   const lastModelKey = useRef(modelKey)
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
   const [_dataSource, _setDataSource] = useState('video')
   const dataSource = dataSourceProp !== undefined ? dataSourceProp : _dataSource
   const setDataSource = onDataSourceChange || _setDataSource
@@ -109,13 +114,17 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   // ── Generate ──
   const handleGenerate = useCallback(async () => {
     const sourceText = getSourceText(dataSource)
-    console.log('[TeachingDocPanel] handleGenerate called', { docType, dataSource, sourceText: sourceText?.slice(0, 50), model, stepKey })
+    console.log('[TeachingDocPanel] handleGenerate called', { docType, dataSource, sourceText: sourceText?.slice(0, 50), model, stepKey, generating })
     if (!sourceText) {
       modal.toast(`数据来源「${dataSource}」没有内容，请先在 Stage 1 导入素材`, 'error')
       return
     }
     if (!model) {
       modal.toast('请先选择大模型', 'error')
+      return
+    }
+    if (generating) {
+      console.log('[TeachingDocPanel] already generating, skipping')
       return
     }
     setGenerating(true)
@@ -130,7 +139,8 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         provider_id: pid, model: mdl,
         system_prompt: systemPrompt, user_message: userMessage,
       })
-      console.log('[TeachingDocPanel] llmGenerate result', { hasContent: !!result?.content, contentLen: result?.content?.length })
+      console.log('[TeachingDocPanel] llmGenerate result', { hasContent: !!result?.content, contentLen: result?.content?.length, mounted: mountedRef.current })
+      if (!mountedRef.current) return
       if (result?.content) {
         await api.saveStep(projectId, stepKey, result.content)
         console.log('[TeachingDocPanel] saveStep done, calling onRefresh')
@@ -141,9 +151,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       }
     } catch (e: any) {
       console.error('[TeachingDocPanel] generate error', e)
-      modal.toast(`生成失败: ${e.message}`, 'error')
+      if (mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
-      setGenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }, [dataSource, model, prompt, skill, docType, projectId, stepKey, onRefresh])
 
@@ -153,14 +163,15 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     try {
       await api.saveStep(projectId, stepKey, localContent)
       console.log('[TeachingDocPanel] saveStep done')
+      if (!mountedRef.current) return
       setSavedFlash(Date.now())
-      setTimeout(() => setSavedFlash(0), 1500)
+      setTimeout(() => { if (mountedRef.current) setSavedFlash(0) }, 1500)
       await onRefresh()
       console.log('[TeachingDocPanel] save onRefresh done')
       modal.toast('已保存', 'success')
     } catch (e: any) {
       console.error('[TeachingDocPanel] save error', e)
-      modal.toast(`保存失败: ${e.message}`, 'error')
+      if (mountedRef.current) modal.toast(`保存失败: ${e.message}`, 'error')
     }
   }, [projectId, stepKey, localContent, onRefresh])
 

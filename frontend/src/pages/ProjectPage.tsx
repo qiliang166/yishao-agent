@@ -102,6 +102,11 @@ function Stage2Controls({
   onRefresh: () => Promise<void>
 }) {
   const modal = useModal()
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
   const modelKey = MODEL_KEYS_S2[docType]
   const icon = DOC_ICONS[docType]
   const color = DOC_COLORS_S2[docType]
@@ -135,13 +140,17 @@ function Stage2Controls({
 
   const handleGenerate = async () => {
     const source = getSourceText(dataSource)
-    console.log('[Stage2Controls] handleGenerate called', { docType, dataSource, source: source?.slice(0, 50), model })
+    console.log('[Stage2Controls] handleGenerate called', { docType, dataSource, source: source?.slice(0, 50), model, generating })
     if (!source) {
       modal.toast(`数据来源「${dataSource}」没有内容，请先在 Stage 1 导入素材`, 'error')
       return
     }
     if (!model) {
       modal.toast('请先选择大模型', 'error')
+      return
+    }
+    if (generating) {
+      console.log('[Stage2Controls] already generating, skipping')
       return
     }
     setGenerating(true)
@@ -151,9 +160,9 @@ function Stage2Controls({
       console.log('[Stage2Controls] triggerGenerate done')
     } catch (e: any) {
       console.error('[Stage2Controls] generate error', e)
-      modal.toast(`生成失败: ${e.message}`, 'error')
+      if (mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
-      setGenerating(false)
+      if (mountedRef.current) setGenerating(false)
     }
   }
 
@@ -256,8 +265,6 @@ export default function ProjectPage() {
   const daoRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
   const yanxiRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
 
-  const s2Tab = sub === '2a' ? 'sop' : sub === '2b' ? 'dao' : 'yanxi'
-  const s2DataSource = s2DataSources[s2Tab] || 'video'
   const handleS2DataSourceChange = (tab: string, val: string) => {
     setS2DataSources(prev => ({ ...prev, [tab]: val }))
     if (id) api.saveStep(id, `_ds_s2_${tab}`, val)
@@ -1067,10 +1074,10 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                {sub === '2a' && (
+                <div style={{ display: sub === '2a' ? 'contents' : 'none' }}>
                   <Stage2Controls docType="sop" label="SOP文案"
                     steps={steps} llmProviders={llmProviders}
-                    dataSource={s2DataSource} onDataSourceChange={(v) => handleS2DataSourceChange('sop', v)}
+                    dataSource={s2DataSources['sop'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('sop', v)}
                     generating={step2Generating === '2a'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
@@ -1085,11 +1092,11 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
-                )}
-                {sub === '2b' && (
+                </div>
+                <div style={{ display: sub === '2b' ? 'contents' : 'none' }}>
                   <Stage2Controls docType="dao" label="道与术文案"
                     steps={steps} llmProviders={llmProviders}
-                    dataSource={s2DataSource} onDataSourceChange={(v) => handleS2DataSourceChange('dao', v)}
+                    dataSource={s2DataSources['dao'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('dao', v)}
                     generating={step2Generating === '2b'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
@@ -1104,11 +1111,11 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
-                )}
-                {sub === '2c' && (
+                </div>
+                <div style={{ display: sub === '2c' ? 'contents' : 'none' }}>
                   <Stage2Controls docType="yanxi" label="研学手册文案"
                     steps={steps} llmProviders={llmProviders}
-                    dataSource={s2DataSource} onDataSourceChange={(v) => handleS2DataSourceChange('yanxi', v)}
+                    dataSource={s2DataSources['yanxi'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('yanxi', v)}
                     generating={step2Generating === '2c'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
@@ -1123,19 +1130,19 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
-                )}
+                </div>
               </div>
             </div>
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                {sub === '2a' && (
+                <div style={{ display: sub === '2a' ? 'contents' : 'none' }}>
                   <TeachingDocPanel ref={sopRef} docType="sop" projectId={id!}
                     steps={steps} savedSteps={savedSteps}
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
-                    hideControls dataSource={s2DataSource}
+                    hideControls dataSource={s2DataSources['sop'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1144,15 +1151,15 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
-                )}
-                {sub === '2b' && (
+                </div>
+                <div style={{ display: sub === '2b' ? 'contents' : 'none' }}>
                   <TeachingDocPanel ref={daoRef} docType="dao" projectId={id!}
                     steps={steps} savedSteps={savedSteps}
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
-                    hideControls dataSource={s2DataSource}
+                    hideControls dataSource={s2DataSources['dao'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1161,15 +1168,15 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
-                )}
-                {sub === '2c' && (
+                </div>
+                <div style={{ display: sub === '2c' ? 'contents' : 'none' }}>
                   <TeachingDocPanel ref={yanxiRef} docType="yanxi" projectId={id!}
                     steps={steps} savedSteps={savedSteps}
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
-                    hideControls dataSource={s2DataSource}
+                    hideControls dataSource={s2DataSources['yanxi'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1178,7 +1185,7 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
-                )}
+                </div>
               </div>
             </div>
           </div>
