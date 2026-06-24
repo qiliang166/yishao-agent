@@ -247,18 +247,112 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     return None
 
 
+def _build_guizang_field_spec(style_family: str) -> dict:
+    """Return {type: {name, fields, description}} for each AI-visible slide type.
+
+    Fields are extracted from the actual guizang layout HTML skeletons.
+    This is the single source of truth for what the AI must fill.
+    """
+    if style_family == "swiss":
+        return {
+            "cover":       {"name":"封面","fields":["kicker","title","lead","author","date","section_label","page_num","footer_hint"]},
+            "chapter":     {"name":"章节","fields":["kicker","heading","lead","section_label","page_num"]},
+            "data_hero":   {"name":"数据大字报","fields":["kicker","heading","lead","stats","section_label","page_num"],
+                            "stats_fields": ["label","value","unit","note"]},
+            "toc":         {"name":"六格目录","fields":["kicker","heading","cells","section_label","page_num"],
+                            "cells_fields": ["icon","num","title","desc"]},
+            "content":     {"name":"三子卡","fields":["kicker","heading","cards","section_label","page_num"],
+                            "cards_fields": ["num","title","desc"]},
+            "principle":   {"name":"三子卡(原则)","fields":["kicker","heading","cards","section_label","page_num"],
+                            "cards_fields": ["num","title","desc"]},
+            "technique":   {"name":"三子卡(技法)","fields":["kicker","heading","cards","section_label","page_num"],
+                            "cards_fields": ["num","title","desc"]},
+            "process_flow":{"name":"纵向时间轴","fields":["kicker","heading","timeline_nodes","section_label","page_num"],
+                            "nodes_fields": ["year","metric","label","desc"]},
+            "timeline":    {"name":"横向时间线","fields":["heading","nodes","section_label","page_num"],
+                            "nodes_fields": ["num","label"]},
+            "quote":       {"name":"极简陈述","fields":["statement","anchor","section_label","page_num"]},
+            "duo_compare": {"name":"双轨对照","fields":["heading","left_kicker","left_title","left_desc","right_kicker","right_title","right_desc","section_label","page_num"]},
+            "closing":     {"name":"收束宣言","fields":["kicker","title","footnote","author","date","takeaways","takeaway_label","takeaway_count","closing_text","section_label","page_num"],
+                            "takeaways_fields": ["num","title","desc"]},
+            "summary":     {"name":"收束宣言","fields":["kicker","title","footnote","author","date","takeaways","takeaway_label","takeaway_count","closing_text","section_label","page_num"],
+                            "takeaways_fields": ["num","title","desc"]},
+            "section":    {"name":"极简陈述","fields":["statement","anchor","section_label","page_num"]},
+            "image_hero": {"name":"图文封面","fields":["title","description","img_src","img_alt","section_label","page_num","metrics"],
+                           "metrics_fields": ["name","value","explanation"]},
+            "grid_cards": {"name":"六格定义","fields":["kicker","heading","cells","section_label","page_num"],
+                           "cells_fields": ["icon","num","title","desc"]},
+            "food_archive":{"name":"图像矩阵","fields":["heading","cells","stat_value","stat_label","section_label","page_num"],
+                            "cells_fields": ["title"]},
+            "skill_card": {"name":"三子卡","fields":["kicker","heading","cards","section_label","page_num"],
+                           "cards_fields": ["num","title","desc"]},
+            "troubleshoot":{"name":"双轨对照","fields":["heading","left_kicker","left_title","left_desc","right_kicker","right_title","right_desc","section_label","page_num"]},
+            "table":      {"name":"规格说明书","fields":["title","kpi_items","goal_value","goal_label","tags","mp_code","section_label","page_num"],
+                           "kpi_fields": ["value","unit"]},
+            "appendix":   {"name":"极简陈述","fields":["statement","anchor","section_label","page_num"]},
+            "copyright":  {"name":"极简陈述","fields":["statement","anchor","section_label","page_num"]},
+        }
+    else:
+        return {
+            "cover":       {"name":"Hero Cover","fields":["section_label","page_num","kicker","title","subtitle","lead","author","footnote_l","footnote_r"]},
+            "chapter":     {"name":"Act Divider","fields":["section_label","page_num","kicker","title","lead","footnote_l"]},
+            "data_hero":   {"name":"Big Numbers","fields":["section_label","page_num","kicker","heading","lead","stats","footnote_l"],
+                            "stats_fields":["label","value","unit","note"]},
+            "content":     {"name":"Quote+Image","fields":["section_label","page_num","kicker","heading","lead","quote","quote_src","img_src","img_alt","img_caption"]},
+            "image_hero":  {"name":"Image Grid","fields":["section_label","page_num","kicker","heading","images","footnote_l"],
+                            "images_fields":["src","alt","caption"]},
+            "process_flow":{"name":"Pipeline","fields":["section_label","page_num","kicker","heading","pipelines","footnote_l"],
+                            "pipelines_fields":["label","steps"],"steps_fields":["num","title","desc"]},
+            "quote":       {"name":"Hero Question","fields":["section_label","page_num","kicker","title","lead","footnote_l"]},
+            "duo_compare": {"name":"Big Quote","fields":["section_label","page_num","kicker","quote","translation","attribution"]},
+            "toc":         {"name":"A vs B","fields":["section_label","page_num","kicker","heading","left_kicker","left_title","left_items","right_kicker","right_title","right_items","footnote_l"]},
+            "closing":     {"name":"Lead Image+Text","fields":["section_label","page_num","kicker","heading","lead","body_text","quote","quote_src","img_src","img_alt","img_caption"]},
+            "summary":     {"name":"Lead Image+Text","fields":["section_label","page_num","kicker","heading","lead","body_text","quote","quote_src","img_src","img_alt","img_caption"]},
+            "section":    {"name":"Act Divider","fields":["section_label","page_num","kicker","title","lead","footnote_l"]},
+            "principle":  {"name":"Quote+Image","fields":["section_label","page_num","kicker","heading","lead","quote","quote_src","img_src","img_alt","img_caption"]},
+            "technique":  {"name":"Quote+Image","fields":["section_label","page_num","kicker","heading","lead","quote","quote_src","img_src","img_alt","img_caption"]},
+            "timeline":   {"name":"Pipeline","fields":["section_label","page_num","kicker","heading","pipelines","footnote_l"],
+                           "pipelines_fields":["label","steps"],"steps_fields":["num","title","desc"]},
+            "grid_cards": {"name":"Image Grid","fields":["section_label","page_num","kicker","heading","images","footnote_l"],
+                           "images_fields":["src","alt","caption"]},
+            "food_archive":{"name":"Image Grid","fields":["section_label","page_num","kicker","heading","images","footnote_l"],
+                           "images_fields":["src","alt","caption"]},
+            "skill_card": {"name":"Quote+Image","fields":["section_label","page_num","kicker","heading","lead","quote","quote_src","img_src","img_alt","img_caption"]},
+            "troubleshoot":{"name":"Big Quote","fields":["section_label","page_num","kicker","quote","translation","attribution"]},
+            "table":      {"name":"Lead Image+Text","fields":["section_label","page_num","kicker","heading","lead","body_text","quote","quote_src","img_src","img_alt","img_caption"]},
+            "appendix":   {"name":"Lead Image+Text","fields":["section_label","page_num","kicker","heading","lead","body_text","quote","quote_src","img_src","img_alt","img_caption"]},
+            "copyright":  {"name":"Act Divider","fields":["section_label","page_num","kicker","title","lead","footnote_l"]},
+        }
+
+
 def _stage2_structure(provider_id, model, llm_generate, rules, stage1_slides, sop_content,
                       system_prompt: str = "") -> list | None:
     """Stage 2: Assign layout types and map content to zones."""
-    layout_types = rules.get("layout_types", [])
     page_rhythm = rules.get("page_rhythm", {})
     design_principles = rules.get("design_principles", [])
+    style_family = rules.get("design_rules", {}).get("style_family", "swiss")
+    field_spec = _build_guizang_field_spec(style_family)
 
-    # Build compact layout reference
-    layout_ref = []
-    for lt in layout_types:
-        zones_str = ", ".join(lt.get("zones", []))
-        layout_ref.append(f"- **{lt['id']}**: {lt.get('name','')} | zones: [{zones_str}] | {lt.get('description','')}")
+    # Build compact layout reference from guizang field specs
+    layout_ref_lines = []
+    for type_id, spec in sorted(field_spec.items()):
+        fields = spec["fields"]
+        fields_str = ", ".join(fields)
+        layout_ref_lines.append(f"- **{type_id}** ({spec['name']}): zones = [{fields_str}]")
+        # Document nested array field schemas
+        for suffix, sub_fields in [
+            ("cards_fields","cards"), ("cells_fields","cells"), ("towers_fields","towers"),
+            ("bars_fields","bars"), ("timeline_nodes","nodes_fields"), ("nodes_fields","nodes"),
+            ("takeaways_fields","takeaways"), ("metrics_fields","metrics"),
+            ("stats_fields","stats"), ("images_fields","images"),
+            ("steps_fields","steps"), ("layers_fields","layers"),
+            ("kpi_fields","kpi_items"), ("columns_fields","columns"),
+            ("rows_fields","rows"), ("briefs_fields","briefs"),
+            ("pipelines_fields","pipelines"), ("nodes_fields","nodes"),
+        ]:
+            if suffix in spec:
+                sub = spec[suffix]
+                layout_ref_lines.append(f"  └ 数组元素 {spec['name']} 的字段: [{', '.join(sub)}]")
 
     rhythm_str = " → ".join(page_rhythm.get("sequence", []))
     alt_rule = page_rhythm.get("alternation_rule", "")
@@ -266,14 +360,25 @@ def _stage2_structure(provider_id, model, llm_generate, rules, stage1_slides, so
 
     principles_str = "\n".join(f"- {dp.get('rule','')}" for dp in design_principles)
 
+    # Build a compact example showing cover + closing with correct field names
+    cover_fields = field_spec.get("cover", {}).get("fields", [])
+    closing_fields = field_spec.get("closing", {}).get("fields", [])
+    cover_example = {f: "..." for f in cover_fields[:5]}
+    closing_example = {}
+    for f in closing_fields[:5]:
+        if f not in ("takeaways",):
+            closing_example[f] = "..."
+    if "takeaways" in closing_fields:
+        closing_example["takeaways"] = [{"num":"01","title":"...","desc":"..."}]
+
     system = system_prompt if system_prompt else (
         "你是PPT结构设计专家。你的任务是为每张幻灯片分配合适的版式类型(layout type)，"
-        "并将内容映射到版式对应的 zones 中。"
+        "并将内容映射到版式对应的 zones 中。zones 的字段名必须严格使用下方定义。"
         "输出纯 JSON，不要用 markdown 包裹。"
     )
 
-    user = f"""## 可用版式类型（你必须从以下类型中选择）
-{chr(10).join(layout_ref)}
+    user = f"""## 可用版式类型及字段定义（zones 必须使用这些字段名）
+{chr(10).join(layout_ref_lines)}
 
 ## 页面节奏规则
 - 序列模式: {rhythm_str}
@@ -292,26 +397,17 @@ def _stage2_structure(provider_id, model, llm_generate, rules, stage1_slides, so
 {sop_content[:2000]}
 
 ## 输出要求
-输出一个 JSON 对象，包含 slides 数组。每元素格式（注意 zones 的 key 必须用英文 zone id，来自上方可用版式类型定义）：
+输出一个 JSON 对象，包含 slides 数组。每元素格式（zones 的 key 必须使用上方定义的英文 field 名）：
 ```json
 {{
   "slides": [
     {{
       "type": "cover",
-      "zones": {{
-        "title": "...",
-        "subtitle": "...",
-        "date": "..."
-      }}
+      "zones": {json.dumps(cover_example, ensure_ascii=False)}
     }},
     {{
-      "type": "technique",
-      "zones": {{
-        "heading": "...",
-        "operation": "...",
-        "principle": "...",
-        "params": "..."
-      }}
+      "type": "closing",
+      "zones": {json.dumps(closing_example, ensure_ascii=False, indent=6)}
     }}
   ]
 }}
@@ -319,7 +415,8 @@ def _stage2_structure(provider_id, model, llm_generate, rules, stage1_slides, so
 
 关键规则：
 - type 必须在可用版式类型范围内
-- zones 的键必须严格使用上方「可用版式类型」中该 type 定义的 zones 列表中的英文 zone id，不得自创或汉化
+- zones 的键必须严格使用上方每种 type 定义的字段名，不得自创、不得汉化、不得省略
+- 数组字段（如 takeaways、cards、cells、stats）中每个元素必须包含对应子字段
 - 封面(type=cover)必须在第一页，总结(type=summary)必须在最后一页
 - 遵守页面节奏规则：不连续3页同类型
 - 仅输出 JSON"""

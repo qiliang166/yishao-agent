@@ -113,23 +113,26 @@ def _extract_layouts(style_family: str) -> dict:
     content = _read(path)
     layouts = {}
 
-    # Split on ## headers (layout sections)
-    sections = re.split(r'\n## ', content)
+    # Collect all h3 sections (### headers) that contain an HTML block.
+    # Use finditer to locate every ### header, then grab its body up to
+    # the next ### or ## header.
+    h3_starts = [m.end() for m in re.finditer(r'^###\s', content, re.MULTILINE)]
+    h3_bodies = []
+    for i, start in enumerate(h3_starts):
+        end = h3_starts[i + 1] if i + 1 < len(h3_starts) else len(content)
+        h3_bodies.append(content[start:end])
 
-    for section in sections:
-        lines = section.strip().split('\n')
+    for body in h3_bodies:
+        lines = body.strip().split('\n')
         if not lines:
             continue
         header = lines[0].strip()
 
-        # Find first ```html block in the section
-        html_match = re.search(r'```html\n(.*?)\n```', section, re.DOTALL)
+        html_match = re.search(r'```html\n(.*?)\n```', body, re.DOTALL)
         if not html_match:
             continue
 
         html = html_match.group(1)
-
-        # Generate slug from header
         slug = _header_to_slug(header, style_family)
         if slug:
             layouts[slug] = html
@@ -143,7 +146,7 @@ def _header_to_slug(header: str, style_family: str) -> str:
 
     if style_family == "swiss":
         # "P1 · Cover · 封面页" → "p1"
-        m = re.match(r'P(\d+)', header, re.IGNORECASE)
+        m = re.search(r'P(\d+)', header, re.IGNORECASE)
         if m:
             return f"p{m.group(1)}"
     else:
@@ -221,41 +224,105 @@ def _get_layout_map(style_family: str) -> dict:
 def _fill_zones(layout_html: str, zones: dict) -> str:
     """Fill zone values into a layout HTML skeleton.
 
-    Strategy: look for guizang text elements and replace their content
-    with zone values. Uses heuristics based on HTML element classes and
-    content patterns.
+    Uses CSS-class heuristics first, then {{field}} template syntax,
+    then [必填] placeholder replacement as final fallback.
     """
     if not zones:
         return layout_html
 
     html = layout_html
 
-    # Zone → CSS class heuristics for text replacement
-    zone_selectors = {
-        "title":      (r'<h1[^>]*class="[^"]*h-hero[^"]*"[^>]*>.*?</h1>', 'h1'),
-        "heading":    (r'<h2[^>]*class="[^"]*h-xl[^"]*"[^>]*>.*?</h2>', 'h2'),
-        "subtitle":   (r'<p[^>]*class="[^"]*lead[^"]*"[^>]*>.*?</p>', 'p'),
-        "kicker":     (r'<div[^>]*class="[^"]*kicker[^"]*"[^>]*>.*?</div>', 'div'),
-        "body":       (r'<p[^>]*class="[^"]*(?:lead|body-zh|body-serif)[^"]*"[^>]*>.*?</p>', 'p'),
-        "quote":      (r'<blockquote[^>]*>.*?</blockquote>', 'blockquote'),
-        "text":       (r'<p[^>]*>.*?</p>', 'p'),
-    }
+    # Zone → CSS class heuristics (magazine + swiss)
+    zone_selectors = [
+        ("title", [
+            r'<h1[^>]*class="[^"]*h-hero[^"]*"[^>]*>.*?</h1>',
+            r'<h1\b[^>]*>.*?</h1>',
+            r'<h2\b[^>]*>.*?</h2>',
+        ]),
+        ("heading", [
+            r'<h2[^>]*class="[^"]*h-xl[^"]*"[^>]*>.*?</h2>',
+            r'<h2\b[^>]*>.*?</h2>',
+        ]),
+        ("subtitle", [
+            r'<p[^>]*class="[^"]*lead[^"]*"[^>]*>.*?</p>',
+        ]),
+        ("kicker", [
+            r'<div[^>]*class="[^"]*(?:kicker|t-meta|t-cat)[^"]*"[^>]*>.*?</div>',
+        ]),
+        ("lead", [
+            r'<p[^>]*class="[^"]*lead[^"]*"[^>]*>.*?</p>',
+        ]),
+        ("body", [
+            r'<p[^>]*class="[^"]*(?:lead|body-zh|body-serif|body-sm)[^"]*"[^>]*>.*?</p>',
+        ]),
+        ("body_text", [
+            r'<p[^>]*class="[^"]*(?:lead|body-zh|body-serif|body-sm|body)[^"]*"[^>]*>.*?</p>',
+        ]),
+        ("quote", [
+            r'<blockquote[^>]*>.*?</blockquote>',
+        ]),
+        ("footnote", [
+            r'<div\s[^>]*style="[^"]*"[^>]*>\[必填\][^<]*</div>',
+        ]),
+        ("author", [
+            r'<div[^>]*class="[^"]*t-meta[^"]*"[^>]*>\[选填\]?\s*作者[^<]*</div>',
+            r'<div[^>]*class="[^"]*t-meta[^"]*"[^>]*>.*?</div>',
+        ]),
+        ("date", [
+            r'<div[^>]*class="[^"]*t-meta[^"]*"[^>]*>\s*YY\.MM\.DD\s*</div>',
+        ]),
+        ("statement", [
+            r'<h1[^>]*class="[^"]*h-statement[^"]*"[^>]*>.*?</h1>',
+            r'<h1\b[^>]*>.*?</h1>',
+        ]),
+        ("declaration", [
+            r'<h1[^>]*class="[^"]*h-statement[^"]*"[^>]*>.*?</h1>',
+            r'<h2\b[^>]*>.*?</h2>',
+        ]),
+        ("text", [
+            r'<(h2|h3|p)\b[^>]*>.*?</\1>',
+        ]),
+    ]
 
+    handled = set()
+
+    # Phase 1: CSS-class-based selectors
     for zone_key, value in zones.items():
         if not value or not isinstance(value, str):
             continue
+        for sel_key, patterns in zone_selectors:
+            if zone_key != sel_key:
+                continue
+            for pattern in patterns:
+                m = re.search(pattern, html, re.DOTALL)
+                if m:
+                    old_elem = m.group(0)
+                    tag_m = re.match(r'<(\w+)', old_elem)
+                    tag = tag_m.group(1) if tag_m else 'p'
+                    new_elem = re.sub(r'>.*?</' + tag + '>',
+                                     f'>{_escape(value)}</{tag}>',
+                                     old_elem, count=1, flags=re.DOTALL)
+                    html = html.replace(old_elem, new_elem, 1)
+                    handled.add(zone_key)
+                    break
+            break  # Zone matched its selector group; don't try other selector groups
 
-        if zone_key in zone_selectors:
-            pattern, tag = zone_selectors[zone_key]
-            m = re.search(pattern, html, re.DOTALL)
-            if m:
-                old_elem = m.group(0)
-                new_elem = re.sub(r'>.*?</' + tag + '>',
-                                  f'>{_escape(value)}</{tag}>',
-                                  old_elem, count=1, flags=re.DOTALL)
-                html = html.replace(old_elem, new_elem, 1)
-        else:
-            # Fallback: replace [必填] placeholder with zone value for unmatched keys
+    # Phase 2: {{field}} template syntax
+    for zone_key, value in zones.items():
+        if not value or not isinstance(value, str):
+            continue
+        tmpl = '{{' + zone_key + '}}'
+        if tmpl in html:
+            html = html.replace(tmpl, _escape(value))
+            handled.add(zone_key)
+
+    # Phase 3: [必填] placeholder fallback (for zones not handled above)
+    for zone_key, value in zones.items():
+        if not value or not isinstance(value, str):
+            continue
+        if zone_key in handled:
+            continue
+        if '[必填]' in html:
             html = html.replace('[必填]', _escape(value), 1)
 
     return html
@@ -445,6 +512,7 @@ def render_slide_html(slide_type: str, zones: dict, style_family: str,
     Returns a full HTML document that can be opened directly in a browser
     or embedded in an iframe via srcdoc.
     """
+    style_family = style_family or "swiss"
     template_html = _load_template_html(style_family)
     template_html = _inject_theme(template_html, design_rules)
 
@@ -465,6 +533,7 @@ def render_deck_html(slide_plan: list, style_family: str,
     Returns a full HTML document with all slides arranged horizontally
     in the guizang deck format (single-page app with horizontal scroll).
     """
+    style_family = style_family or "swiss"
     template_html = _load_template_html(style_family)
     template_html = _inject_theme(template_html, design_rules)
 

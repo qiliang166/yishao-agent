@@ -1944,7 +1944,7 @@ async def preview_slide_html(template_id: str, request: Request):
             except Exception:
                 pass
         design_rules = rules.get("design_rules", {})
-        style_family = design_rules.get("style_family", "swiss")
+        style_family = design_rules.get("style_family") or "swiss"
 
         body = {}
         try:
@@ -1985,7 +1985,7 @@ async def preview_deck_html(template_id: str, request: Request):
             except Exception:
                 pass
         design_rules = rules.get("design_rules", {})
-        style_family = design_rules.get("style_family", "swiss")
+        style_family = design_rules.get("style_family") or "swiss"
 
         body = {}
         try:
