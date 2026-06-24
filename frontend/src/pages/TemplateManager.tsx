@@ -113,7 +113,7 @@ function TemplateManager() {
     try { rules = JSON.parse(t.rules || '{}') } catch {}
     const dr = rules.design_rules || {}
     const colors = dr.colors || {}
-    const sf = dr.style_family || (t.type === 'preset' ? 'preset' : '')
+    const sf = dr.style_family || ''
     let slidePlan: any[] = []
     try { slidePlan = JSON.parse(t.slide_plan || '[]') } catch {}
 
