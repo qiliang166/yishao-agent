@@ -69,8 +69,9 @@ function TemplateManager() {
   // action states
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
   const [planningId, setPlanningId] = useState<string | null>(null)
-  const [analyzeProvider, setAnalyzeProvider] = useState('')
-  const [analyzeModel, setAnalyzeModel] = useState('')
+  const [pptModel, setPptModel] = useState(() => {
+    try { return localStorage.getItem('tm_ppt_model') || '' } catch { return '' }
+  })
   const [autoThumbnails, setAutoThumbnails] = useState<Record<string, string>>({})
 
   // outline editor state
@@ -102,6 +103,7 @@ function TemplateManager() {
   useEffect(() => { loadTemplates() }, [loadTemplates])
   useEffect(() => { loadProviders() }, [loadProviders])
   useEffect(() => { loadPresets() }, [loadPresets])
+  useEffect(() => { try { localStorage.setItem('tm_ppt_model', pptModel) } catch {} }, [pptModel])
 
   // ---------- parse style card from template ----------
 
@@ -222,7 +224,8 @@ function TemplateManager() {
       setShowModal(false)
       setAnalyzingId(newId)
       try {
-        await api.analyzeTemplate(newId, 'daoPpt', analyzeProvider, analyzeModel)
+        const [pid2, model2] = pptModel ? pptModel.split(':') : ['', '']
+        await api.analyzeTemplate(newId, 'daoPpt', pid2, model2)
         modal.toast('风格已创建并完成色彩提取', 'success')
       } catch {
         modal.toast('风格已创建，但色彩提取失败', 'error')
@@ -239,7 +242,8 @@ function TemplateManager() {
     if (!t.file_path) { modal.toast('请先上传 PPTX 文件', 'error'); return }
     setAnalyzingId(t.id)
     try {
-      await api.analyzeTemplate(t.id, 'daoPpt', analyzeProvider, analyzeModel)
+      const [pid, model] = pptModel ? pptModel.split(':') : ['', '']
+      await api.analyzeTemplate(t.id, 'daoPpt', pid, model)
       modal.toast('色彩与字体已提取', 'success')
       loadTemplates()
     } catch (e: any) {
@@ -248,16 +252,9 @@ function TemplateManager() {
   }
 
   const handleGenerateOutline = async (card: StyleCardData) => {
-    if (!enabledProviders.length) {
-      modal.toast('请先在设置中配置大模型', 'error')
-      return
-    }
     setPlanningId(card.id)
     try {
-      const defaultModel = enabledProviders[0]
-      const models = Array.isArray(defaultModel.models) ? defaultModel.models : []
-      const model = models[0] || ''
-      const pid = defaultModel.id
+      const [pid, model] = pptModel ? pptModel.split(':') : ['', '']
 
       const result: any = await api.generateTemplatePlan(
         card.id, '', pid, model, 'col4')
@@ -354,20 +351,32 @@ function TemplateManager() {
         </p>
       </div>
 
-      {/* Filter bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '12px 0' }}>
-        {['all', ...families].map(f => (
-          <button key={f}
-            className={familyFilter === f ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
-            onClick={() => setFamilyFilter(f)}
-          >
-            {f === 'all' ? '全部' : (FAMILY_LABELS[f] || f)}
+      {/* Tab bar */}
+      <div style={{ display: 'flex', alignItems: 'stretch', margin: '12px 0 -1px 0' }}>
+        <div className="mgmt-tabs" style={{ flex: 1, padding: '0 0 0 0' }}>
+          {['all', ...families].map(f => (
+            <button key={f}
+              className={`mgmt-tab${familyFilter === f ? ' active' : ''}`}
+              onClick={() => setFamilyFilter(f)}
+            >
+              {f === 'all' ? '全部' : (FAMILY_LABELS[f] || f)}
+            </button>
+          ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px', background: 'var(--card)', borderBottom: '1px solid var(--border)' }}>
+          <select className="form-select" style={{ width: 200, height: 28, fontSize: 11 }}
+            value={pptModel} onChange={e => setPptModel(e.target.value)}>
+            <option value="">默认模型</option>
+            {enabledProviders.map(p =>
+              (Array.isArray(p.models) ? p.models : []).map((m: string) => (
+                <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} / {m}</option>
+              ))
+            )}
+          </select>
+          <button className="btn btn-primary btn-sm" onClick={openCreateModal}>
+            + 新增风格
           </button>
-        ))}
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-primary btn-sm" onClick={openCreateModal}>
-          + 新增风格
-        </button>
+        </div>
       </div>
 
       {/* Content */}
