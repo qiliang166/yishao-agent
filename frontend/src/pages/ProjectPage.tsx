@@ -287,8 +287,8 @@ export default function ProjectPage() {
     api.getSteps(id).then((s: any[]) => {
       const map: Record<string, string> = {}
       s.forEach((x: any) => { map[x.step_name] = x.content })
-      setSteps(map)
-      setSavedSteps({...map})
+      setSteps(prev => ({ ...prev, ...map }))
+      setSavedSteps(prev => ({ ...prev, ...map }))
       setVideoText(map['raw_video'] || map['video_text'] || '')
       setTextInput(map['raw_text'] || '')
       setFileText(map['raw_file'] || '')
@@ -570,8 +570,8 @@ export default function ProjectPage() {
         const s = await api.getSteps(id!)
         const map: Record<string, string> = {}
         s.forEach((x: any) => { map[x.step_name] = x.content })
-        setSteps(map)
-        setSavedSteps({...map})
+        setSteps(prev => ({ ...prev, ...map }))
+        setSavedSteps(prev => ({ ...prev, ...map }))
       } catch {}
     }
   }
@@ -1057,8 +1057,8 @@ export default function ProjectPage() {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
                         s.forEach((x: any) => { map[x.step_name] = x.content })
-                        setSteps(map)
-                        setSavedSteps({...map})
+                        setSteps(prev => ({ ...prev, ...map }))
+                        setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
                 )}
@@ -1076,8 +1076,8 @@ export default function ProjectPage() {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
                         s.forEach((x: any) => { map[x.step_name] = x.content })
-                        setSteps(map)
-                        setSavedSteps({...map})
+                        setSteps(prev => ({ ...prev, ...map }))
+                        setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
                 )}
@@ -1095,8 +1095,8 @@ export default function ProjectPage() {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
                         s.forEach((x: any) => { map[x.step_name] = x.content })
-                        setSteps(map)
-                        setSavedSteps({...map})
+                        setSteps(prev => ({ ...prev, ...map }))
+                        setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
                 )}
@@ -1116,8 +1116,8 @@ export default function ProjectPage() {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
                         s.forEach((x: any) => { map[x.step_name] = x.content })
-                        setSteps(map)
-                        setSavedSteps({...map})
+                        setSteps(prev => ({ ...prev, ...map }))
+                        setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
                 )}
@@ -1133,8 +1133,8 @@ export default function ProjectPage() {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
                         s.forEach((x: any) => { map[x.step_name] = x.content })
-                        setSteps(map)
-                        setSavedSteps({...map})
+                        setSteps(prev => ({ ...prev, ...map }))
+                        setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
                 )}
@@ -1150,8 +1150,8 @@ export default function ProjectPage() {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
                         s.forEach((x: any) => { map[x.step_name] = x.content })
-                        setSteps(map)
-                        setSavedSteps({...map})
+                        setSteps(prev => ({ ...prev, ...map }))
+                        setSavedSteps(prev => ({ ...prev, ...map }))
                       })
                     }} />
                 )}
