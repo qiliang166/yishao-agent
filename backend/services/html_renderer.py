@@ -236,15 +236,13 @@ def _fill_zones(layout_html: str, zones: dict) -> str:
         "kicker":     (r'<div[^>]*class="[^"]*kicker[^"]*"[^>]*>.*?</div>', 'div'),
         "body":       (r'<p[^>]*class="[^"]*(?:lead|body-zh|body-serif)[^"]*"[^>]*>.*?</p>', 'p'),
         "quote":      (r'<blockquote[^>]*>.*?</blockquote>', 'blockquote'),
+        "text":       (r'<p[^>]*>.*?</p>', 'p'),
     }
 
     for zone_key, value in zones.items():
         if not value or not isinstance(value, str):
             continue
 
-        # Try direct text replacement within common elements
-        # Look for h1/h2/p elements and replace their text if the zone key
-        # matches a likely element
         if zone_key in zone_selectors:
             pattern, tag = zone_selectors[zone_key]
             m = re.search(pattern, html, re.DOTALL)
@@ -254,6 +252,9 @@ def _fill_zones(layout_html: str, zones: dict) -> str:
                                   f'>{_escape(value)}</{tag}>',
                                   old_elem, count=1, flags=re.DOTALL)
                 html = html.replace(old_elem, new_elem, 1)
+        else:
+            # Fallback: replace [必填] placeholder with zone value for unmatched keys
+            html = html.replace('[必填]', _escape(value), 1)
 
     return html
 
