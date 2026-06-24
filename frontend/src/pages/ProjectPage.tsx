@@ -238,8 +238,12 @@ export default function ProjectPage() {
   const [step1Generating, setStep1Generating] = useState<Record<string, boolean>>({})
 
   // Stage 2 state
-  const [step2Generating, setStep2Generating] = useState('') // which sub is generating
+  const [step2Generating, setStep2Generating] = useState('')
   const [s2DataSource, setS2DataSource] = useState('video')
+  useEffect(() => {
+    if (!id) return
+    api.saveStep(id, '_ds_s2', s2DataSource)
+  }, [s2DataSource, id])
   const [batchGenerating, setBatchGenerating] = useState(false)
   const sopRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
   const daoRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
@@ -292,6 +296,8 @@ export default function ProjectPage() {
       setVideoText(map['raw_video'] || map['video_text'] || '')
       setTextInput(map['raw_text'] || '')
       setFileText(map['raw_file'] || '')
+      // Restore saved data source
+      if (map['_ds_s2']) setS2DataSource(map['_ds_s2'])
       // Restore saved model selections
       if (map['_model_s1_video'] || map['_model_s1_text'] || map['_model_s1_file']) {
         setStep1Models({
