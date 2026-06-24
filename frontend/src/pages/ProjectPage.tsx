@@ -1350,6 +1350,11 @@ export default function ProjectPage() {
                       s3DaoPptModel)}>
                     {pptGenerating === 'step3_dao_ppt' ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
+                  <button className="btn btn-ghost btn-sm"
+                    disabled={!daoPptSelected}
+                    onClick={() => downloadFile(api.exportHtmlUrl(daoPptSelected), '道术PPT.html')}>
+                    HTML
+                  </button>
                 </div>
               </div>
             </div>
@@ -1413,6 +1418,11 @@ export default function ProjectPage() {
                       stage3Prompts.yanxiPpt?.prompt || '你是一个教学PPT设计专家。请将研学手册内容转化为PPT。',
                       s3YanxiPptModel)}>
                     {pptGenerating === 'step3_yan_ppt' ? '⏳ 合成中...' : '📌 合成PPT'}
+                  </button>
+                  <button className="btn btn-ghost btn-sm"
+                    disabled={!yanxiPptSelected}
+                    onClick={() => downloadFile(api.exportHtmlUrl(yanxiPptSelected), '研学PPT.html')}>
+                    HTML
                   </button>
                 </div>
               </div>

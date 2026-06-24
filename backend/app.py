@@ -1924,6 +1924,140 @@ async def update_template_slide_plan(template_id: str, request: Request):
         db.close()
 
 
+@app.post("/api/templates/{template_id}/preview-slide")
+async def preview_slide_html(template_id: str, request: Request):
+    """Render a single slide as HTML using guizang template CSS.
+
+    Request body: {slide: {type, zones}}
+    Returns: {html: "..."} — a complete HTML page for iframe srcdoc.
+    """
+    from services.html_renderer import render_slide_html
+    db = get_db()
+    try:
+        tmpl = db.execute("SELECT rules FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not tmpl:
+            raise HTTPException(404, "模板不存在")
+        rules = {}
+        if tmpl["rules"]:
+            try:
+                rules = json.loads(tmpl["rules"])
+            except Exception:
+                pass
+        design_rules = rules.get("design_rules", {})
+        style_family = design_rules.get("style_family", "swiss")
+
+        body = {}
+        try:
+            body = json.loads((await request.body()).decode("utf-8"))
+        except Exception:
+            pass
+        slide = body.get("slide", {}) if isinstance(body, dict) else {}
+        slide_type = slide.get("type", "content")
+        zones = slide.get("zones", {})
+
+        html = render_slide_html(slide_type, zones, style_family, design_rules)
+        return {"html": html}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/api/templates/{template_id}/preview-deck")
+async def preview_deck_html(template_id: str, request: Request):
+    """Render a full slide deck as HTML using guizang template CSS.
+
+    Request body: {slide_plan: [...]}
+    Returns: {html: "..."} — a complete HTML page.
+    """
+    from services.html_renderer import render_deck_html
+    db = get_db()
+    try:
+        tmpl = db.execute("SELECT rules FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not tmpl:
+            raise HTTPException(404, "模板不存在")
+        rules = {}
+        if tmpl["rules"]:
+            try:
+                rules = json.loads(tmpl["rules"])
+            except Exception:
+                pass
+        design_rules = rules.get("design_rules", {})
+        style_family = design_rules.get("style_family", "swiss")
+
+        body = {}
+        try:
+            body = json.loads((await request.body()).decode("utf-8"))
+        except Exception:
+            pass
+        slide_plan = body.get("slide_plan", []) if isinstance(body, dict) else []
+
+        html = render_deck_html(slide_plan, style_family, design_rules)
+        return {"html": html}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.get("/api/templates/{template_id}/export-html")
+def export_template_html(template_id: str):
+    """Export a template's slide_plan as a complete HTML slide deck file.
+
+    Uses the template's saved slide_plan and design_rules with guizang
+    template CSS to generate a self-contained HTML file for download.
+    """
+    from services.html_renderer import render_deck_html
+    from fastapi.responses import Response
+    db = get_db()
+    try:
+        tmpl = db.execute(
+            "SELECT name, rules, slide_plan FROM templates WHERE id = ?",
+            (template_id,)).fetchone()
+        if not tmpl:
+            raise HTTPException(404, "模板不存在")
+
+        rules = {}
+        if tmpl["rules"]:
+            try:
+                rules = json.loads(tmpl["rules"])
+            except Exception:
+                pass
+        design_rules = rules.get("design_rules", {})
+        style_family = design_rules.get("style_family", "swiss")
+
+        slide_plan = []
+        if tmpl["slide_plan"]:
+            try:
+                slide_plan = json.loads(tmpl["slide_plan"])
+            except Exception:
+                pass
+
+        if not slide_plan:
+            raise HTTPException(400, "该模板没有大纲，请先生成大纲")
+
+        html = render_deck_html(slide_plan, style_family, design_rules)
+        import urllib.parse
+        safe_name = urllib.parse.quote(tmpl["name"].replace(" ", "_").replace("/", "_"), safe="")
+        return Response(
+            content=html.encode("utf-8"),
+            media_type="text/html; charset=utf-8",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}.html"
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+
 def _load_guizang_layouts(style_family: str) -> dict | None:
     """Load layout definitions from guizang ppt_engine references."""
     ref_dir = os.path.join(os.path.dirname(__file__), "services", "ppt_engine", "references")

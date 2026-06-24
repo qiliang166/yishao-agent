@@ -408,6 +408,20 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slide_plan: slidePlan }),
     }),
+  previewSlide: (templateId: string, slide: { type: string; zones: Record<string, any> }) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/preview-slide`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slide }),
+    }),
+  previewDeck: (templateId: string, slidePlan: any[]) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/preview-deck`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slide_plan: slidePlan }),
+    }),
+  exportHtmlUrl: (templateId: string) =>
+    `/api/templates/${encodeURIComponent(templateId)}/export-html`,
   listAvailablePresets: () =>
     request('/api/templates/presets/available').then(d => d.presets),
   createPresetTemplate: (data: { name: string; style_family: string; colors: Record<string, string>; fonts?: Record<string, string>; spacing?: Record<string, number>; layout_types?: any[] }) =>

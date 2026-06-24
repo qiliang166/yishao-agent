@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, LLMProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import SlideOutlineEditor from '../components/SlideOutlineEditor'
 
 // ---------- types ----------
 
@@ -73,10 +74,7 @@ function TemplateManager() {
   const [autoThumbnails, setAutoThumbnails] = useState<Record<string, string>>({})
 
   // outline editor state
-  const [outlineCard, setOutlineCard] = useState<StyleCardData | null>(null)
-  const [editingPlan, setEditingPlan] = useState<any[]>([])
-  const [expandedSlide, setExpandedSlide] = useState<number | null>(null)
-  const [savingOutline, setSavingOutline] = useState(false)
+  const [outlineCard, setOutlineCard] = useState<{ id: string; name: string; slidePlan: any[]; template: Template } | null>(null)
 
   // ---------- loading ----------
 
@@ -299,55 +297,24 @@ function TemplateManager() {
   const openOutlineEditor = (card: StyleCardData) => {
     let plan: any[] = []
     try { plan = JSON.parse(card.template.slide_plan || '[]') } catch {}
-    setOutlineCard(card)
-    setEditingPlan(JSON.parse(JSON.stringify(plan))) // deep copy
-    setExpandedSlide(null)
-  }
-
-  const updateSlideInPlan = (idx: number, field: string, value: any) => {
-    setEditingPlan(prev => {
-      const next = [...prev]
-      if (field === 'type') {
-        next[idx] = { ...next[idx], type: value }
-      } else {
-        next[idx] = { ...next[idx], zones: { ...(next[idx].zones || {}), [field]: value } }
-      }
-      return next
+    setOutlineCard({
+      id: card.id,
+      name: card.name,
+      slidePlan: JSON.parse(JSON.stringify(plan)),
+      template: card.template,
     })
   }
 
-  const removeSlideFromPlan = (idx: number) => {
-    setEditingPlan(prev => prev.filter((_, i) => i !== idx))
-    setExpandedSlide(null)
-  }
-
-  const addSlideToPlan = () => {
-    setEditingPlan(prev => [...prev, { type: 'content', zones: { heading: '', body: '' } }])
-    setExpandedSlide(editingPlan.length)
-  }
-
-  const moveSlide = (idx: number, dir: -1 | 1) => {
-    const newIdx = idx + dir
-    if (newIdx < 0 || newIdx >= editingPlan.length) return
-    setEditingPlan(prev => {
-      const next = [...prev]
-      ;[next[idx], next[newIdx]] = [next[newIdx], next[idx]]
-      return next
-    })
-    setExpandedSlide(newIdx)
-  }
-
-  const saveOutline = async () => {
+  const handleSaveOutline = async (updatedPlan: any[]) => {
     if (!outlineCard) return
-    setSavingOutline(true)
     try {
-      await api.updateTemplateSlidePlan(outlineCard.id, editingPlan)
+      await api.updateTemplateSlidePlan(outlineCard.id, updatedPlan)
       modal.toast('大纲已保存', 'success')
       setOutlineCard(null)
       loadTemplates()
     } catch (e: any) {
       modal.toast('保存失败: ' + e.message, 'error')
-    } finally { setSavingOutline(false) }
+    }
   }
 
   // ---------- render helpers ----------
@@ -658,144 +625,16 @@ function TemplateManager() {
         </div>
       )}
 
-      {/* ====== Outline Editor Modal ====== */}
+      {/* ====== Visual Outline Editor ====== */}
       {outlineCard && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100,
-        }} onMouseDown={e => { if (e.target === e.currentTarget) setOutlineCard(null) }}>
-          <div style={{
-            background: 'var(--card)', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', padding: 24,
-            width: 800, maxWidth: '95vw', maxHeight: '90vh',
-            display: 'flex', flexDirection: 'column',
-          }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-                编辑大纲 — {outlineCard.name}
-              </h3>
-              <button className="btn btn-ghost btn-sm" onClick={() => setOutlineCard(null)}>✕</button>
-            </div>
-
-            {/* Slide list */}
-            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-              {editingPlan.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>
-                  暂无幻灯片，点击下方按钮添加
-                </p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {editingPlan.map((slide: any, idx: number) => {
-                    const zones = slide.zones || {}
-                    const isExpanded = expandedSlide === idx
-                    const preview = zones.heading || zones.title || zones.big_number
-                      || zones.quote || zones.body || zones.operation || zones.items || '(无标题)'
-                    return (
-                      <div key={idx} style={{
-                        border: '1px solid var(--border)', borderRadius: 4,
-                        background: isExpanded ? 'var(--bg-hover)' : 'var(--bg)',
-                      }}>
-                        {/* Collapsed row */}
-                        <div style={{
-                          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-                          cursor: 'pointer',
-                        }} onClick={() => setExpandedSlide(isExpanded ? null : idx)}>
-                          <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 24 }}>
-                            #{idx + 1}
-                          </span>
-                          <select value={slide.type}
-                            onClick={e => e.stopPropagation()}
-                            onChange={e => updateSlideInPlan(idx, 'type', e.target.value)}
-                            style={{
-                              fontSize: 10, padding: '2px 4px', borderRadius: 3,
-                              border: '1px solid var(--border)', background: 'var(--card)',
-                              color: 'var(--text)', minWidth: 100,
-                            }}>
-                            {SLIDE_TYPES.map(st => (
-                              <option key={st} value={st}>{st}</option>
-                            ))}
-                          </select>
-                          <span style={{
-                            fontSize: 11, color: 'var(--text)', flex: 1,
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          }}>
-                            {typeof preview === 'string' ? preview.substring(0, 60) : preview}
-                          </span>
-                          <button className="btn btn-ghost btn-sm"
-                            style={{ fontSize: 9, padding: '1px 4px', color: 'var(--text-secondary)' }}
-                            onClick={e => { e.stopPropagation(); moveSlide(idx, -1) }}
-                            disabled={idx === 0} title="上移">
-                            ▲
-                          </button>
-                          <button className="btn btn-ghost btn-sm"
-                            style={{ fontSize: 9, padding: '1px 4px', color: 'var(--text-secondary)' }}
-                            onClick={e => { e.stopPropagation(); moveSlide(idx, 1) }}
-                            disabled={idx === editingPlan.length - 1} title="下移">
-                            ▼
-                          </button>
-                          <button className="btn btn-ghost btn-sm"
-                            style={{ fontSize: 9, padding: '1px 4px', color: 'var(--warning)' }}
-                            onClick={e => { e.stopPropagation(); removeSlideFromPlan(idx) }} title="删除">
-                            ✕
-                          </button>
-                        </div>
-
-                        {/* Expanded zone editor */}
-                        {isExpanded && (
-                          <div style={{ padding: '8px 12px 12px', borderTop: '1px solid var(--border)' }}>
-                            {Object.keys(zones).map(key => (
-                              <div key={key} style={{ marginBottom: 6 }}>
-                                <label style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'block', marginBottom: 2 }}>
-                                  {key}
-                                </label>
-                                <textarea value={zones[key] || ''}
-                                  onChange={e => updateSlideInPlan(idx, key, e.target.value)}
-                                  rows={key === 'body' || key === 'items' || key === 'rows' ? 3 : 1}
-                                  style={{
-                                    width: '100%', fontSize: 11, padding: '4px 6px',
-                                    border: '1px solid var(--border)', borderRadius: 3,
-                                    background: 'var(--card)', color: 'var(--text)',
-                                    resize: 'vertical', fontFamily: 'inherit',
-                                  }} />
-                              </div>
-                            ))}
-                            {/* Add new zone field */}
-                            <div style={{ marginTop: 6 }}>
-                              <button className="btn btn-ghost btn-sm"
-                                style={{ fontSize: 9, padding: '1px 5px' }}
-                                onClick={() => {
-                                  const name = prompt('输入新字段名（如：notes, image, caption）')
-                                  if (name) updateSlideInPlan(idx, name, '')
-                                }}>
-                                + 添加字段
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Bottom buttons */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, justifyContent: 'space-between' }}>
-              <button className="btn btn-ghost btn-sm" onClick={addSlideToPlan}>
-                + 添加幻灯片
-              </button>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => setOutlineCard(null)}>
-                  取消
-                </button>
-                <button className="btn btn-primary btn-sm"
-                  onClick={saveOutline} disabled={savingOutline}>
-                  {savingOutline ? '保存中...' : '保存大纲'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <SlideOutlineEditor
+          templateId={outlineCard.id}
+          templateName={outlineCard.name}
+          slidePlan={outlineCard.slidePlan}
+          slideTypes={SLIDE_TYPES}
+          onSave={handleSaveOutline}
+          onClose={() => setOutlineCard(null)}
+        />
       )}
     </div>
   )
