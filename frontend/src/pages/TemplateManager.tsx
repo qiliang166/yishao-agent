@@ -443,14 +443,14 @@ function TemplateManager() {
                       <button className="btn btn-ghost btn-sm"
                         style={{ fontSize: 10, padding: '2px 6px' }}
                         onClick={() => handleAnalyze(card.template)}
-                        disabled={analyzingId === card.id}>
+                        disabled={analyzingId !== null || planningId !== null}>
                         {analyzingId === card.id ? '提取中...' : '分析'}
                       </button>
                     )}
                     <button className="btn btn-ghost btn-sm"
                       style={{ fontSize: 10, padding: '2px 6px' }}
                       onClick={() => handleGenerateOutline(card)}
-                      disabled={planningId === card.id}>
+                      disabled={analyzingId !== null || planningId !== null}>
                       {planningId === card.id ? '生成中...' : '大纲'}
                     </button>
                     <div style={{ flex: 1 }} />
