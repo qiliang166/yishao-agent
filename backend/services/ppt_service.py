@@ -33,7 +33,8 @@ os.makedirs(EXPORT_DIR, exist_ok=True)
 
 
 def generate_ppt(content: str, template_id: str = None, branding: dict = None,
-                 output_dir: str = None, provider_id: str = "", model: str = "") -> str:
+                 output_dir: str = None, provider_id: str = "",
+                 model: str = "", slide_plan: list = None) -> str:
     """Generate a PPTX file from content. Uses AI when provider+model provided, falls back to mechanical split."""
     prs = None
     slide_data = None
@@ -75,11 +76,19 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                     except Exception:
                         pass
 
-                if provider_id and model and rules and content.strip():
+                print(f"[PPT-DBG] AI check: pid={bool(provider_id)} model={bool(model)} rules_empty={not rules} rules_keys={list(rules.keys()) if rules else 'N/A'} content_len={len(content.strip()) if content else 0}", flush=True)
+                if slide_plan is not None:
+                    slide_data = slide_plan
+                    print("[PPT-DBG] Using provided slide_plan", flush=True)
+                elif provider_id and model and rules and content.strip():
+                    print("[PPT-DBG] Using AI staged generation", flush=True)
                     slide_data = _generate_slides_staged(provider_id, model, rules, content,
                                                          prompt, skill)
+                    print(f"[PPT-DBG] AI result: {bool(slide_data)}, slides={len(slide_data) if slide_data else 0}", flush=True)
                     if not slide_data:
-                        _logger.warning("Staged AI generation failed, falling back to mechanical split")
+                        print("[PPT-DBG] AI generation failed, falling back to mechanical split", flush=True)
+                else:
+                    print("[PPT-DBG] Skipping AI, using mechanical fill", flush=True)
         finally:
             db.close()
 
@@ -90,10 +99,19 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
     prs.slide_height = Inches(7.5)
 
     if slide_data and isinstance(slide_data, list) and len(slide_data) > 0:
-        _fill_template_slides(prs, slide_data, rules)
+        from services.ppt_designer import extract_design, build_slide
+        _remove_all_slides(prs)
+        design = extract_design(rules, typography_profile)
+        for sd in slide_data:
+            if not isinstance(sd, dict):
+                continue
+            slide_type = sd.get("type", "content")
+            zones = sd.get("zones", {})
+            if not isinstance(zones, dict):
+                zones = {}
+            build_slide(prs, slide_type, zones, design)
     else:
-        if template_id and prs is not None:
-            _remove_all_slides(prs)
+        _remove_all_slides(prs)
         _mechanical_fill(prs, content)
 
     if branding:
@@ -264,26 +282,34 @@ def _stage2_structure(provider_id, model, llm_generate, rules, stage1_slides, so
 {sop_content[:2000]}
 
 ## 输出要求
-输出一个 JSON 对象，包含 slides 数组。每元素格式：
+输出一个 JSON 对象，包含 slides 数组。每元素格式（注意 zones 的 key 必须用英文 zone id，来自上方可用版式类型定义）：
 ```json
 {{
   "slides": [
     {{
-      "type": "版式类型id（从可用类型中选择）",
+      "type": "cover",
       "zones": {{
-        "标题": "从 heading 内容填入",
-        "正文": "从 body 内容填入",
-        "注释": "从 notes 内容填入（如无则为空字符串）"
+        "title": "...",
+        "subtitle": "...",
+        "date": "..."
       }}
     }},
-    ...
+    {{
+      "type": "technique",
+      "zones": {{
+        "heading": "...",
+        "operation": "...",
+        "principle": "...",
+        "params": "..."
+      }}
+    }}
   ]
 }}
 ```
 
 关键规则：
 - type 必须在可用版式类型范围内
-- zones 的键必须是 type 对应的区域名
+- zones 的键必须严格使用上方「可用版式类型」中该 type 定义的 zones 列表中的英文 zone id，不得自创或汉化
 - 封面(type=cover)必须在第一页，总结(type=summary)必须在最后一页
 - 遵守页面节奏规则：不连续3页同类型
 - 仅输出 JSON"""
@@ -392,6 +418,10 @@ def _fill_template_slides(prs: Presentation, slide_data: list, rules: dict):
     Each original slide's text content is replaced by the corresponding
     AI-generated placeholder content.
     """
+    # Build lookup: layout_type_id → ordered zone name list
+    layout_types = rules.get("layout_types", [])
+    type_zones = {lt["id"]: lt.get("zones", []) for lt in layout_types if lt.get("id")}
+
     original_slides = list(prs.slides)
     if not original_slides:
         _fill_slides_from_json(prs, slide_data, rules, None)
@@ -408,7 +438,9 @@ def _fill_template_slides(prs: Presentation, slide_data: list, rules: dict):
         if not isinstance(zones, dict):
             zones = {}
 
-        _replace_slide_text(slide, zones)
+        slide_type = sd.get("type", "")
+        zone_order = type_zones.get(slide_type)
+        _replace_slide_text(slide, zones, zone_order)
 
     # If AI generated more slides than original, clone the last few originals
     if n_data > n_orig:
@@ -419,51 +451,90 @@ def _fill_template_slides(prs: Presentation, slide_data: list, rules: dict):
             if not isinstance(zones, dict):
                 zones = {}
 
+            slide_type = sd.get("type", "")
+            zone_order = type_zones.get(slide_type)
             # Clone from the slide at position (i % n_orig) for visual variety
             src_slide = original_slides[i % n_orig]
             new_slide = _clone_slide_from_shapes(prs, src_slide)
-            _replace_slide_text(new_slide, zones)
+            _replace_slide_text(new_slide, zones, zone_order)
 
     # If fewer slides than original, remove extras
     if n_data < n_orig:
         _remove_slides_from(prs, n_data)
 
 
-def _replace_slide_text(slide, zones: dict):
-    """Replace text in a slide's text shapes with zone content."""
-    zone_items = [(k, v) for k, v in zones.items() if str(v).strip()]
-    text_shapes = [sh for sh in slide.shapes if sh.has_text_frame]
+def _replace_slide_text(slide, zones: dict, layout_zone_names: list = None):
+    """Replace text in a slide's text shapes with zone content.
 
-    for i, (zname, ztext) in enumerate(zone_items):
-        text = str(ztext)
-        if i < len(text_shapes):
-            tf = text_shapes[i].text_frame
-            # Replace all paragraph text
-            lines = text.split('\n')
-            for li, line in enumerate(lines):
-                if li == 0:
-                    tf.paragraphs[0].text = line
-                elif li < len(tf.paragraphs):
-                    tf.paragraphs[li].text = line
-                else:
-                    p = tf.add_paragraph()
-                    p.text = line
-            # Clear extra paragraphs
-            for p in tf.paragraphs[len(lines):]:
+    If layout_zone_names is provided, zone content is matched to text shapes
+    by the layout type's zone order (positional mapping within the known zone
+    list), ensuring the title zone always goes to the title text shape.
+    Otherwise falls back to dict-iteration order.
+
+    Any text shape that was NOT filled is cleared to prevent old template
+    text from appearing alongside generated content.
+    """
+    text_shapes = [sh for sh in slide.shapes if sh.has_text_frame]
+    filled_indices = set()
+
+    if layout_zone_names:
+        for i, zname in enumerate(layout_zone_names):
+            ztext = zones.get(zname, "")
+            if not str(ztext).strip():
+                continue
+            text = str(ztext)
+            if i < len(text_shapes):
+                tf = text_shapes[i].text_frame
+                _write_text_frame(tf, text)
+                filled_indices.add(i)
+            else:
+                _add_fallback_textbox(slide, i, text)
+    else:
+        zone_items = [(k, v) for k, v in zones.items() if str(v).strip()]
+        for i, (zname, ztext) in enumerate(zone_items):
+            text = str(ztext)
+            if i < len(text_shapes):
+                tf = text_shapes[i].text_frame
+                _write_text_frame(tf, text)
+                filled_indices.add(i)
+            else:
+                _add_fallback_textbox(slide, i, text)
+
+    # Clear any text shapes that weren't matched — they still hold old template text
+    for i, sh in enumerate(text_shapes):
+        if i not in filled_indices:
+            tf = sh.text_frame
+            for p in tf.paragraphs:
                 p.text = ""
+
+
+def _write_text_frame(tf, text: str):
+    lines = text.split('\n')
+    for li, line in enumerate(lines):
+        if li == 0:
+            tf.paragraphs[0].text = line
+        elif li < len(tf.paragraphs):
+            tf.paragraphs[li].text = line
         else:
-            # Extra zone not matched to a text shape — add text box
-            top_offset = Inches(1.5 + i * 0.8)
-            txBox = slide.shapes.add_textbox(Inches(1), top_offset, Inches(11), Inches(0.6))
-            tf = txBox.text_frame
-            tf.word_wrap = True
-            lines = text.split('\n')
-            for li, line in enumerate(lines):
-                if li == 0:
-                    tf.paragraphs[0].text = line
-                else:
-                    p = tf.add_paragraph()
-                    p.text = line
+            p = tf.add_paragraph()
+            p.text = line
+    for p in tf.paragraphs[len(lines):]:
+        p.text = ""
+
+
+def _add_fallback_textbox(slide, index: int, text: str):
+    from pptx.util import Inches
+    top_offset = Inches(1.5 + index * 0.8)
+    txBox = slide.shapes.add_textbox(Inches(1), top_offset, Inches(11), Inches(0.6))
+    tf = txBox.text_frame
+    tf.word_wrap = True
+    lines = text.split('\n')
+    for li, line in enumerate(lines):
+        if li == 0:
+            tf.paragraphs[0].text = line
+        else:
+            p = tf.add_paragraph()
+            p.text = line
 
 
 def _clone_slide_from_shapes(prs: Presentation, source_slide) -> object:

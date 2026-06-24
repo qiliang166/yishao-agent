@@ -611,12 +611,32 @@ export default function ProjectPage() {
   }
 
   // ── PPT / SOP Generation ──
+  const doGeneratePlan = async (stepKey: string, content: string, tmplId: string, model: string) => {
+    setPptGenerating(stepKey)
+    try {
+      const [pid, mdl] = model ? model.split(':') : ['', '']
+      const result: any = await api.generatePPTPlan(content, tmplId, pid, mdl)
+      const plan = result.slide_plan || []
+      const planJson = JSON.stringify(plan, null, 2)
+      setSteps(prev => ({ ...prev, [stepKey]: planJson }))
+      saveStep(stepKey, planJson)
+      modal.toast(`大纲已生成: ${plan.length} 页幻灯片`, 'success')
+    } catch (e: any) { modal.toast('生成大纲失败: ' + e.message, 'error') }
+    finally { setPptGenerating('') }
+  }
+
   const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, _prompt: string, model: string) => {
     setPptGenerating(stepKey)
     try {
       const branding = (globalBranding.copyright || globalBranding.signature) ? globalBranding : undefined
       const [pid, mdl] = model ? model.split(':') : ['', '']
-      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl)
+      let slidePlan = null
+      const planText = steps[stepKey] || ''
+      if (planText.trim()) {
+        try { slidePlan = JSON.parse(planText) }
+        catch { modal.toast('大纲 JSON 格式错误，请检查', 'error'); setPptGenerating(''); return }
+      }
+      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl, slidePlan)
       setGenFiles(prev => [...prev, {
         name: result.filename, type: 'PPT',
         source: label,
@@ -670,8 +690,38 @@ export default function ProjectPage() {
 
   // Generated files tracking
   const [genFiles, setGenFiles] = useState<{ name: string; type: string; source: string; url: string }[]>([])
+  const [filesLoaded, setFilesLoaded] = useState(false)
 
-  // ── Stage status dots ──
+  // Load existing files from project folder on mount
+  useEffect(() => {
+    if (!id || filesLoaded) return
+    api.getProjectFiles(id).then((data: any) => {
+      const existing = (data.files || []).map((f: any) => ({
+        name: f.filename,
+        type: f.type,
+        source: '项目文件',
+        url: f.download_url,
+      }))
+      setGenFiles(prev => {
+        const existingNames = new Set(existing.map((e: any) => e.name))
+        const sessionOnly = prev.filter(p => !existingNames.has(p.name))
+        return [...existing, ...sessionOnly]
+      })
+      setFilesLoaded(true)
+    }).catch(() => {})
+  }, [id, filesLoaded])
+
+  // Global generation tracking — visible across all stages
+  const isAnyS1 = Object.values(step1Generating).some(Boolean)
+  const isAnyS2 = Object.values(step2Generating).some(Boolean)
+  const isGlobalGenerating = isAnyS1 || isAnyS2 || batchGenerating || pptGenerating !== '' || ttsGenerating
+  const globalGenLabel = batchGenerating ? '批量生成文案中'
+    : pptGenerating ? 'PPT 合成中'
+    : ttsGenerating ? '语音合成中'
+    : isAnyS2 ? 'AI 生成文档中'
+    : isAnyS1 ? '整理文档中'
+    : '处理中'
+
   const stageDot = (s: StageId) => {
     const st = steps
     if (s === 1 && (st.step1_video || st.step1_text || st.step1_file)) return 'done'
@@ -712,6 +762,19 @@ export default function ProjectPage() {
           }}>
           {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 锁定'}
         </button>
+        {isGlobalGenerating && (
+          <span style={{
+            marginLeft: 12, fontSize: 12, color: 'var(--primary)',
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            animation: 'pulse 1.5s infinite',
+          }}>
+            <span style={{
+              display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
+              background: 'var(--primary)', animation: 'blink 0.8s infinite',
+            }} />
+            ⏳ {globalGenLabel} (切换栏目不影响)
+          </span>
+        )}
       </div>
 
       {/* ═══ Top Nav ═══ */}
@@ -1283,13 +1346,22 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  disabled={pptGenerating !== '' || !s3DaoPptModel}
-                  onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '道术PPT',
-                    stage3Prompts.daoPpt?.prompt || '你是一个PPT内容设计专家。请将道与术文案转化为PPT大纲。',
-                    s3DaoPptModel)}>
-                  {pptGenerating === 'step3_dao_ppt' ? '⏳ 生成中...' : '📌 合成道术PPT'}
-                </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button className="btn btn-outline btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={pptGenerating !== '' || !s3DaoPptModel || !(steps.step2_daoshuyi || '')}
+                    onClick={() => doGeneratePlan('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, s3DaoPptModel)}>
+                    {pptGenerating === 'step3_dao_ppt' ? '⏳ 生成中...' : '📝 生成大纲'}
+                  </button>
+                  <button className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={pptGenerating !== '' || !(steps.step3_dao_ppt || '')}
+                    onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '道术PPT',
+                      stage3Prompts.daoPpt?.prompt || '你是一个PPT内容设计专家。请将道与术文案转化为PPT大纲。',
+                      s3DaoPptModel)}>
+                    {pptGenerating === 'step3_dao_ppt' ? '⏳ 合成中...' : '📌 合成PPT'}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="panel-right">
@@ -1344,13 +1416,22 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  disabled={pptGenerating !== '' || !s3YanxiPptModel}
-                  onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '研学PPT',
-                    stage3Prompts.yanxiPpt?.prompt || '你是一个教学PPT设计专家。请将研学手册内容转化为PPT。',
-                    s3YanxiPptModel)}>
-                  {pptGenerating === 'step3_yan_ppt' ? '⏳ 生成中...' : '📌 合成研学PPT'}
-                </button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button className="btn btn-outline btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={pptGenerating !== '' || !s3YanxiPptModel || !(steps.step2_yanxi || '')}
+                    onClick={() => doGeneratePlan('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, s3YanxiPptModel)}>
+                    {pptGenerating === 'step3_yan_ppt' ? '⏳ 生成中...' : '📝 生成大纲'}
+                  </button>
+                  <button className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={pptGenerating !== '' || !(steps.step3_yan_ppt || '')}
+                    onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '研学PPT',
+                      stage3Prompts.yanxiPpt?.prompt || '你是一个教学PPT设计专家。请将研学手册内容转化为PPT。',
+                      s3YanxiPptModel)}>
+                    {pptGenerating === 'step3_yan_ppt' ? '⏳ 合成中...' : '📌 合成PPT'}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="panel-right">

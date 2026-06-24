@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from database import init_db, get_db
-from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest
+from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest
 from typing import Optional
 import json
 import logging
@@ -176,6 +176,29 @@ def api_project_videos(project_id: str):
                 full = os.path.join(path, f)
                 videos.append({"filename": f, "path": full, "size": os.path.getsize(full)})
     return {"videos": videos, "storage_path": path}
+
+
+@app.get("/api/projects/{project_id}/files")
+def api_project_files(project_id: str):
+    """List all generated output files in the project's storage folder."""
+    path = resolve_project_storage(project_id, auto_create=False)
+    files = []
+    if os.path.exists(path):
+        for f in sorted(os.listdir(path), key=lambda x: os.path.getmtime(os.path.join(path, x)), reverse=True):
+            full = os.path.join(path, f)
+            if os.path.isfile(full):
+                ext = os.path.splitext(f)[1].lower()
+                type_map = {'.pptx': 'PPT', '.docx': 'Word', '.txt': 'Text',
+                           '.mp3': 'MP3', '.wav': 'Audio', '.mp4': 'Video'}
+                file_type = type_map.get(ext, 'Other')
+                files.append({
+                    "filename": f,
+                    "type": file_type,
+                    "size": os.path.getsize(full),
+                    "modified": os.path.getmtime(full),
+                    "download_url": f"/api/download/{f}?project_id={project_id}"
+                })
+    return {"files": files, "storage_path": path}
 
 
 @app.get("/api/projects/{project_id}")
@@ -751,10 +774,21 @@ async def preview_voice(voice_id: str):
 
 @app.post("/api/llm/generate")
 async def llm_generate(req: LLMGenerateRequest):
+    import time, sys
+    t0 = time.time()
+    print(f"[LLM-REQ] {time.strftime('%H:%M:%S')} provider={req.provider_id} model={req.model} "
+          f"sys_len={len(req.system_prompt)} user_len={len(req.user_message)} temp={req.temperature}",
+          flush=True)
     try:
         result = await generate(req.provider_id, req.model, req.system_prompt, req.user_message, req.temperature)
+        dt = (time.time() - t0) * 1000
+        print(f"[LLM-OK]  {time.strftime('%H:%M:%S')} model={req.model} dt={dt:.0f}ms "
+              f"out_len={len(result) if result else 0}", flush=True)
         return {"content": result}
     except Exception as e:
+        dt = (time.time() - t0) * 1000
+        print(f"[LLM-ERR] {time.strftime('%H:%M:%S')} model={req.model} dt={dt:.0f}ms "
+              f"err={e}", flush=True)
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -1727,7 +1761,7 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
 
         stage_to_column = {"daoPpt": "col4", "yanxiPpt": "col5"}
         column_id = stage_to_column.get(stage_type, "col4")
-        config = db.execute("SELECT rules, prompt FROM column_configs WHERE column_id = ?", (column_id,)).fetchone()
+        config = db.execute("SELECT rules, prompt, skill FROM column_configs WHERE column_id = ?", (column_id,)).fetchone()
         if not config or not config["rules"] or config["rules"] == "{}":
             raise HTTPException(400, f"栏目 {column_id} 未配置规则，请先在栏目配置中设置 PPT SKILL 规则")
 
@@ -1754,10 +1788,15 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
         ty_spec_text = json.dumps(ty_spec, ensure_ascii=False, indent=2) if ty_spec else "（无 typography_spec 配置）"
         ty_extracted = structure.get("typography_extracted", {})
 
+        column_skill = config.get("skill") or ""
+
         system_prompt = f"""你是一位专业的 PPT 模板分析专家。请严格遵循栏目预设的角色定义完成分析任务。
 
 ## 栏目角色定义（分析的身份立场和领域知识）
 {column_prompt}
+
+## 栏目 SKILL 框架（必须基于此框架生成，严禁偏离）
+{column_skill}
 
 ## 栏目约束规则（必须遵守的分析框架）
 {json.dumps(rules, ensure_ascii=False, indent=2)}
@@ -1767,7 +1806,7 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
 2. 从提取的 PPTX 结构中获取实际配色（colors_used）和字体（fonts_used），不预设任何配色方案
 3. 按 design_rules 中的约束条文审视模板的视觉样式，确保符合设计纪律
 4. prompt 应完整包含：角色设定、从模板提取的实际样式描述（颜色/字体/版式/尺寸）、内容规范引用、版式选择规则、约束规则引用、输出格式要求
-5. skill 应为完整的 Markdown 结构模板，描述幻灯片从封面到总结的完整页面结构、每页的段落和字段（用 {{占位符}} 标记待填内容）。包含所有章节（道/术/流程/附录）的页面框架，但不包含原模板的特定菜品名称或具体参数值。模板的页数结构是可复用的框架，具体页数由内容量动态决定
+5. skill 必须完全基于上方「栏目 SKILL 框架」生成。所有占位符（{{{{...}}}}）必须原样保留。禁止将栏目 SKILL 框架中的 {{占位符}} 替换为原模板的实际内容。禁止在 skill 中出现原模板的菜品名称、具体参数值或任何实际内容。
 6. 遵守 design_principles 中的所有铁律
 7. 遵守 page_rhythm 中的页面节奏规则
 8. 从模板中提取的实际样式信息必须如实写入 prompt，不编造不预设
@@ -1931,6 +1970,11 @@ from services.ppt_service import generate_ppt, _extract_typography
 
 @app.post("/api/ppt/generate")
 def api_generate_ppt(req: PPTGenerateRequest):
+    import time, sys
+    t0 = time.time()
+    print(f"[PPT-REQ] {time.strftime('%H:%M:%S')} provider={req.provider_id} model={req.model} "
+          f"content_len={len(req.content) if req.content else 0} template={req.template_id} "
+          f"has_rules=?", flush=True)
     try:
         output_dir = None
         project_name = ""
@@ -1939,7 +1983,7 @@ def api_generate_ppt(req: PPTGenerateRequest):
             proj = _get_project(req.project_id)
             if proj:
                 project_name = proj["name"]
-        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model)
+        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, req.slide_plan)
         filename = os.path.basename(filepath)
         params = []
         if req.project_id:
@@ -1950,9 +1994,48 @@ def api_generate_ppt(req: PPTGenerateRequest):
         download_url = f"/api/download/{filename}"
         if params:
             download_url += "?" + "&".join(params)
-        return {"filename": filename, "download_url": download_url}
+        return {"filename": filename, "download_url": download_url,
+                "slide_plan": req.slide_plan}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/ppt/plan")
+def api_ppt_plan(req: PPTPlanRequest):
+    """Generate slide plan only (no PPTX file). Returns JSON for user review."""
+    from services.ppt_service import _generate_slides_staged
+    db = get_db()
+    try:
+        rules = {}
+        prompt = ""
+        skill = ""
+        if req.template_id:
+            row = db.execute(
+                "SELECT prompt, skill, rules FROM templates WHERE id = ?",
+                (req.template_id,)).fetchone()
+            if row:
+                prompt = row["prompt"] or ""
+                skill = row["skill"] or ""
+                if row["rules"]:
+                    try:
+                        rules = json.loads(row["rules"])
+                    except Exception:
+                        pass
+        if not rules:
+            cfg = db.execute(
+                "SELECT rules FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
+            ).fetchone()
+            if cfg and cfg["rules"]:
+                rules = json.loads(cfg["rules"])
+
+        slide_plan = _generate_slides_staged(
+            req.provider_id, req.model, rules, req.content, prompt, skill
+        )
+        return {"slide_plan": slide_plan or []}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
 
 
 # ── SOP Export ──

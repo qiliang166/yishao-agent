@@ -53,3 +53,11 @@ class PPTGenerateRequest(BaseModel):
     project_id: Optional[str] = None
     provider_id: str = ""
     model: str = ""
+    slide_plan: Optional[list] = None
+
+
+class PPTPlanRequest(BaseModel):
+    content: str
+    template_id: str = ""
+    provider_id: str = ""
+    model: str = ""
