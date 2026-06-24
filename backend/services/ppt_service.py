@@ -41,6 +41,9 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
     rules = {}
     typography_profile = None
 
+    if slide_plan is not None:
+        slide_data = slide_plan
+
     if template_id:
         db = get_db()
         try:
@@ -77,10 +80,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                         pass
 
                 print(f"[PPT-DBG] AI check: pid={bool(provider_id)} model={bool(model)} rules_empty={not rules} rules_keys={list(rules.keys()) if rules else 'N/A'} content_len={len(content.strip()) if content else 0}", flush=True)
-                if slide_plan is not None:
-                    slide_data = slide_plan
-                    print("[PPT-DBG] Using provided slide_plan", flush=True)
-                elif provider_id and model and rules and content.strip():
+                if slide_data is None and provider_id and model and rules and content.strip():
                     print("[PPT-DBG] Using AI staged generation", flush=True)
                     slide_data = _generate_slides_staged(provider_id, model, rules, content,
                                                          prompt, skill)
