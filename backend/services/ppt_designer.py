@@ -153,8 +153,10 @@ def build_slide(prs: Presentation, slide_type: str, zones: dict,
 
     Falls back to build_content for unknown types.
     """
+    # Replace None zone values with empty strings so builders' .strip() calls don't crash
+    clean_zones = {k: (v if v is not None else "") for k, v in zones.items()}
     builder = BUILDERS.get(slide_type, build_content)
-    builder(prs, zones, design)
+    builder(prs, clean_zones, design)
 
 
 @_register("cover")

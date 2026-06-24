@@ -2003,6 +2003,19 @@ def list_available_presets():
     return {"presets": presets}
 
 
+class PresetCreateRequest(BaseModel):
+    name: str
+    style_family: str = "swiss"  # magazine or swiss
+    colors: dict = {}
+    fonts: dict | None = None
+    spacing: dict | None = None
+    layout_types: list | None = None
+    prompt: str = ""
+    skill: str = ""
+    linked_skill_id: str = ""
+    branding_config: str = ""
+
+
 @app.post("/api/templates/presets")
 def create_preset_template(req: PresetCreateRequest):
     """Create a new template from a guizang theme preset."""
@@ -2040,19 +2053,6 @@ def create_preset_template(req: PresetCreateRequest):
         return {"id": tid, "name": req.name}
     finally:
         db.close()
-
-
-class PresetCreateRequest(BaseModel):
-    name: str
-    style_family: str = "swiss"  # magazine or swiss
-    colors: dict = {}
-    fonts: dict | None = None
-    spacing: dict | None = None
-    layout_types: list | None = None
-    prompt: str = ""
-    skill: str = ""
-    linked_skill_id: str = ""
-    branding_config: str = ""
 
 
 # ── Video ──
@@ -2209,7 +2209,7 @@ def api_generate_ppt(req: PPTGenerateRequest):
         if params:
             download_url += "?" + "&".join(params)
         return {"filename": filename, "download_url": download_url,
-                "slide_plan": req.slide_plan}
+                "slide_plan": slide_plan}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
