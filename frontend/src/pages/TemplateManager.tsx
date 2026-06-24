@@ -341,16 +341,6 @@ function TemplateManager() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 64px)' }}>
-      {/* Header */}
-      <div style={{ padding: '16px 0 0 0' }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text)' }}>
-          PPT 风格库
-        </h2>
-        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-          风格 = 颜色 + 字体。从这里制造风格，在项目页选择风格一键合成PPT。
-        </p>
-      </div>
-
       {/* Tab bar */}
       <div style={{ display: 'flex', alignItems: 'stretch', margin: '12px 0 -1px 0' }}>
         <div className="mgmt-tabs" style={{ flex: 1, padding: '0 0 0 0' }}>
