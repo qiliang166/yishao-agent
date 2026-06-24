@@ -63,27 +63,42 @@ def _inject_theme(html: str, design_rules: dict) -> str:
 
     Strategy: find the existing :root{...} block and replace its
     variable values. Variables not found in design_rules keep their
-    template defaults.
+    template defaults. New variables (primary, bg) are appended.
     """
     colors = design_rules.get("colors", {})
     if not colors:
         return html
 
+    # If accent is too close to paper, fall back to primary
+    accent = colors.get("accent")
+    paper = colors.get("paper") or colors.get("background")
+    primary = colors.get("primary")
+    if accent and paper and primary:
+        # Quick luminance check: if accent and paper are within ~30 units, use primary
+        def _lum(hex_color: str) -> float:
+            h = hex_color.lstrip('#')
+            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+            return 0.299 * r + 0.587 * g + 0.114 * b
+        if abs(_lum(accent) - _lum(paper)) < 30:
+            accent = primary
+
+    var_map = {
+        "accent": accent,
+        "ink": colors.get("ink") or colors.get("text"),
+        "paper": paper,
+        "primary": primary,
+        "bg": colors.get("background"),
+        "accent-rgb": colors.get("accent_rgb"),
+        "ink-rgb": colors.get("ink_rgb"),
+        "paper-rgb": colors.get("paper_rgb"),
+    }
+    # Track which vars already exist in the template
+    replaced = set()
+
     def _replace_var(m: re.Match) -> str:
         name = m.group(1)
-        value = m.group(2).strip()
-        # Check if we have an override for this variable
-        var_map = {
-            "accent": colors.get("accent"),
-            "ink": colors.get("ink") or colors.get("text"),
-            "paper": colors.get("paper") or colors.get("light_text") or colors.get("background"),
-            "primary": colors.get("primary"),
-            "bg": colors.get("background"),
-            "accent-rgb": colors.get("accent_rgb"),
-            "ink-rgb": colors.get("ink_rgb"),
-            "paper-rgb": colors.get("paper_rgb"),
-        }
         if name in var_map and var_map[name]:
+            replaced.add(name)
             return f"--{name}: {var_map[name]};"
         return m.group(0)
 
@@ -92,6 +107,13 @@ def _inject_theme(html: str, design_rules: dict) -> str:
         block = m.group(0)
         inner = m.group(1)
         new_inner = re.sub(r'--([\w-]+):\s*([^;]+);', _replace_var, inner)
+        # Append new variables that weren't in the template
+        extra = []
+        for name in ("primary", "bg"):
+            if name not in replaced and var_map.get(name):
+                extra.append(f"    --{name}: {var_map[name]};")
+        if extra:
+            new_inner = new_inner.rstrip() + "\n" + "\n".join(extra) + "\n  "
         return block.replace(inner, new_inner)
 
     html = re.sub(r':root\s*\{([^}]*)\}', _replace_root_block, html, count=1, flags=re.DOTALL)
@@ -244,12 +266,14 @@ def _fill_zones(layout_html: str, zones: dict) -> str:
             r'<h2\b[^>]*>.*?</h2>',
         ]),
         ("subtitle", [
+            r'<div[^>]*class="[^"]*lead[^"]*"[^>]*>.*?</div>',
             r'<p[^>]*class="[^"]*lead[^"]*"[^>]*>.*?</p>',
         ]),
         ("kicker", [
             r'<div[^>]*class="[^"]*(?:kicker|t-meta|t-cat)[^"]*"[^>]*>.*?</div>',
         ]),
         ("lead", [
+            r'<div[^>]*class="[^"]*lead[^"]*"[^>]*>.*?</div>',
             r'<p[^>]*class="[^"]*lead[^"]*"[^>]*>.*?</p>',
         ]),
         ("body", [
@@ -270,6 +294,9 @@ def _fill_zones(layout_html: str, zones: dict) -> str:
         ]),
         ("date", [
             r'<div[^>]*class="[^"]*t-meta[^"]*"[^>]*>\s*YY\.MM\.DD\s*</div>',
+            r'<div[^>]*class="[^"]*t-meta[^"]*"[^>]*>\s*→\s*swipe\b[^<]*</div>',
+            r'<div[^>]*class="[^"]*t-meta[^"]*"[^>]*>\s*\d{2}\.\d{2}\.\d{2}\s*</div>',
+            r'<div[^>]*class="[^"]*t-meta[^"]*"[^>]*>\s*\d{4}\.\d{2}\s*</div>',
         ]),
         ("statement", [
             r'<h1[^>]*class="[^"]*h-statement[^"]*"[^>]*>.*?</h1>',
