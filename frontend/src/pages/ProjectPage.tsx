@@ -239,11 +239,18 @@ export default function ProjectPage() {
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState('')
-  const [s2DataSource, setS2DataSource] = useState('video')
+  const [s2DataSources, setS2DataSources] = useState<Record<string, string>>({ sop: 'video', dao: 'video', yanxi: 'video' })
   const [batchGenerating, setBatchGenerating] = useState(false)
   const sopRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
   const daoRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
   const yanxiRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
+
+  const s2Tab = sub === '2a' ? 'sop' : sub === '2b' ? 'dao' : 'yanxi'
+  const s2DataSource = s2DataSources[s2Tab] || 'video'
+  const handleS2DataSourceChange = (tab: string, val: string) => {
+    setS2DataSources(prev => ({ ...prev, [tab]: val }))
+    if (id) api.saveStep(id, `_ds_s2_${tab}`, val)
+  }
   const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
   const [stage1Skill, setStage1Skill] = useState('')
@@ -310,6 +317,12 @@ export default function ProjectPage() {
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
       if (map['_model_s4_koubo']) { setS4KouboModel(map['_model_s4_koubo']); hasModelOverride = true }
+      // Restore per-tab data source selections
+      setS2DataSources(prev => ({
+        sop: map['_ds_s2_sop'] || prev.sop,
+        dao: map['_ds_s2_dao'] || prev.dao,
+        yanxi: map['_ds_s2_yanxi'] || prev.yanxi,
+      }))
     })
     api.listColumnConfigs().then((configs: any[]) => {
       const s1p: Record<string, string> = {}
@@ -1046,7 +1059,7 @@ export default function ProjectPage() {
                 {sub === '2a' && (
                   <Stage2Controls docType="sop" label="SOP文案"
                     steps={steps} llmProviders={llmProviders}
-                    dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
+                    dataSource={s2DataSource} onDataSourceChange={(v) => handleS2DataSourceChange('sop', v)}
                     generating={step2Generating === '2a'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
@@ -1065,7 +1078,7 @@ export default function ProjectPage() {
                 {sub === '2b' && (
                   <Stage2Controls docType="dao" label="道与术文案"
                     steps={steps} llmProviders={llmProviders}
-                    dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
+                    dataSource={s2DataSource} onDataSourceChange={(v) => handleS2DataSourceChange('dao', v)}
                     generating={step2Generating === '2b'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
@@ -1084,7 +1097,7 @@ export default function ProjectPage() {
                 {sub === '2c' && (
                   <Stage2Controls docType="yanxi" label="研学手册文案"
                     steps={steps} llmProviders={llmProviders}
-                    dataSource={s2DataSource} onDataSourceChange={setS2DataSource}
+                    dataSource={s2DataSource} onDataSourceChange={(v) => handleS2DataSourceChange('yanxi', v)}
                     generating={step2Generating === '2c'} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
