@@ -330,7 +330,7 @@ def _stage2_structure(provider_id, model, llm_generate, rules, stage1_slides, so
     """Stage 2: Assign layout types and map content to zones."""
     page_rhythm = rules.get("page_rhythm", {})
     design_principles = rules.get("design_principles", [])
-    style_family = rules.get("design_rules", {}).get("style_family", "swiss")
+    style_family = rules.get("design_rules", {}).get("style_family") or "swiss"
     field_spec = _build_guizang_field_spec(style_family)
 
     # Build compact layout reference from guizang field specs
