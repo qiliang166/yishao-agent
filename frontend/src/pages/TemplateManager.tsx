@@ -454,7 +454,7 @@ function TemplateManager() {
 
                   {/* Actions */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
-                    {card.fileName && (
+                    {card.template.file_path?.toLowerCase().endsWith('.pptx') && (
                       <button className="btn btn-ghost btn-sm"
                         style={{ fontSize: 10, padding: '2px 6px' }}
                         onClick={() => handleAnalyze(card.template)}
