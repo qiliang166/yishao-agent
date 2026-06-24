@@ -2,7 +2,7 @@ import os
 import shutil
 import uuid
 import hashlib
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from database import init_db, get_db
@@ -1891,6 +1891,31 @@ def generate_template_plan(template_id: str, req: PPTPlanRequest):
         db.commit()
 
         return {"ok": True, "slide_plan": slide_plan, "count": len(slide_plan)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.put("/api/templates/{template_id}/slide-plan")
+async def update_template_slide_plan(template_id: str, request: Request):
+    """Save an edited slide_plan back to a template."""
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "模板不存在")
+        body = await request.json()
+        sp = body.get("slide_plan", []) if isinstance(body, dict) else []
+        if not isinstance(sp, list):
+            raise HTTPException(400, "slide_plan 必须是数组")
+        db.execute(
+            "UPDATE templates SET slide_plan = ? WHERE id = ?",
+            (json.dumps(sp, ensure_ascii=False), template_id))
+        db.commit()
+        return {"ok": True, "count": len(sp)}
     except HTTPException:
         raise
     except Exception as e:

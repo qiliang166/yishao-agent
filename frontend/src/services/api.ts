@@ -402,6 +402,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content, provider_id: providerId || '', model: model || '', column_id: columnId || 'col4' }),
     }),
+  updateTemplateSlidePlan: (templateId: string, slidePlan: any[]) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/slide-plan`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slide_plan: slidePlan }),
+    }),
   listAvailablePresets: () =>
     request('/api/templates/presets/available').then(d => d.presets),
   createPresetTemplate: (data: { name: string; style_family: string; colors: Record<string, string>; fonts?: Record<string, string>; spacing?: Record<string, number>; layout_types?: any[] }) =>
