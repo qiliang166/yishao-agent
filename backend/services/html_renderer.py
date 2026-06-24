@@ -75,8 +75,10 @@ def _inject_theme(html: str, design_rules: dict) -> str:
         # Check if we have an override for this variable
         var_map = {
             "accent": colors.get("accent"),
-            "ink": colors.get("ink"),
-            "paper": colors.get("paper"),
+            "ink": colors.get("ink") or colors.get("text"),
+            "paper": colors.get("paper") or colors.get("light_text") or colors.get("background"),
+            "primary": colors.get("primary"),
+            "bg": colors.get("background"),
             "accent-rgb": colors.get("accent_rgb"),
             "ink-rgb": colors.get("ink_rgb"),
             "paper-rgb": colors.get("paper_rgb"),
