@@ -99,7 +99,7 @@ function Stage2Controls({
   prompt: string; skill: string; projectId: string
   panelRef: React.RefObject<{ triggerGenerate: () => Promise<void> } | null>
   setGenerating: (v: boolean) => void
-  onRefresh: () => void
+  onRefresh: () => Promise<void>
 }) {
   const modal = useModal()
   const modelKey = MODEL_KEYS_S2[docType]
@@ -139,9 +139,9 @@ function Stage2Controls({
     setGenerating(true)
     try {
       await panelRef.current?.triggerGenerate()
-      setGenerating(false)
     } catch (e: any) {
       modal.toast(`生成失败: ${e.message}`, 'error')
+    } finally {
       setGenerating(false)
     }
   }
@@ -1053,12 +1053,14 @@ export default function ProjectPage() {
                     projectId={id!}
                     panelRef={sopRef}
                     setGenerating={(v) => setStep2Generating(v ? '2a' : '')}
-                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
-                      const map: Record<string, string> = {}
-                      s.forEach((x: any) => { map[x.step_name] = x.content })
-                      setSteps(map)
-                      setSavedSteps({...map})
-                    })} />
+                    onRefresh={() => {
+                      return api.getSteps(id!).then((s: any[]) => {
+                        const map: Record<string, string> = {}
+                        s.forEach((x: any) => { map[x.step_name] = x.content })
+                        setSteps(map)
+                        setSavedSteps({...map})
+                      })
+                    }} />
                 )}
                 {sub === '2b' && (
                   <Stage2Controls docType="dao" label="道与术文案"
@@ -1070,12 +1072,14 @@ export default function ProjectPage() {
                     projectId={id!}
                     panelRef={daoRef}
                     setGenerating={(v) => setStep2Generating(v ? '2b' : '')}
-                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
-                      const map: Record<string, string> = {}
-                      s.forEach((x: any) => { map[x.step_name] = x.content })
-                      setSteps(map)
-                      setSavedSteps({...map})
-                    })} />
+                    onRefresh={() => {
+                      return api.getSteps(id!).then((s: any[]) => {
+                        const map: Record<string, string> = {}
+                        s.forEach((x: any) => { map[x.step_name] = x.content })
+                        setSteps(map)
+                        setSavedSteps({...map})
+                      })
+                    }} />
                 )}
                 {sub === '2c' && (
                   <Stage2Controls docType="yanxi" label="研学手册文案"
@@ -1087,12 +1091,14 @@ export default function ProjectPage() {
                     projectId={id!}
                     panelRef={yanxiRef}
                     setGenerating={(v) => setStep2Generating(v ? '2c' : '')}
-                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
-                      const map: Record<string, string> = {}
-                      s.forEach((x: any) => { map[x.step_name] = x.content })
-                      setSteps(map)
-                      setSavedSteps({...map})
-                    })} />
+                    onRefresh={() => {
+                      return api.getSteps(id!).then((s: any[]) => {
+                        const map: Record<string, string> = {}
+                        s.forEach((x: any) => { map[x.step_name] = x.content })
+                        setSteps(map)
+                        setSavedSteps({...map})
+                      })
+                    }} />
                 )}
               </div>
             </div>
@@ -1106,12 +1112,14 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
                     hideControls dataSource={s2DataSource}
-                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
-                      const map: Record<string, string> = {}
-                      s.forEach((x: any) => { map[x.step_name] = x.content })
-                      setSteps(map)
-                      setSavedSteps({...map})
-                    })} />
+                    onRefresh={() => {
+                      return api.getSteps(id!).then((s: any[]) => {
+                        const map: Record<string, string> = {}
+                        s.forEach((x: any) => { map[x.step_name] = x.content })
+                        setSteps(map)
+                        setSavedSteps({...map})
+                      })
+                    }} />
                 )}
                 {sub === '2b' && (
                   <TeachingDocPanel ref={daoRef} docType="dao" projectId={id!}
@@ -1121,12 +1129,14 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
                     hideControls dataSource={s2DataSource}
-                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
-                      const map: Record<string, string> = {}
-                      s.forEach((x: any) => { map[x.step_name] = x.content })
-                      setSteps(map)
-                      setSavedSteps({...map})
-                    })} />
+                    onRefresh={() => {
+                      return api.getSteps(id!).then((s: any[]) => {
+                        const map: Record<string, string> = {}
+                        s.forEach((x: any) => { map[x.step_name] = x.content })
+                        setSteps(map)
+                        setSavedSteps({...map})
+                      })
+                    }} />
                 )}
                 {sub === '2c' && (
                   <TeachingDocPanel ref={yanxiRef} docType="yanxi" projectId={id!}
@@ -1136,12 +1146,14 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     batchGenerating={batchGenerating}
                     hideControls dataSource={s2DataSource}
-                    onRefresh={() => api.getSteps(id!).then((s: any[]) => {
-                      const map: Record<string, string> = {}
-                      s.forEach((x: any) => { map[x.step_name] = x.content })
-                      setSteps(map)
-                      setSavedSteps({...map})
-                    })} />
+                    onRefresh={() => {
+                      return api.getSteps(id!).then((s: any[]) => {
+                        const map: Record<string, string> = {}
+                        s.forEach((x: any) => { map[x.step_name] = x.content })
+                        setSteps(map)
+                        setSavedSteps({...map})
+                      })
+                    }} />
                 )}
               </div>
             </div>
