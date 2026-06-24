@@ -195,12 +195,16 @@ export const api = {
   llmGenerate: (data: {
     provider_id: string; model: string; system_prompt: string;
     user_message: string; temperature?: number
-  }) =>
-    request('/api/llm/generate', {
+  }) => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 120_000)
+    return request('/api/llm/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer))
+  },
   // LLM streaming generate (SSE)
   llmGenerateStream: async function* (data: {
     provider_id: string; model: string; system_prompt: string;

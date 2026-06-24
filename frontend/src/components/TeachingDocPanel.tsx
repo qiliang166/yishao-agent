@@ -64,6 +64,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   const dataSource = dataSourceProp !== undefined ? dataSourceProp : _dataSource
   const setDataSource = onDataSourceChange || _setDataSource
   const [generating, setGenerating] = useState(false)
+  const generatingRef = useRef(false)
   const [savedFlash, setSavedFlash] = useState(0)
 
   const stepKey = STEP_KEYS[docType]
@@ -123,10 +124,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       modal.toast('请先选择大模型', 'error')
       return
     }
-    if (generating) {
-      console.log('[TeachingDocPanel] already generating, skipping')
+    if (generatingRef.current) {
+      console.log('[TeachingDocPanel] already generating (ref), skipping')
       return
     }
+    generatingRef.current = true
     setGenerating(true)
     try {
       const [pid, mdl] = model.split(':')
@@ -153,6 +155,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       console.error('[TeachingDocPanel] generate error', e)
       if (mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
+      generatingRef.current = false
       if (mountedRef.current) setGenerating(false)
     }
   }, [dataSource, model, prompt, skill, docType, projectId, stepKey, onRefresh])

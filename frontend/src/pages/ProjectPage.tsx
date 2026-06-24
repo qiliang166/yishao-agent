@@ -103,6 +103,7 @@ function Stage2Controls({
 }) {
   const modal = useModal()
   const mountedRef = useRef(true)
+  const generatingRef = useRef(false)
   useEffect(() => {
     mountedRef.current = true
     return () => { mountedRef.current = false }
@@ -149,10 +150,11 @@ function Stage2Controls({
       modal.toast('请先选择大模型', 'error')
       return
     }
-    if (generating) {
-      console.log('[Stage2Controls] already generating, skipping')
+    if (generatingRef.current) {
+      console.log('[Stage2Controls] already generating (ref), skipping')
       return
     }
+    generatingRef.current = true
     setGenerating(true)
     try {
       console.log('[Stage2Controls] calling panelRef.triggerGenerate()')
@@ -162,6 +164,7 @@ function Stage2Controls({
       console.error('[Stage2Controls] generate error', e)
       if (mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
+      generatingRef.current = false
       if (mountedRef.current) setGenerating(false)
     }
   }
@@ -258,7 +261,7 @@ export default function ProjectPage() {
   const [step1Generating, setStep1Generating] = useState<Record<string, boolean>>({})
 
   // Stage 2 state
-  const [step2Generating, setStep2Generating] = useState('')
+  const [step2Generating, setStep2Generating] = useState<Record<string, boolean>>({})
   const [s2DataSources, setS2DataSources] = useState<Record<string, string>>({ sop: 'video', dao: 'video', yanxi: 'video' })
   const [batchGenerating, setBatchGenerating] = useState(false)
   const sopRef = useRef<{ triggerGenerate: () => Promise<void> }>(null)
@@ -1078,12 +1081,12 @@ export default function ProjectPage() {
                   <Stage2Controls docType="sop" label="SOP文案"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['sop'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('sop', v)}
-                    generating={step2Generating === '2a'} batchGenerating={batchGenerating}
+                    generating={!!step2Generating['2a']} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
                     projectId={id!}
                     panelRef={sopRef}
-                    setGenerating={(v) => setStep2Generating(v ? '2a' : '')}
+                    setGenerating={(v) => setStep2Generating(prev => ({ ...prev, '2a': v }))}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1097,12 +1100,12 @@ export default function ProjectPage() {
                   <Stage2Controls docType="dao" label="道与术文案"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['dao'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('dao', v)}
-                    generating={step2Generating === '2b'} batchGenerating={batchGenerating}
+                    generating={!!step2Generating['2b']} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
                     projectId={id!}
                     panelRef={daoRef}
-                    setGenerating={(v) => setStep2Generating(v ? '2b' : '')}
+                    setGenerating={(v) => setStep2Generating(prev => ({ ...prev, '2b': v }))}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1116,12 +1119,12 @@ export default function ProjectPage() {
                   <Stage2Controls docType="yanxi" label="研学手册文案"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['yanxi'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('yanxi', v)}
-                    generating={step2Generating === '2c'} batchGenerating={batchGenerating}
+                    generating={!!step2Generating['2c']} batchGenerating={batchGenerating}
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
                     projectId={id!}
                     panelRef={yanxiRef}
-                    setGenerating={(v) => setStep2Generating(v ? '2c' : '')}
+                    setGenerating={(v) => setStep2Generating(prev => ({ ...prev, '2c': v }))}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1405,7 +1408,7 @@ export default function ProjectPage() {
                 </select>
                 <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
                   onClick={async () => {
-                    setStep2Generating('koubo')
+                    setStep2Generating(prev => ({ ...prev, koubo: true }))
                     try {
                       let prompt = stage4KouboPrompt || '你是一个短视频口播稿专家。请根据以下研学手册内容生成口播稿，风格亲切自然，适合美食类短视频。'
                       let pid = '', mdl = ''
@@ -1414,9 +1417,9 @@ export default function ProjectPage() {
                         steps.step2_yanxi || steps.step1_video || steps.step1_text || steps.step1_file || '',
                         pid, mdl)
                       if (content) setKouboText(content)
-                    } finally { setStep2Generating('') }
+                    } finally { setStep2Generating(prev => ({ ...prev, koubo: false })) }
                   }}>
-                  {step2Generating === 'koubo' ? '⏳ 生成中...' : '📢 生成口播稿'}
+                  {step2Generating['koubo'] ? '⏳ 生成中...' : '📢 生成口播稿'}
                 </button>
               </div>
             </div>
