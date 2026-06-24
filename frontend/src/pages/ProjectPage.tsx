@@ -135,11 +135,22 @@ function Stage2Controls({
 
   const handleGenerate = async () => {
     const source = getSourceText(dataSource)
-    if (!source || !model) return
+    console.log('[Stage2Controls] handleGenerate called', { docType, dataSource, source: source?.slice(0, 50), model })
+    if (!source) {
+      modal.toast(`数据来源「${dataSource}」没有内容，请先在 Stage 1 导入素材`, 'error')
+      return
+    }
+    if (!model) {
+      modal.toast('请先选择大模型', 'error')
+      return
+    }
     setGenerating(true)
     try {
+      console.log('[Stage2Controls] calling panelRef.triggerGenerate()')
       await panelRef.current?.triggerGenerate()
+      console.log('[Stage2Controls] triggerGenerate done')
     } catch (e: any) {
+      console.error('[Stage2Controls] generate error', e)
       modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
       setGenerating(false)

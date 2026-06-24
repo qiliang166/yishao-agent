@@ -109,7 +109,15 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   // ── Generate ──
   const handleGenerate = useCallback(async () => {
     const sourceText = getSourceText(dataSource)
-    if (!sourceText || !model) return
+    console.log('[TeachingDocPanel] handleGenerate called', { docType, dataSource, sourceText: sourceText?.slice(0, 50), model, stepKey })
+    if (!sourceText) {
+      modal.toast(`数据来源「${dataSource}」没有内容，请先在 Stage 1 导入素材`, 'error')
+      return
+    }
+    if (!model) {
+      modal.toast('请先选择大模型', 'error')
+      return
+    }
     setGenerating(true)
     try {
       const [pid, mdl] = model.split(':')
@@ -117,15 +125,22 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       const userMessage = skill
         ? `请将以下内容按指定格式整理：\n\n${sourceText}\n\n输出格式要求：\n${skill}`
         : sourceText
+      console.log('[TeachingDocPanel] calling llmGenerate...', { pid, mdl })
       const result: any = await api.llmGenerate({
         provider_id: pid, model: mdl,
         system_prompt: systemPrompt, user_message: userMessage,
       })
+      console.log('[TeachingDocPanel] llmGenerate result', { hasContent: !!result?.content, contentLen: result?.content?.length })
       if (result?.content) {
         await api.saveStep(projectId, stepKey, result.content)
+        console.log('[TeachingDocPanel] saveStep done, calling onRefresh')
         await onRefresh()
+        console.log('[TeachingDocPanel] onRefresh done')
+      } else {
+        modal.toast('生成失败: 模型未返回内容', 'error')
       }
     } catch (e: any) {
+      console.error('[TeachingDocPanel] generate error', e)
       modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
       setGenerating(false)
@@ -134,13 +149,17 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
   // ── Save ──
   const handleSave = useCallback(async () => {
+    console.log('[TeachingDocPanel] handleSave called', { stepKey, contentLen: localContent?.length })
     try {
       await api.saveStep(projectId, stepKey, localContent)
+      console.log('[TeachingDocPanel] saveStep done')
       setSavedFlash(Date.now())
       setTimeout(() => setSavedFlash(0), 1500)
       await onRefresh()
+      console.log('[TeachingDocPanel] save onRefresh done')
       modal.toast('已保存', 'success')
     } catch (e: any) {
+      console.error('[TeachingDocPanel] save error', e)
       modal.toast(`保存失败: ${e.message}`, 'error')
     }
   }, [projectId, stepKey, localContent, onRefresh])
