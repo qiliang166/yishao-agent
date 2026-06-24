@@ -1,5 +1,5 @@
 """Multi-provider LLM service using OpenAI-compatible SDK."""
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from database import get_db
 
 
@@ -36,7 +36,7 @@ async def generate(
     if not provider:
         raise ValueError(f"Provider {provider_id} not found or disabled")
 
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=provider["api_key"],
         base_url=provider["base_url"],
         timeout=120.0,
@@ -47,7 +47,7 @@ async def generate(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_message})
 
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=temperature,
@@ -66,7 +66,7 @@ async def generate_stream(
     if not provider:
         raise ValueError(f"Provider {provider_id} not found or disabled")
 
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=provider["api_key"],
         base_url=provider["base_url"],
         timeout=120.0,
@@ -77,14 +77,14 @@ async def generate_stream(
         messages.append({"role": "system", "content": system_prompt})
     messages.append({"role": "user", "content": user_message})
 
-    stream = client.chat.completions.create(
+    stream = await client.chat.completions.create(
         model=model,
         messages=messages,
         temperature=temperature,
         stream=True,
     )
 
-    for chunk in stream:
+    async for chunk in stream:
         delta = chunk.choices[0].delta
         if delta.content:
             yield delta.content
@@ -101,7 +101,7 @@ async def refine(
     if not provider:
         raise ValueError(f"Provider {provider_id} not found or disabled")
 
-    client = OpenAI(
+    client = AsyncOpenAI(
         api_key=provider["api_key"],
         base_url=provider["base_url"],
         timeout=120.0,
@@ -115,7 +115,7 @@ async def refine(
     user_parts.append(f"【选中的文本】\n{selected_text}")
     user_parts.append(f"【操作指令】\n{instruction}")
 
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},

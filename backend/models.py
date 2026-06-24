@@ -61,3 +61,4 @@ class PPTPlanRequest(BaseModel):
     template_id: str = ""
     provider_id: str = ""
     model: str = ""
+    column_id: str = "col4"

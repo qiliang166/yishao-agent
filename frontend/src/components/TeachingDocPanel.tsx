@@ -74,19 +74,15 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   // ── Local content state (decoupled from props for dirty-state tracking) ──
   const [localContent, setLocalContent] = useState(propContent)
 
-  // Re-sync localContent when stepKey changes (tab switch)
-  const prevStepKeyRef = useRef(stepKey)
-  if (stepKey !== prevStepKeyRef.current) {
-    prevStepKeyRef.current = stepKey
-    setLocalContent(steps[stepKey] || '')
-  }
-
-  // Re-sync localContent when prop content changes externally (AI gen, parent refresh)
-  const prevPropContentRef = useRef(propContent)
-  if (propContent !== prevPropContentRef.current) {
-    prevPropContentRef.current = propContent
+  // Re-sync localContent when prop content changes externally (AI gen, onRefresh)
+  useEffect(() => {
     setLocalContent(propContent)
-  }
+  }, [propContent])
+
+  // Re-sync localContent when stepKey changes (tab switch)
+  useEffect(() => {
+    setLocalContent(steps[stepKey] || '')
+  }, [stepKey])
 
   // ── Re-sync model when docType/modelKey changes ──
   if (modelKey !== lastModelKey.current) {

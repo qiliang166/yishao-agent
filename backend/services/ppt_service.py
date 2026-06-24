@@ -48,12 +48,10 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
         db = get_db()
         try:
             row = db.execute(
-                "SELECT file_path, prompt, skill, rules, typography_profile, branding_config FROM templates WHERE id = ?",
+                "SELECT file_path, rules, typography_profile, branding_config FROM templates WHERE id = ?",
                 (template_id,)).fetchone()
             if row and row["file_path"] and os.path.exists(row["file_path"]):
                 prs = Presentation(row["file_path"])
-                prompt = row["prompt"] or ""
-                skill = row["skill"] or ""
                 if not branding and row["branding_config"]:
                     try:
                         branding = json.loads(row["branding_config"])
@@ -82,8 +80,20 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                 print(f"[PPT-DBG] AI check: pid={bool(provider_id)} model={bool(model)} rules_empty={not rules} rules_keys={list(rules.keys()) if rules else 'N/A'} content_len={len(content.strip()) if content else 0}", flush=True)
                 if slide_data is None and provider_id and model and rules and content.strip():
                     print("[PPT-DBG] Using AI staged generation", flush=True)
+                    # Load column config prompt+skill for AI generation
+                    col_prompt = ""
+                    col_skill = ""
+                    try:
+                        cfg2 = db.execute(
+                            "SELECT prompt, skill FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
+                        ).fetchone()
+                        if cfg2:
+                            col_prompt = cfg2["prompt"] or ""
+                            col_skill = cfg2["skill"] or ""
+                    except Exception:
+                        pass
                     slide_data = _generate_slides_staged(provider_id, model, rules, content,
-                                                         prompt, skill)
+                                                         col_prompt, col_skill)
                     print(f"[PPT-DBG] AI result: {bool(slide_data)}, slides={len(slide_data) if slide_data else 0}", flush=True)
                     if not slide_data:
                         print("[PPT-DBG] AI generation failed, falling back to mechanical split", flush=True)

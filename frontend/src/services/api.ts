@@ -358,8 +358,8 @@ export const api = {
     request(`/api/projects/${projectId}/files`),
 
   // PPT
-  generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string) =>
-    request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || ''}) }),
+  generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string) =>
+    request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4'}) }),
 
   generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[]) =>
     request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null}) }),

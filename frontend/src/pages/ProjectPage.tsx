@@ -611,11 +611,11 @@ export default function ProjectPage() {
   }
 
   // ── PPT / SOP Generation ──
-  const doGeneratePlan = async (stepKey: string, content: string, tmplId: string, model: string) => {
+  const doGeneratePlan = async (stepKey: string, content: string, tmplId: string, model: string, columnId: string) => {
     setPptGenerating(stepKey)
     try {
       const [pid, mdl] = model ? model.split(':') : ['', '']
-      const result: any = await api.generatePPTPlan(content, tmplId, pid, mdl)
+      const result: any = await api.generatePPTPlan(content, tmplId, pid, mdl, columnId)
       const plan = result.slide_plan || []
       const planJson = JSON.stringify(plan, null, 2)
       setSteps(prev => ({ ...prev, [stepKey]: planJson }))
@@ -1350,7 +1350,7 @@ export default function ProjectPage() {
                   <button className="btn btn-outline btn-sm"
                     style={{ flex: 1 }}
                     disabled={pptGenerating !== '' || !s3DaoPptModel || !(steps.step2_daoshuyi || '')}
-                    onClick={() => doGeneratePlan('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, s3DaoPptModel)}>
+                    onClick={() => doGeneratePlan('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, s3DaoPptModel, 'col4')}>
                     {pptGenerating === 'step3_dao_ppt' ? '⏳ 生成中...' : '📝 生成大纲'}
                   </button>
                   <button className="btn btn-primary btn-sm"
@@ -1420,7 +1420,7 @@ export default function ProjectPage() {
                   <button className="btn btn-outline btn-sm"
                     style={{ flex: 1 }}
                     disabled={pptGenerating !== '' || !s3YanxiPptModel || !(steps.step2_yanxi || '')}
-                    onClick={() => doGeneratePlan('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, s3YanxiPptModel)}>
+                    onClick={() => doGeneratePlan('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, s3YanxiPptModel, 'col5')}>
                     {pptGenerating === 'step3_yan_ppt' ? '⏳ 生成中...' : '📝 生成大纲'}
                   </button>
                   <button className="btn btn-primary btn-sm"

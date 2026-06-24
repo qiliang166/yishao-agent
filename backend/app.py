@@ -1748,7 +1748,12 @@ def extract_pptx_structure(file_path: str) -> dict:
 @app.post("/api/templates/{template_id}/analyze")
 async def analyze_template(template_id: str, stage_type: str = "daoPpt",
                             provider_id: str = "", model: str = ""):
-    from services.llm_service import generate as llm_generate, get_provider
+    """Mechanically extract visual data from PPTX and save to template.
+
+    No AI call — colors, fonts, and typography are extracted directly from
+    the PPTX file. Column config's rules structure is used as-is.
+    """
+    from services.ppt_designer import _extract_dominant_colors
     db = get_db()
     try:
         tmpl = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -1757,104 +1762,70 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
         if not tmpl["file_path"] or not os.path.exists(tmpl["file_path"]):
             raise HTTPException(400, "请先上传 .pptx 模板文件")
 
-        structure = extract_pptx_structure(tmpl["file_path"])
-
+        # Determine column for rules structure
         stage_to_column = {"daoPpt": "col4", "yanxiPpt": "col5"}
         column_id = stage_to_column.get(stage_type, "col4")
-        config = db.execute("SELECT rules, prompt, skill FROM column_configs WHERE column_id = ?", (column_id,)).fetchone()
+        config = db.execute("SELECT rules FROM column_configs WHERE column_id = ?",
+                            (column_id,)).fetchone()
         if not config or not config["rules"] or config["rules"] == "{}":
-            raise HTTPException(400, f"栏目 {column_id} 未配置规则，请先在栏目配置中设置 PPT SKILL 规则")
+            raise HTTPException(400, f"栏目 {column_id} 未配置规则，请先在栏目配置中设置 PPT 规则")
 
         rules = json.loads(config["rules"])
-        column_prompt = config["prompt"] or ""
-        analysis_prompt = rules.get("analysis_rules", "")
-        if not analysis_prompt:
-            raise HTTPException(400, "栏目规则中缺少 analysis_rules")
 
-        # Use specified provider/model, or fall back to first enabled
-        if provider_id and model:
-            provider_row = db.execute("SELECT id, models FROM llm_providers WHERE id = ? AND is_enabled = 1", (provider_id,)).fetchone()
-            if not provider_row:
-                raise HTTPException(400, "指定的 LLM 服务商不可用")
-        else:
-            provider_row = db.execute("SELECT id, models FROM llm_providers WHERE is_enabled = 1 ORDER BY rowid LIMIT 1").fetchone()
-            if not provider_row:
-                raise HTTPException(400, "没有可用的 LLM 服务商")
-            models_list = json.loads(provider_row["models"] or "[]")
-            model = models_list[0] if models_list else "gpt-4o"
+        # Mechanical extraction from PPTX
+        structure = extract_pptx_structure(tmpl["file_path"])
+        typography = structure.get("typography_extracted", {}) or {}
+        dominant = _extract_dominant_colors(tmpl["file_path"])
 
-        # Build typography spec section for the prompt
-        ty_spec = rules.get("design_rules", {}).get("typography_spec", {})
-        ty_spec_text = json.dumps(ty_spec, ensure_ascii=False, indent=2) if ty_spec else "（无 typography_spec 配置）"
-        ty_extracted = structure.get("typography_extracted", {})
+        # Populate design_rules.colors from extracted data
+        design_rules = rules.get("design_rules", {})
+        if not isinstance(design_rules, dict):
+            design_rules = {}
 
-        column_skill = config.get("skill") or ""
+        design_rules["colors"] = {
+            "primary": dominant.get("primary", "#C02E2E"),
+            "accent": dominant.get("accent", "#FF6D01"),
+            "background": dominant.get("background", "#FFFFFF"),
+            "text": dominant.get("text", "#333333"),
+            "light_text": dominant.get("light_text", "#FFFFFF"),
+        }
 
-        system_prompt = f"""你是一位专业的 PPT 模板分析专家。请严格遵循栏目预设的角色定义完成分析任务。
+        # Populate design_rules.fonts from extracted data
+        fonts_used = structure.get("fonts_used", [])
+        real_fonts = [f for f in fonts_used if not f.startswith('+')
+                      and f not in ('Calibri', 'Arial')]  # theme refs & generic defaults
+        font_name = real_fonts[0] if real_fonts else "Microsoft YaHei"
+        # Fall back if likely a theme font reference
+        if font_name.startswith('+'):
+            font_name = "Microsoft YaHei"
+        design_rules["fonts"] = {
+            "font_name": font_name,
+            "title_size": int(typography.get("title_font_size_pt") or 36),
+            "body_size": int(typography.get("body_font_size_pt") or 18),
+        }
 
-## 栏目角色定义（分析的身份立场和领域知识）
-{column_prompt}
+        rules["design_rules"] = design_rules
 
-## 栏目 SKILL 框架（必须基于此框架生成，严禁偏离）
-{column_skill}
+        # Typography profile
+        typography_profile = {
+            "body_font_size_pt": typography.get("body_font_size_pt") or 18,
+            "title_font_size_pt": typography.get("title_font_size_pt") or 36,
+            "line_height_ratio": typography.get("line_height_ratio") or 1.2,
+        }
 
-## 栏目约束规则（必须遵守的分析框架）
-{json.dumps(rules, ensure_ascii=False, indent=2)}
-
-## 重要指示
-1. 版式类型必须在 layout_types 范围内
-2. 从提取的 PPTX 结构中获取实际配色（colors_used）和字体（fonts_used），不预设任何配色方案
-3. 按 design_rules 中的约束条文审视模板的视觉样式，确保符合设计纪律
-4. prompt 应完整包含：角色设定、从模板提取的实际样式描述（颜色/字体/版式/尺寸）、内容规范引用、版式选择规则、约束规则引用、输出格式要求
-5. skill 必须完全基于上方「栏目 SKILL 框架」生成。所有占位符（{{{{...}}}}）必须原样保留。禁止将栏目 SKILL 框架中的 {{占位符}} 替换为原模板的实际内容。禁止在 skill 中出现原模板的菜品名称、具体参数值或任何实际内容。
-6. 遵守 design_principles 中的所有铁律
-7. 遵守 page_rhythm 中的页面节奏规则
-8. 从模板中提取的实际样式信息必须如实写入 prompt，不编造不预设
-
-## 排版属性提取与补全（核心任务）
-typography_spec 定义了必须从模板中提取的排版属性及其规范兜底值：
-{ty_spec_text}
-
-typography_extracted 是代码从模板 PPTX 中自动提取到的排版值（null 表示未提取到）。你的任务是：
-- 分析 typography_extracted 中的实际值和缺失值
-- 对于缺失（null）的字段，按 typography_spec 的 fallback + rationale 补全合理的值
-- 输出 typography_profile，必须包含 typography_spec 中定义的三个字段（body_font_size_pt, title_font_size_pt, line_height_ratio），所有值均不得为 null
-- 将 typography_profile 作为顶层字段与 prompt、skill 一起输出"""
-
-        user_message = f"请分析以下 PPTX 文件结构，基于约束规则生成该模板专属的 prompt、SKILL 和 typography_profile：\n\n## 模板结构数据\n```json\n{json.dumps(structure, ensure_ascii=False, indent=2)}\n```\n\n## typography_extracted（代码提取值，null 项需要你补全）\n```json\n{json.dumps(ty_extracted, ensure_ascii=False, indent=2)}\n```\n\n请直接输出 JSON，格式为：{{\"prompt\": \"...\", \"skill\": \"...\", \"typography_profile\": {{\"body_font_size_pt\": 数字, \"title_font_size_pt\": 数字, \"line_height_ratio\": 数字}}}}"
-
-        ai_response = await llm_generate(provider_row["id"], model, system_prompt, user_message, temperature=0.3)
-
-        # Parse AI response
-        ai_response = ai_response.strip()
-        if ai_response.startswith("```"):
-            lines = ai_response.split("\n")
-            ai_response = "\n".join(lines[1:]) if lines[0].startswith("```") else ai_response
-            if ai_response.endswith("```"):
-                ai_response = ai_response[:ai_response.rfind("```")].strip()
-
-        result = json.loads(ai_response)
-        prompt = result.get("prompt", "")
-        skill = result.get("skill", "")
-        typography_profile = result.get("typography_profile", None)
-
-        if not prompt or not skill:
-            raise HTTPException(400, "AI 未能生成完整的 prompt 和 skill，请重试")
-
-        if not typography_profile or not isinstance(typography_profile, dict):
-            # Fallback: use code-extracted typography from structure
-            ty = structure.get("typography_extracted", {}) or {}
-            typography_profile = {"body_font_size_pt": ty.get("body_font_size_pt") or 18,
-                                  "title_font_size_pt": ty.get("title_font_size_pt") or 36,
-                                  "line_height_ratio": ty.get("line_height_ratio") or 1.2}
         rules_json = json.dumps(rules, ensure_ascii=False)
-        db.execute("UPDATE templates SET prompt = ?, skill = ?, typography_profile = ?, rules = ? WHERE id = ?",
-                   (prompt, skill, json.dumps(typography_profile, ensure_ascii=False), rules_json, template_id))
+        db.execute(
+            "UPDATE templates SET typography_profile = ?, rules = ? WHERE id = ?",
+            (json.dumps(typography_profile, ensure_ascii=False), rules_json, template_id))
         db.commit()
 
-        return {"ok": True, "prompt": prompt, "skill": skill, "typography_profile": typography_profile, "rules": rules}
-    except json.JSONDecodeError:
-        raise HTTPException(500, "AI 返回格式异常，请重试")
+        return {
+            "ok": True,
+            "typography_profile": typography_profile,
+            "rules": rules,
+            "colors_used": structure.get("colors_used", []),
+            "fonts_used": structure.get("fonts_used", []),
+        }
     finally:
         db.close()
 
@@ -2002,34 +1973,54 @@ def api_generate_ppt(req: PPTGenerateRequest):
 
 @app.post("/api/ppt/plan")
 def api_ppt_plan(req: PPTPlanRequest):
-    """Generate slide plan only (no PPTX file). Returns JSON for user review."""
+    """Generate slide plan only (no PPTX file). Returns JSON for user review.
+
+    Uses column config's prompt + skill as AI system message and structure
+    template. Template is only used for its rules (layout_types, page_rhythm).
+    """
     from services.ppt_service import _generate_slides_staged
     db = get_db()
     try:
+        # Load column config — the single source of truth for content logic
+        column_id = req.column_id or "col4"
+        cfg = db.execute(
+            "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
+            (column_id,)).fetchone()
+        if not cfg:
+            cfg = db.execute(
+                "SELECT prompt, skill, rules FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
+            ).fetchone()
+
+        column_prompt = ""
+        column_skill = ""
         rules = {}
-        prompt = ""
-        skill = ""
+        if cfg:
+            column_prompt = cfg["prompt"] or ""
+            column_skill = cfg["skill"] or ""
+            if cfg["rules"]:
+                try:
+                    rules = json.loads(cfg["rules"])
+                except Exception:
+                    pass
+
+        # Template provides layout_types via its rules (visual structure)
         if req.template_id:
             row = db.execute(
-                "SELECT prompt, skill, rules FROM templates WHERE id = ?",
+                "SELECT rules FROM templates WHERE id = ?",
                 (req.template_id,)).fetchone()
-            if row:
-                prompt = row["prompt"] or ""
-                skill = row["skill"] or ""
-                if row["rules"]:
-                    try:
-                        rules = json.loads(row["rules"])
-                    except Exception:
-                        pass
-        if not rules:
-            cfg = db.execute(
-                "SELECT rules FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
-            ).fetchone()
-            if cfg and cfg["rules"]:
-                rules = json.loads(cfg["rules"])
+            if row and row["rules"]:
+                try:
+                    template_rules = json.loads(row["rules"])
+                    # Merge: template's layout_types + page_rhythm take priority
+                    for key in ("layout_types", "page_rhythm", "design_principles"):
+                        if key in template_rules:
+                            rules[key] = template_rules[key]
+                except Exception:
+                    pass
 
         slide_plan = _generate_slides_staged(
-            req.provider_id, req.model, rules, req.content, prompt, skill
+            req.provider_id, req.model, rules, req.content,
+            column_prompt, column_skill
         )
         return {"slide_plan": slide_plan or []}
     except Exception as e:

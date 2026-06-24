@@ -69,6 +69,9 @@ def extract_design(rules: dict, typography_profile: Optional[dict] = None) -> De
     fonts = design_rules.get("fonts", {})
     if "font_name" in fonts:
         ds.font_name = fonts["font_name"]
+    # Theme font reference (e.g. +mj-ea) — fall back
+    if ds.font_name.startswith('+'):
+        ds.font_name = "Microsoft YaHei"
     if "title_size" in fonts:
         ds.title_size_pt = fonts["title_size"]
     if "body_size" in fonts:
@@ -383,3 +386,93 @@ def build_section(prs: Presentation, zones: dict, design: DesignSystem):
                      subtitle, font_size_pt=design.subtitle_size_pt,
                      color=design.light_text_color, bold=False,
                      alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+
+
+def _extract_dominant_colors(pptx_path: str) -> dict:
+    """Mechanically extract dominant colors from a PPTX template.
+
+    Returns {primary, accent, background, text, light_text} as hex strings.
+    """
+    from pptx import Presentation
+    from collections import Counter
+
+    prs = Presentation(pptx_path)
+
+    bg_colors = []
+    fill_colors = []
+    text_colors = []
+
+    for slide in prs.slides:
+        try:
+            bg = slide.background.fill
+            if bg.type is not None:
+                try:
+                    rgb = bg.fore_color.rgb
+                    bg_colors.append(str(rgb))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        for shape in slide.shapes:
+            try:
+                if hasattr(shape, 'fill') and shape.fill is not None:
+                    try:
+                        rgb = shape.fill.fore_color.rgb
+                        fill_colors.append(str(rgb))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        try:
+                            if run.font.color and run.font.color.rgb:
+                                text_colors.append(str(run.font.color.rgb))
+                        except Exception:
+                            pass
+
+    def most_common(colors, fallback):
+        if not colors:
+            return fallback
+        c = Counter(colors)
+        for clr, _ in c.most_common():
+            h = clr.upper()
+            if h not in ('FFFFFF', '000000'):
+                return f"#{h}"
+        return f"#{c.most_common(1)[0][0].upper()}"
+
+    non_white = [c for c in fill_colors if c.upper() not in ('FFFFFF', '000000')]
+    primary = most_common(non_white, "C02E2E")
+
+    white_bg = [c for c in bg_colors if c.upper() == 'FFFFFF']
+    background = "FFFFFF" if white_bg else most_common(bg_colors, "FFFFFF")
+
+    dark_text = [c for c in text_colors if _is_dark(c)]
+    text = most_common(dark_text, "333333") if dark_text else "333333"
+
+    non_white_fills = [c for c in non_white if c.upper() != primary.lstrip('#').upper()]
+    accent = most_common(non_white_fills, "FF6D01")
+
+    light_text_colors = [c for c in text_colors if c.upper() == 'FFFFFF']
+    light_text = "FFFFFF" if light_text_colors else "FFFFFF"
+
+    return {
+        "primary": primary if primary.startswith('#') else f"#{primary}",
+        "accent": accent if accent.startswith('#') else f"#{accent}",
+        "background": background if background.startswith('#') else f"#{background}",
+        "text": text if text.startswith('#') else f"#{text}",
+        "light_text": light_text if light_text.startswith('#') else f"#{light_text}",
+    }
+
+
+def _is_dark(hex_str: str) -> bool:
+    """True if hex color is perceptually dark."""
+    h = hex_str.lstrip('#').upper()
+    if len(h) != 6:
+        return False
+    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    luminance = 0.299 * r + 0.587 * g + 0.114 * b
+    return luminance < 128
