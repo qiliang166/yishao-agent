@@ -69,24 +69,11 @@ def _inject_theme(html: str, design_rules: dict) -> str:
     if not colors:
         return html
 
-    # If accent is too close to paper, fall back to primary
-    accent = colors.get("accent")
-    paper = colors.get("paper") or colors.get("background")
-    primary = colors.get("primary")
-    if accent and paper and primary:
-        # Quick luminance check: if accent and paper are within ~30 units, use primary
-        def _lum(hex_color: str) -> float:
-            h = hex_color.lstrip('#')
-            r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-            return 0.299 * r + 0.587 * g + 0.114 * b
-        if abs(_lum(accent) - _lum(paper)) < 30:
-            accent = primary
-
     var_map = {
-        "accent": accent,
+        "accent": colors.get("accent"),
         "ink": colors.get("ink") or colors.get("text"),
-        "paper": paper,
-        "primary": primary,
+        "paper": colors.get("paper") or colors.get("background"),
+        "primary": colors.get("primary"),
         "bg": colors.get("background"),
         "accent-rgb": colors.get("accent_rgb"),
         "ink-rgb": colors.get("ink_rgb"),
@@ -243,11 +230,13 @@ def _get_layout_map(style_family: str) -> dict:
 
 # ── Zone filling ──────────────────────────────────────────────────
 
-def _fill_zones(layout_html: str, zones: dict) -> str:
+def _fill_zones(layout_html: str, zones: dict, style_family: str = "swiss") -> str:
     """Fill zone values into a layout HTML skeleton.
 
-    Uses CSS-class heuristics first, then {{field}} template syntax,
-    then [必填] placeholder replacement as final fallback.
+    Phase 1: CSS-class heuristics (zone_selectors)
+    Phase 2: {{field}} template syntax
+    Phase 3: [必填] placeholder replacement
+    Phase 4: Auto-generate DOM elements for still-unmatched zones
     """
     if not zones:
         return layout_html
@@ -352,12 +341,139 @@ def _fill_zones(layout_html: str, zones: dict) -> str:
         if '[必填]' in html:
             html = html.replace('[必填]', _escape(value), 1)
 
+    # Phase 4: Auto-generate elements for zones still unmatched
+    unmatched = {k: v for k, v in zones.items()
+                 if v and isinstance(v, str) and k not in handled}
+    if unmatched:
+        extra = [_gen_zone_elem(k, v, style_family) for k, v in unmatched.items()]
+        extra = [e for e in extra if e]
+        if extra:
+            # Insert before last closing tag
+            last_close = html.rfind('</')
+            if last_close > 0:
+                html = html[:last_close] + '\n  ' + '\n  '.join(extra) + '\n' + html[last_close:]
+            else:
+                html += '\n' + '\n'.join(extra)
+
     return html
 
 
 def _escape(text: str) -> str:
     """Minimal HTML escape for text content."""
     return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _gen_zone_elem(zone_key: str, value: str, style_family: str) -> str:
+    """Generate an HTML element for a zone unmatched by Phases 1-3."""
+    is_swiss = style_family == "swiss"
+    body_cls = "body-zh" if is_swiss else "body-zh"
+
+    # Table zone → simple HTML table
+    if zone_key == "table":
+        return _gen_table(value, is_swiss)
+
+    # List-type zones
+    if zone_key in ("items", "points", "steps", "params", "metrics", "bullets",
+                    "features", "benefits", "specs", "requirements", "rules"):
+        return _gen_list(zone_key, value)
+
+    # Quote
+    if zone_key in ("quote", "citation", "testimonial"):
+        return f'<blockquote><p>{_escape(value)}</p></blockquote>'
+
+    # KPI / big number
+    if zone_key in ("kpi", "metric", "number", "stat", "big_num"):
+        return f'<div class="stat"><span class="kpi-num">{_escape(value)}</span></div>'
+
+    # Heading-like
+    if zone_key in ("heading", "subheading", "section_title", "label",
+                    "tagline", "strapline"):
+        return f'<h3>{_escape(value)}</h3>'
+
+    # Code / pre
+    if zone_key in ("code", "snippet", "command"):
+        return f'<pre><code>{_escape(value)}</code></pre>'
+
+    # Image URL → img tag
+    if zone_key in ("image", "photo", "illustration", "icon", "logo",
+                    "hero_image", "background"):
+        if value.startswith("http") or value.startswith("/"):
+            return f'<img src="{_escape(value)}" alt="" style="max-width:100%;height:auto" />'
+        return f'<div class="img-placeholder" style="padding:4vh;border:1px dashed var(--ink);opacity:0.3;text-align:center">{_escape(value)}</div>'
+
+    # Default: paragraph
+    return f'<p class="{body_cls}">{_escape(value)}</p>'
+
+
+def _gen_table(value: str, is_swiss: bool) -> str:
+    """Parse a JSON-like table value into an HTML table."""
+    rows = None
+    # Try JSON array of arrays
+    try:
+        data = json.loads(value)
+        if isinstance(data, list) and len(data) > 0:
+            if isinstance(data[0], list):
+                rows = data
+            elif isinstance(data[0], dict):
+                # Array of dicts: keys → header, values → rows
+                keys = list(data[0].keys())
+                rows = [keys] + [[str(d.get(k, "")) for k in keys] for d in data]
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Try newline-separated with | or tab delimiter
+    if rows is None:
+        lines = [l.strip() for l in value.strip().split("\n") if l.strip()]
+        if lines:
+            rows = []
+            for line in lines:
+                if "|" in line:
+                    rows.append([c.strip() for c in line.split("|")])
+                elif "\t" in line:
+                    rows.append([c.strip() for c in line.split("\t")])
+                else:
+                    rows.append([line])
+
+    if not rows:
+        return f'<p class="body-zh">{_escape(value)}</p>'
+
+    parts = ['<table style="width:100%;border-collapse:collapse;margin-top:2vh;font-size:14px">']
+    for i, row in enumerate(rows):
+        tag = "th" if i == 0 else "td"
+        style = 'style="padding:6px 10px;border-bottom:1px solid var(--ink);opacity:0.2"'
+        parts.append("  <tr>")
+        for cell in row:
+            parts.append(f'    <{tag} {style}>{_escape(str(cell))}</{tag}>')
+        parts.append("  </tr>")
+    parts.append("</table>")
+    return "\n".join(parts)
+
+
+def _gen_list(zone_key: str, value: str) -> str:
+    """Parse a value into an HTML list."""
+    items = None
+    # Try JSON array
+    try:
+        data = json.loads(value)
+        if isinstance(data, list):
+            items = [str(item) for item in data]
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Try newline-separated
+    if items is None:
+        lines = [l.strip() for l in value.strip().split("\n") if l.strip()]
+        # Strip common bullet prefixes
+        items = [re.sub(r'^[-*•]\s*', '', l) for l in lines]
+
+    if not items:
+        return f'<p class="body-zh">{_escape(value)}</p>'
+
+    parts = ['<ul style="margin-top:2vh;padding-left:1.2em;display:flex;flex-direction:column;gap:1vh;font-size:16px">']
+    for item in items:
+        parts.append(f'  <li>{_escape(item)}</li>')
+    parts.append("</ul>")
+    return "\n".join(parts)
 
 
 # ── Slide HTML generation ─────────────────────────────────────────
@@ -373,7 +489,8 @@ def _generate_slide_html(slide_type: str, zones: dict, style_family: str,
     layout_html = layouts.get(layout_key, "")
 
     if layout_html:
-        return _fill_zones(layout_html, zones)
+        filled = _fill_zones(layout_html, zones, style_family)
+        return f'<section class="slide">\n{filled}\n</section>'
 
     # Fallback: generate a minimal slide using guizang CSS classes
     return _fallback_slide(slide_type, zones, style_family)

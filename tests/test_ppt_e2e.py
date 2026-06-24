@@ -88,7 +88,7 @@ def test_api_plan_endpoint():
         "content": "test",
         "template_id": "default-dao"
     }).encode('utf-8')
-    req = urllib.request.Request('http://localhost:8700/api/ppt/plan',
+    req = urllib.request.Request('http://localhost:8765/api/ppt/plan',
         data=data, headers={'Content-Type': 'application/json'})
     resp = urllib.request.urlopen(req)
     result = json.loads(resp.read())
@@ -107,7 +107,7 @@ def test_api_generate_with_plan():
             {"type": "summary", "zones": {"heading": "Done", "points": "Point A\nPoint B"}},
         ]
     }).encode('utf-8')
-    req = urllib.request.Request('http://localhost:8700/api/ppt/generate',
+    req = urllib.request.Request('http://localhost:8765/api/ppt/generate',
         data=data, headers={'Content-Type': 'application/json'})
     resp = urllib.request.urlopen(req)
     result = json.loads(resp.read())
