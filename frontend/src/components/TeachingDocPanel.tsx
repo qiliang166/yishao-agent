@@ -284,6 +284,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
           <button className="btn btn-ghost btn-sm" onClick={handleSaveToProject}
             disabled={!localContent}>📥 存到项目</button>
           <button className={`btn btn-primary btn-sm ${getSaveClass()}`}
+            disabled={!localContent.trim()}
             onClick={handleSave}>{getSaveLabel()}</button>
         </span>
       </div>
