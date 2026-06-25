@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="1280" height="720" fill="#0f172a"/>
+  
+  <text x="64" y="80" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="48" font-weight="700" fill="white">
+    更好看：座舱焕新
+  </text>
+  <rect x="64" y="100" width="120" height="4" rx="2" fill="#FFB366"/>
+  
+  <!-- Interior showcase -->
+  <g transform="translate(64, 140)">
+    <rect x="0" y="0" width="560" height="340" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="280" y="160" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="rgba(255,255,255,0.4)">
+      [ 座舱展示区 ]
+    </text>
+    <text x="280" y="190" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.3)">
+      暗夜黑 / 砂陶米 新色
+    </text>
+  </g>
+  
+  <!-- Feature cards -->
+  <g transform="translate(648, 140)">
+    <rect x="0" y="0" width="568" height="100" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">氛围灯</text>
+    <text x="40" y="75" font-family="sans-serif" font-size="32" font-weight="700" fill="white">3636mm 环绕</text>
+  </g>
+  
+  <g transform="translate(648, 260)">
+    <rect x="0" y="0" width="274" height="100" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">主驾座椅</text>
+    <text x="40" y="75" font-family="sans-serif" font-size="28" font-weight="700" fill="white">18向调节</text>
+  </g>
+  
+  <g transform="translate(942, 260)">
+    <rect x="0" y="0" width="274" height="100" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">副驾座椅</text>
+    <text x="40" y="75" font-family="sans-serif" font-size="28" font-weight="700" fill="white">零重力</text>
+  </g>
+  
+  <g transform="translate(648, 380)">
+    <rect x="0" y="0" width="568" height="100" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">材质工艺</text>
+    <text x="40" y="75" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="24" fill="white">100%软质包裹 | 5㎡ Alcantara | 豪车级绗缝</text>
+  </g>
+  
+  <!-- Bottom features -->
+  <g transform="translate(64, 520)">
+    <rect x="0" y="0" width="360" height="100" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">座椅功能</text>
+    <text x="40" y="70" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">通风加热标配 | 按摩功能</text>
+  </g>
+  
+  <g transform="translate(444, 520)">
+    <rect x="0" y="0" width="360" height="100" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">显示系统</text>
+    <text x="40" y="70" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">16.1"中控 + 7.1"仪表</text>
+  </g>
+  
+  <g transform="translate(824, 520)">
+    <rect x="0" y="0" width="392" height="100" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">隔音配置</text>
+    <text x="40" y="70" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">全系静音双层夹胶玻璃</text>
+  </g>
+  
+  <text x="1216" y="690" text-anchor="end" font-family="sans-serif" font-size="14" fill="rgba(255,255,255,0.3)">04</text>
+</svg>

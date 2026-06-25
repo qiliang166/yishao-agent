@@ -1,0 +1,5 @@
+{
+  "name": "ppt-agent",
+  "version": "1.0.0",
+  "description": "PPT slide generation workflow: requirement research → material collection → outline planning → planning draft → design draft (SVG 1280x720 Bento Grid) with Claude draft + Gemini review"
+}

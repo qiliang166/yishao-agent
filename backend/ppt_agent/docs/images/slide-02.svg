@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1280" height="720" fill="#0f172a"/>
+  
+  <!-- Title -->
+  <text x="64" y="80" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="48" font-weight="700" fill="white">
+    小米汽车的市场势能
+  </text>
+  <rect x="64" y="100" width="120" height="4" rx="2" fill="#FFB366"/>
+  
+  <!-- Stats cards - Row 1 -->
+  <g transform="translate(64, 140)">
+    <rect x="0" y="0" width="370" height="200" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="50" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">交付量</text>
+    <text x="40" y="120" font-family="sans-serif" font-size="72" font-weight="700" fill="white">36万+</text>
+    <text x="40" y="160" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">21个月累计交付</text>
+  </g>
+  
+  <g transform="translate(454, 140)">
+    <rect x="0" y="0" width="370" height="200" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="50" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">市场排名</text>
+    <text x="40" y="120" font-family="sans-serif" font-size="72" font-weight="700" fill="white">TOP 1</text>
+    <text x="40" y="160" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">2025年底超越特斯拉Model 3</text>
+  </g>
+  
+  <g transform="translate(844, 140)">
+    <rect x="0" y="0" width="370" height="200" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="50" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">2026目标</text>
+    <text x="40" y="120" font-family="sans-serif" font-size="72" font-weight="700" fill="white">55万</text>
+    <text x="40" y="160" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">年交付目标</text>
+  </g>
+  
+  <!-- Highlight quote -->
+  <g transform="translate(64, 380)">
+    <rect x="0" y="0" width="1152" height="100" rx="16" fill="rgba(99,102,241,0.2)" stroke="rgba(99,102,241,0.3)" stroke-width="1"/>
+    <text x="576" y="60" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="24" fill="white" font-style="italic">
+      "小米汽车正在重新定义中国新能源汽车市场"
+    </text>
+  </g>
+  
+  <!-- Bottom timeline -->
+  <g transform="translate(64, 520)">
+    <rect x="0" y="0" width="1152" height="120" rx="16" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">发展里程碑</text>
+    <text x="40" y="80" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="18" fill="rgba(255,255,255,0.8)">2024.03 上市 → 2025.11 首超Model 3 → 2026.03 新一代发布</text>
+    <text x="40" y="105" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" fill="rgba(255,255,255,0.5)">小米SU7，从新势力到主流玩家的蜕变之路</text>
+  </g>
+  
+  <!-- Page number -->
+  <text x="1216" y="690" text-anchor="end" font-family="sans-serif" font-size="14" fill="rgba(255,255,255,0.3)">02</text>
+</svg>

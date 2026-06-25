@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<rect width="1280" height="720" fill="#ffffff"/>
+<rect x="0" y="0" width="1280" height="90" fill="#1a365d"/>
+<rect x="0" y="0" width="6" height="90" fill="#e67e22"/>
+<text x="40" y="58" font-family="system-ui" font-size="32" font-weight="700" fill="#ffffff">内饰设计：重新定义豪华</text>
+<rect x="50" y="130" width="560" height="200" rx="16" fill="#f0f4f8"/><rect x="50" y="130" width="560" height="60" fill="#1a365d"/><text x="100" y="172" font-family="system-ui" font-size="22" font-weight="700" fill="#ffffff">三层环绕氛围灯</text><text x="100" y="240" font-family="system-ui" font-size="16" fill="#666">联动音乐节奏、驾驶模式变化</text><text x="100" y="280" font-family="system-ui" font-size="16" fill="#666">256色氛围灯，支持音乐律动</text>
+<rect x="650" y="130" width="580" height="200" rx="16" fill="#f0f4f8"/><rect x="650" y="130" width="580" height="60" fill="#1a365d"/><text x="700" y="172" font-family="system-ui" font-size="22" font-weight="700" fill="#ffffff">Nappa真皮方向盘</text><text x="700" y="240" font-family="system-ui" font-size="16" fill="#666">运动握圈真皮包覆</text><text x="700" y="280" font-family="system-ui" font-size="16" fill="#666">新增镀铬装饰点缀</text>
+<rect x="50" y="360" width="560" height="200" rx="16" fill="#f0f4f8"/><rect x="50" y="360" width="560" height="60" fill="#1a365d"/><text x="100" y="402" font-family="system-ui" font-size="22" font-weight="700" fill="#ffffff">100%软包覆</text><text x="100" y="470" font-family="system-ui" font-size="16" fill="#666">高频接触内饰面全面软包</text><text x="100" y="510" font-family="system-ui" font-size="16" fill="#666">精致度极大提升</text>
+<rect x="650" y="360" width="580" height="200" rx="16" fill="#f0f4f8"/><rect x="650" y="360" width="580" height="60" fill="#1a365d"/><text x="700" y="402" font-family="system-ui" font-size="22" font-weight="700" fill="#ffffff">电动前备箱</text><text x="700" y="470" font-family="system-ui" font-size="16" fill="#666">105L超大容量</text><text x="700" y="510" font-family="system-ui" font-size="16" fill="#666">支持8种开合方式</text>
+</svg>

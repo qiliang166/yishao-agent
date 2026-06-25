@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="1280" height="720" fill="#0f172a"/>
+  
+  <text x="64" y="80" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="48" font-weight="700" fill="white">
+    更智能：XLA认知大模型
+  </text>
+  <rect x="64" y="100" width="120" height="4" rx="2" fill="#FFB366"/>
+  
+  <!-- XLA Architecture -->
+  <g transform="translate(64, 140)">
+    <rect x="0" y="0" width="1152" height="180" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">XLA 架构</text>
+    <text x="40" y="90" font-family="sans-serif" font-size="32" font-weight="700" fill="white">X: 端到端大模型</text>
+    <text x="420" y="90" font-family="sans-serif" font-size="32" font-weight="700" fill="white">L: 语言模型 + MiMo具身</text>
+    <text x="900" y="90" font-family="sans-serif" font-size="32" font-weight="700" fill="white">A: 拟人执行</text>
+    <text x="40" y="140" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="rgba(255,255,255,0.6)">从"数据驱动"迈入"认知驱动"新范式</text>
+  </g>
+  
+  <!-- Capabilities -->
+  <g transform="translate(64, 360)">
+    <rect x="0" y="0" width="560" height="220" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">核心能力</text>
+    <text x="40" y="85" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">• 首次打通辅助驾驶和具身机器人</text>
+    <text x="40" y="125" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">• 引入多模态输入</text>
+    <text x="40" y="165" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">• 复杂场景理解推理能力提升</text>
+    <text x="40" y="200" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" fill="rgba(255,255,255,0.4)">小米自研MiMo-Embodied具身基座模型</text>
+  </g>
+  
+  <g transform="translate(648, 360)">
+    <rect x="0" y="0" width="568" height="220" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="40" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">体验提升</text>
+    <text x="40" y="85" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">• 决策更可控、更拟人</text>
+    <text x="40" y="125" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">• 行驶更安心、更从容</text>
+    <text x="40" y="165" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">• 全系标配，交付即搭载</text>
+    <text x="40" y="200" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" fill="rgba(255,255,255,0.4)">2年完成同行5-10年的路</text>
+  </g>
+  
+  <text x="1216" y="690" text-anchor="end" font-family="sans-serif" font-size="14" fill="rgba(255,255,255,0.3)">09</text>
+</svg>

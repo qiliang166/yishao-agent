@@ -1,0 +1,13 @@
+{
+  "name": "ppt-agent",
+  "owner": {
+    "name": "zengwenliang416"
+  },
+  "plugins": [
+    {
+      "name": "ppt-agent",
+      "description": "End-to-end PPT slide generation workflow: requirement research → material collection → outline planning → SVG slide design with Bento Grid + Gemini review",
+      "source": "./"
+    }
+  ]
+}

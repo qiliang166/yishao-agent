@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="card-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+    <linearGradient id="highlight-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#FF6900;stop-opacity:0.3"/>
+      <stop offset="100%" style="stop-color:#e65c00;stop-opacity:0.2"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="1280" height="720" fill="#0f172a"/>
+  
+  <text x="64" y="80" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="48" font-weight="700" fill="white">
+    价格发布
+  </text>
+  <rect x="64" y="100" width="120" height="4" rx="2" fill="#FFB366"/>
+  
+  <!-- Price cards -->
+  <g transform="translate(64, 140)">
+    <rect x="0" y="0" width="370" height="320" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="50" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">Standard</text>
+    <text x="40" y="130" font-family="sans-serif" font-size="64" font-weight="700" fill="white">21.99</text>
+    <text x="40" y="170" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="24" fill="rgba(255,255,255,0.6)">万元</text>
+    <text x="40" y="220" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">720km续航</text>
+    <text x="40" y="250" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">752V高压平台</text>
+    <text x="40" y="280" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">320马力</text>
+  </g>
+  
+  <g transform="translate(454, 140)">
+    <rect x="0" y="0" width="370" height="320" rx="20" fill="url(#highlight-bg)" stroke="#FF6900" stroke-width="2"/>
+    <rect x="0" y="0" width="370" height="36" rx="20" fill="#FF6900"/>
+    <text x="185" y="24" text-anchor="middle" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="14" font-weight="600" fill="white">推荐</text>
+    <text x="40" y="70" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">Pro</text>
+    <text x="40" y="150" font-family="sans-serif" font-size="64" font-weight="700" fill="white">24.99</text>
+    <text x="40" y="190" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="24" fill="rgba(255,255,255,0.7)">万元</text>
+    <text x="40" y="240" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.6)">902km续航 ⭐</text>
+    <text x="40" y="270" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.6)">752V高压平台</text>
+    <text x="40" y="300" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.6)">空悬+CDC可选</text>
+  </g>
+  
+  <g transform="translate(844, 140)">
+    <rect x="0" y="0" width="370" height="320" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="50" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="#FFB366" font-weight="600">Max</text>
+    <text x="40" y="130" font-family="sans-serif" font-size="64" font-weight="700" fill="white">30.39</text>
+    <text x="40" y="170" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="24" fill="rgba(255,255,255,0.6)">万元</text>
+    <text x="40" y="220" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">835km续航</text>
+    <text x="40" y="250" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">897V高压平台</text>
+    <text x="40" y="280" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="16" fill="rgba(255,255,255,0.5)">690马力四驱</text>
+  </g>
+  
+  <!-- Comparison -->
+  <g transform="translate(64, 500)">
+    <rect x="0" y="0" width="1152" height="80" rx="20" fill="url(#card-grad)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+    <text x="40" y="50" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="20" fill="white">比特斯拉Model 3便宜5600元 | 续航更长 | 全系标配激光雷达</text>
+  </g>
+  
+  <text x="1216" y="690" text-anchor="end" font-family="sans-serif" font-size="14" fill="rgba(255,255,255,0.3)">12</text>
+</svg>

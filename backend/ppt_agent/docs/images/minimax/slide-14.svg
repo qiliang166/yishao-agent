@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs><linearGradient id="ebg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#1a365d"/><stop offset="100%" style="stop-color:#2a4a7f"/></linearGradient></defs>
+<rect width="1280" height="720" fill="url(#ebg)"/>
+<rect x="0" y="0" width="10" height="720" fill="#e67e22"/>
+<text x="80" y="150" font-family="system-ui" font-size="60" font-weight="700" fill="#ffffff">新一代小米SU7</text>
+<rect x="80" y="180" width="300" height="5" fill="#e67e22" rx="2"/>
+<rect x="80" y="250" width="450" height="140" rx="16" fill="rgba(230,126,34,0.2)" stroke="#e67e22" stroke-width="3"/>
+<text x="130" y="320" font-family="system-ui" font-size="18" fill="rgba(255,255,255,0.7)">官方指导价</text>
+<text x="130" y="370" font-family="system-ui" font-size="64" font-weight="800" fill="#e67e22">21.99<tspan font-size="28">万</tspan></text>
+<text x="80" y="450" font-family="system-ui" font-size="28" fill="#ffffff">即刻下定，享首销权益</text>
+<rect x="80" y="510" width="280" height="60" rx="30" fill="#e67e22"/>
+<text x="220" y="548" text-anchor="middle" font-family="system-ui" font-size="22" font-weight="700" fill="#ffffff">立即下定</text>
+<rect x="400" y="510" width="420" height="60" rx="12" fill="rgba(255,255,255,0.1)"/>
+<text x="430" y="545" font-family="system-ui" font-size="14" fill="rgba(255,255,255,0.8)">标准版/Pro版赠4.4万权益</text>
+<text x="700" y="545" font-family="system-ui" font-size="14" fill="#e67e22">|</text>
+<text x="730" y="545" font-family="system-ui" font-size="14" fill="#e67e22">Max版赠6.9万权益</text>
+<text x="80" y="630" font-family="system-ui" font-size="18" fill="rgba(255,255,255,0.6)">小米SU7 · 新一代驾驶者之车</text>
+</svg>

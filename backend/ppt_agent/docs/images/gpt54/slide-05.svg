@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#07111E"/>
+        <stop offset="55%" stop-color="#0B182B"/>
+        <stop offset="100%" stop-color="#06101B"/>
+      </linearGradient>
+      <linearGradient id="panelGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#132842" stop-opacity="0.96"/>
+        <stop offset="100%" stop-color="#0D1B2F" stop-opacity="0.92"/>
+      </linearGradient>
+      <linearGradient id="indigoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#6D7BFF"/>
+        <stop offset="100%" stop-color="#4C5BEA"/>
+      </linearGradient>
+      <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#42E8FF"/>
+        <stop offset="100%" stop-color="#1AB7D8"/>
+      </linearGradient>
+      <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#FF7A1A"/>
+        <stop offset="100%" stop-color="#FFB15C"/>
+      </linearGradient>
+      <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#FF7A1A" stop-opacity="0"/>
+        <stop offset="30%" stop-color="#FF7A1A" stop-opacity="0.85"/>
+        <stop offset="70%" stop-color="#42E8FF" stop-opacity="0.75"/>
+        <stop offset="100%" stop-color="#42E8FF" stop-opacity="0"/>
+      </linearGradient>
+      <radialGradient id="cyanGlow">
+        <stop offset="0%" stop-color="#42E8FF" stop-opacity="0.55"/>
+        <stop offset="100%" stop-color="#42E8FF" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="orangeGlow">
+        <stop offset="0%" stop-color="#FF7A1A" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#FF7A1A" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="indigoGlow">
+        <stop offset="0%" stop-color="#6D7BFF" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="#6D7BFF" stop-opacity="0"/>
+      </radialGradient>
+      <pattern id="grain" width="120" height="120" patternUnits="userSpaceOnUse">
+        <circle cx="14" cy="16" r="1" fill="#9CB3CF"/>
+        <circle cx="54" cy="46" r="1" fill="#9CB3CF"/>
+        <circle cx="92" cy="18" r="1" fill="#9CB3CF"/>
+        <circle cx="88" cy="92" r="1" fill="#9CB3CF"/>
+        <circle cx="20" cy="78" r="1" fill="#9CB3CF"/>
+      </pattern>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000000" flood-opacity="0.24"/>
+      </filter>
+    </defs>
+    
+    
+    <rect width="1280" height="720" fill="url(#bgGrad)"/>
+    <rect width="1280" height="720" fill="url(#grain)" opacity="0.08"/>
+    <g><line x1="0" y1="0" x2="0" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="128" y1="0" x2="128" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="256" y1="0" x2="256" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="384" y1="0" x2="384" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="512" y1="0" x2="512" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="640" y1="0" x2="640" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="768" y1="0" x2="768" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="896" y1="0" x2="896" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="1024" y1="0" x2="1024" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="1152" y1="0" x2="1152" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="1280" y1="0" x2="1280" y2="720" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="0" y1="0" x2="1280" y2="0" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="0" y1="128" x2="1280" y2="128" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="0" y1="256" x2="1280" y2="256" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="0" y1="384" x2="1280" y2="384" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="0" y1="512" x2="1280" y2="512" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/><line x1="0" y1="640" x2="1280" y2="640" stroke="#8DA7C5" stroke-opacity="0.03" stroke-width="1"/></g>
+    <circle cx="1120" cy="140" r="260" fill="url(#cyanGlow)" opacity="0.15"/>
+    <circle cx="150" cy="620" r="220" fill="url(#orangeGlow)" opacity="0.15"/>
+    
+    <path d="M-40 652 C 160 590 308 612 492 534 S 810 368 1320 176" fill="none" stroke="url(#lineGrad)" stroke-width="2" stroke-linecap="round" opacity="0.62"/>
+    <path d="M-20 630 C 190 560 352 578 522 512 S 846 342 1300 134" fill="none" stroke="#42E8FF" stroke-opacity="0.16" stroke-width="10" stroke-linecap="round"/>
+    
+    
+    <g transform="translate(72,34)"><rect x="0" y="0" width="155" height="32" rx="16" fill="#0F2136" stroke="#315B8D" stroke-width="1"/><text x="77.5" y="21" text-anchor="middle" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="13" font-weight="600" fill="#9FB4CF">Cabin Upgrade</text></g>
+    <text x="72" y="100" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="36" font-weight="700" fill="#F3F7FB">座舱焕新：豪华感从“看上去不错”变成“坐进去就能感到值”</text>
+    <rect x="72" y="112" width="96" height="4" rx="2" fill="url(#orangeGrad)"/>
+    <g transform="translate(1172,34)">
+      <rect x="0" y="0" width="56" height="34" rx="17" fill="#0F2136" stroke="#315B8D" stroke-width="1"/>
+      <text x="28" y="23" text-anchor="middle" font-family="JetBrains Mono, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700" fill="#42E8FF">05</text>
+    </g>
+    
+    <rect x="72" y="150" width="520" height="470" rx="30" fill="url(#panelGrad)" stroke="#23456B" stroke-width="1" filter="url(#shadow)" />
+    <text x="108" y="194" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="18" font-weight="600" fill="#FFB15C">体感升级</text>
+    <text x="108" y="244" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="34" font-weight="800" fill="#F3F7FB">豪华不是“堆配置”</text>
+    <text x="108" y="286" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="34" font-weight="800" fill="#F3F7FB">而是全车都更舒服</text>
+    <path d="M130 450 C 180 388 280 370 356 370 C 432 370 490 392 542 442" fill="none" stroke="#88C6FF" stroke-opacity="0.16" stroke-width="18" stroke-linecap="round"/>
+    <path d="M138 454 C 208 398 288 388 356 388 C 428 388 484 406 538 446" fill="none" stroke="url(#indigoGrad)" stroke-width="4" stroke-linecap="round"/>
+    <path d="M196 486 C 228 462 262 454 306 454 C 342 454 378 460 422 480" fill="none" stroke="#FF7A1A" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="108" cy="494" r="4" fill="#42E8FF"/><text x="124" y="500" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#9FB4CF"><tspan x="124" dy="0">对称式中控 + 金属质感实体按键，视觉秩序更强</tspan></text><circle cx="108" cy="532" r="4" fill="#42E8FF"/><text x="124" y="538" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#9FB4CF"><tspan x="124" dy="0">三层环绕氛围灯 + 高频接触区软包，豪华感更完整</tspan></text><circle cx="108" cy="570" r="4" fill="#42E8FF"/><text x="124" y="576" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#9FB4CF"><tspan x="124" dy="0">静音夹层玻璃与防晒隔热升级，日常舒适感更强</tspan></text>
+
+    <rect x="622" y="150" width="282" height="214" rx="26" fill="url(#panelGrad)" stroke="#23456B" stroke-width="1" filter="url(#shadow)" />
+    <text x="648" y="190" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#FFB15C">驾驶席</text>
+    <circle cx="648" cy="228" r="4" fill="#42E8FF"/><text x="664" y="234" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="664" dy="0">18 向调节</tspan></text><circle cx="648" cy="266" r="4" fill="#42E8FF"/><text x="664" y="272" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="664" dy="0">按摩 + 主动侧翼支撑</tspan></text><circle cx="648" cy="304" r="4" fill="#42E8FF"/><text x="664" y="310" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="664" dy="0">核心感受：更贴身、更稳、更不累</tspan></text>
+
+    <rect x="926" y="150" width="282" height="214" rx="26" fill="url(#panelGrad)" stroke="#23456B" stroke-width="1" filter="url(#shadow)" />
+    <text x="952" y="190" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#FFB15C">副驾与后排</text>
+    <circle cx="952" cy="228" r="4" fill="#42E8FF"/><text x="968" y="234" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="968" dy="0">副驾零重力</tspan></text><circle cx="952" cy="266" r="4" fill="#42E8FF"/><text x="968" y="272" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="968" dy="0">后排更柔软更能躺</tspan></text><circle cx="952" cy="304" r="4" fill="#42E8FF"/><text x="968" y="310" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="968" dy="0">从“坐得下”升级到“愿意坐”</tspan></text>
+
+    <rect x="622" y="388" width="282" height="214" rx="26" fill="url(#panelGrad)" stroke="#23456B" stroke-width="1" filter="url(#shadow)" />
+    <text x="648" y="428" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#FFB15C">静谧与防晒</text>
+    <circle cx="648" cy="466" r="4" fill="#42E8FF"/><text x="664" y="472" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="664" dy="0">全系静音夹层玻璃</tspan></text><circle cx="648" cy="504" r="4" fill="#42E8FF"/><text x="664" y="510" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="664" dy="0">三层镀银前风挡</tspan></text><circle cx="648" cy="542" r="4" fill="#42E8FF"/><text x="664" y="548" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="500" fill="#F3F7FB"><tspan x="664" dy="0">Max 版调光天幕体验更完整</tspan></text>
+
+    <rect x="926" y="388" width="282" height="214" rx="26" fill="#0E1D31" stroke="#315B8D" stroke-width="1" filter="url(#shadow)" />
+    <text x="952" y="428" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="16" font-weight="600" fill="#42E8FF">一句话总结</text>
+    <text x="952" y="476" text-anchor="start" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="24" font-weight="700" fill="#F3F7FB"><tspan x="952" dy="0">这一代不只照顾驾驶者，</tspan><tspan x="952" dy="+32.4">也明显更照顾家人的乘坐感受。</tspan></text>
+    
+    <line x1="72" y1="674" x2="1208" y2="674" stroke="#294B71" stroke-width="1" stroke-opacity="0.55"/>
+    <text x="72" y="694" font-family="Geist Sans, 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="11" fill="#6985A7">来源：小米发布会公开信息、IT之家、雷科技；舒适与静谧描述按公开资料整理</text>
+    
+    </svg>

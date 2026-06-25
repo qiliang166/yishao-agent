@@ -1,4 +1,7 @@
-"""PPT generation service."""
+"""PPT generation service — SVG output with PPTX fallback.
+
+Uses PPT-Agent Bento Grid methodology: style YAML → AI outline → Bento Grid layout → SVG output.
+"""
 import os
 import json
 import asyncio
@@ -10,6 +13,83 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from database import get_db
 
 _logger = logging.getLogger("uvicorn")
+
+
+def _extract_typography(prs) -> dict:
+    """Extract typography info from a PPTX Presentation object."""
+    fonts = set()
+    sizes = set()
+    bold_count = 0
+    total_runs = 0
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        total_runs += 1
+                        f = run.font
+                        if f.name:
+                            fonts.add(f.name)
+                        if f.size:
+                            sizes.add(round(f.size / 12700, 1))
+                        if f.bold:
+                            bold_count += 1
+    return {
+        "fonts": sorted(list(fonts)),
+        "sizes_pt": sorted(list(sizes)),
+        "bold_ratio": round(bold_count / total_runs, 2) if total_runs > 0 else 0,
+        "total_text_runs": total_runs
+    }
+
+
+def _clean_json_response(response: str) -> str:
+    """Strip markdown code fences and extract JSON from AI response."""
+    import re
+    text = response.strip()
+    # Remove markdown code block wrappers
+    text = re.sub(r'^```(?:json)?\s*\n?', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\n?```\s*$', '', text)
+    # Remove PPT-Agent [PPT_OUTLINE] markers
+    text = re.sub(r'\[PPT_OUTLINE\]\s*', '', text)
+    text = re.sub(r'\[/PPT_OUTLINE\]\s*', '', text)
+    return text.strip()
+
+
+def _safe_run_async(coro):
+    """Run an async coroutine from any thread — works in FastAPI thread pools.
+
+    On Windows, asyncio.run() can leak "Event loop is closed" errors from
+    httpx/AsyncOpenAI cleanup callbacks. We always spawn a dedicated daemon
+    thread to fully isolate the event loop lifecycle.
+    """
+    import concurrent.futures
+    import threading
+
+    result = [None]
+    error = [None]
+
+    def _runner():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result[0] = loop.run_until_complete(coro)
+            finally:
+                # Pump remaining callbacks before closing
+                loop.call_soon(lambda: None)
+                loop.run_until_complete(asyncio.sleep(0))
+                loop.close()
+        except Exception as e:
+            error[0] = e
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+    t.join(timeout=300)
+    if t.is_alive():
+        raise TimeoutError("LLM API call timed out after 300s")
+    if error[0]:
+        raise error[0]
+    return result[0]
 
 _NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
@@ -28,18 +108,53 @@ def _set_font_all(run, font_name: str):
     ea.set("typeface", font_name)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
 
+def _load_style_from_template(template_id: str = None) -> str:
+    """Extract style_id from template rules. Defaults to 'business'."""
+    if not template_id:
+        return "business"
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT rules FROM templates WHERE id = ?", (template_id,)
+        ).fetchone()
+        if row and row["rules"]:
+            rules = json.loads(row["rules"])
+            style_id = rules.get("style_id", "")
+            if style_id:
+                return style_id
+    except Exception:
+        pass
+    finally:
+        db.close()
+    return "business"
+
+
+
 def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                  output_dir: str = None, provider_id: str = "",
-                 model: str = "", slide_plan: list = None) -> str:
-    """Generate a PPTX file from content. Uses AI when provider+model provided, falls back to mechanical split."""
+                 model: str = "", slide_plan: list = None, format: str = "svg",
+                 project_name: str = "", column_id: str = "") -> str:
+    """Generate presentation from content. Default: SVG (PPT-Agent Bento Grid).
+
+    When provider+model provided, uses AI staged generation.
+    When format='pptx', falls back to legacy PPTX pipeline.
+    Returns (output_path, slide_data) — output_path is HTML path for SVG, PPTX path for PPTX.
+    """
+    # Build human-readable dir name: "{项目名}_{类型}" (e.g. "测试1_道术PPT")
+    col_label_map = {"col4": "道术PPT", "col5": "研学PPT", "col3": "SOP课件", "col2": "SOP课件"}
+    safe_proj = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip() if project_name else ""
+    col_label = col_label_map.get(column_id, "PPT")
+    dir_name = f"{safe_proj}_{col_label}" if safe_proj else ""
     prs = None
     slide_data = None
     rules = {}
     typography_profile = None
+    style_id = "business"
 
     if slide_plan is not None:
         slide_data = slide_plan
@@ -50,8 +165,18 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             row = db.execute(
                 "SELECT file_path, rules, typography_profile, branding_config FROM templates WHERE id = ?",
                 (template_id,)).fetchone()
-            if row and row["file_path"] and os.path.exists(row["file_path"]):
-                prs = Presentation(row["file_path"])
+            if row:
+                if row["file_path"]:
+                    fp = row["file_path"]
+                    if not os.path.isabs(fp):
+                        fp_ws = os.path.join(WORKSPACE_ROOT, fp)
+                        fp_be = os.path.join(BASE_DIR, fp)
+                        if os.path.exists(fp_ws):
+                            fp = fp_ws
+                        elif os.path.exists(fp_be):
+                            fp = fp_be
+                    if os.path.exists(fp) and fp.endswith('.pptx'):
+                        prs = Presentation(fp)
                 if not branding and row["branding_config"]:
                     try:
                         branding = json.loads(row["branding_config"])
@@ -67,138 +192,273 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                         rules = json.loads(row["rules"])
                     except Exception:
                         pass
-                if not rules:
-                    try:
-                        cfg = db.execute(
-                            "SELECT rules FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
-                        ).fetchone()
-                        if cfg and cfg["rules"]:
-                            rules = json.loads(cfg["rules"])
-                    except Exception:
-                        pass
 
-                print(f"[PPT-DBG] AI check: pid={bool(provider_id)} model={bool(model)} rules_empty={not rules} rules_keys={list(rules.keys()) if rules else 'N/A'} content_len={len(content.strip()) if content else 0}", flush=True)
-                if slide_data is None and provider_id and model and rules and content.strip():
+                # Extract style_id from template rules (for SVG mode)
+                style_id = rules.get("style_id", "business")
+
+                print(f"[PPT-DBG] AI check: pid={bool(provider_id)} model={bool(model)} "
+                      f"style={style_id} "
+                      f"rules_empty={not rules} "
+                      f"content_len={len(content.strip()) if content else 0}", flush=True)
+
+                if slide_data is None and provider_id and model and content.strip():
                     print("[PPT-DBG] Using AI staged generation", flush=True)
-                    # Load column config prompt+skill for AI generation
                     col_prompt = ""
                     col_skill = ""
                     try:
+                        # Query the specific column_id passed from frontend (col4=道术, col5=研学)
+                        target_col = column_id if column_id in ('col4', 'col5', 'col3', 'col2') else 'col4'
                         cfg2 = db.execute(
-                            "SELECT prompt, skill FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
+                            "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
+                            (target_col,)
                         ).fetchone()
                         if cfg2:
                             col_prompt = cfg2["prompt"] or ""
                             col_skill = cfg2["skill"] or ""
+                            # Merge column_configs rules into template rules (template wins)
+                            try:
+                                col_rules = json.loads(cfg2["rules"] or "{}")
+                                if col_rules and isinstance(col_rules, dict):
+                                    merged = dict(col_rules)
+                                    merged.update(rules)
+                                    rules = merged
+                            except Exception:
+                                pass
                     except Exception:
                         pass
                     slide_data = _generate_slides_staged(provider_id, model, rules, content,
                                                          col_prompt, col_skill)
-                    print(f"[PPT-DBG] AI result: {bool(slide_data)}, slides={len(slide_data) if slide_data else 0}", flush=True)
+                    print(f"[PPT-DBG] AI result: {bool(slide_data)}, "
+                          f"slides={len(slide_data) if slide_data else 0}", flush=True)
                     if not slide_data:
-                        print("[PPT-DBG] AI generation failed, falling back to mechanical split", flush=True)
+                        print("[PPT-DBG] AI generation failed — no fallback, returning error", flush=True)
                 else:
-                    print("[PPT-DBG] Skipping AI, using mechanical fill", flush=True)
+                    if not slide_data:
+                        print("[PPT-DBG] No AI provider/model and no saved plan — cannot generate", flush=True)
         finally:
             db.close()
 
-    if prs is None:
-        prs = Presentation()
+    # ── SVG path (default: try AI-SVG direct first, fall back to code-rendered) ──
+    if format != "pptx" and slide_data and isinstance(slide_data, list) and len(slide_data) > 0:
+        print(f"[PPT-DBG] Rendering SVG deck: {len(slide_data)} slides, style={style_id}", flush=True)
+        from services.svg_designer import DeckDesigner
+        from services.llm_service import generate as llm_generate
 
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
+        designer = DeckDesigner(style_name=style_id, branding=branding)
+        title = "Presentation"
+        if isinstance(slide_data[0], dict):
+            z = slide_data[0].get("zones", {})
+            title = z.get("heading", "") or z.get("title", "") or "Presentation"
 
-    if slide_data and isinstance(slide_data, list) and len(slide_data) > 0:
-        from services.ppt_designer import extract_design, build_slide
-        _remove_all_slides(prs)
-        design = extract_design(rules, typography_profile)
-        for sd in slide_data:
-            if not isinstance(sd, dict):
-                continue
-            slide_type = sd.get("type", "content")
-            zones = sd.get("zones", {})
-            if not isinstance(zones, dict):
-                zones = {}
-            build_slide(prs, slide_type, zones, design)
-    else:
-        _remove_all_slides(prs)
-        _mechanical_fill(prs, content)
-
-    if branding:
-        for slide in prs.slides:
-            left = Inches(0.5)
-            top = Inches(7.0)
-            width = Inches(12.3)
-            height = Inches(0.4)
-            txBox = slide.shapes.add_textbox(left, top, width, height)
-            tf = txBox.text_frame
-            if branding.get("copyright"):
-                tf.text = branding["copyright"]
-            if branding.get("signature"):
-                p = tf.add_paragraph()
-                p.text = branding["signature"]
-                p.alignment = PP_ALIGN.RIGHT
-
-    if typography_profile:
-        spacing = _compute_spacing_from_profile(typography_profile)
-    else:
-        db = get_db()
         try:
-            spacing = _load_spacing_rules(db)
-        finally:
-            db.close()
-    _normalize_formatting(prs, spacing)
+            # ── Try AI-SVG direct generation (PPT-Agent slide-core quality) ──
+            ai_svg_slides = None
+            if provider_id and model:
+                print(f"[PPT-DBG] Attempting AI-SVG direct generation...", flush=True)
+                try:
+                    ai_svg_slides = _stage3_svg(provider_id, model, llm_generate,
+                                                 slide_data, style_id=style_id,
+                                                 rules=rules)
+                except Exception as e:
+                    print(f"[PPT-DBG] AI-SVG generation failed: {e}", flush=True)
 
-    filename = f"ppt_{os.urandom(4).hex()}.pptx"
-    target_dir = output_dir if output_dir else EXPORT_DIR
-    os.makedirs(target_dir, exist_ok=True)
-    filepath = os.path.join(target_dir, filename)
-    prs.save(filepath)
-    return filepath
+            if ai_svg_slides and len(ai_svg_slides) > 0:
+                slides_info, preview_html, svg_dir, _run_id = designer.render_deck_from_ai_svg(
+                    ai_svg_slides, title, output_dir, dir_name
+                )
+                print(f"[PPT-DBG] AI-SVG deck: {len(slides_info)} slides → {svg_dir}", flush=True)
+            else:
+                slides_info, preview_html, svg_dir, _run_id = designer.render_deck(
+                    slide_data, title, output_dir, dir_name
+                )
+                print(f"[PPT-DBG] Code-rendered SVG deck: {len(slides_info)} slides → {svg_dir}", flush=True)
+
+            html_path = os.path.join(svg_dir, "index.html")
+            return html_path, slide_data
+        except Exception as e:
+            print(f"[PPT-DBG] SVG rendering failed ({e}), falling back to PPTX", flush=True)
+            format = "pptx"  # fall through to PPTX path
+
+    # ── PPTX fallback ──
+    if format == "pptx":
+        if prs is None:
+            prs = Presentation()
+
+        prs.slide_width = Inches(13.333)
+        prs.slide_height = Inches(7.5)
+
+        if slide_data and isinstance(slide_data, list) and len(slide_data) > 0:
+            from services.ppt_designer import extract_design, build_slide
+            _remove_all_slides(prs)
+            design = extract_design(rules, typography_profile)
+            for sd in slide_data:
+                if not isinstance(sd, dict):
+                    continue
+                slide_type = sd.get("type", "content")
+                zones = sd.get("zones", {})
+                if not isinstance(zones, dict):
+                    zones = {}
+                build_slide(prs, slide_type, zones, design)
+        else:
+            _remove_all_slides(prs)
+            _mechanical_fill(prs, content)
+
+        if branding:
+            for slide in prs.slides:
+                left = Inches(0.5)
+                top = Inches(7.0)
+                width = Inches(12.3)
+                height = Inches(0.4)
+                txBox = slide.shapes.add_textbox(left, top, width, height)
+                tf = txBox.text_frame
+                if branding.get("copyright"):
+                    tf.text = branding["copyright"]
+                if branding.get("signature"):
+                    p = tf.add_paragraph()
+                    p.text = branding["signature"]
+                    p.alignment = PP_ALIGN.RIGHT
+
+        if typography_profile:
+            spacing = _compute_spacing_from_profile(typography_profile)
+        else:
+            db = get_db()
+            try:
+                spacing = _load_spacing_rules(db)
+            finally:
+                db.close()
+        _normalize_formatting(prs, spacing)
+
+        filename = f"ppt_{os.urandom(4).hex()}.pptx"
+        target_dir = output_dir if output_dir else EXPORT_DIR
+        os.makedirs(target_dir, exist_ok=True)
+        filepath = os.path.join(target_dir, filename)
+        prs.save(filepath)
+        return filepath, slide_data
+
+    # No viable path
+    return None, None
 
 
 # ── Staged AI slide generation ──
 
+def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: str) -> str:
+    """Phase 2 (Research): Deep SOP content analysis — matches PPT-Agent research-core.
+
+    PPT-Agent research-core 'research' mode outputs research-context.md with:
+    Background, Key Insights, Common Angles, Suggested Focus Areas.
+
+    Instead of web search, LLM deeply analyzes the SOP content itself,
+    producing the same structured research context for Stage 1.
+    """
+    if not sop_content or not sop_content.strip():
+        return ""
+
+    research_system = (
+        "你是专业的内容研究员。对提供的 SOP 文档进行深度结构化分析。"
+        "\n\n你的任务不是总结内容，而是："
+        "\n1. 识别文档的核心主题、领域背景和行业语境"
+        "\n2. 提取关键概念、术语定义、数据指标、度量值"
+        "\n3. 梳理内容的逻辑结构：主论点、分论点、支撑论据的层级关系"
+        "\n4. 识别可转化为图表的数据点（数字、对比、趋势、比例）"
+        "\n5. 标记最值得在演示文稿中强调的重点（差异化价值、反直觉发现、关键数据）"
+        "\n\n按以下结构输出："
+        "\n## 背景与领域语境"
+        "\n## 核心发现与关键洞察"
+        "\n## 内容逻辑结构（金字塔层级）"
+        "\n## 可提取的数据点与量化指标"
+        "\n## 建议的重点强调方向"
+        "\n## 潜在图表机会"
+    )
+
+    research_user = f"""## SOP 文档（唯一分析对象）
+{sop_content}
+
+## 任务
+深度分析上述 SOP 文档，输出结构化的研究上下文。这将用于后续的 PPT 大纲规划和内容提取。"""
+
+    try:
+        response = _safe_run_async(llm_generate(provider_id, model,
+            research_system, research_user, temperature=0.7))
+        _logger.info(f"Phase 2 research: {len(response)} chars of analysis")
+        return response
+    except Exception as e:
+        _logger.warning(f"Phase 2 research failed: {e}")
+        return ""
+
+
 def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_content: str,
                             system_prompt: str = "", skill_template: str = "") -> list | None:
-    """Three-stage pipeline: content → structure → final JSON.
+    """Pipeline matching PPT-Agent Phases 2-6:
 
-    Stage 1 (AI): Extract & organize content from SOP — AI decides page count.
-    Stage 2 (AI): Map content to layout types & zones.
-    Stage 3 (code): Validate against rules, no AI.
+    Phase 2 (Research): Deep SOP analysis → research context.
+    Phase 4 (Outline): Extract & organize content → outline with body text.
+    Phase 5+6 (Cards): AI selects layout + fills card content → structured data.
+    Rendering: svg_designer.render_deck() mechanically renders SVG from card data.
 
-    Args:
-        system_prompt: Template's role+design+behavior prompt (used as system message).
-        skill_template: Template's structural SKILL with placeholders (used in user message).
+    AI does NOT write SVG. Code renders SVG.
     """
     from services.llm_service import generate as llm_generate
 
+    # ── Phase 2: Research (SOP deep analysis → research-context) ──
+    research_context = ""
+    try:
+        research_context = _phase2_research(provider_id, model, llm_generate, sop_content)
+        if research_context:
+            _logger.info(f"Phase 2 research done: {len(research_context)} chars")
+    except Exception as e:
+        _logger.warning(f"Phase 2 research failed (proceeding without): {e}")
+
+    # ── Phase 4: Content extraction (outline + body per slide) ──
     stage1 = _stage1_content(provider_id, model, llm_generate, rules, sop_content,
-                             system_prompt, skill_template)
+                             system_prompt, skill_template, research_context=research_context)
     if not stage1:
         return None
-    _logger.info(f"Stage 1 done: {len(stage1)} slides extracted")
+    _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
 
-    stage2 = _stage2_structure(provider_id, model, llm_generate, rules, stage1, sop_content,
-                               system_prompt)
+    # ── Phase 5+6: Card content filling (AI selects layout + structures cards) ──
+    style_id = rules.get("style_id", "business")
+    stage2 = _stage2_cards(provider_id, model, llm_generate, rules,
+                           stage1, style_id=style_id)
     if not stage2:
         return None
-    _logger.info(f"Stage 2 done: {len(stage2)} slides mapped")
+    _logger.info(f"Phase 5+6 cards: {len(stage2)} slides structured")
 
     return stage2
 
 
 def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
-                    system_prompt: str = "", skill_template: str = "") -> list | None:
-    """Stage 1: Extract and organize content from SOP following the template's skill structure."""
+                    system_prompt: str = "", skill_template: str = "",
+                    research_context: str = "") -> list | None:
+    """Stage 1: Two-phase — outline first, then fill content per slide in batches.
+
+    research_context from Phase 2 (research-core) provides pre-analyzed SOP structure,
+    key insights, data points, and suggested focus areas.
+    """
     content_spec = rules.get("content_spec", "")
     page_rhythm = rules.get("page_rhythm", {})
 
-    system = system_prompt if system_prompt else (
-        "你是内容编辑专家。从 SOP 文章中提取内容，严格按照大纲结构为每一页幻灯片编写内容。"
-        "核心纪律：大纲中的每个「技法」/「步骤」/「章节」必须独占一页，绝不合并。"
-        "即使 SOP 很短，封面页和总结页也不可省略。"
-        "每页一主题，内容聚焦不堆砌。输出纯 JSON，不要用 markdown 包裹。"
+    # Load outline-architect prompt (UI-configurable via column_configs rules, disk fallback)
+    outline_spec = ""
+    if rules.get("outline_architect_prompt"):
+        outline_spec = rules["outline_architect_prompt"]
+    if not outline_spec:
+        outline_spec = _load_outline_spec()
+
+    # Load cognitive design principles (referenced by outline-architect.md)
+    cognitive_spec_stage1 = rules.get("cognitive_design_principles", "") if rules else ""
+    if not cognitive_spec_stage1:
+        cognitive_spec_stage1 = _load_cognitive_spec()
+
+    base_system = system_prompt if system_prompt else (
+        f"""{outline_spec}
+
+    ## 认知设计原则（必须遵守）
+    {cognitive_spec_stage1}
+
+    重要补充：从提供的 SOP 文章中提取内容，严格按金字塔原理组织大纲。
+    核心纪律：大纲中的每个「技法」/「步骤」/「章节」必须独占一页，绝不合并。
+    即使 SOP 很短，封面页和总结页也不可省略。
+    每页一主题，内容聚焦不堆砌。输出纯 JSON，不要用 markdown 包裹。"""
     )
 
     rhythm_seq = " → ".join(page_rhythm.get("sequence", ["cover", "toc", "content*N", "summary"]))
@@ -210,7 +470,18 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 """
 
-    user = f"""{skill_block}## 内容大纲（强制结构，每个 ### 节点至少一页）
+    # ── Research context block (from Phase 2) ──
+    research_block = ""
+    if research_context:
+        research_block = f"""## 研究上下文（SOP 深度分析结果）
+{research_context[:4000]}
+
+---
+
+"""
+
+    # ── Phase 1: Generate outline (headings + page types + layout hints, lightweight) ──
+    outline_user = f"""{research_block}{skill_block}## 内容大纲（强制结构，每个 ### 节点至少一页）
 {content_spec if content_spec else '封面 + 目录 + 内容章节 + 总结'}
 
 ## 页面结构约束（铁律）
@@ -218,33 +489,99 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 - 封面 1 页 + 目录 1 页 + 总结 1 页 = 至少 3 页结构页，不可删减
 - 大纲中每个 ### 技法节点 = 独立一页，多个技法 = 多页，禁止合并
 - 只有内容极丰富的单个技法才可拆分为多页
-
-## 必填页清单（从大纲推导）
-先数出 SOP 中有几个独立技法/步骤，每个技法一页。页码编排：1.封面 2.目录 3~N.各技法页 N+1.总结
+- 每页只传达一个核心信息（4±1 个信息单元）
+- 视觉节奏：避免连续 3 页以上高密度，高低交错
 
 ## SOP 文章（唯一内容来源）
 {sop_content}
 
-## 输出格式
+## 输出格式（仅输出大纲，每页包含 heading, page_type, layout_hint, visual_weight, key_points）
 ```json
-{{"slides": [{{"seq":1,"heading":"页标题","body":"页正文","notes":"备注或反面后果(可选)"}}, ...]}}
+{{"slides": [
+  {{"seq":1,"heading":"页标题","page_type":"cover","layout_hint":"single_focus","visual_weight":"low","key_points":["要点1"]}},
+  {{"seq":2,"heading":"目录","page_type":"toc","layout_hint":"three_column","visual_weight":"low","key_points":["章节概览"]}},
+  ...
+]}}
 ```
 铁律：
 - 大纲的每个 ### 节点至少对应一张幻灯片
-- 所有文字从 SOP 提取归纳，不编造
-- 仅输出 JSON"""
+- page_type 从以下选择: cover, toc, content, technique, principle, process_flow, comparison, duo_compare, table, grid_cards, troubleshoot, summary, copyright, appendix
+- layout_hint 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
+- visual_weight 从以下选择: low, medium, high
+- key_points 为每页 3-5 个关键点
+- 仅输出 JSON，不输出其他文字"""
 
+    outline = None
     for attempt in range(2):
         try:
-            response = asyncio.run(llm_generate(provider_id, model, system, user, temperature=0.3))
+            response = _safe_run_async(llm_generate(provider_id, model,
+                base_system, outline_user, temperature=1.0))
             response = _clean_json_response(response)
             data = json.loads(response)
             slides = data.get("slides", data) if isinstance(data, dict) else data
             if isinstance(slides, list) and len(slides) > 0:
-                return slides
+                outline = slides
+                break
         except Exception as e:
-            _logger.warning(f"Stage 1 attempt {attempt+1} failed: {e}")
-    return None
+            _logger.warning(f"Stage 1 outline attempt {attempt+1} failed: {e}")
+
+    if not outline:
+        _logger.error("Stage 1 outline generation failed after retries")
+        return None
+    _logger.info(f"Stage 1 outline: {len(outline)} slides")
+
+    # ── Phase 2: Fill content per slide in batches ──
+    BATCH_SIZE = 4
+    fill_system = (
+        "你是内容编辑专家。根据 SOP 文章和金字塔原理为指定幻灯片填充正文内容。"
+        "遵循结论先行、以上统下、归类分组(MECE)、逻辑递进四大原则。"
+        "从 SOP 中提取归纳对应部分的内容，不编造。输出纯 JSON，不要用 markdown 包裹。"
+    )
+
+    for batch_start in range(0, len(outline), BATCH_SIZE):
+        batch = outline[batch_start:batch_start + BATCH_SIZE]
+        batch_json = json.dumps(batch, ensure_ascii=False, indent=2)
+
+        fill_user = f"""## SOP 文章（唯一内容来源）
+{sop_content}
+
+## 需要填充的幻灯片（只输出这些幻灯片的 body 和 notes，不要更改其他字段）
+{batch_json}
+
+## 输出格式
+```json
+{{"slides": [{{"seq":1,"heading":"原样保留","body":"从此 SOP 提取归纳的正文（结论先行，先给核心论点再展开）","notes":"备注或反面后果(可选)","layout_hint":"原样保留","visual_weight":"原样保留","key_points":["原文保留"]}}, ...]}}
+```
+铁律：
+- 只输出以上幻灯片，不增减
+- heading, layout_hint, visual_weight, key_points 保持原样
+- body 从此 SOP 对应部分提取归纳，每页至少 80 字，结论先行
+- 仅输出 JSON"""
+
+        for attempt in range(2):
+            try:
+                response = _safe_run_async(llm_generate(provider_id, model,
+                    fill_system, fill_user, temperature=1.0))
+                response = _clean_json_response(response)
+                data = json.loads(response)
+                filled = data.get("slides", data) if isinstance(data, dict) else data
+                if isinstance(filled, list):
+                    for f in filled:
+                        seq = f.get("seq", 0)
+                        idx = seq - 1
+                        if 0 <= idx < len(outline):
+                            outline[idx]["body"] = f.get("body", outline[idx].get("body", ""))
+                            outline[idx]["notes"] = f.get("notes", outline[idx].get("notes", ""))
+                            if f.get("layout_hint"):
+                                outline[idx]["layout_hint"] = f["layout_hint"]
+                            if f.get("visual_weight"):
+                                outline[idx]["visual_weight"] = f["visual_weight"]
+                break
+            except Exception as e:
+                if attempt == 1:
+                    _logger.warning(f"Stage 1 fill batch {batch_start//BATCH_SIZE+1} failed: {e}")
+
+    return outline
 
 
 def _build_guizang_field_spec(style_family: str) -> dict:
@@ -325,750 +662,660 @@ def _build_guizang_field_spec(style_family: str) -> dict:
         }
 
 
-def _stage2_structure(provider_id, model, llm_generate, rules, stage1_slides, sop_content,
-                      system_prompt: str = "") -> list | None:
-    """Stage 2: Assign layout types and map content to zones."""
-    page_rhythm = rules.get("page_rhythm", {})
-    design_principles = rules.get("design_principles", [])
-    style_family = rules.get("design_rules", {}).get("style_family") or "swiss"
-    field_spec = _build_guizang_field_spec(style_family)
+def _load_svg_prompt_specs() -> tuple[str, str]:
+    """Load svg-generator.md and bento-grid-layout.md from ppt_agent/."""
+    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared", "references", "prompts")
+    prompts_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
 
-    # Build compact layout reference from guizang field specs
-    layout_ref_lines = []
-    for type_id, spec in sorted(field_spec.items()):
-        fields = spec["fields"]
-        fields_str = ", ".join(fields)
-        layout_ref_lines.append(f"- **{type_id}** ({spec['name']}): zones = [{fields_str}]")
-        # Document nested array field schemas
-        for suffix, sub_fields in [
-            ("cards_fields","cards"), ("cells_fields","cells"), ("towers_fields","towers"),
-            ("bars_fields","bars"), ("timeline_nodes","nodes_fields"), ("nodes_fields","nodes"),
-            ("takeaways_fields","takeaways"), ("metrics_fields","metrics"),
-            ("stats_fields","stats"), ("images_fields","images"),
-            ("steps_fields","steps"), ("layers_fields","layers"),
-            ("kpi_fields","kpi_items"), ("columns_fields","columns"),
-            ("rows_fields","rows"), ("briefs_fields","briefs"),
-            ("pipelines_fields","pipelines"), ("nodes_fields","nodes"),
-        ]:
-            if suffix in spec:
-                sub = spec[suffix]
-                layout_ref_lines.append(f"  └ 数组元素 {spec['name']} 的字段: [{', '.join(sub)}]")
+    def _read(filename):
+        for d in [ppt_agent_dir, prompts_dir]:
+            p = os.path.join(d, filename)
+            if os.path.exists(p):
+                with open(p, "r", encoding="utf-8") as f:
+                    return f.read()
+        return ""
 
-    rhythm_str = " → ".join(page_rhythm.get("sequence", []))
-    alt_rule = page_rhythm.get("alternation_rule", "")
-    p0_rule = page_rhythm.get("p0_violation", "")
+    return _read("svg-generator.md"), _read("bento-grid-layout.md")
 
-    principles_str = "\n".join(f"- {dp.get('rule','')}" for dp in design_principles)
 
-    # Build a compact example showing cover + closing with correct field names
-    cover_fields = field_spec.get("cover", {}).get("fields", [])
-    closing_fields = field_spec.get("closing", {}).get("fields", [])
-    cover_example = {f: "..." for f in cover_fields[:5]}
-    closing_example = {}
-    for f in closing_fields[:5]:
-        if f not in ("takeaways",):
-            closing_example[f] = "..."
-    if "takeaways" in closing_fields:
-        closing_example["takeaways"] = [{"num":"01","title":"...","desc":"..."}]
+def _load_outline_spec() -> str:
+    """Load outline-architect.md from ppt_engine/prompts/."""
+    prompts_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
+    outline_path = os.path.join(prompts_dir, "outline-architect.md")
+    if os.path.exists(outline_path):
+        with open(outline_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
 
-    system = system_prompt if system_prompt else (
-        "你是PPT结构设计专家。你的任务是为每张幻灯片分配合适的版式类型(layout type)，"
-        "并将内容映射到版式对应的 zones 中。zones 的字段名必须严格使用下方定义。"
-        "输出纯 JSON，不要用 markdown 包裹。"
-    )
 
-    user = f"""## 可用版式类型及字段定义（zones 必须使用这些字段名）
-{chr(10).join(layout_ref_lines)}
+def _load_style_yaml_text(style_id: str) -> str:
+    """Load a style YAML file as text for embedding in AI prompts."""
+    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared", "references", "styles")
+    legacy_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "styles")
+    for d in [ppt_agent_dir, legacy_dir]:
+        p = os.path.join(d, f"{style_id}.yaml")
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                return f.read()
+    return ""
 
-## 页面节奏规则
-- 序列模式: {rhythm_str}
-- {alt_rule}
-- 严禁: {p0_rule}
 
-## 设计原则
-{principles_str}
+def _load_cognitive_spec() -> str:
+    """Load cognitive-design-principles.md from ppt_agent/."""
+    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared", "references", "prompts")
+    legacy_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
+    for d in [ppt_agent_dir, legacy_dir]:
+        p = os.path.join(d, "cognitive-design-principles.md")
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                return f.read()
+    return ""
 
-## 幻灯片内容（从 SOP 提取）
+
+def _load_reviewer_spec() -> str:
+    """Load reviewer.md from ppt_agent/ — PPT-Agent review-core's reviewer prompt."""
+    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "gemini-cli", "references", "roles")
+    prompts_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
+    for d in [ppt_agent_dir, prompts_dir]:
+        p = os.path.join(d, "reviewer.md")
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                return f.read()
+    return ""
+
+
+def _validate_cards(slides: list) -> list[str]:
+    """Structural validation of AI-generated card data.
+
+    Checks: cards ≤5 per slide (Miller's Law), each card has role, layout valid,
+    type present, card has title or body, cover ≤3 info units.
+    Returns list of error strings. Empty list = all valid.
+    """
+    VALID_LAYOUTS = {
+        "single_focus", "two_column", "two_column_asymmetric", "three_column",
+        "hero_grid", "mixed_grid", "dashboard", "timeline", "horizontal_split", "full_bleed"
+    }
+    VALID_TYPES = {
+        "cover", "toc", "content", "technique", "principle", "process_flow",
+        "comparison", "duo_compare", "table", "grid_cards", "troubleshoot",
+        "summary", "copyright", "appendix", "data_hero", "timeline", "section",
+        "quote", "closing", "chapter", "image_hero", "food_archive", "skill_card",
+        "image_grid", "process_timeline"
+    }
+    issues = []
+    for i, slide in enumerate(slides):
+        if not isinstance(slide, dict):
+            issues.append(f"Slide {i}: not a dict, got {type(slide).__name__}")
+            continue
+        sid = slide.get("seq", i + 1)
+        stype = slide.get("type", "")
+        layout = slide.get("layout", "")
+        zones = slide.get("zones", {})
+
+        if not stype:
+            issues.append(f"Slide {sid}: missing 'type' field")
+        elif stype not in VALID_TYPES:
+            issues.append(f"Slide {sid}: unknown type '{stype}'")
+
+        if layout and layout not in VALID_LAYOUTS:
+            issues.append(f"Slide {sid}: invalid layout '{layout}'")
+
+        if not isinstance(zones, dict):
+            issues.append(f"Slide {sid}: 'zones' must be a dict")
+            continue
+
+        cards = zones.get("cards", [])
+        if not isinstance(cards, list):
+            issues.append(f"Slide {sid}: zones.cards must be a list")
+            continue
+
+        num_cards = len(cards)
+        if num_cards == 0:
+            heading = zones.get("heading", "") or zones.get("title", "") or zones.get("kicker", "")
+            body = zones.get("body", "") or zones.get("lead", "") or zones.get("body_text", "")
+            if not heading and not body:
+                issues.append(f"Slide {sid}: no cards and no heading/body in zones")
+        elif num_cards > 5:
+            issues.append(f"Slide {sid}: {num_cards} cards exceeds Miller's Law limit (max 5)")
+
+        for ci, card in enumerate(cards):
+            if not isinstance(card, dict):
+                issues.append(f"Slide {sid} card {ci}: not a dict")
+                continue
+            if "role" not in card:
+                issues.append(f"Slide {sid} card {ci}: missing 'role'")
+            has_content = card.get("title") or card.get("body") or card.get("chart")
+            if not has_content:
+                issues.append(f"Slide {sid} card {ci}: no title, body, or chart")
+
+        if stype == "cover" and num_cards > 3:
+            issues.append(f"Slide {sid}: cover has {num_cards} cards (max 3 info units)")
+
+    return issues
+
+
+def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
+                   style_id: str = "business") -> list | None:
+    """Phase 5+6: AI selects Bento Grid layout + fills card content per slide.
+
+    Input: stage1_slides [{seq, heading, page_type, layout_hint, body, ...}, ...]
+    Output: [{type, layout, zones: {kicker, heading, lead, cards: [{role, title, body, chart}]}}, ...]
+
+    Includes validation loop: generate → validate → if issues → fix (max 2 rounds).
+    On generation failure, converts raw zones as fallback.
+    """
+    svg_spec, bento_spec = _load_svg_prompt_specs()
+    cognitive_spec = _load_cognitive_spec()
+    reviewer_spec = _load_reviewer_spec()
+    style_yaml = _load_style_yaml_text(style_id)
+
+    spec_version = rules.get("spec_version", "2.2.1")
+
+    # ── System prompt for card generation (PPT-Agent design-core + reviewer) ──
+    cards_system = f"""{svg_spec}
+
+{bento_spec}
+
+## 认知设计原则
+{cognitive_spec}
+
+## 设计评审标准（用于自检）
+{reviewer_spec}
+
+## 风格 Token（颜色/字体/阴影/圆角）
+{style_yaml}
+
+你是演示文稿设计专家。根据大纲内容和以上设计规范：
+1. 为每页选择合适的 Bento Grid 布局
+2. 将内容转化为结构化的卡片数据（role, title, body, chart）
+3. 每页最多 5 张卡片（Miller's Law: 4±1 个信息单元）
+4. 封面最多 3 个信息单元
+
+输出纯 JSON，不要用 markdown 包裹。"""
+
+    # ── Batch generation with validation loop ──
+    BATCH_SIZE = 3
+    MAX_FIX_ROUNDS = 2
+    result = []
+
+    for batch_start in range(0, len(stage1_slides), BATCH_SIZE):
+        batch = stage1_slides[batch_start:batch_start + BATCH_SIZE]
+        batch_json = json.dumps(batch, ensure_ascii=False, indent=2)
+
+        cards_user = f"""## 大纲（content-core 输出，每页已填充 body 正文）
+{batch_json}
+
+## 任务
+为以上幻灯片选择布局并填充卡片内容。每页输出格式：
 ```json
-{json.dumps({"slides": stage1_slides}, ensure_ascii=False, indent=2)}
+{{"slides": [
+  {{"seq": 1, "type": "cover", "layout": "full_bleed",
+    "zones": {{"heading": "标题", "kicker": "标签", "lead": "副标题",
+      "cards": [{{"role": "hero", "title": "主标题", "body": "正文内容"}}]
+    }}
+  }},
+  {{"seq": 2, "type": "content", "layout": "hero_grid",
+    "zones": {{"heading": "页标题", "kicker": "章节标签",
+      "cards": [
+        {{"role": "hero", "title": "核心观点", "body": "详细内容"}},
+        {{"role": "metric", "title": "数据1", "chart": {{"type": "big_number", "value": 85, "label": "%"}}}}
+      ]
+    }}
+  }}
+]}}
 ```
 
-## SOP 原文（用于验证内容准确性）
-{sop_content[:2000]}
+铁律：
+- 只输出此批次的幻灯片，按 seq 顺序
+- type 从以下选择: cover, toc, content, technique, principle, process_flow, comparison, duo_compare, table, grid_cards, summary, data_hero, troubleshoot, quote, closing, section, appendix, copyright
+- layout 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
+- 每卡必有 role (hero/metric/card_0/card_1/left/right/cell_0_0 等)
+- 每卡必有 title 或 body 或 chart
+- 封面页 layout=full_bleed，cards 最多 3 个
+- 图表用 chart 字段: {{type: "big_number"|"donut"|"bar"|"progress_bar"|"timeline"|"sparkline", ...}}
+- {spec_version} 规范：识别并转化数据为图表
+- 仅输出 JSON"""
+
+        generated = None
+        fix_round = 0
+        while fix_round <= MAX_FIX_ROUNDS and not generated:
+            try:
+                response = _safe_run_async(llm_generate(provider_id, model,
+                    cards_system, cards_user, temperature=1.0))
+                response = _clean_json_response(response)
+                data = json.loads(response)
+                slides = data.get("slides", data) if isinstance(data, dict) else data
+
+                if not isinstance(slides, list) or len(slides) == 0:
+                    raise ValueError("AI returned empty or non-list slides")
+
+                # ── Validate ──
+                errors = _validate_cards(slides)
+                if errors:
+                    err_text = "\n".join(f"- {e}" for e in errors)
+                    _logger.warning(f"Batch {batch_start//BATCH_SIZE+1} round {fix_round}: {len(errors)} validation errors")
+
+                    if fix_round < MAX_FIX_ROUNDS:
+                        # Feed errors back into fix prompt
+                        cards_user = f"""## 上一轮生成的验证错误（请逐一修复）
+{err_text}
+
+## 原始大纲（必须在修复后保留内容完整性）
+{batch_json}
+
+## 任务
+修复上述验证错误后重新生成。每页输出格式不变。仅输出 JSON。"""
+                        fix_round += 1
+                        continue
+                    else:
+                        _logger.warning(f"Batch {batch_start//BATCH_SIZE+1}: max fix rounds reached, accepting with {len(errors)} errors")
+
+                # ── Augment each slide with missing fields from stage1 outline ──
+                for slide in slides:
+                    if isinstance(slide, dict):
+                        seq = slide.get("seq", 0)
+                        s1 = next((s for s in batch if s.get("seq") == seq), None)
+                        if s1:
+                            zones = slide.setdefault("zones", {})
+                            if not zones.get("heading") and s1.get("heading"):
+                                zones["heading"] = s1["heading"]
+                            if not slide.get("layout") and s1.get("layout_hint"):
+                                slide["layout"] = s1["layout_hint"]
+                            if not slide.get("type") and s1.get("page_type"):
+                                slide["type"] = s1["page_type"]
+                            if not zones.get("body") and not zones.get("cards") and s1.get("body"):
+                                zones["body"] = s1["body"]
+                            if not zones.get("kicker") and s1.get("kicker"):
+                                zones["kicker"] = s1["kicker"]
+                            if not zones.get("lead") and s1.get("lead"):
+                                zones["lead"] = s1["lead"]
+
+                generated = slides
+
+            except Exception as e:
+                err_msg = str(e)[:200]
+                _logger.warning(f"Batch {batch_start//BATCH_SIZE+1} round {fix_round} failed: {err_msg}")
+                if fix_round < MAX_FIX_ROUNDS:
+                    cards_user = f"""## 上一轮生成失败: {err_msg}，请重试
+
+## 原始大纲
+{batch_json}
+
+## 任务
+重新为以上幻灯片选择布局并填充卡片内容。仅输出 JSON。"""
+                    fix_round += 1
+                else:
+                    break
+
+        if not generated:
+            # ── Fallback: convert raw stage1 zones to card format ──
+            _logger.warning(f"Batch {batch_start//BATCH_SIZE+1}: generation failed, using raw zone fallback")
+            generated = _fallback_zones_to_cards(batch)
+
+        result.extend(generated)
+
+    return result if result else None
+
+
+def _fallback_zones_to_cards(slides: list) -> list:
+    """Convert raw stage1 outline slides to minimal card-structured format.
+
+    Fallback when AI card generation fails — ensures basic structural validity
+    so render_deck() can still produce output.
+    """
+    result = []
+    for s in slides:
+        if not isinstance(s, dict):
+            continue
+        seq = s.get("seq", 0)
+        heading = s.get("heading", "")
+        ptype = s.get("page_type", "content")
+        layout = s.get("layout_hint", "hero_grid")
+        body = s.get("body", "")
+        notes = s.get("notes", "")
+        kicker = s.get("kicker", "")
+        key_points = s.get("key_points", [])
+
+        body_text = body
+        if key_points and not body_text:
+            body_text = "\n".join(f"• {kp}" for kp in key_points if isinstance(kp, str))
+
+        zones = {
+            "heading": heading,
+            "kicker": kicker,
+            "body": body_text,
+            "cards": [{
+                "role": "hero",
+                "title": heading,
+                "body": body_text or notes,
+                "kicker": kicker,
+            }]
+        }
+
+        result.append({
+            "seq": seq,
+            "type": ptype,
+            "layout": layout,
+            "zones": zones,
+        })
+
+    return result
+
+
+def _extract_svg(response: str) -> str | None:
+    """Extract SVG XML from AI response — handles markdown-wrapped and raw SVG."""
+    import re
+
+    # Try ```svg ... ``` first
+    m = re.search(r'```svg\s*\n(.*?)\n```', response, re.DOTALL | re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    # Try ```xml ... ```
+    m = re.search(r'```xml\s*\n(.*?)\n```', response, re.DOTALL | re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    # Try <svg ... </svg> directly
+    m = re.search(r'(<svg[\s\S]*?</svg>)', response, re.IGNORECASE)
+    if m:
+        return m.group(1).strip()
+
+    return None
+
+
+def _check_svg(svg: str, idx: int) -> list[str]:
+    """Validate AI-generated SVG: XML well-formedness, viewBox, font sizes.
+
+    Returns list of error strings. Empty list = all valid.
+    """
+    import re
+    import xml.etree.ElementTree as ET
+
+    issues = []
+
+    if not re.search(r'<svg[\s>]', svg, re.IGNORECASE):
+        issues.append(f"Slide {idx}: no <svg> tag found")
+        return issues
+
+    m = re.search(r'viewBox\s*=\s*["\']([^"\']+)["\']', svg)
+    if m:
+        vb = m.group(1)
+        parts = vb.split()
+        if len(parts) == 4:
+            try:
+                w, h = float(parts[2]), float(parts[3])
+                if abs(w - 1280) > 2 or abs(h - 720) > 2:
+                    issues.append(f"Slide {idx}: viewBox {w}x{h}, expected 1280x720")
+            except ValueError:
+                issues.append(f"Slide {idx}: unparseable viewBox '{vb}'")
+    else:
+        issues.append(f"Slide {idx}: missing viewBox")
+
+    if svg.count('<svg') != svg.count('</svg>'):
+        issues.append(f"Slide {idx}: mismatched <svg>/</svg> tags")
+
+    try:
+        ET.fromstring(svg)
+    except ET.ParseError as e:
+        issues.append(f"Slide {idx}: XML parse error: {str(e)[:100]}")
+
+    font_sizes = re.findall(r'font-size\s*=\s*["\'](\d+(?:\.\d+)?)\s*(?:px)?["\']', svg)
+    small_fonts = [float(s) for s in font_sizes if float(s) < 10]
+    if small_fonts:
+        issues.append(f"Slide {idx}: font sizes below 10px: {small_fonts}")
+    tiny_fonts = [float(s) for s in font_sizes if float(s) < 12]
+    if tiny_fonts:
+        issues.append(f"Slide {idx}: font sizes below 12px (WARN): {tiny_fonts[:5]}")
+
+    # Safe-area boundary check (PPT-Agent slide-core validation #4)
+    # Check for content placed outside safe area. Exclude:
+    # - x=0,y=0 (background rect), x=60 (safe left edge), y=40-60 (header zone)
+    # - y=690-710 (footer zone with page numbers/branding)
+    safe_violations = []
+    x_vals = re.findall(r'(?:x|translate)\s*\(\s*(-?\d+(?:\.\d+)?)\s*[,\)]', svg)
+    y_vals = re.findall(r'(?:y|translate)\s*\(\s*\d+\s*,\s*(-?\d+(?:\.\d+)?)\s*\)', svg)
+    direct_x = re.findall(r'\sx\s*=\s*["\'](-?\d+(?:\.\d+)?)\s*(?:px)?["\']', svg)
+    direct_y = re.findall(r'\sy\s*=\s*["\'](-?\d+(?:\.\d+)?)\s*(?:px)?["\']', svg)
+    # Exclude x=0 (background rect), x=60 (safe left margin)
+    all_x_low = [float(v) for v in x_vals + direct_x if float(v) < 40]
+    # Exclude y=0 (background), y >= 28 (header zone)
+    all_y_low = [float(v) for v in y_vals + direct_y if float(v) < 28]
+    # Exclude y >= 685 but < 715 (footer zone is expected)
+    all_y_high = [float(v) for v in y_vals + direct_y if float(v) > 710]
+    if all_x_low:
+        safe_violations.append(f"x < 40: {all_x_low[:3]}")
+    if all_y_low:
+        safe_violations.append(f"y < 28: {all_y_low[:3]}")
+    if all_y_high:
+        safe_violations.append(f"y > 710: {all_y_high[:3]}")
+    if safe_violations:
+        issues.append(f"Slide {idx}: safe-area boundary issues: {'; '.join(safe_violations)}")
+
+    return issues
+
+
+def _stage3_svg(provider_id, model, llm_generate, slide_data,
+                 style_id: str = "business", rules: dict = None,
+                 batch_size: int = 2) -> list | None:
+    """Phase 6 (AI-SVG): AI generates complete SVG XML per slide — PPT-Agent quality.
+
+    Unlike the code-rendered path (AI→JSON→Code→SVG), this has AI write SVG directly,
+    giving it full creative control: decorative elements, custom layouts, gradients,
+    accent borders, semi-transparent overlays, info cards, etc.
+
+    Args:
+        provider_id: LLM provider ID
+        model: model name
+        llm_generate: async generate function
+        slide_data: [{type, layout, zones: {heading, kicker, lead, cards: [{role, title, body, chart}]}}]
+        style_id: style YAML name
+        rules: optional rules dict
+        batch_size: slides per LLM call (1-2, lower = better quality)
+
+    Returns:
+        [{seq, file, svg_content, type, label}] or None on failure
+    """
+    import re
+
+    svg_spec, bento_spec = _load_svg_prompt_specs()
+    cognitive_spec = _load_cognitive_spec()
+    reviewer_spec = _load_reviewer_spec()
+    style_yaml = _load_style_yaml_text(style_id)
+
+    if not svg_spec:
+        _logger.warning("svg-generator.md not found, AI-SVG generation disabled")
+        return None
+    if not style_yaml:
+        _logger.warning(f"Style YAML '{style_id}' not found, AI-SVG generation disabled")
+        return None
+
+    svg_system = f"""{svg_spec}
+
+{bento_spec}
+
+## 认知设计原则
+{cognitive_spec}
+
+## 设计评审标准（用于自检）
+{reviewer_spec}
+
+## 风格 Token（颜色/字体/阴影/圆角/渐变/发光）
+{style_yaml}
+
+---
+严格按照以上 Style YAML 中的 color_scheme、typography、card_style、decoration、gradients 和 elevation 规范生成 SVG。所有颜色和字体必须从 YAML 精确提取，不得使用样例替代。"""
+
+    result = []
+    total = len([s for s in slide_data if isinstance(s, dict)])
+
+    for batch_start in range(0, len(slide_data), batch_size):
+        batch = slide_data[batch_start:batch_start + batch_size]
+        valid_batch = [s for s in batch if isinstance(s, dict)]
+        if not valid_batch:
+            continue
+
+        slide_descriptions = []
+        for slide in valid_batch:
+            seq = slide.get("seq", 0)
+            slide_type = slide.get("type", "content")
+            zones = slide.get("zones", {})
+            heading = zones.get("heading", "")
+            kicker = zones.get("kicker", "")
+            lead = zones.get("lead", "")
+            cards = zones.get("cards", [])
+            body = zones.get("body", "")
+
+            desc = f"--- 幻灯片 {seq}/{total} ---\n"
+            desc += f"页码: {seq:02d} / {total:02d}\n"
+            desc += f"类型: {slide_type}\n"
+            desc += f"标题: {heading}\n"
+            if kicker:
+                desc += f"章节标签: {kicker}\n"
+            if lead:
+                desc += f"副标题: {lead}\n"
+            if body:
+                desc += f"正文: {body[:600]}\n"
+
+            if cards:
+                desc += f"卡片 ({len(cards)} 张):\n"
+                for ci, card in enumerate(cards):
+                    role = card.get("role", "unknown")
+                    ctitle = card.get("title", "")
+                    cbody = card.get("body", "")
+                    chart = card.get("chart")
+                    desc += f"  [{role}] {ctitle}"
+                    if cbody:
+                        desc += f" — {cbody[:300]}"
+                    if chart:
+                        desc += f" [图表: {json.dumps(chart, ensure_ascii=False)}]"
+                    desc += "\n"
+
+            slide_descriptions.append(desc)
+
+        all_descs = "\n".join(slide_descriptions)
+
+        svg_user = f"""为以下 {len(valid_batch)} 页幻灯片生成完整的 SVG XML。
+
+{all_descs}
 
 ## 输出要求
-输出一个 JSON 对象，包含 slides 数组。每元素格式（zones 的 key 必须使用上方定义的英文 field 名）：
-```json
-{{
-  "slides": [
-    {{
-      "type": "cover",
-      "zones": {json.dumps(cover_example, ensure_ascii=False)}
-    }},
-    {{
-      "type": "closing",
-      "zones": {json.dumps(closing_example, ensure_ascii=False, indent=6)}
-    }}
-  ]
-}}
-```
+为每一页输出一个完整的 SVG，按顺序用 ```svg ... ``` 包裹。每个 SVG 之间用空行分隔。
+仅输出 SVG 代码块，不输出其他文字。"""
 
-关键规则：
-- type 必须在可用版式类型范围内
-- zones 的键必须严格使用上方每种 type 定义的字段名，不得自创、不得汉化、不得省略
-- 数组字段（如 takeaways、cards、cells、stats）中每个元素必须包含对应子字段
-- 封面(type=cover)必须在第一页，总结(type=summary)必须在最后一页
-- 遵守页面节奏规则：不连续3页同类型
-- 仅输出 JSON"""
+        generated_for_batch = []
 
-    for attempt in range(2):
-        try:
-            response = asyncio.run(llm_generate(provider_id, model, system, user, temperature=0.3))
-            response = _clean_json_response(response)
-            data = json.loads(response)
-            slides = data.get("slides", data) if isinstance(data, dict) else data
-            if isinstance(slides, list) and len(slides) > 0:
-                return slides
-        except Exception as e:
-            _logger.warning(f"Stage 2 attempt {attempt+1} failed: {e}")
-    return None
+        for attempt in range(2):
+            try:
+                response = _safe_run_async(llm_generate(provider_id, model,
+                    svg_system, svg_user, temperature=0.7))
 
+                svg_matches = re.findall(r'```svg\s*\n(.*?)\n```', response, re.DOTALL | re.IGNORECASE)
+                if not svg_matches:
+                    svg_matches = re.findall(r'(<svg[\s\S]*?</svg>)', response, re.IGNORECASE)
 
-def _clean_json_response(response: str) -> str:
-    """Strip markdown code fences from AI response."""
-    response = response.strip()
-    if response.startswith("```"):
-        lines = response.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        response = "\n".join(lines)
-    return response.strip()
+                if svg_matches and len(svg_matches) >= len(valid_batch):
+                    for j, slide in enumerate(valid_batch):
+                        seq = slide.get("seq", 0)
+                        svg_content = svg_matches[j].strip()
+                        errors = _check_svg(svg_content, seq)
+                        if errors:
+                            _logger.warning(f"Slide {seq} SVG check ({len(errors)} issues): {'; '.join(errors[:3])}")
 
+                        generated_for_batch.append({
+                            "seq": seq,
+                            "file": f"slide-{seq:02d}.svg",
+                            "svg_content": svg_content,
+                            "type": slide.get("type", "content"),
+                            "label": slide.get("zones", {}).get("heading", f"Slide {seq}"),
+                        })
+                    break
+                else:
+                    found = len(svg_matches) if svg_matches else 0
+                    _logger.warning(
+                        f"Batch {batch_start//batch_size+1} attempt {attempt+1}: "
+                        f"found {found} SVGs, need {len(valid_batch)}"
+                    )
+                    if attempt == 0 and found > 0:
+                        svg_user = f"上一轮只输出了 {found}/{len(valid_batch)} 个 SVG。请为所有 {len(valid_batch)} 页重新生成。\n\n{all_descs}"
 
-def generate_template_pptx(prs: Presentation, prompt: str, skill: str, rules: dict,
-                          provider_id: str, model: str, output_path: str) -> str:
-    """Generate a complete template PPTX from prompt + SKILL + rules using AI.
+            except Exception as e:
+                _logger.warning(f"Batch {batch_start//batch_size+1} attempt {attempt+1} failed: {e}")
+                if attempt == 0:
+                    svg_user = f"生成失败: {str(e)[:200]}。请重试。\n\n{all_descs}"
 
-    Preserves visual styling by cloning original slides and replacing their text,
-    rather than removing slides and rebuilding from scratch.
-
-    Returns the output_path on success, raises on failure.
-    """
-    from services.llm_service import generate as llm_generate
-
-    layout_types = rules.get("layout_types", [])
-    page_rhythm = rules.get("page_rhythm", {})
-    design_principles = rules.get("design_principles", [])
-
-    layout_ref = []
-    for lt in layout_types:
-        zones_str = ", ".join(lt.get("zones", []))
-        layout_ref.append(f"- **{lt['id']}**: {lt.get('name','')} | zones: [{zones_str}] | {lt.get('description','')}")
-
-    rhythm_str = " → ".join(page_rhythm.get("sequence", []))
-    alt_rule = page_rhythm.get("alternation_rule", "")
-    p0_rule = page_rhythm.get("p0_violation", "")
-    principles_str = "\n".join(f"- {dp.get('rule','')}" for dp in design_principles)
-
-    system = prompt if prompt else "你是PPT模板生成专家。请将SKILL结构模板转换为幻灯片JSON。"
-
-    user = f"""## 任务
-将下方的 SKILL 结构模板完整转换为幻灯片 JSON 数组。**保留所有占位符文字**（如 {{菜品名}}、{{填入}}、{{xx分钟}} 等），不要替换为实际内容。
-
-## SKILL 结构模板
-{skill}
-
-## 可用版式类型
-{chr(10).join(layout_ref)}
-
-## 页面节奏规则
-- 序列: {rhythm_str}
-- {alt_rule}
-- 严禁: {p0_rule}
-
-## 设计原则
-{principles_str}
-
-## 输出格式
-```json
-{{"slides": [{{"type":"版式id","zones":{{"区域名":"内容(保留占位符)","区域名2":"..."}}}}, ...]}}
-```
-
-关键规则：
-- SKILL 中每个 ### 节点 = 独立一页
-- zones 内容保留 SKILL 中的占位符（{{xxx}}），不替换
-- 封面(type=cover)在第一页，总结(type=summary)在最后
-- 仅输出 JSON"""
-
-    for attempt in range(2):
-        try:
-            response = asyncio.run(llm_generate(provider_id, model, system, user, temperature=0.2))
-            response = _clean_json_response(response)
-            data = json.loads(response)
-            slides = data.get("slides", data) if isinstance(data, dict) else data
-            if isinstance(slides, list) and len(slides) > 0:
-                _fill_template_slides(prs, slides, rules)
-                prs.save(output_path)
-                _logger.info(f"Template PPTX generated: {output_path} ({len(slides)} slides)")
-                return output_path
-        except Exception as e:
-            _logger.warning(f"Template generation attempt {attempt+1} failed: {e}")
-    raise RuntimeError("Failed to generate template PPTX from SKILL")
-
-
-def _fill_template_slides(prs: Presentation, slide_data: list, rules: dict):
-    """Fill template slides by replacing text on original slides directly.
-
-    Preserves the original slide sequence and visual styling 1:1.
-    Each original slide's text content is replaced by the corresponding
-    AI-generated placeholder content.
-    """
-    # Build lookup: layout_type_id → ordered zone name list
-    layout_types = rules.get("layout_types", [])
-    type_zones = {lt["id"]: lt.get("zones", []) for lt in layout_types if lt.get("id")}
-
-    original_slides = list(prs.slides)
-    if not original_slides:
-        _fill_slides_from_json(prs, slide_data, rules, None)
-        return
-
-    n_orig = len(original_slides)
-    n_data = len(slide_data)
-
-    # Replace text on existing slides, 1:1 positional mapping
-    for i in range(min(n_orig, n_data)):
-        slide = original_slides[i]
-        sd = slide_data[i]
-        zones = sd.get("zones", {})
-        if not isinstance(zones, dict):
-            zones = {}
-
-        slide_type = sd.get("type", "")
-        zone_order = type_zones.get(slide_type)
-        _replace_slide_text(slide, zones, zone_order)
-
-    # If AI generated more slides than original, clone the last few originals
-    if n_data > n_orig:
-        import copy
-        for i in range(n_orig, n_data):
-            sd = slide_data[i]
-            zones = sd.get("zones", {})
-            if not isinstance(zones, dict):
-                zones = {}
-
-            slide_type = sd.get("type", "")
-            zone_order = type_zones.get(slide_type)
-            # Clone from the slide at position (i % n_orig) for visual variety
-            src_slide = original_slides[i % n_orig]
-            new_slide = _clone_slide_from_shapes(prs, src_slide)
-            _replace_slide_text(new_slide, zones, zone_order)
-
-    # If fewer slides than original, remove extras
-    if n_data < n_orig:
-        _remove_slides_from(prs, n_data)
-
-
-def _replace_slide_text(slide, zones: dict, layout_zone_names: list = None):
-    """Replace text in a slide's text shapes with zone content.
-
-    If layout_zone_names is provided, zone content is matched to text shapes
-    by the layout type's zone order (positional mapping within the known zone
-    list), ensuring the title zone always goes to the title text shape.
-    Otherwise falls back to dict-iteration order.
-
-    Any text shape that was NOT filled is cleared to prevent old template
-    text from appearing alongside generated content.
-    """
-    text_shapes = [sh for sh in slide.shapes if sh.has_text_frame]
-    filled_indices = set()
-
-    if layout_zone_names:
-        for i, zname in enumerate(layout_zone_names):
-            ztext = zones.get(zname, "")
-            if not str(ztext).strip():
-                continue
-            text = str(ztext)
-            if i < len(text_shapes):
-                tf = text_shapes[i].text_frame
-                _write_text_frame(tf, text)
-                filled_indices.add(i)
-            else:
-                _add_fallback_textbox(slide, i, text)
-    else:
-        zone_items = [(k, v) for k, v in zones.items() if str(v).strip()]
-        for i, (zname, ztext) in enumerate(zone_items):
-            text = str(ztext)
-            if i < len(text_shapes):
-                tf = text_shapes[i].text_frame
-                _write_text_frame(tf, text)
-                filled_indices.add(i)
-            else:
-                _add_fallback_textbox(slide, i, text)
-
-    # Clear any text shapes that weren't matched — they still hold old template text
-    for i, sh in enumerate(text_shapes):
-        if i not in filled_indices:
-            tf = sh.text_frame
-            for p in tf.paragraphs:
-                p.text = ""
-
-
-def _write_text_frame(tf, text: str):
-    lines = text.split('\n')
-    for li, line in enumerate(lines):
-        if li == 0:
-            tf.paragraphs[0].text = line
-        elif li < len(tf.paragraphs):
-            tf.paragraphs[li].text = line
+        if len(generated_for_batch) == len(valid_batch):
+            result.extend(generated_for_batch)
+            _logger.info(f"Batch {batch_start//batch_size+1}: {len(generated_for_batch)} SVGs generated")
         else:
-            p = tf.add_paragraph()
-            p.text = line
-    for p in tf.paragraphs[len(lines):]:
-        p.text = ""
-
-
-def _add_fallback_textbox(slide, index: int, text: str):
-    from pptx.util import Inches
-    top_offset = Inches(1.5 + index * 0.8)
-    txBox = slide.shapes.add_textbox(Inches(1), top_offset, Inches(11), Inches(0.6))
-    tf = txBox.text_frame
-    tf.word_wrap = True
-    lines = text.split('\n')
-    for li, line in enumerate(lines):
-        if li == 0:
-            tf.paragraphs[0].text = line
-        else:
-            p = tf.add_paragraph()
-            p.text = line
-
-
-def _clone_slide_from_shapes(prs: Presentation, source_slide) -> object:
-    """Create a new slide with visual shapes copied from source_slide."""
-    import copy
-    from lxml import etree
-
-    NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
-
-    new_slide = prs.slides.add_slide(source_slide.slide_layout)
-
-    # Get shape trees
-    src_elem = source_slide.part._element
-    src_cSld = src_elem.find(f"{{{NS_P}}}cSld")
-    if src_cSld is None:
-        return new_slide
-    src_spTree = src_cSld.find(f"{{{NS_P}}}spTree")
-    if src_spTree is None:
-        return new_slide
-
-    dst_elem = new_slide.part._element
-    dst_cSld = dst_elem.find(f"{{{NS_P}}}cSld")
-    if dst_cSld is None:
-        return new_slide
-    dst_spTree = dst_cSld.find(f"{{{NS_P}}}spTree")
-    if dst_spTree is None:
-        return new_slide
-
-    # Clear default shapes
-    for child in list(dst_spTree):
-        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-        if tag in ('sp', 'pic', 'grpSp', 'cxnSp', 'graphicFrame'):
-            dst_spTree.remove(child)
-
-    # Copy source shapes
-    for child in src_spTree:
-        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-        if tag in ('sp', 'pic', 'grpSp', 'cxnSp', 'graphicFrame'):
-            dst_spTree.append(copy.deepcopy(child))
-
-    return new_slide
-
-
-def _remove_slides_from(prs: Presentation, keep_count: int):
-    """Remove slides starting from index `keep_count`."""
-    NS = {
-        "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
-        "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-    }
-    pres_elem = prs.part._element
-    sldIdLst = pres_elem.find(".//p:sldIdLst", NS)
-    if sldIdLst is None:
-        return
-
-    sldId_elements = list(sldIdLst)
-    for idx, sldId in enumerate(sldId_elements):
-        if idx < keep_count:
-            continue
-        rId = sldId.get(f"{{{NS['r']}}}id")
-        if rId is not None:
-            prs.part.drop_rel(rId)
-        sldIdLst.remove(sldId)
-
-
-
-# ── Fallback: plain text generation when no template visuals exist ──
-
-
-def _remove_all_slides(prs: Presentation):
-    """Delete all slides from a presentation."""
-    NS = {
-        "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
-        "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-    }
-    pres_elem = prs.part._element
-    sldIdLst = pres_elem.find(".//p:sldIdLst", NS)
-    if sldIdLst is None:
-        return
-    sldId_elements = list(sldIdLst)
-    for sldId in sldId_elements:
-        rId = sldId.get(f"{{{NS['r']}}}id")
-        if rId is not None:
-            prs.part.drop_rel(rId)
-        sldIdLst.remove(sldId)
-
-
-def _fill_slides_from_json(prs: Presentation, slides: list, rules: dict, typo: dict):
-    """Fallback: create slides from AI-generated JSON using plain text boxes.
-
-    Used only when no original slides exist to clone visual styling from.
-    """
-    default_layout = prs.slide_layouts[0] if prs.slide_layouts else None
-
-    for sd in slides:
-        if not isinstance(sd, dict):
-            continue
-        zones = sd.get("zones", {})
-        if not isinstance(zones, dict):
-            zones = {}
-
-        slide = prs.slides.add_slide(default_layout) if default_layout else prs.slides.add_slide()
-
-        top_offset = Inches(1.0)
-        for zname, ztext in zones.items():
-            txBox = slide.shapes.add_textbox(Inches(1.5), top_offset, Inches(10.3), Inches(0.8))
-            txBox.text_frame.text = str(ztext)
-            top_offset += Inches(1.0)
-
-
-def _mechanical_fill(prs: Presentation, content: str):
-    """Legacy fallback: split content by ## headings into slides."""
-    sections = content.split("\n## ")
-    if sections:
-        first_lines = sections[0].strip().split("\n")
-        title_text = first_lines[0].replace("# ", "").strip() if first_lines else "未命名"
-        title_slide = prs.slides.add_slide(prs.slide_layouts[0])
-        if title_slide.shapes.title:
-            title_slide.shapes.title.text = title_text
-
-    for section in sections[1:]:
-        lines = section.strip().split("\n")
-        slide_title = lines[0].strip()
-        slide_body = "\n".join(lines[1:]).strip()
-
-        slide = prs.slides.add_slide(prs.slide_layouts[1])
-        if slide.shapes.title:
-            slide.shapes.title.text = slide_title
-        if len(slide.placeholders) > 1:
-            slide.placeholders[1].text = slide_body[:500]
-
-
-# ── Spacing defaults (fallback for old templates without typography_profile) ──
-_SPACING_DEFAULTS = {
-    "text_line_gap": 76200,
-    "element_vertical_gap": 101600,
-    "footer_margin": 6200000,
-    "peer_alignment_tolerance": 50800,
-    "slide_bottom_boundary": 6858000,
-}
-
-# Ratios applied to computed line-height for spacing (authority: 国开标准 / SJ/T 11841.6.1 / ISO 24896)
-_ELEMENT_GAP_RATIO = 1 / 3       # sibling element gap = 1/3 line height
-_TEXT_LINE_GAP_RATIO = 1 / 4     # text-to-underline gap = 1/4 line height
-_TITLE_LINE_GAP_RATIO = 1 / 5    # title-to-underline gap = 1/5 title size
-_PEER_TOLERANCE_RATIO = 3 / 20   # same-row alignment tolerance = 3/20 line height
-_FALLBACK_BODY_PT = 18
-_FALLBACK_TITLE_PT = 36
-_FALLBACK_LINE_HEIGHT_RATIO = 1.2
-
-
-def _extract_typography(prs: Presentation) -> dict:
-    """Extract body/title font sizes and line-height ratio from a template.
-
-    Walks the XML inheritance chain when python-pptx font.size returns None:
-    run.rPr[@sz] -> para.defRPr[@sz] -> layout placeholder -> master bodyStyle/titleStyle.
-    Returns {body_font_size_pt, title_font_size_pt, line_height_ratio}, null for misses.
-    """
-    ns = {"a": "http://schemas.openxmlformats.org/drawingml/2006/main",
-          "p": "http://schemas.openxmlformats.org/presentationml/2006/main",
-          "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
-
-    size_counts = {}
-    title_size = None
-
-    # ── Pass 1: collect font sizes from runs ──
-    for slide in prs.slides:
-        for shape in slide.shapes:
-            if not shape.has_text_frame:
-                continue
-            for para in shape.text_frame.paragraphs:
-                for run in para.runs:
-                    sz = _resolve_run_size(run, ns)
-                    if sz is not None:
-                        sz = round(sz, 1)
-                        size_counts[sz] = size_counts.get(sz, 0) + 1
-
-    # ── Pass 2: master bodyStyle / titleStyle ──
-    master_sizes = {}
-    a_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
-    p_ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
-    for master in prs.slide_masters:
-        # Body styles
-        for body_style in master.element.iter(f'{{{p_ns}}}bodyStyle'):
-            for defRPr in body_style.iter(f'{{{a_ns}}}defRPr'):
-                sz = defRPr.get('sz')
-                if sz:
-                    master_sizes[int(sz) / 100.0] = master_sizes.get(int(sz) / 100.0, 0) + 1
-        # Title styles
-        if title_size is None:
-            for title_style in master.element.iter(f'{{{p_ns}}}titleStyle'):
-                for defRPr in title_style.iter(f'{{{a_ns}}}defRPr'):
-                    sz = defRPr.get('sz')
-                    if sz:
-                        title_size = int(sz) / 100.0
-                        break
-
-    # Merge master sizes into counts (lower weight — master is fallback)
-    for sz, cnt in master_sizes.items():
-        size_counts[sz] = size_counts.get(sz, 0) + cnt * 0.5
-
-    if not size_counts:
-        return {"body_font_size_pt": None, "title_font_size_pt": None, "line_height_ratio": None}
-
-    sorted_sizes = sorted(size_counts.items(), key=lambda x: -x[1])
-
-    # Title: largest font size
-    if title_size is None:
-        title_size = max(size_counts.keys())
-
-    # Body: prefer master bodyStyle lvl2-4 (most common body levels), then fall back to run frequencies
-    body_size = None
-    body_candidates = sorted(
-        [(sz, cnt) for sz, cnt in master_sizes.items() if sz < title_size - 4 and sz >= 14],
-        key=lambda x: -x[1])
-    if body_candidates:
-        body_size = body_candidates[0][0]
-    else:
-        for sz, _ in sorted_sizes:
-            if sz < title_size - 4 and sz >= 14:
-                body_size = sz
-                break
-    if body_size is None and sorted_sizes:
-        body_size = sorted_sizes[-1][0]
-
-    # ── Pass 3: line-height ratio from master ──
-    line_height_ratio = _resolve_line_height(prs, ns)
-
-    return {
-        "body_font_size_pt": round(body_size, 1),
-        "title_font_size_pt": round(title_size, 1),
-        "line_height_ratio": line_height_ratio,
-    }
-
-
-def _resolve_run_size(run, ns: dict) -> float | None:
-    """Resolve effective font size for a run by walking the XML inheritance chain.
-
-    Chain: run.rPr[@sz] -> para.defRPr[@sz] -> layout placeholder defRPr -> master styles.
-    Returns size in points, or None.
-    """
-    # 1. Direct run font size
-    if run.font.size is not None:
-        return run.font.size / 12700.0
-
-    # 2. Run rPr in XML
-    rPr = run._r.find('{http://schemas.openxmlformats.org/drawingml/2006/main}rPr')
-    if rPr is not None:
-        sz = rPr.get('sz')
-        if sz:
-            return int(sz) / 100.0
-
-    # 3. Paragraph defRPr
-    p = run._r.getparent()
-    while p is not None:
-        pPr = p.find('{http://schemas.openxmlformats.org/drawingml/2006/main}pPr')
-        if pPr is not None:
-            defRPr = pPr.find('{http://schemas.openxmlformats.org/drawingml/2006/main}defRPr')
-            if defRPr is not None:
-                sz = defRPr.get('sz')
-                if sz:
-                    return int(sz) / 100.0
-        p = p.getparent()
-
-    return None
-
-
-def _resolve_line_height(prs: Presentation, ns: dict) -> float | None:
-    """Extract line-height ratio from master bodyPr or paragraph lnSpc."""
-    a_ns = "http://schemas.openxmlformats.org/drawingml/2006/main"
-    p_ns = "http://schemas.openxmlformats.org/presentationml/2006/main"
-    for master in prs.slide_masters:
-        # Check bodyPr.normAutofit.fontScale
-        bodyPr = master.element.find('.//{http://schemas.openxmlformats.org/drawingml/2006/main}bodyPr')
-        if bodyPr is not None:
-            norm = bodyPr.find('{http://schemas.openxmlformats.org/drawingml/2006/main}normAutofit')
-            if norm is not None:
-                scale = norm.get('fontScale')
-                if scale:
-                    return int(scale) / 100000.0
-
-        # Check lvl1pPr.lnSpc.spcPct
-        for body_style in master.element.iter(f'{{{p_ns}}}bodyStyle'):
-            for lvl1 in body_style.iter(f'{{{a_ns}}}lvl1pPr'):
-                for lnSpc in lvl1.iter(f'{{{a_ns}}}lnSpc'):
-                    for spcPct in lnSpc.iter(f'{{{a_ns}}}spcPct'):
-                        val = spcPct.get('val')
-                        if val:
-                            return int(val) / 100000.0
-
-    return None
-
-
-def _compute_spacing_from_profile(profile: dict) -> dict:
-    """Compute EMU spacing values from a typography_profile.
-
-    profile: {body_font_size_pt, title_font_size_pt, line_height_ratio}
-    Returns a flat dict suitable for _normalize_spacing.
-    """
-    body_pt = profile.get("body_font_size_pt") or _FALLBACK_BODY_PT
-    title_pt = profile.get("title_font_size_pt") or _FALLBACK_TITLE_PT
-    ratio = profile.get("line_height_ratio") or _FALLBACK_LINE_HEIGHT_RATIO
-
-    body_emu = body_pt * 12700
-    line_height_emu = body_emu * ratio
-
-    return {
-        "text_line_gap": int(line_height_emu * _TEXT_LINE_GAP_RATIO),
-        "element_vertical_gap": int(line_height_emu * _ELEMENT_GAP_RATIO),
-        "footer_margin": _SPACING_DEFAULTS["footer_margin"],
-        "peer_alignment_tolerance": int(line_height_emu * _PEER_TOLERANCE_RATIO),
-        "slide_bottom_boundary": _SPACING_DEFAULTS["slide_bottom_boundary"],
-    }
-
-
-def _load_spacing_rules(db=None) -> dict:
-    """Read spacing rules from column config JSON, fall back to defaults.
-
-    Looks up col4/col5 design_rules.spacing. Returns a flat dict of
-    {key: value_emu} suitable for _normalize_spacing.
-    """
-    if db is None:
-        return dict(_SPACING_DEFAULTS)
-    try:
-        row = db.execute(
-            "SELECT rules FROM column_configs WHERE column_id IN ('col4', 'col5') LIMIT 1"
-        ).fetchone()
-        if not row:
-            return dict(_SPACING_DEFAULTS)
-        rules = json.loads(row["rules"])
-        structured = rules.get("design_rules", {}).get("spacing", {})
-        flat = {}
-        for k in _SPACING_DEFAULTS:
-            entry = structured.get(k, {})
-            flat[k] = entry.get("value", _SPACING_DEFAULTS[k]) if isinstance(entry, dict) else _SPACING_DEFAULTS[k]
-        return flat
-    except Exception:
-        return dict(_SPACING_DEFAULTS)
-
-
-def _horizontally_overlap(a, b) -> bool:
-    """True if two shapes share any horizontal space."""
-    return a.left < b.left + b.width and a.left + a.width > b.left
-
-
-def _normalize_spacing(prs: Presentation, spacing: dict = None):
-    """Ensure no two elements overlap vertically on any slide.
-
-    Spacing values are read from column config design_rules.spacing
-    (which encodes ECMA-376 / PPT design-grid standards).
-    Falls back to _SPACING_DEFAULTS if not configured.
-
-    Guards:
-    - Same-row peers (top difference < peer_alignment_tolerance) are skipped
-    - Footer-zone shapes are left in place
-    - Elements are not pushed past slide_bottom_boundary
-    """
-    s = spacing if spacing else _SPACING_DEFAULTS
-    min_gap = s["element_vertical_gap"]
-    peer_tol = s["peer_alignment_tolerance"]
-    footer_zone = s["footer_margin"]
-    bottom_limit = s["slide_bottom_boundary"]
-
-    for slide in prs.slides:
-        ordered = sorted(slide.shapes, key=lambda s: s.top)
-        for i, upper in enumerate(ordered):
-            upper_bottom = upper.top + upper.height
-            for lower in ordered[i + 1:]:
-                if lower.top >= footer_zone:
+            _logger.warning(
+                f"Batch {batch_start//batch_size+1}: only {len(generated_for_batch)}/{len(valid_batch)} "
+                f"SVGs — retrying individually"
+            )
+            result.extend(generated_for_batch)
+            # Retry each missing slide individually
+            for slide in valid_batch:
+                seq = slide.get("seq", 0)
+                already_got = any(g.get("seq") == seq for g in generated_for_batch)
+                if already_got:
                     continue
-                if not _horizontally_overlap(upper, lower):
-                    continue
-                # Peer check — skip if horizontally aligned (same row)
-                if abs(lower.top - upper.top) < peer_tol:
-                    continue
-                # Background container check — if upper fully contains lower
-                # horizontally AND lower's top is inside upper, it's intentional
-                # (e.g. text on a background rectangle). Skip.
-                if (upper.left <= lower.left
-                        and upper.left + upper.width >= lower.left + lower.width
-                        and upper.top <= lower.top):
-                    continue
-                gap = lower.top - upper_bottom
-                if gap < min_gap:
-                    shift = min_gap - gap
-                    # Don't push past bottom boundary
-                    if lower.top + lower.height + shift > bottom_limit:
-                        continue
-                    lower.top += shift
+                # Build single-slide prompt
+                zones = slide.get("zones", {})
+                heading = zones.get("heading", "")
+                kicker = zones.get("kicker", "")
+                lead = zones.get("lead", "")
+                cards = zones.get("cards", [])
+                body = zones.get("body", "")
+                single_desc = f"页码: {seq:02d} / {total:02d}\n类型: {slide.get('type', 'content')}\n标题: {heading}\n"
+                if kicker:
+                    single_desc += f"章节标签: {kicker}\n"
+                if lead:
+                    single_desc += f"副标题: {lead}\n"
+                if body:
+                    single_desc += f"正文: {body[:600]}\n"
+                if cards:
+                    single_desc += f"卡片 ({len(cards)} 张):\n"
+                    for ci, card in enumerate(cards):
+                        single_desc += f"  [{card.get('role', 'unknown')}] {card.get('title', '')}"
+                        if card.get('body'):
+                            single_desc += f" — {card['body'][:300]}"
+                        if card.get('chart'):
+                            single_desc += f" [图表]"
+                        single_desc += "\n"
 
+                single_user = f"""为以下 1 页幻灯片生成完整的 SVG XML。
 
-def _normalize_formatting(prs: Presentation, spacing: dict = None):
-    """Set uniform font (微软雅黑) across the presentation without changing alignment."""
-    FONT_NAME = "Microsoft YaHei"  # 微软雅黑
-    _normalize_spacing(prs, spacing)
-    for slide in prs.slides:
-        for shape in slide.shapes:
-            # Text frames — only set font, keep original alignment
-            if shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
-                    for run in para.runs:
-                        _set_font_all(run, FONT_NAME)
-            # Tables
-            if shape.has_table:
-                for row in shape.table.rows:
-                    for cell in row.cells:
-                        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-                        for para in cell.text_frame.paragraphs:
-                            para.alignment = PP_ALIGN.CENTER
-                            for run in para.runs:
-                                _set_font_all(run, FONT_NAME)
-            # Group shapes (recurse)
-            if shape.shape_type == 6:  # MSO_SHAPE_TYPE.GROUP
-                _normalize_group(shape, FONT_NAME)
+{single_desc}
 
+输出一个完整的 SVG，用 ```svg ... ``` 包裹。仅输出 SVG 代码块。"""
 
-def _normalize_group(group_shape, font_name: str):
-    """Recurse into group shapes — only set font, keep original alignment."""
-    for shape in group_shape.shapes:
-        if shape.has_text_frame:
-            for para in shape.text_frame.paragraphs:
-                for run in para.runs:
-                    _set_font_all(run, font_name)
-        if shape.has_table:
-            for row in shape.table.rows:
-                for cell in row.cells:
-                    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-                    for para in cell.text_frame.paragraphs:
-                        para.alignment = PP_ALIGN.CENTER
-                        for run in para.runs:
-                            _set_font_all(run, font_name)
+                single_ok = False
+                for sa in range(3):
+                    try:
+                        resp = _safe_run_async(llm_generate(provider_id, model,
+                            svg_system, single_user, temperature=0.7))
+                        svg_content = _extract_svg(resp)
+                        if svg_content and "<svg" in svg_content and "</svg>" in svg_content:
+                            errors = _check_svg(svg_content, seq)
+                            if errors:
+                                _logger.warning(f"Slide {seq} individual retry {sa+1} SVG check ({len(errors)} issues)")
+                            result.append({
+                                "seq": seq,
+                                "file": f"slide-{seq:02d}.svg",
+                                "svg_content": svg_content,
+                                "type": slide.get("type", "content"),
+                                "label": heading or f"Slide {seq}",
+                            })
+                            _logger.info(f"Slide {seq}: individual retry {sa+1} SUCCESS")
+                            single_ok = True
+                            break
+                        else:
+                            _logger.warning(f"Slide {seq} individual retry {sa+1}: no valid SVG extracted")
+                    except Exception as e:
+                        _logger.warning(f"Slide {seq} individual retry {sa+1} failed: {e}")
+                if not single_ok:
+                    _logger.error(f"Slide {seq}: all individual retries exhausted — slide will be missing")
+
+    if not result:
+        return None
+    return result
