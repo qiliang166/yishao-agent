@@ -341,17 +341,78 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
 
 # ── Staged AI slide generation ──
 
+def _web_search(query: str, max_results: int = 5) -> str:
+    """Equivalent to PPT-Agent agent-reach: search the web for context enrichment.
+
+    Uses DuckDuckGo Instant Answer API (free, no API key needed).
+    Returns concatenated search result text, or empty string on failure.
+    """
+    import urllib.parse
+    try:
+        import httpx
+        url = "https://api.duckduckgo.com/"
+        params = {"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"}
+        resp = httpx.get(url, params=params, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+
+        parts = []
+        # Heading (topic disambiguation) — placed first for context
+        heading = data.get("Heading", "")
+        if heading:
+            parts.append(f"主题: {heading}")
+        # Abstract (main curated answer) — highest quality signal
+        if data.get("AbstractText"):
+            parts.append(data["AbstractText"])
+        # Abstract URL (external reference for deeper reading)
+        abstract_url = data.get("AbstractURL", "")
+        if abstract_url:
+            parts.append(f"参考来源: {abstract_url}")
+        # Related topics — semantically related, broadens context
+        for r in data.get("RelatedTopics", [])[:max_results]:
+            text = r.get("Text", "")
+            if text and text not in parts:
+                parts.append(text)
+
+        return "\n\n---\n".join(parts) if parts else ""
+    except Exception as e:
+        _logger.info(f"Web search skipped ({e})")
+        return ""
+
+
 def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: str) -> str:
     """Phase 2 (Research): Deep SOP content analysis — matches PPT-Agent research-core.
 
-    PPT-Agent research-core 'research' mode outputs research-context.md with:
-    Background, Key Insights, Common Angles, Suggested Focus Areas.
+    PPT-Agent research-core uses agent-reach for web search, producing
+    research-context.md with: Background, Key Insights, Common Angles,
+    Suggested Focus Areas.
 
-    Instead of web search, LLM deeply analyzes the SOP content itself,
-    producing the same structured research context for Stage 1.
+    Our equivalent: web search enriches the LLM's internal knowledge,
+    then the LLM produces the same structured research context.
     """
+    import re
+
     if not sop_content or not sop_content.strip():
         return ""
+
+    # ── Extract search queries from SOP content ──
+    search_results = ""
+    try:
+        lines = [l.strip() for l in sop_content.split("\n") if l.strip()]
+        heading_match = re.search(r'^#+\s*(.+)$', sop_content, re.MULTILINE)
+        if heading_match:
+            topic = heading_match.group(1).strip()
+        elif lines:
+            topic = lines[0][:120]
+        else:
+            topic = ""
+        if topic:
+            _logger.info(f"Phase 2 web search: '{topic[:80]}'")
+            search_results = _web_search(topic, max_results=5)
+            if search_results:
+                _logger.info(f"Phase 2 web search returned {len(search_results)} chars")
+    except Exception as e:
+        _logger.info(f"Phase 2 web search skipped (non-critical): {e}")
 
     research_system = (
         "你是专业的内容研究员。对提供的 SOP 文档进行深度结构化分析。"
@@ -370,7 +431,16 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
         "\n## 潜在图表机会"
     )
 
-    research_user = f"""## SOP 文档（唯一分析对象）
+    search_block = ""
+    if search_results:
+        search_block = f"""## 网络搜索结果（补充上下文，非直接内容来源）
+{search_results}
+
+---
+
+"""
+
+    research_user = f"""{search_block}## SOP 文档（唯一分析对象）
 {sop_content}
 
 ## 任务
@@ -1318,4 +1388,156 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
 
     if not result:
         return None
+
+    # ── Phase 6b: Review loop (PPT-Agent review-core equivalent) ──
+    if provider_id and model:
+        result = _review_and_fix_slides(provider_id, model, llm_generate, result,
+                                        style_yaml, style_id, svg_system)
     return result
+
+
+def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
+                           style_id, svg_system, max_rounds=2):
+    """PPT-Agent review-core equivalent: review each slide, fix if score < 7.
+
+    Uses the same LLM (DeepSeek/Moonshot) with PPT-Agent's reviewer.md prompt.
+    Returns updated slides list with fixes applied.
+    """
+    import re, json
+
+    reviewer_spec = _load_reviewer_spec()
+    if not reviewer_spec:
+        _logger.info("Reviewer spec not available, skipping review loop")
+        return slides
+
+    review_system = f"""{reviewer_spec}
+
+## Style YAML (reference for this review)
+```yaml
+{style_yaml}
+```
+
+You are reviewing slides for style "{style_id}". Score each SVG on all 5 criteria.
+Output MUST include the Suggestions JSON block with typed, actionable suggestions.
+If the slide passes all quality gates, output an empty Suggestions JSON array []."""
+
+    for round_num in range(max_rounds):
+        fixes_needed = False
+        for i, slide in enumerate(slides):
+            svg_content = slide.get("svg_content", "")
+            if not svg_content:
+                continue
+
+            seq = slide.get("seq", i + 1)
+            slide_type = slide.get("type", "content")
+
+            review_user = f"""## Slide {seq}: {slide.get('label', 'Untitled')} (type: {slide_type})
+
+```svg
+{svg_content[:10000]}
+```
+
+Review this slide and provide your full Quality Gate scores + Suggestions JSON."""
+
+            try:
+                response = _safe_run_async(llm_generate(provider_id, model,
+                    review_system, review_user, temperature=0.3))
+            except Exception as e:
+                _logger.warning(f"Review round {round_num+1} slide {seq} failed: {e}")
+                continue
+
+            # Parse score from response
+            score_match = re.search(r'overall_score\s*\|\s*(\d+)', response)
+            score = int(score_match.group(1)) if score_match else 0
+            pass_match = re.search(r'pass\s*\|\s*(true|false)', response)
+            passed = pass_match.group(1) == "true" if pass_match else False
+
+            # Parse Suggestions JSON
+            fixes_json = []
+            json_match = re.search(r'```json\s*\n(.*?)\n```', response, re.DOTALL)
+            if json_match:
+                try:
+                    fixes_json = json.loads(json_match.group(1))
+                except json.JSONDecodeError:
+                    pass
+
+            _logger.info(
+                f"Slide {seq} review round {round_num+1}: "
+                f"score={score}/10 pass={passed} suggestions={len(fixes_json)}"
+            )
+
+            if score >= 7 and passed:
+                continue  # This slide passes
+
+            fixes_needed = True
+
+            # Determine fix strategy based on suggestion types
+            suggestion_types = {s.get("type", "") for s in fixes_json}
+
+            if "full_rethink" in suggestion_types:
+                # Regenerate from scratch with guidance
+                guidance = fixes_json[0].get("details", {}).get("guidance", "")
+                fix_prompt = (
+                    f"\n\n## 重新设计要求（审查反馈）\n"
+                    f"上一版评分 {score}/10。请完全重新设计本页：\n{guidance}\n"
+                    f"严格遵循上方所有 Style YAML 和 SVG 规范。"
+                )
+            elif "layout_restructure" in suggestion_types:
+                # Regenerate with layout constraint
+                constraint = fixes_json[0].get("details", {}).get("constraint", "")
+                suggested = fixes_json[0].get("details", {}).get("suggested_layout", "")
+                fix_prompt = (
+                    f"\n\n## 布局调整要求（审查反馈）\n"
+                    f"上一版评分 {score}/10。使用布局 {suggested}：{constraint}\n"
+                )
+            elif "content_reduction" in suggestion_types:
+                target = fixes_json[0].get("details", {}).get("target_info_units", 4)
+                what = fixes_json[0].get("details", {}).get("what_to_remove", "")
+                fix_prompt = (
+                    f"\n\n## 内容精简要求（审查反馈）\n"
+                    f"上一版评分 {score}/10。目标信息单元 {target} 个。\n移除：{what}\n"
+                )
+            elif "attribute_change" in suggestion_types:
+                # Patch specific attributes
+                patches = "; ".join(
+                    f"{s.get('details',{}).get('attribute','?')}: "
+                    f"{s.get('details',{}).get('current','?')} → "
+                    f"{s.get('details',{}).get('target','?')}"
+                    for s in fixes_json if s.get("type") == "attribute_change"
+                )
+                fix_prompt = (
+                    f"\n\n## 精确属性修正（审查反馈）\n"
+                    f"上一版评分 {score}/10。请修正以下属性：{patches}\n"
+                )
+            else:
+                fix_prompt = (
+                    f"\n\n## 质量改进（审查反馈）\n"
+                    f"上一版评分 {score}/10。请改进整体质量。\n"
+                )
+
+            # Regenerate with fix prompt
+            single_desc = f"页码: {seq:02d}\n类型: {slide_type}\n标题: {slide.get('label', '')}\n"
+            fix_user = f"""为以下 1 页幻灯片生成改进版 SVG。
+
+{single_desc}
+{fix_prompt}
+
+输出一个完整的 SVG，用 ```svg ... ``` 包裹。仅输出 SVG 代码块。"""
+
+            for fa in range(2):
+                try:
+                    resp = _safe_run_async(llm_generate(provider_id, model,
+                        svg_system, fix_user, temperature=0.7))
+                    new_svg = _extract_svg(resp)
+                    if new_svg and "<svg" in new_svg and "</svg>" in new_svg:
+                        slide["svg_content"] = new_svg
+                        _logger.info(f"Slide {seq} fix round {round_num+1} applied ({len(new_svg)} bytes)")
+                        break
+                except Exception as e:
+                    _logger.warning(f"Slide {seq} fix attempt {fa+1} failed: {e}")
+
+        if not fixes_needed:
+            _logger.info(f"Review round {round_num+1}: all slides pass quality gate")
+            break
+
+    return slides
