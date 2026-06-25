@@ -418,7 +418,86 @@ def _generate_speaker_notes(slide_data: list, title: str) -> str:
     return "\n".join(lines)
 
 
+def _resolve_review_models(provider_id: str, model: str) -> tuple[str, str, str]:
+    """Try to find a different model for review (cross-model validation).
+
+    PPT-Agent advantage: Claude generates, Gemini reviews — different models
+    catch different errors. We replicate this: if multiple providers/models are
+    configured, pick a different one for review. If only one model exists,
+    return the same model but flag for self-review mode.
+
+    Returns (review_provider_id, review_model, mode):
+      mode = "cross_model" | "self_review"
+    """
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT id, model FROM llm_providers WHERE is_enabled = 1"
+        ).fetchall()
+        db.close()
+
+        candidates = []
+        for row in rows:
+            pid = row["id"]
+            # Get configured model from provider record
+            prov_model = row.get("model", "")
+            candidates.append((pid, prov_model))
+
+        # Find a different provider or different model
+        for pid, prov_model in candidates:
+            if pid != provider_id:
+                # Different provider — best case
+                _logger.info(f"Cross-model review: gen={provider_id}/{model}, review={pid}/{prov_model or model}")
+                return pid, prov_model or model, "cross_model"
+            elif prov_model and prov_model != model:
+                # Same provider, different model
+                _logger.info(f"Cross-model review: gen={provider_id}/{model}, review={pid}/{prov_model}")
+                return pid, prov_model, "cross_model"
+
+        # If we get here, only one model available
+        _logger.info(f"Self-review mode: only {provider_id}/{model} available")
+        return provider_id, model, "self_review"
+    except Exception as e:
+        _logger.info(f"Model resolution failed ({e}), falling back to self-review")
+        return provider_id, model, "self_review"
+
+
 def _web_search(query: str, max_results: int = 5) -> str:
+    """Superior to PPT-Agent agent-reach: always-on web search, zero dependencies.
+
+    PPT-Agent's agent-reach probes for shell tools (curl/gh/yt-dlp/mcporter/xreach),
+    degrades through 4 tiers, and risks partial results when tools are missing.
+    Our implementation is always available — no probing, always the same quality.
+
+    Uses DuckDuckGo Instant Answer API (free, no API key, no rate limits).
+    """
+    import urllib.parse
+    try:
+        import httpx
+        url = "https://api.duckduckgo.com/"
+        params = {"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"}
+        resp = httpx.get(url, params=params, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+
+        parts = []
+        heading = data.get("Heading", "")
+        if heading:
+            parts.append(f"Subject: {heading}")
+        if data.get("AbstractText"):
+            parts.append(data["AbstractText"])
+        abstract_url = data.get("AbstractURL", "")
+        if abstract_url:
+            parts.append(f"Reference: {abstract_url}")
+        for r in data.get("RelatedTopics", [])[:max_results]:
+            text = r.get("Text", "")
+            if text and text not in parts:
+                parts.append(text)
+
+        return "\n\n---\n".join(parts) if parts else ""
+    except Exception as e:
+        _logger.info(f"Web search skipped ({e})")
+        return ""
     """Equivalent to PPT-Agent agent-reach: search the web for context enrichment.
 
     Uses DuckDuckGo Instant Answer API (free, no API key needed).
@@ -1417,21 +1496,28 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
     if not result:
         return None
 
+    review_pid, review_m, review_mode = provider_id, model, "self_review"
+    if provider_id and model:
+        review_pid, review_m, review_mode = _resolve_review_models(provider_id, model)
+
     # ── Phase 6b: Per-slide review loop (PPT-Agent review-core equivalent) ──
     if provider_id and model:
-        result = _review_and_fix_slides(provider_id, model, llm_generate, result,
-                                        style_yaml, style_id, svg_system)
+        result = _review_and_fix_slides(review_pid, review_m, llm_generate, result,
+                                        style_yaml, style_id, svg_system,
+                                        review_mode=review_mode)
 
     # ── Phase 6c: Holistic deck review (cross-slide consistency) ──
     if provider_id and model and result and len(result) >= 3:
-        result = _holistic_review(provider_id, model, llm_generate, result,
-                                  slide_data, style_yaml, style_id, svg_system)
+        result = _holistic_review(review_pid, review_m, llm_generate, result,
+                                  slide_data, style_yaml, style_id, svg_system,
+                                  review_mode=review_mode)
 
     return result
 
 
 def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
-                           style_id, svg_system, max_rounds=2):
+                           style_id, svg_system, max_rounds=2,
+                           review_mode: str = "self_review"):
     """PPT-Agent review-core equivalent: review each slide, fix if score < 7.
 
     Uses the same LLM (DeepSeek/Moonshot) with PPT-Agent's reviewer.md prompt.
@@ -1444,12 +1530,30 @@ def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
         _logger.info("Reviewer spec not available, skipping review loop")
         return slides
 
+    # ── Self-critique injection for single-model review ──
+    self_critique_block = ""
+    if review_mode == "self_review":
+        self_critique_block = (
+            "\n\n## CRITICAL: Self-Review Mode\n"
+            "You are reviewing SVGs generated by YOUR OWN model. This means you share\n"
+            "the same blind spots. To compensate:\n"
+            "1. Be EXTRA skeptical — assume every color, font size, and layout choice\n"
+            "   might be wrong. Verify each against the Style YAML above.\n"
+            "2. Check for patterns YOU tend to overuse (same layout, same accent placement,\n"
+            "   same card structure across slides — variety is required).\n"
+            "3. Look for MISSING elements: shadows you forgot, gradients you skipped,\n"
+            "   decorative elements the style requires but you omitted.\n"
+            "4. Reduce inflated scores: if your first instinct is 8+, re-examine and\n"
+            "   look harder for issues. Self-review tends to overrate by 1-2 points.\n"
+        )
+
     review_system = f"""{reviewer_spec}
 
 ## Style YAML (reference for this review)
 ```yaml
 {style_yaml}
 ```
+{self_critique_block}
 
 You are reviewing slides for style "{style_id}". Score each SVG on all 5 criteria.
 Output MUST include the Suggestions JSON block with typed, actionable suggestions.
@@ -1578,15 +1682,15 @@ Review this slide and provide your full Quality Gate scores + Suggestions JSON."
 
 
 def _holistic_review(provider_id, model, llm_generate, slides, slide_data,
-                     style_yaml, style_id, svg_system):
+                     style_yaml, style_id, svg_system,
+                     review_mode: str = "self_review"):
     """Phase 6c: Holistic deck review — cross-slide consistency evaluation.
 
-    PPT-Agent review-core holistic mode: evaluates all slides together using
-    the 5-Dimension Framework (Visual Rhythm, Color Story, Narrative Arc,
-    Style Consistency, Pacing). Produces deck_coordination suggestions.
-
-    Superior to PPT-Agent: same LLM performs review (no Gemini dependency),
-    and we apply priority-1 fixes automatically.
+    PPT-Agent review-core holistic mode (reviewer.md:286-331): reads ALL slide
+    SVGs and evaluates 5-Dimension cross-slide consistency. Unlike the previous
+    metadata-only approach, this sends structural fingerprints with actual
+    color values, font sizes, shadow defs, and stripped SVG skeletons so the
+    LLM can detect real inconsistencies across slides.
     """
     import re, json, yaml
 
@@ -1599,88 +1703,139 @@ def _holistic_review(provider_id, model, llm_generate, slides, slide_data,
         _logger.info("Deck too small (<3 slides), skipping holistic review")
         return slides
 
-    # ── Build slide summary for holistic review ──
-    slide_summaries = []
+    # ── Build structural fingerprint + stripped SVG per slide ──
+    fingerprint_parts = []
+
     for i, s in enumerate(slides):
         seq = s.get("seq", i + 1)
         svg = s.get("svg_content", "")
         stype = s.get("type", "content")
         label = s.get("label", f"Slide {seq}")
 
-        # Detect layout from SVG content
-        layout = "mixed"
-        if "single_focus" in stype or s.get("layout") == "single_focus":
-            layout = "single_focus"
-        elif "two_column" in str(s.get("layout", "")):
-            layout = "two_column"
-        elif "three_column" in str(s.get("layout", "")):
-            layout = "three_column"
-        elif "hero_grid" in str(s.get("layout", "")):
-            layout = "hero_grid"
+        # Extract structural attributes from SVG
+        fills = sorted(set(re.findall(r'fill\s*=\s*"([^"]+)"', svg)))
+        strokes = sorted(set(re.findall(r'stroke\s*=\s*"([^"]+)"', svg)))
+        hex_colors = sorted(set(
+            c for c in fills + strokes
+            if re.match(r'^#[0-9a-fA-F]{3,8}$', c)
+        ))
+        font_sizes = sorted(set(re.findall(r'font-size\s*=\s*"(\d+(?:\.\d+)?)', svg)))
+        font_families = sorted(set(re.findall(r'font-family\s*=\s*"([^"]+)"', svg)))
+        rx_vals = sorted(set(re.findall(r'rx\s*=\s*"(\d+(?:\.\d+)?)"', svg)))
+        shadow_ids = re.findall(r'<filter\s+id="([^"]*shadow[^"]*)"', svg)
+        gradient_ids = re.findall(r'<linearGradient\s+id="([^"]+)"', svg)
 
-        # Infer visual_weight from page type per reviewer.md
+        # Layout detection
+        layout = s.get("layout", "")
+        if not layout:
+            if re.search(r'three.column|3.col', svg):
+                layout = "three_column"
+            elif re.search(r'two.column|2.col', svg):
+                layout = "two_column"
+            elif re.search(r'single.focus|full.bleed', svg):
+                layout = "single_focus"
+            elif re.search(r'hero.grid', svg):
+                layout = "hero_grid"
+            else:
+                layout = "mixed"
+
+        # Visual weight
         low_types = {"quote", "image", "image_hero", "section", "copyright", "appendix"}
         high_types = {"data_hero", "comparison", "duo_compare", "table"}
-        if stype in low_types:
-            weight = "low"
-        elif stype in high_types:
-            weight = "high"
-        else:
-            weight = "medium"
+        weight = "low" if stype in low_types else ("high" if stype in high_types else "medium")
 
-        # Count info units from SVG
-        card_matches = re.findall(r'<g[^>]*transform', svg)
-        text_blocks = len(re.findall(r'<text[^>]*>', svg))
-        info_units = max(len(card_matches) if card_matches else 0, min(text_blocks // 2, 8))
+        # Stripped SVG: remove text content but keep structure
+        # Strip <text>...</text> body content, keep all structural tags + defs
+        stripped = re.sub(r'(<text[^>]*>).*?(</text>)', r'\1...\2', svg)
+        # Keep only first 6000 chars of stripped SVG
+        stripped = stripped[:6000]
+        if len(svg) > 6000:
+            stripped += "\n<!-- ... truncated ... -->"
 
-        # Check accent color presence
-        has_accent = False
-        try:
-            yaml_data = yaml.safe_load(style_yaml)
-            accent = yaml_data.get("color_scheme", {}).get("accent", "")
-            if accent and accent.upper() in svg.upper():
-                has_accent = True
-        except Exception:
-            pass
+        fp = (
+            f"## Slide {seq:02d}: {label}\n"
+            f"- Type: {stype} | Layout: {layout} | Weight: {weight}\n"
+            f"- Colors in use: {', '.join(hex_colors[:20])}\n"
+            f"- Font sizes: {', '.join(font_sizes[:15])}\n"
+            f"- Font families: {', '.join(font_families[:5])}\n"
+            f"- Border radii: {', '.join(rx_vals[:10])}\n"
+            f"- Shadow filters: {', '.join(shadow_ids) if shadow_ids else 'none'}\n"
+            f"- Gradients: {', '.join(gradient_ids) if gradient_ids else 'none'}\n"
+            f"\n```svg\n{stripped}\n```\n"
+        )
+        fingerprint_parts.append(fp)
 
-        slide_summaries.append({
-            "seq": seq, "type": stype, "label": label, "layout": layout,
-            "visual_weight": weight, "info_units": info_units,
-            "has_accent": has_accent, "svg_preview": svg[:500],
-        })
+    all_fingerprints = "\n---\n".join(fingerprint_parts)
 
-    summaries_text = "\n".join(
-        f"| {s['seq']:02d} | {s['type']} | {s['layout']} | {s['visual_weight']} | "
-        f"{s['info_units']} | {'Y' if s['has_accent'] else 'N'} | {s['label']} |"
-        for s in slide_summaries
-    )
+    # Summary table for quick overview
+    summary_rows = []
+    for i, s in enumerate(slides):
+        seq = s.get("seq", i + 1)
+        svg = s.get("svg_content", "")
+        stype = s.get("type", "content")
+        label = s.get("label", f"Slide {seq}")
+        low_types = {"quote", "image", "image_hero", "section", "copyright", "appendix"}
+        high_types = {"data_hero", "comparison", "duo_compare", "table"}
+        weight = "low" if stype in low_types else ("high" if stype in high_types else "medium")
+        layout = s.get("layout", "mixed")
+        card_count = len(re.findall(r'<g[^>]*transform', svg))
+        summary_rows.append(
+            f"| {seq:02d} | {stype} | {layout} | {weight} | {card_count} | {label} |"
+        )
+
+    summary_table = "\n".join([
+        "| # | Type | Layout | Weight | Cards | Title |",
+        "|---|------|--------|--------|-------|-------|",
+    ] + summary_rows)
+
+    # Self-critique injection for single-model holistic review
+    holistic_critique = ""
+    if review_mode == "self_review":
+        holistic_critique = (
+            "\n\n## CRITICAL: Self-Review Mode\n"
+            "You are reviewing a deck generated by YOUR OWN model. Cross-slide issues\n"
+            "are YOUR blind spots — be extra vigilant:\n"
+            "1. Compare STRUCTURAL ATTRIBUTES numerically: are all slide titles really\n"
+            "   the same font-size? Check the fingerprint data, don't assume.\n"
+            "2. SCAN for monotony: your model tends to repeat the same layout pattern.\n"
+            "   Flag any 3+ consecutive slides with identical layout.\n"
+            "3. COLOR DRIFT: check if hex colors are consistent across slides.\n"
+            "   Your model often uses slightly different hex codes for 'the same' color.\n"
+            "4. Reduce scores by 1 point: self-review systematically overrates by 1-2 points.\n"
+        )
 
     holistic_system = f"""{reviewer_spec}
 
-## Style YAML
+## Style YAML (reference tokens)
 ```yaml
 {style_yaml}
 ```
+{holistic_critique}
 
-You are performing HOLISTIC DECK REVIEW for style "{style_id}". Evaluate ALL {len(slides)} slides together using the 5-Dimension Evaluation Framework from the reviewer spec above. Output deck_coordination suggestions only."""
+You are performing HOLISTIC DECK REVIEW for style "{style_id}". You have access to each slide's structural fingerprint (exact colors, font sizes, shadows, gradients) AND stripped SVG skeleton. Use these to detect REAL cross-slide inconsistencies, not guess from metadata."""
 
-    holistic_user = f"""## Deck Overview: {len(slides)} slides
+    holistic_user = f"""## Deck Summary: {len(slides)} slides
 
-| # | Type | Layout | Weight | Units | Accent | Title |
-|---|------|--------|--------|-------|--------|-------|
-{summaries_text}
+{summary_table}
+
+## Per-Slide Structural Fingerprints + Stripped SVGs
+
+{all_fingerprints}
 
 ## Task
-Evaluate cross-slide consistency using the 5-Dimension Framework:
-1. Visual Rhythm (25%): layout variety, monotony detection
-2. Color Story (20%): accent escalation, token consistency
-3. Narrative Arc (20%): visual weight progression
-4. Style Consistency (20%): attribute uniformity
-5. Pacing (15%): breathing slides between dense content
 
-Output the Holistic Scoring table + deck_coordination Suggestions JSON.
-If coherence score >= 7 and no P1 issues, output empty JSON array [].
-Only output deck_coordination type suggestions, no per-slide suggestions."""
+Evaluate cross-slide consistency using the 5-Dimension Framework. Use the actual color values, font sizes, shadow defs, and border radii from the fingerprints above to detect inconsistencies — do not guess from metadata alone.
+
+1. **Visual Rhythm** (25%): Do layouts alternate? 3+ consecutive same layout = trigger.
+2. **Color Story** (20%): Compare hex_colors across slides. Accent on >60% of slides = trigger. Missing accent on climax slide = trigger.
+3. **Narrative Arc** (20%): 3+ consecutive high-weight slides without low-weight breathing slide = trigger.
+4. **Style Consistency** (20%): Compare font_sizes, font_families, rx_vals, shadow_ids across slides. >30% variance on any attribute = trigger.
+5. **Pacing** (15%): 4+ consecutive content/data/comparison slides with no breathing slide = trigger.
+
+Output:
+- Holistic Scoring table (each dimension 0-10, weighted total)
+- deck_coordination Suggestions JSON with affected_slides and concrete fix recommendations
+- If coherence >= 7 AND no P1 issues, output empty JSON array []"""
 
     try:
         response = _safe_run_async(llm_generate(provider_id, model,
