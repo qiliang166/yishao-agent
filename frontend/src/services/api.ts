@@ -86,6 +86,20 @@ export interface DiffResult {
   skill_template_diff: string
 }
 
+export interface StyleItem {
+  id: string
+  name: string
+  group: string
+  mood: string
+  keywords: string[]
+  colors: {
+    primary: string
+    accent: string
+    background: string
+    text: string
+  }
+}
+
 export const api = {
   // Projects
   listProjects: (page?: number, pageSize?: number) => {
@@ -358,11 +372,23 @@ export const api = {
     request(`/api/projects/${projectId}/files`),
 
   // PPT
-  generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string) =>
-    request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4'}) }),
+  generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal) =>
+    request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4'}), signal }),
 
-  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[]) =>
-    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null}) }),
+  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[], signal?: AbortSignal, columnId?: string) =>
+    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null, column_id: columnId || ''}), signal }),
+
+  // PPT Styles (17 PPT-Agent YAML styles)
+  listStyles: () => request('/api/ppt/styles').then(d => d.styles as StyleItem[]),
+
+  exportSvgZip: (runId: string) => `${BASE}/api/ppt/export-zip/${encodeURIComponent(runId)}`,
+
+  // PPT Preview URL
+  previewUrl: (runId: string) => `${BASE}/api/exports/${encodeURIComponent(runId)}/index.html`,
+
+  // Load existing PPT results for a project (survives page reload / timeout)
+  listPptResults: (projectId: string) =>
+    request(`/api/projects/${encodeURIComponent(projectId)}/ppt-results`).then(d => d.results as any[]),
 
   // SOP Export
   exportSOP: (content: string, branding?: Record<string, string>, projectId?: string) =>

@@ -54,6 +54,7 @@ class PPTGenerateRequest(BaseModel):
     provider_id: str = ""
     model: str = ""
     slide_plan: Optional[list] = None
+    column_id: str = ""  # col4=道术PPT, col5=研学PPT
 
 
 class PPTPlanRequest(BaseModel):

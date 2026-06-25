@@ -406,7 +406,7 @@ def _gen_zone_elem(zone_key: str, value: str, style_family: str) -> str:
 
 
 def _gen_table(value: str, is_swiss: bool) -> str:
-    """Parse a JSON-like table value into an HTML table."""
+    """Parse a markdown/JSON table value into an HTML table."""
     rows = None
     # Try JSON array of arrays
     try:
@@ -415,32 +415,44 @@ def _gen_table(value: str, is_swiss: bool) -> str:
             if isinstance(data[0], list):
                 rows = data
             elif isinstance(data[0], dict):
-                # Array of dicts: keys → header, values → rows
                 keys = list(data[0].keys())
                 rows = [keys] + [[str(d.get(k, "")) for k in keys] for d in data]
     except (json.JSONDecodeError, TypeError):
         pass
 
-    # Try newline-separated with | or tab delimiter
+    # Try markdown pipe table or tab-delimited
     if rows is None:
         lines = [l.strip() for l in value.strip().split("\n") if l.strip()]
         if lines:
-            rows = []
+            raw_rows = []
             for line in lines:
                 if "|" in line:
-                    rows.append([c.strip() for c in line.split("|")])
+                    cells = [c.strip() for c in line.split("|")]
+                    # Strip leading/trailing empty cells from markdown pipe syntax
+                    if cells and cells[0] == "":
+                        cells = cells[1:]
+                    if cells and cells[-1] == "":
+                        cells = cells[:-1]
+                    raw_rows.append(cells)
                 elif "\t" in line:
-                    rows.append([c.strip() for c in line.split("\t")])
+                    raw_rows.append([c.strip() for c in line.split("\t")])
                 else:
-                    rows.append([line])
+                    raw_rows.append([line])
+            # Filter separator rows (|---|:---| etc.)
+            rows = []
+            for r in raw_rows:
+                if all(re.match(r'^:?-{2,}:?$', c) for c in r if c):
+                    continue
+                rows.append(r)
 
     if not rows:
         return f'<p class="body-zh">{_escape(value)}</p>'
 
-    parts = ['<table style="width:100%;border-collapse:collapse;margin-top:2vh;font-size:14px">']
+    border_color = "var(--ink)" if is_swiss else "var(--ink)"
+    parts = [f'<table style="width:100%;border-collapse:collapse;margin-top:2vh;font-size:14px">']
     for i, row in enumerate(rows):
         tag = "th" if i == 0 else "td"
-        style = 'style="padding:6px 10px;border-bottom:1px solid var(--ink);opacity:0.2"'
+        style = f'style="padding:6px 10px;border-bottom:1px solid {border_color};opacity:0.2;text-align:left"'
         parts.append("  <tr>")
         for cell in row:
             parts.append(f'    <{tag} {style}>{_escape(str(cell))}</{tag}>')

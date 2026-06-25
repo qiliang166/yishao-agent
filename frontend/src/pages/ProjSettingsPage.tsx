@@ -20,7 +20,6 @@ interface ColumnConfig {
   label: string
   prompt: string
   skill: string
-  rules: string
   has_template: number
   template_path: string | null
   sort_order: number
@@ -41,12 +40,12 @@ export default function ProjSettingsPage() {
   const [providers, setProviders] = useState<any[]>([])
   // Column configs state
   const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([])
-  const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string; rules: string }>>({})
+  const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [colSaving, setColSaving] = useState<Record<string, boolean>>({})
 
   // Accordion state
   const [openCols, setOpenCols] = useState<Set<string>>(new Set())
-  const [rulesOpen, setRulesOpen] = useState<Set<string>>(new Set())
+
 
   // Provider form
   const [showProviderForm, setShowProviderForm] = useState(false)
@@ -101,8 +100,8 @@ export default function ProjSettingsPage() {
     api.listAsrProviders().then(setAsrProviders).catch(() => {})
     api.listColumnConfigs().then((configs: ColumnConfig[]) => {
       setColumnConfigs(configs)
-      const vals: Record<string, { prompt: string; skill: string; rules: string }> = {}
-      configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill, rules: c.rules || '{}' } })
+      const vals: Record<string, { prompt: string; skill: string }> = {}
+      configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
       setColValues(vals)
     }).catch(() => {})
     api.getSettings().then(data => {
@@ -580,67 +579,6 @@ export default function ProjSettingsPage() {
                             </div>
                           </div>
 
-                          {/* PPT SKILL 规则配置 — 仅 col4/col5 */}
-                          {(col.id === 'col4' || col.id === 'col5') && (
-                            <div style={{ marginTop: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-                              <button
-                                onClick={() => setRulesOpen(prev => {
-                                  const next = new Set(prev)
-                                  next.has(config.id) ? next.delete(config.id) : next.add(config.id)
-                                  return next
-                                })}
-                                style={{
-                                  background: 'none', border: 'none', cursor: 'pointer',
-                                  fontSize: '13px', fontWeight: 600, color: 'var(--primary)',
-                                  padding: 0, display: 'flex', alignItems: 'center', gap: '4px',
-                                }}
-                              >
-                                <span>{rulesOpen.has(config.id) ? '▾' : '▸'}</span>
-                                PPT SKILL 规则配置
-                              </button>
-                              {rulesOpen.has(config.id) && (
-                                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                                    参照 guizang-ppt-skill 结构化规则体系。包含：设计纪律、版式类型、组件规范、内容规范、配图规则、澄清问题、设计原则、页面节奏、质量检查清单、分析规则。直接编辑下方 JSON。
-                                  </div>
-                                  <textarea
-                                    value={(() => {
-                                      try {
-                                        const rules = JSON.parse(colValues[config.id]?.rules || '{}')
-                                        return JSON.stringify(rules, null, 2)
-                                      } catch { return colValues[config.id]?.rules || '{}' }
-                                    })()}
-                                    onChange={e => {
-                                      try {
-                                        JSON.parse(e.target.value)
-                                        setColValues(prev => ({
-                                          ...prev,
-                                          [config.id]: { ...prev[config.id], rules: e.target.value }
-                                        }))
-                                      } catch {
-                                        // Allow invalid JSON while typing
-                                        setColValues(prev => ({
-                                          ...prev,
-                                          [config.id]: { ...prev[config.id], rules: e.target.value }
-                                        }))
-                                      }
-                                    }}
-                                    style={{
-                                      width: '100%', height: '300px',
-                                      border: '1px solid var(--border)',
-                                      borderRadius: 'var(--radius-sm)',
-                                      padding: '10px', fontSize: '12px',
-                                      fontFamily: 'var(--mono)',
-                                      color: 'var(--text)',
-                                      background: 'var(--card)',
-                                      outline: 'none', resize: 'vertical',
-                                      boxSizing: 'border-box', lineHeight: 1.5,
-                                    }}
-                                  />
-                                </div>
-                              )}
-                            </div>
-                          )}
 
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                             <button className="btn btn-primary btn-sm"
@@ -651,9 +589,6 @@ export default function ProjSettingsPage() {
                                   const payload: any = {
                                     prompt: colValues[config.id]?.prompt || '',
                                     skill: colValues[config.id]?.skill || '',
-                                  }
-                                  if (col.id === 'col4' || col.id === 'col5') {
-                                    payload.rules = colValues[config.id]?.rules || '{}'
                                   }
                                   await api.updateColumnConfig(config.id, payload)
                                   modal.toast('已保存', 'success')
@@ -670,42 +605,6 @@ export default function ProjSettingsPage() {
                       ))}
                     </>
                   )}
-                  {col.hasTemplate && columnConfigs.filter(c => c.column_id === col.id && c.has_template).map(config => (
-                    <div key={config.id} style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>模板文件：</span>
-                      <span style={{ fontSize: 10, fontWeight: 600 }}>
-                        {config.template_path || '未上传'}
-                      </span>
-                      <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                        替换
-                        <input type="file" accept=".docx,.pptx" style={{ display: 'none' }}
-                          onChange={async e => {
-                            const file = e.target.files?.[0]
-                            if (!file) return
-                            try {
-                              await api.uploadColumnTemplate(config.id, file)
-                              modal.toast('模板已上传', 'success')
-                              api.listColumnConfigs().then((configs: ColumnConfig[]) => {
-                                setColumnConfigs(configs)
-                                const vals: Record<string, { prompt: string; skill: string; rules: string }> = {}
-                                configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill, rules: c.rules || '{}' } })
-                                setColValues(vals)
-                              }).catch(() => {})
-                            } catch (err: any) {
-                              modal.toast('上传失败: ' + err.message, 'error')
-                            }
-                          }} />
-                      </label>
-                      {config.template_path && (
-                        <button className="btn btn-ghost btn-sm" onClick={() => {
-                          const a = document.createElement('a')
-                          a.href = '/api/download/' + encodeURIComponent(config.template_path || '')
-                          a.download = config.template_path || ''
-                          a.click()
-                        }}>下载</button>
-                      )}
-                    </div>
-                  ))}
                 </div>
               </div>
             ))}

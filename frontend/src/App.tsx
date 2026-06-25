@@ -118,30 +118,20 @@ function App() {
 
   return (
     <ModalProvider>
-      {isWorkspace ? (
-        <div className="app-layout">
-          <Sidebar />
-          <div className="main-area">
+      <div className="app-layout">
+        <Sidebar />
+        <div className="main-area">
+          <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
             <Routes>
               <Route path="/project/:id" element={<ProjectPage />} />
+              <Route path="/templates" element={<TemplateManager />} />
+              <Route path="/proj-settings" element={<ProjSettingsPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/" element={<HomePage />} />
             </Routes>
           </div>
         </div>
-      ) : (
-        <div className="app-layout">
-          <Sidebar />
-          <div className="main-area">
-            <div className="main-content">
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/proj-settings" element={<ProjSettingsPage />} />
-                <Route path="/templates" element={<TemplateManager />} />
-                <Route path="/settings" element={<SettingsPage />} />
-              </Routes>
-            </div>
-          </div>
-        </div>
-      )}
+      </div>
     </ModalProvider>
   )
 }

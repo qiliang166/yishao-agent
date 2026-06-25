@@ -3,8 +3,9 @@ import shutil
 import uuid
 import hashlib
 from fastapi import FastAPI, HTTPException, UploadFile, File, Body, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from database import init_db, get_db
 from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest
 from typing import Optional
@@ -29,6 +30,7 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
 AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
 os.makedirs(AUDIO_DIR, exist_ok=True)
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
@@ -37,6 +39,65 @@ LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 os.makedirs(LOGO_DIR, exist_ok=True)
 THUMBNAIL_DIR = os.path.join(BASE_DIR, "data", "thumbnails")
 os.makedirs(THUMBNAIL_DIR, exist_ok=True)
+
+# Run-id → actual directory mapping for SVG preview serving
+# Persisted to data/run_dirs.json so it survives restarts
+_RUN_DIRS_FILE = os.path.join(BASE_DIR, "data", "run_dirs.json")
+
+def _load_run_dirs() -> dict[str, str]:
+    try:
+        with open(_RUN_DIRS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_run_dirs(mapping: dict[str, str]):
+    try:
+        os.makedirs(os.path.dirname(_RUN_DIRS_FILE), exist_ok=True)
+        with open(_RUN_DIRS_FILE, "w", encoding="utf-8") as f:
+            json.dump(mapping, f)
+    except Exception:
+        pass
+
+_run_dirs: dict[str, str] = _load_run_dirs()
+
+def _scan_output_bases() -> list[str]:
+    """Scan for possible output directories (project storage dirs)."""
+    bases = []
+    output_root = os.path.join(WORKSPACE_ROOT, "output")
+    if os.path.isdir(output_root):
+        for name in os.listdir(output_root):
+            d = os.path.join(output_root, name)
+            if os.path.isdir(d):
+                bases.append(d)
+    return bases
+
+@app.get("/api/exports/{run_id}/{filename:path}")
+def api_serve_export_file(run_id: str, filename: str):
+    import starlette.responses as _sr
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir:
+        # Fallback: look in EXPORT_DIR and scan subdirs
+        candidate = os.path.join(EXPORT_DIR, run_id)
+        if os.path.isdir(candidate):
+            run_dir = candidate
+    if not run_dir:
+        # Last resort: scan known output dirs for run_id
+        for base in [EXPORT_DIR] + _scan_output_bases():
+            candidate = os.path.join(base, run_id)
+            if os.path.isdir(candidate):
+                run_dir = candidate
+                _run_dirs[run_id] = run_dir
+                _save_run_dirs(_run_dirs)
+                break
+    if not run_dir:
+        run_dir = os.path.join(EXPORT_DIR, run_id)
+    filepath = os.path.normpath(os.path.join(run_dir, filename))
+    if not filepath.startswith(os.path.normpath(run_dir)):
+        raise HTTPException(status_code=403, detail="Path traversal denied")
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return _sr.FileResponse(filepath)
 
 import re
 
@@ -352,6 +413,29 @@ def save_step(project_id: str, step_name: str, req: StepResultSave):
         return {"ok": True}
     finally:
         db.close()
+
+
+def save_step_meta(project_id: str, step_name: str, content: str):
+    """Save result metadata to step_results (fire-and-forget, no fail on error)."""
+    try:
+        db = get_db()
+        try:
+            existing = db.execute(
+                "SELECT id FROM step_results WHERE project_id = ? AND step_name = ?",
+                (project_id, step_name)).fetchone()
+            if existing:
+                db.execute(
+                    "UPDATE step_results SET content = ?, content_type = 'json', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                    (content, existing["id"]))
+            else:
+                db.execute(
+                    "INSERT INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, 'json')",
+                    (project_id, step_name, content))
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass  # non-critical, don't fail the request
 
 
 # ── LLM Providers ──
@@ -1619,9 +1703,13 @@ def list_templates_for_stage(stage_type: str):
     db_type = type_map.get(stage_type, "ppt")
     db = get_db()
     try:
-        rows = db.execute(
-            "SELECT id, name, type, file_path, prompt, skill, branding_config, is_default FROM templates WHERE type = ? ORDER BY is_default DESC, created_at ASC",
-            (db_type,)).fetchall()
+        if db_type == "ppt":
+            rows = db.execute(
+                "SELECT id, name, type, file_path, prompt, skill, branding_config, is_default FROM templates WHERE type = 'style' ORDER BY created_at ASC").fetchall()
+        else:
+            rows = db.execute(
+                "SELECT id, name, type, file_path, prompt, skill, branding_config, is_default FROM templates WHERE type = ? ORDER BY is_default DESC, created_at ASC",
+                (db_type,)).fetchall()
         items = []
         for r in rows:
             rdict = dict(r)
@@ -1762,15 +1850,8 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
         if not tmpl["file_path"] or not os.path.exists(tmpl["file_path"]):
             raise HTTPException(400, "请先上传 .pptx 模板文件")
 
-        # Determine column for rules structure
-        stage_to_column = {"daoPpt": "col4", "yanxiPpt": "col5"}
-        column_id = stage_to_column.get(stage_type, "col4")
-        config = db.execute("SELECT rules FROM column_configs WHERE column_id = ?",
-                            (column_id,)).fetchone()
-        if not config or not config["rules"] or config["rules"] == "{}":
-            raise HTTPException(400, f"栏目 {column_id} 未配置规则，请先在栏目配置中设置 PPT 规则")
-
-        rules = json.loads(config["rules"])
+        # Use built-in default design_rules structure (column_configs rules removed)
+        rules = {}
 
         # Mechanical extraction from PPTX
         structure = extract_pptx_structure(tmpl["file_path"])
@@ -1839,6 +1920,13 @@ def generate_template_plan(template_id: str, req: PPTPlanRequest):
     a slide_plan JSON that is saved to the templates table.
     """
     from services.ppt_service import _generate_slides_staged
+    import logging
+    _log = logging.getLogger("app")
+    _log.warning(f"[GEN-PLAN] template={template_id} provider={req.provider_id!r} model={req.model!r} content={req.content!r}")
+
+    if not req.provider_id or not req.model:
+        raise HTTPException(400, "请先在页面顶部下拉框中选择 AI 模型（如 deepseek-v4-pro），再点击「大纲」生成")
+
     db = get_db()
     try:
         tmpl = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -1865,11 +1953,11 @@ def generate_template_plan(template_id: str, req: PPTPlanRequest):
         # Load column config for content logic
         column_id = req.column_id or "col4"
         cfg = db.execute(
-            "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
+            "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
             (column_id,)).fetchone()
         if not cfg:
             cfg = db.execute(
-                "SELECT prompt, skill, rules FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
+                "SELECT prompt, skill FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
             ).fetchone()
 
         col_prompt = cfg["prompt"] if cfg else ""
@@ -2323,13 +2411,48 @@ def api_extract_subtitles(req: dict):
 
 from services.ppt_service import generate_ppt, _extract_typography
 
+@app.get("/api/projects/{project_id}/ppt-results")
+def api_ppt_results(project_id: str):
+    """Return all saved PPT generation results for a project (survives page reload)."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT step_name, content, updated_at FROM step_results "
+            "WHERE project_id = ? AND (step_name LIKE '_ppt_result_%' OR step_name LIKE '_ppt_plan_%') "
+            "ORDER BY updated_at DESC",
+            (project_id,)).fetchall()
+        results = []
+        seen_run_ids = set()
+        for row in rows:
+            try:
+                meta = json.loads(row["content"])
+                rid = meta.get("run_id") or ""
+                # Deduplicate: _ppt_plan_ and _ppt_result_ may share the same run_id
+                if rid and rid in seen_run_ids:
+                    continue
+                if rid:
+                    seen_run_ids.add(rid)
+                meta["_saved_at"] = row["updated_at"]
+                meta["_step_name"] = row["step_name"]
+                results.append(meta)
+            except Exception:
+                pass
+        return {"results": results}
+    finally:
+        db.close()
+
 @app.post("/api/ppt/generate")
 def api_generate_ppt(req: PPTGenerateRequest):
-    import time, sys
+    import time, sys, datetime as _dt
     t0 = time.time()
     print(f"[PPT-REQ] {time.strftime('%H:%M:%S')} provider={req.provider_id} model={req.model} "
           f"content_len={len(req.content) if req.content else 0} template={req.template_id} "
           f"has_rules=?", flush=True)
+    try:
+        with open(os.path.join(BASE_DIR, "data", "ppt_req.log"), "a", encoding="utf-8") as _lf:
+            _lf.write(f"[{_dt.datetime.now().isoformat()}] provider={req.provider_id} model={req.model} "
+                      f"content_len={len(req.content) if req.content else 0} template={req.template_id}\n")
+    except Exception: pass
     try:
         output_dir = None
         project_name = ""
@@ -2339,9 +2462,11 @@ def api_generate_ppt(req: PPTGenerateRequest):
             if proj:
                 project_name = proj["name"]
 
-        # Use saved slide_plan from template if not provided in request
+        # Use saved slide_plan from template if not provided in request.
+        # But if caller sent content+model, let AI regenerate (content takes priority).
         slide_plan = req.slide_plan
-        if slide_plan is None and req.template_id:
+        has_content_input = bool(req.content and req.content.strip() and req.provider_id and req.model)
+        if slide_plan is None and req.template_id and not has_content_input:
             db = get_db()
             try:
                 row = db.execute(
@@ -2355,21 +2480,97 @@ def api_generate_ppt(req: PPTGenerateRequest):
                         pass
             finally:
                 db.close()
+        if has_content_input:
+            print(f"[PPT-REQ] AI regeneration with content ({len(req.content)} chars)", flush=True)
 
-        filepath = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, slide_plan)
-        filename = os.path.basename(filepath)
-        params = []
-        if req.project_id:
-            params.append(f"project_id={req.project_id}")
-        if project_name:
-            safe_name = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip()
-            params.append(f"name={safe_name}_PPT.pptx")
-        download_url = f"/api/download/{filename}"
-        if params:
-            download_url += "?" + "&".join(params)
-        return {"filename": filename, "download_url": download_url,
-                "slide_plan": slide_plan}
+        filepath, generated_slides = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, slide_plan, project_name=project_name, column_id=req.column_id)
+        if generated_slides is not None:
+            slide_plan = generated_slides
+
+        # Detect output type: SVG (returns HTML path) vs PPTX (returns .pptx path)
+        is_svg = filepath and filepath.endswith(".html")
+        is_pptx = filepath and filepath.endswith(".pptx")
+
+        if is_svg:
+            # SVG output — register run_id → actual directory for preview serving
+            run_dir = os.path.dirname(filepath)
+            run_id = os.path.basename(run_dir)
+            _run_dirs[run_id] = run_dir
+            _save_run_dirs(_run_dirs)
+            preview_url = f"/api/exports/{run_id}/index.html"
+            zip_url = f"/api/ppt/export-zip/{run_id}"
+            # Persist result metadata so page reload can restore without re-generating
+            if req.project_id:
+                try:
+                    result_meta = {
+                        "run_id": run_id,
+                        "preview_url": preview_url,
+                        "zip_url": zip_url,
+                        "slide_plan": slide_plan,
+                        "slide_count": len(generated_slides) if generated_slides else 0,
+                        "template_id": req.template_id,
+                        "format": "svg",
+                        "generated_at": _dt.datetime.now().isoformat(),
+                    }
+                    with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as _rf:
+                        json.dump(result_meta, _rf, ensure_ascii=False)
+                    # Save to step_results in the format the frontend expects for restoration
+                    col_to_step = {"col4": "step3_dao_ppt", "col5": "step3_yan_ppt", "col3": "step3_sop_doc"}
+                    mapped_step = col_to_step.get(req.column_id, "")
+                    if mapped_step:
+                        plan_data = {
+                            "slides": slide_plan or [],
+                            "filename": f"svg-deck-{run_id}",
+                            "downloadUrl": zip_url,
+                            "previewUrl": preview_url,
+                            "zipUrl": zip_url,
+                            "templateId": req.template_id,
+                            "format": "svg",
+                        }
+                        save_step_meta(req.project_id, f"_ppt_plan_{mapped_step}",
+                                       json.dumps(plan_data, ensure_ascii=False))
+                        save_step_meta(req.project_id, f"_preview_html_{mapped_step}",
+                                       f"__SVG__{preview_url}")
+                    # Also save with run_id key for the listPptResults endpoint
+                    save_step_meta(req.project_id, f"_ppt_result_{run_id}",
+                                   json.dumps(result_meta, ensure_ascii=False))
+                except Exception as _e:
+                    print(f"[PPT] Failed to persist result meta: {_e}", flush=True)
+            return {
+                "format": "svg",
+                "run_id": run_id,
+                "preview_url": preview_url,
+                "zip_url": zip_url,
+                "slide_plan": slide_plan,
+                "slide_count": len(generated_slides) if generated_slides else 0,
+            }
+        elif is_pptx:
+            # PPTX output — legacy download URL
+            filename = os.path.basename(filepath)
+            params = []
+            if req.project_id:
+                params.append(f"project_id={req.project_id}")
+            if project_name:
+                safe_name = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip()
+                params.append(f"name={safe_name}_PPT.pptx")
+            download_url = f"/api/download/{filename}"
+            if params:
+                download_url += "?" + "&".join(params)
+            return {"format": "pptx", "filename": filename, "download_url": download_url,
+                    "slide_plan": slide_plan,
+                    "slide_count": len(generated_slides) if generated_slides else 0}
+        else:
+            try:
+                with open(os.path.join(BASE_DIR, "data", "ppt_req.log"), "a", encoding="utf-8") as _lf:
+                    _lf.write(f"[{_dt.datetime.now().isoformat()}] 500: filepath={filepath!r} is_svg={is_svg} is_pptx={is_pptx}\n")
+            except Exception: pass
+            raise HTTPException(status_code=500, detail="PPT generation failed — no output produced")
     except Exception as e:
+        import traceback as _tb
+        try:
+            with open(os.path.join(BASE_DIR, "data", "ppt_req.log"), "a", encoding="utf-8") as _lf:
+                _lf.write(f"[{_dt.datetime.now().isoformat()}] EXCEPTION: {e}\n{_tb.format_exc()}\n")
+        except Exception: pass
         raise HTTPException(status_code=400, detail=str(e))
 
 
@@ -2386,11 +2587,11 @@ def api_ppt_plan(req: PPTPlanRequest):
         # Load column config — the single source of truth for content logic
         column_id = req.column_id or "col4"
         cfg = db.execute(
-            "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
+            "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
             (column_id,)).fetchone()
         if not cfg:
             cfg = db.execute(
-                "SELECT prompt, skill, rules FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
+                "SELECT prompt, skill FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
             ).fetchone()
 
         column_prompt = ""
@@ -2399,11 +2600,6 @@ def api_ppt_plan(req: PPTPlanRequest):
         if cfg:
             column_prompt = cfg["prompt"] or ""
             column_skill = cfg["skill"] or ""
-            if cfg["rules"]:
-                try:
-                    rules = json.loads(cfg["rules"])
-                except Exception:
-                    pass
 
         # Template provides layout_types via its rules (visual structure)
         if req.template_id:
@@ -2429,6 +2625,49 @@ def api_ppt_plan(req: PPTPlanRequest):
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
+
+
+# ── PPT Styles (17 PPT-Agent YAML styles) ──
+
+@app.get("/api/ppt/styles")
+def api_ppt_styles():
+    """List all 17 PPT-Agent styles from the YAML style library.
+    Returns a flat list of styles. Each style has a 'group' field
+    (Professional, Creative, Tech / Dark, Thematic) and includes
+    color palette, typography, mood, and use cases.
+    """
+    try:
+        from services.svg_renderer import StyleLoader
+        loader = StyleLoader()
+        groups = loader.list_styles()
+        flat = []
+        for g in groups:
+            for s in g.get("styles", []):
+                flat.append(s)
+        return {"styles": flat}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/ppt/export-zip/{run_id}")
+def api_export_svg_zip(run_id: str):
+    """Download all SVG files + index.html for a generated deck as a ZIP archive."""
+    import zipfile, io
+    run_dir = _run_dirs.get(run_id) or os.path.join(EXPORT_DIR, run_id)
+    if not os.path.isdir(run_dir):
+        raise HTTPException(status_code=404, detail="Export not found")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fname in os.listdir(run_dir):
+            fpath = os.path.join(run_dir, fname)
+            if os.path.isfile(fpath):
+                zf.write(fpath, fname)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="svg-deck-{run_id}.zip"'},
+    )
 
 
 # ── SOP Export ──
@@ -2886,10 +3125,6 @@ def _build_prompt_from_rules(rules: dict) -> str:
     return "\n".join(parts)
 
 
-def _build_skill_from_rules(rules: dict) -> str:
-    """从 rules JSON 自动生成 skill（即 content_spec）"""
-    return rules.get("skill_template", rules.get("content_spec", ""))
-
 
 @app.put("/api/column-configs/{config_id}")
 def update_column_config(config_id: str, req: dict):
@@ -2902,24 +3137,6 @@ def update_column_config(config_id: str, req: dict):
             db.execute("UPDATE column_configs SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['prompt'], config_id))
         if 'skill' in req:
             db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
-        if 'rules' in req:
-            db.execute("UPDATE column_configs SET rules = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['rules'], config_id))
-            # Auto-regenerate skill from rules only if current skill is empty/default
-            col_id = existing["column_id"]
-            if col_id in ("col4", "col5"):
-                try:
-                    rules = json.loads(req['rules'])
-                    if rules and rules != {}:
-                        current = db.execute("SELECT skill FROM column_configs WHERE id = ?", (config_id,)).fetchone()
-                        current_skill = current["skill"] if current else ""
-                        # Only overwrite if current skill is empty or matches a known default
-                        if not current_skill or not current_skill.strip() or current_skill == rules.get("content_spec", ""):
-                            new_skill = rules.get("skill_template", rules.get("content_spec", ""))
-                            if new_skill and new_skill != current_skill:
-                                db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                                           (new_skill, config_id))
-                except (json.JSONDecodeError, Exception):
-                    pass  # Keep existing prompt/skill if rules parse fails
         db.commit()
         row = db.execute("SELECT * FROM column_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)

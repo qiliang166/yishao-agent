@@ -51,6 +51,7 @@ async def generate(
         model=model,
         messages=messages,
         temperature=temperature,
+        max_tokens=16384,
     )
     return response.choices[0].message.content
 

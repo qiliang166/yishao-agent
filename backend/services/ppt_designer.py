@@ -10,6 +10,13 @@ from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.dml.color import RGBColor
 
 
+def _blank_layout(prs: Presentation):
+    """Return a blank slide layout, preferring index 6, falling back to 0."""
+    if len(prs.slide_layouts) > 6:
+        return prs.slide_layouts[6]
+    return prs.slide_layouts[0]
+
+
 @dataclass
 class DesignSystem:
     """Colors, fonts, and spacing for slide creation."""
@@ -52,18 +59,24 @@ def extract_design(rules: dict, typography_profile: Optional[dict] = None) -> De
 
     design_rules = rules.get("design_rules", {}) if rules else {}
 
-    # Colors
+    # Colors — support both ppt and preset naming conventions
     colors = design_rules.get("colors", {})
     if "primary" in colors:
         ds.primary_color = _hex_to_rgb(colors["primary"])
     if "accent" in colors:
         ds.accent_color = _hex_to_rgb(colors["accent"])
-    if "background" in colors:
-        ds.background_color = _hex_to_rgb(colors["background"])
-    if "text" in colors:
-        ds.text_color = _hex_to_rgb(colors["text"])
-    if "light_text" in colors:
-        ds.light_text_color = _hex_to_rgb(colors["light_text"])
+    # background: ppt uses "background", preset uses "paper"
+    bg = colors.get("background") or colors.get("paper")
+    if bg:
+        ds.background_color = _hex_to_rgb(bg)
+    # text: ppt uses "text", preset uses "ink"
+    txt = colors.get("text") or colors.get("ink")
+    if txt:
+        ds.text_color = _hex_to_rgb(txt)
+    # light_text: ppt uses "light_text", preset uses "ink" on dark bg = light text
+    lt = colors.get("light_text") or colors.get("ink")
+    if lt:
+        ds.light_text_color = _hex_to_rgb(lt)
 
     # Fonts
     fonts = design_rules.get("fonts", {})
@@ -162,7 +175,7 @@ def build_slide(prs: Presentation, slide_type: str, zones: dict,
 @_register("cover")
 def build_cover(prs: Presentation, zones: dict, design: DesignSystem):
     """Full-bleed primary background, centered title + subtitle + date."""
-    slide_layout = prs.slide_layouts[6]  # blank
+    slide_layout = _blank_layout(prs)  # blank
     slide = prs.slides.add_slide(slide_layout)
 
     # Background
@@ -205,7 +218,7 @@ def build_cover(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("toc")
 def build_toc(prs: Presentation, zones: dict, design: DesignSystem):
     """Left heading + numbered items with accent bars."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "目录").strip()
@@ -247,7 +260,7 @@ def build_toc(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("technique")
 def build_technique(prs: Presentation, zones: dict, design: DesignSystem):
     """Title bar + operation steps + principle box + params row."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "").strip()
@@ -309,7 +322,7 @@ def build_technique(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("content")
 def build_content(prs: Presentation, zones: dict, design: DesignSystem):
     """Generic content slide: heading + body text."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "").strip()
@@ -339,7 +352,7 @@ def build_content(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("summary")
 def build_summary(prs: Presentation, zones: dict, design: DesignSystem):
     """Summary slide with accent left bar and key points."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "总结").strip()
@@ -373,7 +386,7 @@ def build_summary(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("section")
 def build_section(prs: Presentation, zones: dict, design: DesignSystem):
     """Section divider: primary background + heading + subtitle."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     bg = slide.background
@@ -403,7 +416,7 @@ def build_section(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("chapter")
 def build_chapter(prs: Presentation, zones: dict, design: DesignSystem):
     """Chapter divider: large number + heading on accent background."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
     bg = slide.background
     bg.fill.solid()
@@ -433,7 +446,7 @@ def build_chapter(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("closing")
 def build_closing(prs: Presentation, zones: dict, design: DesignSystem):
     """Closing slide: quote + signature, centered."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
     bg = slide.background
     bg.fill.solid()
@@ -463,7 +476,7 @@ def build_closing(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("data_hero", "key_params")
 def build_data_hero(prs: Presentation, zones: dict, design: DesignSystem):
     """Big number KPI with label and context."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "").strip()
@@ -510,7 +523,7 @@ def build_data_hero(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("duo_compare", "comparison")
 def build_duo_compare(prs: Presentation, zones: dict, design: DesignSystem):
     """Two-column comparison: left vs right with divider."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "").strip()
@@ -566,7 +579,7 @@ def build_duo_compare(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("process_flow")
 def build_process_flow(prs: Presentation, zones: dict, design: DesignSystem):
     """Horizontal process flow: step circles connected by arrows."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "").strip()
@@ -630,7 +643,7 @@ def build_process_flow(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("grid_cards")
 def build_grid_cards(prs: Presentation, zones: dict, design: DesignSystem):
     """2x2 or 3x2 card grid with accent top border."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "").strip()
@@ -684,7 +697,7 @@ def build_grid_cards(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("food_archive")
 def build_food_archive(prs: Presentation, zones: dict, design: DesignSystem):
     """Ingredient archive card: food name + params + mechanism + substitutes."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     food_name = zones.get("food_name", "").strip()
@@ -729,7 +742,7 @@ def build_food_archive(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("skill_card")
 def build_skill_card(prs: Presentation, zones: dict, design: DesignSystem):
     """Technique skill card: name + description + flowchart ref + migration."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     skill_name = zones.get("skill_name", "").strip()
@@ -781,7 +794,7 @@ def build_skill_card(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("troubleshoot")
 def build_troubleshoot(prs: Presentation, zones: dict, design: DesignSystem):
     """Troubleshooting diagnosis page: problem → cause → solution → prevention."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "故障诊断").strip()
@@ -827,7 +840,7 @@ def build_troubleshoot(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("quote")
 def build_quote(prs: Presentation, zones: dict, design: DesignSystem):
     """Large quote slide with accent left bar and attribution."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     quote_text = zones.get("quote", zones.get("body", "")).strip()
@@ -867,7 +880,7 @@ def build_quote(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("timeline")
 def build_timeline(prs: Presentation, zones: dict, design: DesignSystem):
     """Vertical timeline: events along an accent line."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     heading = zones.get("heading", "").strip()
@@ -910,7 +923,7 @@ def build_timeline(prs: Presentation, zones: dict, design: DesignSystem):
 @_register("image_hero")
 def build_image_hero(prs: Presentation, zones: dict, design: DesignSystem):
     """Full-width image placeholder with caption."""
-    slide_layout = prs.slide_layouts[6]
+    slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     caption = zones.get("caption", zones.get("heading", "")).strip()
