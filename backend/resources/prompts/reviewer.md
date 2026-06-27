@@ -23,8 +23,10 @@ These are hard rules — violations are reported in the Hard Rule Violations sec
 | Standard | Threshold | Severity if violated |
 |----------|-----------|---------------------|
 | Card gap | >= 20px between any two cards | Critical |
-| Safe area | >= 60px padding from viewport edges | Critical |
+| Safe area | Content MUST use left=60px, right=60px (not 30/40/48/80/88/180 or centered positioning). Only decorative elements may extend outside this zone | Critical |
 | Title-content alignment | Title and content area must share the same horizontal alignment axis. Left-aligned: same `left` value (±20px). Center-aligned: both horizontally centered. Mixed alignment (e.g. title left-aligned + content centered) is a layout error | Major |
+| Container structure | Page title must be a direct child of the slide viewport (1280x720), positioned with absolute coordinates at page root level. Title must NOT be nested inside a content card. Exception: cover and quote pages where the title IS the visual centerpiece | Major |
+| Content area width | On content/data/comparison/process/timeline pages, the primary content area must use the page margin system (left/right edges), not a narrow centered card. Content should span the full usable page width — typically `left:60~80px` with `right:60~80px`. A single centered card narrower than 1040px on these page types is a container misuse error. Use `layout_restructure` suggestion type | Major |
 | Font size | >= 14px for all text at 1280x720 | Critical for body text, Minor for page numbers |
 | Contrast | >= 4.5:1 ratio (WCAG AA) for body text | Major |
 | Contrast | >= 3:1 ratio for large text (>= 24px bold) | Major |

@@ -167,10 +167,11 @@ When wrapping CJK text into `<tspan>` elements, check line boundaries against th
 
 ## Layout Rules
 
-1. **Slide title**: positioned at top-left of safe area (x=60, y=40-50), always present except on cover slides.
-2. **Cards**: positioned using Bento Grid layout specification. Use `<g>` groups for each card.
-3. **Page number**: bottom-right corner (x=1220, y=700), right-aligned.
-4. **Whitespace**: minimum 20px between any two elements.
+1. **Slide title**: MUST be a direct child of the slide viewport (1280x720), positioned with absolute coordinates at the page root level (left=60px, top=28-50px). Always present except on cover slides. **NEVER nest the page title inside a content card.** The title belongs to the structural layer, not the content layer.
+2. **Content area**: MUST use the fixed page margin — `left:60px; right:60px`, spanning the full usable page width (1160px). Do NOT use arbitrary left values (30/40/48/80/88/180) or centered positioning (`left:50%; transform:translateX(-50%)`). The 60px margin is mandatory for ALL content pages.
+3. **Cards**: positioned using Bento Grid layout specification. Use `<g>` groups for each card.
+4. **Page number**: bottom-right corner (x=1220, y=700), right-aligned.
+5. **Whitespace**: minimum 20px between any two elements.
 
 ## Content Rendering
 

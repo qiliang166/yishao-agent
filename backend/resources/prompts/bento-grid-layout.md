@@ -23,7 +23,9 @@ Bento Grid (便当网格) is a flexible card-based layout system inspired by Jap
 
 ### Single Focus
 - One large card spanning the full usable area.
-- Use for: title slides, key quotes, hero images, single statistics.
+- **RESTRICTED**: Use ONLY for cover slides, quote slides, and section dividers where the title IS the visual centerpiece.
+- **NEVER use for**: content slides with tables, process steps, data, or multiple information units. These must use a page-level title (positioned directly on the viewport at x=60, y=28-50) with a separate content area below.
+- When single_focus IS appropriate, the card should be centered and visually dominant.
 ```
 ┌─────────────────────────────────┐
 │                                 │
