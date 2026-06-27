@@ -10,6 +10,8 @@ build/
 *.db-wal
 *.db-shm
 backend/data/
+!backend/data/vi/
+!backend/data/prompts/
 backend/deps/
 backend/models/
 
