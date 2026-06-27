@@ -7,7 +7,10 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import init_db, get_db
-from models import ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest, LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest
+from models import (ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest,
+    LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest,
+    ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
+    ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave)
 from typing import Optional
 import json
 import logging
@@ -17,7 +20,7 @@ from services.prompt_service import (
     rollback_version, diff_versions, set_default, export_prompts, import_prompts,
 )
 
-DEFAULT_SITE_NAME = "SOP Agent"
+DEFAULT_SITE_NAME = "Yishao Agent"
 
 init_db()
 
@@ -64,12 +67,15 @@ _run_dirs: dict[str, str] = _load_run_dirs()
 def _scan_output_bases() -> list[str]:
     """Scan for possible output directories (project storage dirs)."""
     bases = []
-    output_root = os.path.join(WORKSPACE_ROOT, "output")
-    if os.path.isdir(output_root):
-        for name in os.listdir(output_root):
-            d = os.path.join(output_root, name)
-            if os.path.isdir(d):
-                bases.append(d)
+    for output_root in [
+        os.path.join(WORKSPACE_ROOT, "output"),
+        os.path.join(WORKSPACE_ROOT, "data", "output"),
+    ]:
+        if os.path.isdir(output_root):
+            for name in os.listdir(output_root):
+                d = os.path.join(output_root, name)
+                if os.path.isdir(d):
+                    bases.append(d)
     return bases
 
 @app.get("/api/exports/{run_id}/{filename:path}")
@@ -321,7 +327,10 @@ def api_save_file_to_project(project_id: str, req: dict):
 
 
 def _delete_project_files(project_id: str, db):
-    """Remove project storage directory and step results."""
+    """Remove project storage directory and all related data."""
+    db.execute("DELETE FROM source_materials WHERE project_id = ?", (project_id,))
+    db.execute("DELETE FROM project_item_results WHERE project_item_id IN (SELECT id FROM project_items WHERE project_id = ?)", (project_id,))
+    db.execute("DELETE FROM project_items WHERE project_id = ?", (project_id,))
     db.execute("DELETE FROM step_results WHERE project_id = ?", (project_id,))
     try:
         path = resolve_project_storage(project_id, auto_create=False)
@@ -436,6 +445,262 @@ def save_step_meta(project_id: str, step_name: str, content: str):
             db.close()
     except Exception:
         pass  # non-critical, don't fail the request
+
+
+# ── Source Materials (multi-format input) ──
+
+@app.get("/api/projects/{project_id}/materials")
+def list_materials(project_id: str):
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM source_materials WHERE project_id = ? ORDER BY created_at DESC",
+            (project_id,)).fetchall()
+        return {"materials": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/projects/{project_id}/materials")
+def add_material(project_id: str, req: SourceMaterialCreate):
+    db = get_db()
+    try:
+        mat_id = f"sm-{project_id}-{uuid.uuid4().hex[:8]}"
+        db.execute(
+            "INSERT INTO source_materials (id, project_id, source_type, source_name, "
+            "raw_content, processed_content, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (mat_id, project_id, req.source_type, req.source_name,
+             req.raw_content, req.processed_content or req.raw_content, req.status))
+        db.commit()
+        row = db.execute("SELECT * FROM source_materials WHERE id = ?", (mat_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.post("/api/projects/{project_id}/materials/upload")
+async def upload_material(project_id: str, file: UploadFile = File(...)):
+    from services.file_parser import parse_bytes
+
+    data = await file.read()
+    result = parse_bytes(data, file.filename or "unknown")
+
+    db = get_db()
+    try:
+        mat_id = f"sm-{project_id}-{uuid.uuid4().hex[:8]}"
+        source_type = os.path.splitext(file.filename or "")[1].lower().lstrip(".")
+        db.execute(
+            "INSERT INTO source_materials (id, project_id, source_type, source_name, "
+            "raw_content, processed_content, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (mat_id, project_id, source_type, file.filename or "",
+             result.get("text", ""), result.get("text", ""),
+             "processed" if result.get("status") == "ok" else "error"))
+        db.commit()
+        row = db.execute("SELECT * FROM source_materials WHERE id = ?", (mat_id,)).fetchone()
+        return {
+            "material": dict(row),
+            "parse_result": result,
+        }
+    finally:
+        db.close()
+
+
+@app.delete("/api/projects/{project_id}/materials/{material_id}")
+def delete_material(project_id: str, material_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM source_materials WHERE id = ? AND project_id = ?",
+                   (material_id, project_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.put("/api/projects/{project_id}/materials/{material_id}")
+def update_material(project_id: str, material_id: str, req: SourceMaterialUpdate):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM source_materials WHERE id = ? AND project_id = ?",
+                              (material_id, project_id)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Material not found")
+        updates = {}
+        for k in ("source_name", "raw_content", "processed_content", "status"):
+            v = getattr(req, k, None)
+            if v is not None:
+                updates[k] = v
+        if updates:
+            cols = ", ".join(f"{k} = ?" for k in updates)
+            vals = list(updates.values())
+            db.execute(f"UPDATE source_materials SET {cols} WHERE id = ?", vals + [material_id])
+            db.commit()
+        row = db.execute("SELECT * FROM source_materials WHERE id = ?", (material_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+# ── Project Items (dynamic output steps) ──
+
+@app.get("/api/projects/{project_id}/items")
+def list_project_items(project_id: str):
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT pi.*, "
+            "  (SELECT COUNT(*) FROM project_item_results WHERE project_item_id = pi.id) as result_count "
+            "FROM project_items pi WHERE pi.project_id = ? ORDER BY pi.sort_order",
+            (project_id,)).fetchall()
+        return {"items": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/projects/{project_id}/items")
+def create_project_item(project_id: str, req: ProjectItemCreate):
+    db = get_db()
+    try:
+        item_id = f"pi-{project_id}-{uuid.uuid4().hex[:8]}"
+        db.execute(
+            "INSERT INTO project_items (id, project_id, name, prompt, skill, "
+            "output_mode, config_json, source_item_id, sort_order) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (item_id, project_id, req.name, req.prompt, req.skill,
+             req.output_mode, req.config_json, req.source_item_id, req.sort_order))
+        db.commit()
+        row = db.execute("SELECT * FROM project_items WHERE id = ?", (item_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.put("/api/projects/{project_id}/items/{item_id}")
+def update_project_item(project_id: str, item_id: str, req: ProjectItemUpdate):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM project_items WHERE id = ? AND project_id = ?",
+                              (item_id, project_id)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Item not found")
+        updates = {}
+        for k in ("name", "prompt", "skill", "output_mode", "config_json",
+                   "source_item_id", "sort_order", "status"):
+            v = getattr(req, k, None)
+            if v is not None:
+                updates[k] = v
+        if updates:
+            updates["updated_at"] = "CURRENT_TIMESTAMP"
+            cols = ", ".join(f"{k} = ?" for k in updates if k != "updated_at")
+            vals = [updates[k] for k in updates if k != "updated_at"]
+            db.execute(f"UPDATE project_items SET {cols}, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                       vals + [item_id])
+            db.commit()
+        row = db.execute("SELECT * FROM project_items WHERE id = ?", (item_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.delete("/api/projects/{project_id}/items/{item_id}")
+def delete_project_item(project_id: str, item_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM project_item_results WHERE project_item_id = ?", (item_id,))
+        db.execute("DELETE FROM project_items WHERE id = ? AND project_id = ?",
+                   (item_id, project_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/projects/{project_id}/items/copy-from/{source_project_id}")
+def copy_project_items(project_id: str, source_project_id: str):
+    """Copy all project_items from source project to target project."""
+    db = get_db()
+    try:
+        source_items = db.execute(
+            "SELECT * FROM project_items WHERE project_id = ? ORDER BY sort_order",
+            (source_project_id,)).fetchall()
+        count = 0
+        # Build old→new ID mapping for source_item_id remapping
+        id_map = {}
+        for si in source_items:
+            new_id = f"pi-{project_id}-{uuid.uuid4().hex[:8]}"
+            id_map[si["id"]] = new_id
+        for si in source_items:
+            new_id = id_map[si["id"]]
+            new_source = id_map.get(si["source_item_id"], si["source_item_id"]) if si["source_item_id"] else None
+            db.execute(
+                "INSERT INTO project_items (id, project_id, name, prompt, skill, "
+                "output_mode, config_json, source_item_id, sort_order) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (new_id, project_id, si["name"], si["prompt"], si["skill"],
+                 si["output_mode"], si["config_json"], new_source, si["sort_order"]))
+            count += 1
+        db.commit()
+        return {"ok": True, "copied": count}
+    finally:
+        db.close()
+
+
+# ── Project Item Results ──
+
+@app.get("/api/projects/{project_id}/items/{item_id}/results")
+def list_item_results(project_id: str, item_id: str):
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM project_item_results WHERE project_item_id = ? ORDER BY created_at DESC",
+            (item_id,)).fetchall()
+        return {"results": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/projects/{project_id}/items/{item_id}/results")
+def save_item_result(project_id: str, item_id: str, req: ProjectItemResultSave):
+    db = get_db()
+    try:
+        existing = db.execute(
+            "SELECT id FROM project_items WHERE id = ? AND project_id = ?",
+            (item_id, project_id)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Item not found")
+        db.execute(
+            "INSERT INTO project_item_results (project_item_id, content, content_type, "
+            "file_path, quality_score) VALUES (?, ?, ?, ?, ?)",
+            (item_id, req.content, req.content_type, req.file_path, req.quality_score))
+        db.commit()
+        rid = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+        row = db.execute("SELECT * FROM project_item_results WHERE id = ?", (rid,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+# ── Project Copy ──
+
+@app.post("/api/projects/{project_id}/copy")
+def copy_project(project_id: str):
+    """Copy a project and all its items (the project IS the template)."""
+    db = get_db()
+    try:
+        src = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+        if not src:
+            raise HTTPException(404, "Source project not found")
+        new_id = uuid.uuid4().hex[:12]
+        db.execute(
+            "INSERT INTO projects (id, name, storage_path, copied_from_project_id) "
+            "VALUES (?, ?, ?, ?)",
+            (new_id, f"{src['name']} (副本)", "", project_id))
+        db.commit()
+        # Copy project items
+        copy_project_items(new_id, project_id)
+        return {"ok": True, "project": {"id": new_id, "name": f"{src['name']} (副本)"}}
+    finally:
+        db.close()
 
 
 # ── LLM Providers ──
@@ -741,6 +1006,101 @@ async def test_asr_provider(provider_id: str):
         db.close()
 
 
+# ── Image Providers ──
+
+class ImageProviderCreate(BaseModel):
+    name: str
+    api_key: str = ""
+    base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    models: list[str] = []
+    is_default: int = 0
+
+
+@app.get("/api/image/providers")
+def list_image_providers():
+    db = get_db()
+    try:
+        rows = db.execute("SELECT * FROM image_providers ORDER BY created_at").fetchall()
+        providers = []
+        for r in rows:
+            p = dict(r)
+            models_str = p.get("models", "[]")
+            p["models"] = json.loads(models_str) if models_str else []
+            if p.get("api_key"):
+                key = p["api_key"]
+                p["api_key"] = key[:8] + "***" if len(key) > 8 else "***"
+            providers.append(p)
+        return {"providers": providers}
+    finally:
+        db.close()
+
+
+@app.post("/api/image/providers")
+def create_image_provider(req: ImageProviderCreate):
+    pid = uuid.uuid4().hex[:8]
+    db = get_db()
+    try:
+        if req.is_default:
+            db.execute("UPDATE image_providers SET is_default = 0")
+        db.execute(
+            "INSERT INTO image_providers (id, name, api_key, base_url, models, is_default) VALUES (?, ?, ?, ?, ?, ?)",
+            (pid, req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), req.is_default))
+        db.commit()
+        return {"id": pid, "name": req.name}
+    finally:
+        db.close()
+
+
+@app.put("/api/image/providers/{provider_id}")
+def update_image_provider(provider_id: str, req: ImageProviderCreate):
+    db = get_db()
+    try:
+        if req.is_default:
+            db.execute("UPDATE image_providers SET is_default = 0")
+        db.execute(
+            "UPDATE image_providers SET name=?, api_key=?, base_url=?, models=?, is_default=? WHERE id=?",
+            (req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), req.is_default, provider_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/image/providers/{provider_id}")
+def delete_image_provider(provider_id: str):
+    db = get_db()
+    try:
+        db.execute("DELETE FROM image_providers WHERE id = ?", (provider_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/image/providers/{provider_id}/test")
+async def test_image_provider(provider_id: str):
+    import httpx
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM image_providers WHERE id = ?", (provider_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        base_url = row["base_url"].rstrip("/")
+        test_url = f"{base_url}/models"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                test_url,
+                headers={"Authorization": f"Bearer {row['api_key']}"},
+            )
+        if resp.status_code in (200, 201):
+            return {"ok": True, "status": resp.status_code}
+        return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
+    except httpx.HTTPError as e:
+        return {"ok": False, "error": str(e)}
+    finally:
+        db.close()
+
+
 # ── Voice Library ──
 
 @app.get("/api/voices")
@@ -927,6 +1287,108 @@ async def llm_refine(req: LLMRefineRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ── Image Generation ──
+
+def _parse_host(base_url: str) -> str:
+    """Extract scheme+host from base_url, dropping any path."""
+    from urllib.parse import urlparse
+    parsed = urlparse(base_url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+# PPT layout → recommended image size
+PPT_IMAGE_SIZES = {
+    "full": "1280*720",       # 16:9 full-slide background
+    "hero": "1344*576",       # 21:9 wide banner (image_hero)
+    "content": "1280*800",    # 16:10 content illustration
+    "square": "1024*1024",    # 1:1 card/icon
+    "portrait": "960*1280",   # 3:4 vertical
+}
+
+
+@app.post("/api/image/generate")
+async def image_generate(req: ImageGenerateRequest):
+    import httpx
+    db = get_db()
+    try:
+        if req.provider_id:
+            row = db.execute(
+                "SELECT * FROM image_providers WHERE id = ? AND is_enabled = 1",
+                (req.provider_id,)).fetchone()
+        else:
+            row = db.execute(
+                "SELECT * FROM image_providers WHERE is_default = 1 AND is_enabled = 1").fetchone()
+            if not row:
+                row = db.execute(
+                    "SELECT * FROM image_providers WHERE is_enabled = 1 ORDER BY created_at").fetchone()
+        if not row:
+            raise HTTPException(status_code=400, detail="未配置图片生成提供商，请在模型设置中添加")
+        provider = dict(row)
+
+        # Resolve model: try exact match, then lowercase, then first configured
+        saved_models = json.loads(provider["models"]) if provider["models"] else []
+        model = req.model or (saved_models[0] if saved_models else "qwen-image-2.0-pro")
+        # DashScope API expects lowercase model names
+        model_lower = model.lower()
+
+        host = _parse_host(provider["base_url"])
+        url = f"{host}/api/v1/services/aigc/multimodal-generation/generation"
+
+        # Build content array: reference images first, then prompt text
+        content = []
+        for img_url in req.reference_images:
+            content.append({"image": img_url})
+        content.append({"text": req.prompt})
+
+        payload = {
+            "model": model_lower,
+            "input": {
+                "messages": [
+                    {"role": "user", "content": content}
+                ]
+            },
+            "parameters": {
+                "size": req.size,
+                "n": req.n,
+                "prompt_extend": req.prompt_extend,
+                "watermark": req.watermark,
+            },
+        }
+        if req.negative_prompt:
+            payload["parameters"]["negative_prompt"] = req.negative_prompt
+        if req.seed is not None:
+            payload["parameters"]["seed"] = req.seed
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            resp = await client.post(
+                url,
+                headers={
+                    "Authorization": f"Bearer {provider['api_key']}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            images = []
+            choices = data.get("output", {}).get("choices", [])
+            for choice in choices:
+                for item in choice.get("message", {}).get("content", []):
+                    if "image" in item:
+                        images.append({"url": item["image"]})
+            usage = data.get("usage", {})
+            return {"ok": True, "images": images, "model": model_lower,
+                    "usage": {"width": usage.get("width"), "height": usage.get("height"),
+                              "count": usage.get("image_count")}}
+        else:
+            return {"ok": False, "error": f"HTTP {resp.status_code}: {resp.text[:500]}"}
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+
 # ── Prompts ──
 
 class PromptCreate(BaseModel):
@@ -1059,6 +1521,29 @@ def create_template(req: TemplateCreate):
             (tid, req.name, req.type, req.file_path, req.prompt, req.skill, req.rules, req.linked_skill_id, req.branding_config))
         db.commit()
         return {"id": tid, "name": req.name}
+    finally:
+        db.close()
+
+
+@app.put("/api/templates/{template_id}/toggle-enabled")
+def toggle_template_enabled(template_id: str):
+    """Toggle the enabled state of a template.
+
+    Only enabled templates appear in the Step 3 style selector.
+    """
+    db = get_db()
+    try:
+        row = db.execute("SELECT id, enabled FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "模板不存在")
+        new_state = 0 if row["enabled"] == 1 else 1
+        db.execute("UPDATE templates SET enabled = ? WHERE id = ?", (new_state, template_id))
+        db.commit()
+        return {"ok": True, "enabled": new_state == 1}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
@@ -1705,7 +2190,7 @@ def list_templates_for_stage(stage_type: str):
     try:
         if db_type == "ppt":
             rows = db.execute(
-                "SELECT id, name, type, file_path, prompt, skill, branding_config, is_default FROM templates WHERE type = 'style' ORDER BY created_at ASC").fetchall()
+                "SELECT id, name, type, file_path, prompt, skill, branding_config, is_default FROM templates WHERE type = 'style' AND enabled = 1 ORDER BY created_at ASC").fetchall()
         else:
             rows = db.execute(
                 "SELECT id, name, type, file_path, prompt, skill, branding_config, is_default FROM templates WHERE type = ? ORDER BY is_default DESC, created_at ASC",
@@ -1911,395 +2396,14 @@ async def analyze_template(template_id: str, stage_type: str = "daoPpt",
         db.close()
 
 
-@app.post("/api/templates/{template_id}/generate-plan")
-def generate_template_plan(template_id: str, req: PPTPlanRequest):
-    """Generate a slide plan for a template style and save it.
-
-    Reads the template's design_rules (colors/fonts) plus guizang layout
-    definitions from ppt_engine/references/, then calls the AI to produce
-    a slide_plan JSON that is saved to the templates table.
-    """
-    from services.ppt_service import _generate_slides_staged
-    import logging
-    _log = logging.getLogger("app")
-    _log.warning(f"[GEN-PLAN] template={template_id} provider={req.provider_id!r} model={req.model!r} content={req.content!r}")
-
-    if not req.provider_id or not req.model:
-        raise HTTPException(400, "请先在页面顶部下拉框中选择 AI 模型（如 deepseek-v4-pro），再点击「大纲」生成")
-
-    db = get_db()
-    try:
-        tmpl = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not tmpl:
-            raise HTTPException(404, "模板不存在")
-
-        # Load template's design_rules
-        rules = {}
-        if tmpl["rules"]:
-            try:
-                rules = json.loads(tmpl["rules"])
-            except Exception:
-                pass
-
-        design_rules = rules.get("design_rules", {})
-        style_family = design_rules.get("style_family", "swiss")
-
-        # Load guizang layout definitions
-        layouts_data = _load_guizang_layouts(style_family)
-        if layouts_data:
-            rules["layout_types"] = layouts_data.get("layout_types", rules.get("layout_types", []))
-            rules["page_rhythm"] = layouts_data.get("page_rhythm", rules.get("page_rhythm", {}))
-
-        # Load column config for content logic
-        column_id = req.column_id or "col4"
-        cfg = db.execute(
-            "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
-            (column_id,)).fetchone()
-        if not cfg:
-            cfg = db.execute(
-                "SELECT prompt, skill FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
-            ).fetchone()
-
-        col_prompt = cfg["prompt"] if cfg else ""
-        col_skill = cfg["skill"] if cfg else ""
-
-        # Generate slide plan via AI
-        slide_plan = _generate_slides_staged(
-            req.provider_id, req.model, rules, req.content,
-            col_prompt, col_skill
-        )
-
-        if not slide_plan:
-            raise HTTPException(400, "AI 大纲生成失败，请重试")
-
-        # Save slide_plan to template
-        db.execute(
-            "UPDATE templates SET slide_plan = ? WHERE id = ?",
-            (json.dumps(slide_plan, ensure_ascii=False), template_id))
-        db.commit()
-
-        return {"ok": True, "slide_plan": slide_plan, "count": len(slide_plan)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
 
 
-@app.put("/api/templates/{template_id}/slide-plan")
-async def update_template_slide_plan(template_id: str, request: Request):
-    """Save an edited slide_plan back to a template."""
-    db = get_db()
-    try:
-        existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not existing:
-            raise HTTPException(404, "模板不存在")
-        body = await request.json()
-        sp = body.get("slide_plan", []) if isinstance(body, dict) else []
-        if not isinstance(sp, list):
-            raise HTTPException(400, "slide_plan 必须是数组")
-        db.execute(
-            "UPDATE templates SET slide_plan = ? WHERE id = ?",
-            (json.dumps(sp, ensure_ascii=False), template_id))
-        db.commit()
-        return {"ok": True, "count": len(sp)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
 
 
-@app.post("/api/templates/{template_id}/preview-slide")
-async def preview_slide_html(template_id: str, request: Request):
-    """Render a single slide as HTML using guizang template CSS.
-
-    Request body: {slide: {type, zones}}
-    Returns: {html: "..."} — a complete HTML page for iframe srcdoc.
-    """
-    from services.html_renderer import render_slide_html
-    db = get_db()
-    try:
-        tmpl = db.execute("SELECT rules FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not tmpl:
-            raise HTTPException(404, "模板不存在")
-        rules = {}
-        if tmpl["rules"]:
-            try:
-                rules = json.loads(tmpl["rules"])
-            except Exception:
-                pass
-        design_rules = rules.get("design_rules", {})
-        style_family = design_rules.get("style_family") or "swiss"
-
-        body = {}
-        try:
-            body = json.loads((await request.body()).decode("utf-8"))
-        except Exception:
-            pass
-        slide = body.get("slide", {}) if isinstance(body, dict) else {}
-        slide_type = slide.get("type", "content")
-        zones = slide.get("zones", {})
-
-        html = render_slide_html(slide_type, zones, style_family, design_rules)
-        return {"html": html}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
 
 
-@app.post("/api/templates/{template_id}/preview-deck")
-async def preview_deck_html(template_id: str, request: Request):
-    """Render a full slide deck as HTML using guizang template CSS.
-
-    Request body: {slide_plan: [...]}
-    Returns: {html: "..."} — a complete HTML page.
-    """
-    from services.html_renderer import render_deck_html
-    db = get_db()
-    try:
-        tmpl = db.execute("SELECT rules FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not tmpl:
-            raise HTTPException(404, "模板不存在")
-        rules = {}
-        if tmpl["rules"]:
-            try:
-                rules = json.loads(tmpl["rules"])
-            except Exception:
-                pass
-        design_rules = rules.get("design_rules", {})
-        style_family = design_rules.get("style_family") or "swiss"
-
-        body = {}
-        try:
-            body = json.loads((await request.body()).decode("utf-8"))
-        except Exception:
-            pass
-        slide_plan = body.get("slide_plan", []) if isinstance(body, dict) else []
-
-        html = render_deck_html(slide_plan, style_family, design_rules)
-        return {"html": html}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
 
 
-@app.get("/api/templates/{template_id}/export-html")
-def export_template_html(template_id: str):
-    """Export a template's slide_plan as a complete HTML slide deck file.
-
-    Uses the template's saved slide_plan and design_rules with guizang
-    template CSS to generate a self-contained HTML file for download.
-    """
-    from services.html_renderer import render_deck_html
-    from fastapi.responses import Response
-    db = get_db()
-    try:
-        tmpl = db.execute(
-            "SELECT name, rules, slide_plan FROM templates WHERE id = ?",
-            (template_id,)).fetchone()
-        if not tmpl:
-            raise HTTPException(404, "模板不存在")
-
-        rules = {}
-        if tmpl["rules"]:
-            try:
-                rules = json.loads(tmpl["rules"])
-            except Exception:
-                pass
-        design_rules = rules.get("design_rules", {})
-        style_family = design_rules.get("style_family", "swiss")
-
-        slide_plan = []
-        if tmpl["slide_plan"]:
-            try:
-                slide_plan = json.loads(tmpl["slide_plan"])
-            except Exception:
-                pass
-
-        if not slide_plan:
-            raise HTTPException(400, "该模板没有大纲，请先生成大纲")
-
-        html = render_deck_html(slide_plan, style_family, design_rules)
-        import urllib.parse
-        safe_name = urllib.parse.quote(tmpl["name"].replace(" ", "_").replace("/", "_"), safe="")
-        return Response(
-            content=html.encode("utf-8"),
-            media_type="text/html; charset=utf-8",
-            headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}.html"
-            },
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
-
-
-def _load_guizang_layouts(style_family: str) -> dict | None:
-    """Load layout definitions from guizang ppt_engine references."""
-    ref_dir = os.path.join(os.path.dirname(__file__), "services", "ppt_engine", "references")
-    layout_file = "layouts-swiss.md" if style_family == "swiss" else "layouts.md"
-    layout_path = os.path.join(ref_dir, layout_file)
-    if not os.path.exists(layout_path):
-        return None
-
-    try:
-        with open(layout_path, "r", encoding="utf-8") as f:
-            content = f.read()
-    except Exception:
-        return None
-
-    # Extract layout type definitions from the markdown
-    # Each layout is a ## section with an id, name, and zones
-    layout_types = []
-    current = None
-    for line in content.split("\n"):
-        if line.startswith("## "):
-            if current and current.get("id"):
-                layout_types.append(current)
-            heading = line[3:].strip()
-            # Parse "S01 Cover" or "Layout 1: Cover" patterns
-            parts = heading.split(" ", 1)
-            lid = parts[0].lower() if parts else ""
-            name = parts[1] if len(parts) > 1 else heading
-            current = {"id": lid, "name": name, "zones": [], "description": ""}
-        elif current and line.startswith("- **Zones**:"):
-            zones_str = line.split("**Zones**:", 1)[-1].strip()
-            current["zones"] = [z.strip() for z in zones_str.split(",") if z.strip()]
-        elif current and line.startswith("- **用途**:"):
-            current["description"] = line.split("**用途**:", 1)[-1].strip()
-
-    if current and current.get("id"):
-        layout_types.append(current)
-
-    # If parsing failed, return None
-    if not layout_types:
-        return None
-
-    return {
-        "layout_types": layout_types,
-        "page_rhythm": {
-            "sequence": ["cover", "toc", "content*N", "closing"],
-            "alternation_rule": "内容页之间应交替不同版式",
-            "p0_violation": "连续3页同一版式类型 = P0",
-        },
-    }
-
-
-@app.get("/api/templates/presets/available")
-def list_available_presets():
-    """Return guizang theme presets that can be used to create new styles.
-
-    Reads the theme definitions from ppt_engine/references/ and returns
-    structured data the frontend can use in the "new style" modal.
-    """
-    ref_dir = os.path.join(os.path.dirname(__file__), "services", "ppt_engine", "references")
-    presets = []
-    for family, theme_file, style_family in [
-        ("Magazine", "themes.md", "magazine"),
-        ("Swiss", "themes-swiss.md", "swiss"),
-    ]:
-        path = os.path.join(ref_dir, theme_file)
-        if not os.path.exists(path):
-            continue
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
-        except Exception:
-            continue
-        # Parse theme sections — each starts with "## " and has a CSS block
-        import re
-        sections = re.split(r"\n## ", content)
-        for section in sections:
-            lines = section.strip().split("\n")
-            if not lines:
-                continue
-            name_line = lines[0].strip()
-            # Extract emoji+name e.g. "🔵 克莱因蓝 (IKB · International Klein Blue)"
-            name = re.sub(r"\(.*?\)", "", name_line).strip()
-            if not name or name.startswith("#") or "使用方法" in name or "推荐" in name or "切换" in name or "不要" in name or "关于" in name:
-                continue
-            # Extract CSS variables
-            css_vars = {}
-            for line in lines:
-                m = re.match(r"--([\w-]+):\s*([^;]+);", line)
-                if m:
-                    css_vars[m.group(1)] = m.group(2).strip()
-            if css_vars:
-                presets.append({
-                    "name": name,
-                    "style_family": style_family,
-                    "css_vars": css_vars,
-                    "colors": {
-                        "accent": css_vars.get("accent", css_vars.get("ink", "")),
-                        "ink": css_vars.get("ink", ""),
-                        "paper": css_vars.get("paper", ""),
-                    },
-                })
-    return {"presets": presets}
-
-
-class PresetCreateRequest(BaseModel):
-    name: str
-    style_family: str = "swiss"  # magazine or swiss
-    colors: dict = {}
-    fonts: dict | None = None
-    spacing: dict | None = None
-    layout_types: list | None = None
-    prompt: str = ""
-    skill: str = ""
-    linked_skill_id: str = ""
-    branding_config: str = ""
-
-
-@app.post("/api/templates/presets")
-def create_preset_template(req: PresetCreateRequest):
-    """Create a new template from a guizang theme preset."""
-    import uuid
-    db = get_db()
-    try:
-        tid = uuid.uuid4().hex[:8]
-
-        design_rules = {
-            "style_family": req.style_family,
-            "colors": req.colors,
-            "fonts": req.fonts or {"title": "微软雅黑", "body": "微软雅黑", "title_size": "36pt", "body_size": "18pt"},
-            "spacing": req.spacing or {"margin_top": 1.0, "margin_bottom": 1.0, "margin_left": 1.5, "margin_right": 1.5, "line_height": 1.3},
-        }
-        layout_types = req.layout_types or [
-            {"id": "cover", "name": "封面", "zones": ["title", "subtitle", "date"]},
-            {"id": "toc", "name": "目录", "zones": ["heading", "items"]},
-            {"id": "content", "name": "内容", "zones": ["heading", "body"]},
-            {"id": "closing", "name": "封底", "zones": ["quote", "signature"]},
-        ]
-        rules = json.dumps({"design_rules": design_rules, "layout_types": layout_types}, ensure_ascii=False)
-
-        template_file = "template-swiss.html" if req.style_family == "swiss" else "template.html"
-        file_path = f"backend/services/ppt_engine/assets/{template_file}"
-
-        db.execute(
-            "INSERT INTO templates (id, name, type, file_path, prompt, skill, rules, "
-            "linked_skill_id, branding_config, is_default, typography_profile, slide_plan) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (tid, req.name, "preset", file_path,
-             req.prompt or "", req.skill or "", rules,
-             req.linked_skill_id or "", req.branding_config or "",
-             0, "", ""))
-        db.commit()
-        return {"id": tid, "name": req.name}
-    finally:
-        db.close()
 
 
 # ── Video ──
@@ -2441,6 +2545,17 @@ def api_ppt_results(project_id: str):
     finally:
         db.close()
 
+@app.get("/api/projects/{project_id}/ppt-status")
+def api_ppt_status(project_id: str):
+    """Polled by frontend every 10s during PPT generation.
+    Returns current phase, slide counts, preview URL if ready."""
+    from services.ppt_service import get_ppt_status
+    status = get_ppt_status(project_id)
+    if not status:
+        return {"phase": "idle", "phase_label": "未在生成", "message": "没有正在进行的生成任务"}
+    return status
+
+
 @app.post("/api/ppt/generate")
 def api_generate_ppt(req: PPTGenerateRequest):
     import time, sys, datetime as _dt
@@ -2483,7 +2598,22 @@ def api_generate_ppt(req: PPTGenerateRequest):
         if has_content_input:
             print(f"[PPT-REQ] AI regeneration with content ({len(req.content)} chars)", flush=True)
 
-        filepath, generated_slides = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, slide_plan, project_name=project_name, column_id=req.column_id)
+        # Validate prerequisites BEFORE calling expensive pipeline
+        if not has_content_input and not slide_plan:
+            missing: list[str] = []
+            has_content = bool(req.content and req.content.strip())
+            if not has_content:
+                missing.append("没有文案内容，请先在 Stage 1 导入素材或在 Stage 2 生成文案")
+            if not req.provider_id:
+                missing.append("没有选择大模型提供商，请在左侧下拉框中选择")
+            elif not req.model:
+                missing.append("没有选择大模型，请在左侧下拉框中选择模型")
+            if not req.template_id:
+                missing.append("没有选择模板，请先在左侧选择模板")
+            detail = "；".join(missing) if missing else "缺少必要参数，请检查后再试"
+            raise HTTPException(status_code=400, detail=detail)
+
+        filepath, generated_slides = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, slide_plan, project_name=project_name, column_id=req.column_id, temperature=req.temperature, project_id=req.project_id or "", temp_keyword=req.temp_keyword, temp_research=req.temp_research, temp_outline=req.temp_outline, temp_fill=req.temp_fill, temp_cards=req.temp_cards, temp_html=req.temp_html, temp_svg_batch=req.temp_svg_batch, temp_svg_single=req.temp_svg_single, temp_review=req.temp_review, temp_fix=req.temp_fix, temp_holistic=req.temp_holistic, temp_holistic_fix=req.temp_holistic_fix, temp_stage_outline=req.temp_stage_outline, temp_stage_generation=req.temp_stage_generation, temp_stage_review=req.temp_stage_review)
         if generated_slides is not None:
             slide_plan = generated_slides
 
@@ -2515,8 +2645,8 @@ def api_generate_ppt(req: PPTGenerateRequest):
                     with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as _rf:
                         json.dump(result_meta, _rf, ensure_ascii=False)
                     # Save to step_results in the format the frontend expects for restoration
-                    col_to_step = {"col4": "step3_dao_ppt", "col5": "step3_yan_ppt", "col3": "step3_sop_doc"}
-                    mapped_step = col_to_step.get(req.column_id, "")
+                    col_to_step = {}
+                    mapped_step = col_to_step.get(req.column_id, f"step_{req.column_id}")
                     if mapped_step:
                         plan_data = {
                             "slides": slide_plan or [],
@@ -2574,6 +2704,78 @@ def api_generate_ppt(req: PPTGenerateRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/ppt/outline")
+def api_ppt_outline(req: PPTPlanRequest):
+    """Generate outline only (Phase 2 Research + Phase 4 Outline+Content).
+
+    Returns outline_json (structured) and outline_text (natural-language,
+    human-readable format for review and editing).
+    """
+    from services.ppt_service import _generate_outline_only
+    db = get_db()
+    try:
+        column_id = req.column_id or ""
+        cfg = None
+        if column_id:
+            cfg = db.execute(
+                "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
+                (column_id,)).fetchone()
+
+        column_prompt = cfg["prompt"] or "" if cfg else ""
+        column_skill = cfg["skill"] or "" if cfg else ""
+        rules = {}
+
+        if req.template_id:
+            row = db.execute(
+                "SELECT rules FROM templates WHERE id = ?",
+                (req.template_id,)).fetchone()
+            if row and row["rules"]:
+                try:
+                    template_rules = json.loads(row["rules"])
+                    for key in ("style_id", "layout_types", "page_rhythm", "design_principles"):
+                        if key in template_rules:
+                            rules[key] = template_rules[key]
+                except Exception:
+                    pass
+
+        st = dict(
+            keyword=req.temp_keyword or req.temperature or 0.3,
+            research=req.temp_research or req.temperature or 0.7,
+            outline=req.temp_outline or req.temperature or 1.0,
+            fill=req.temp_fill or req.temperature or 1.0,
+        )
+        if req.temp_stage_outline > 0:
+            st.update(keyword=req.temp_stage_outline, research=req.temp_stage_outline,
+                      outline=req.temp_stage_outline, fill=req.temp_stage_outline)
+        outline_json, outline_text = _generate_outline_only(
+            req.provider_id, req.model, rules, req.content,
+            column_prompt, column_skill, temperature=req.temperature,
+            st=st
+        )
+        return {"outline_json": outline_json or [], "outline_text": outline_text or ""}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.post("/api/ppt/outline/convert")
+def api_ppt_outline_convert(req: PPTPlanRequest):
+    """Convert edited natural-language text back to structured JSON via LLM.
+
+    Called when user saves edited outline content. Uses low-temperature LLM
+    to extract structured JSON from free-form text.
+    """
+    from services.ppt_service import _human_text_to_json
+    if not req.provider_id or not req.model:
+        raise HTTPException(status_code=400, detail="需要选择大模型才能转换")
+    try:
+        result = _human_text_to_json(req.provider_id, req.model, req.content, req.slide_plan or [])
+        return {"outline_json": result or []}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/ppt/plan")
 def api_ppt_plan(req: PPTPlanRequest):
     """Generate slide plan only (no PPTX file). Returns JSON for user review.
@@ -2585,21 +2787,16 @@ def api_ppt_plan(req: PPTPlanRequest):
     db = get_db()
     try:
         # Load column config — the single source of truth for content logic
-        column_id = req.column_id or "col4"
-        cfg = db.execute(
-            "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
-            (column_id,)).fetchone()
-        if not cfg:
+        column_id = req.column_id or ""
+        cfg = None
+        if column_id:
             cfg = db.execute(
-                "SELECT prompt, skill FROM column_configs WHERE column_id IN ('col4','col5') LIMIT 1"
-            ).fetchone()
+                "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
+                (column_id,)).fetchone()
 
-        column_prompt = ""
-        column_skill = ""
+        column_prompt = cfg["prompt"] or "" if cfg else ""
+        column_skill = cfg["skill"] or "" if cfg else ""
         rules = {}
-        if cfg:
-            column_prompt = cfg["prompt"] or ""
-            column_skill = cfg["skill"] or ""
 
         # Template provides layout_types via its rules (visual structure)
         if req.template_id:
@@ -2610,15 +2807,29 @@ def api_ppt_plan(req: PPTPlanRequest):
                 try:
                     template_rules = json.loads(row["rules"])
                     # Merge: template's layout_types + page_rhythm take priority
-                    for key in ("layout_types", "page_rhythm", "design_principles"):
+                    for key in ("style_id", "layout_types", "page_rhythm", "design_principles"):
                         if key in template_rules:
                             rules[key] = template_rules[key]
                 except Exception:
                     pass
 
+        st = dict(
+            keyword=req.temp_keyword or req.temperature or 0.3,
+            research=req.temp_research or req.temperature or 0.7,
+            outline=req.temp_outline or req.temperature or 1.0,
+            fill=req.temp_fill or req.temperature or 1.0,
+            cards=req.temp_cards or req.temperature or 0.7,
+            html=req.temp_html or req.temperature or 0.8,
+        )
+        if req.temp_stage_outline > 0:
+            st.update(keyword=req.temp_stage_outline, research=req.temp_stage_outline,
+                      outline=req.temp_stage_outline, fill=req.temp_stage_outline)
+        if req.temp_stage_generation > 0:
+            st.update(cards=req.temp_stage_generation, html=req.temp_stage_generation)
         slide_plan = _generate_slides_staged(
             req.provider_id, req.model, rules, req.content,
-            column_prompt, column_skill
+            column_prompt, column_skill, temperature=req.temperature,
+            st=st
         )
         return {"slide_plan": slide_plan or []}
     except Exception as e:
@@ -2649,24 +2860,176 @@ def api_ppt_styles():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── VI & Prompt file editor (directory-aware) ──
+
+VI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                      "data", "vi")
+
+VI_SECTIONS = ["vi", "cover", "content", "data", "summary", "prompt"]
+
+
+class VIFileUpdate(BaseModel):
+    content: str
+
+
+def _style_dir(style_id: str) -> str:
+    return os.path.join(VI_DIR, style_id)
+
+
+def _vi_section_path(style_id: str, section: str) -> str:
+    """Get path for a VI sub-file. sections: vi, cover, content, data, summary, prompt"""
+    ext = ".yaml" if section == "tokens" else ".md"
+    return os.path.join(_style_dir(style_id), f"{section}{ext}")
+
+
+@app.get("/api/ppt/styles/{style_id}/vi/files")
+def api_list_style_vi_files(style_id: str):
+    """List all VI sub-files in the style directory."""
+    d = _style_dir(style_id)
+    if not os.path.isdir(d):
+        return {"files": [], "exists": False}
+    files = []
+    from services.ppt_service import _page_type_sort_key
+    for f in sorted(os.listdir(d), key=lambda x: _page_type_sort_key(x.rsplit(".", 1)[0])):
+        if f.endswith((".md", ".yaml")):
+            p = os.path.join(d, f)
+            files.append({
+                "name": f,
+                "size": os.path.getsize(p),
+                "section": f.rsplit(".", 1)[0]  # e.g. "vi", "cover", "prompt", "tokens"
+            })
+    return {"files": files, "exists": True, "dir": d}
+
+
+@app.get("/api/ppt/styles/{style_id}/page-types")
+def api_get_page_types(style_id: str):
+    """Return available page_types for a style — scanned from VI directory.
+    Each .md file (except vi.md, prompt.md) = one page_type.
+    """
+    from services.ppt_service import _scan_vi_page_types
+    types = _scan_vi_page_types(style_id)
+    return {"page_types": types}
+
+
+@app.get("/api/ppt/styles/{style_id}/vi/{section}")
+def api_get_style_vi_section(style_id: str, section: str):
+    """Load a specific VI sub-file (vi, cover, content, data, summary, prompt, tokens)."""
+    p = _vi_section_path(style_id, section)
+    if not os.path.exists(p):
+        return {"content": "", "exists": False, "section": section}
+    with open(p, "r", encoding="utf-8") as f:
+        return {"content": f.read(), "exists": True, "section": section}
+
+
+@app.put("/api/ppt/styles/{style_id}/vi/{section}")
+def api_save_style_vi_section(style_id: str, section: str, body: VIFileUpdate):
+    """Save a specific VI sub-file."""
+    d = _style_dir(style_id)
+    os.makedirs(d, exist_ok=True)
+    p = _vi_section_path(style_id, section)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(body.content)
+    return {"ok": True, "path": p, "section": section}
+
+
+# Backward-compatible: GET /vi returns the full combined VI for a style
+@app.get("/api/ppt/styles/{style_id}/vi")
+def api_get_style_vi(style_id: str):
+    """Load full VI — concatenates all sub-files if directory exists, else legacy file."""
+    d = _style_dir(style_id)
+    if os.path.isdir(d):
+        parts = []
+        vi_path = os.path.join(d, "vi.md")
+        if os.path.exists(vi_path):
+            with open(vi_path, "r", encoding="utf-8") as f:
+                parts.append(f.read())
+        for section in ["cover", "content", "data", "summary"]:
+            sp = os.path.join(d, f"{section}.md")
+            if os.path.exists(sp):
+                with open(sp, "r", encoding="utf-8") as f:
+                    parts.append(f.read())
+        if parts:
+            return {"content": "\n\n---\n\n".join(parts), "exists": True}
+    # Legacy fallback
+    from services.ppt_service import _load_style_vi
+    content = _load_style_vi(style_id)
+    return {"content": content, "exists": bool(content)}
+
+
+@app.put("/api/ppt/styles/{style_id}/vi")
+def api_save_style_vi(style_id: str, body: VIFileUpdate):
+    """Save VI — writes to vi.md in directory structure."""
+    d = _style_dir(style_id)
+    os.makedirs(d, exist_ok=True)
+    p = os.path.join(d, "vi.md")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(body.content)
+    return {"ok": True, "path": p}
+
+
+@app.get("/api/ppt/styles/{style_id}/prompt")
+def api_get_style_prompt(style_id: str):
+    """Load a style's AI prompt markdown file."""
+    # Directory structure first
+    p = os.path.join(_style_dir(style_id), "prompt.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return {"content": f.read(), "exists": True}
+    # Legacy fallback
+    from services.ppt_service import _load_style_prompt
+    content = _load_style_prompt(style_id)
+    return {"content": content, "exists": bool(content)}
+
+
+@app.put("/api/ppt/styles/{style_id}/prompt")
+def api_save_style_prompt(style_id: str, body: VIFileUpdate):
+    """Save a style's AI prompt markdown file."""
+    d = _style_dir(style_id)
+    os.makedirs(d, exist_ok=True)
+    p = os.path.join(d, "prompt.md")
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(body.content)
+    return {"ok": True, "path": p}
+
+
 @app.get("/api/ppt/export-zip/{run_id}")
 def api_export_svg_zip(run_id: str):
     """Download all SVG files + index.html for a generated deck as a ZIP archive."""
     import zipfile, io
-    run_dir = _run_dirs.get(run_id) or os.path.join(EXPORT_DIR, run_id)
-    if not os.path.isdir(run_dir):
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir:
+        candidate = os.path.join(EXPORT_DIR, run_id)
+        if os.path.isdir(candidate):
+            run_dir = candidate
+    if not run_dir:
+        for base in [EXPORT_DIR] + _scan_output_bases():
+            candidate = os.path.join(base, run_id)
+            if os.path.isdir(candidate):
+                run_dir = candidate
+                _run_dirs[run_id] = run_dir
+                _save_run_dirs(_run_dirs)
+                break
+    if not run_dir:
         raise HTTPException(status_code=404, detail="Export not found")
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for fname in os.listdir(run_dir):
-            fpath = os.path.join(run_dir, fname)
-            if os.path.isfile(fpath):
-                zf.write(fpath, fname)
+    try:
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
+            for fname in os.listdir(run_dir):
+                fpath = os.path.join(run_dir, fname)
+                if os.path.isfile(fpath):
+                    zf.write(fpath, fname)
+    except Exception as e:
+        import traceback
+        print(f"[ZIP ERROR] run_dir={run_dir!r} error={e}", flush=True)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"ZIP creation failed: {e}")
     buf.seek(0)
+    from urllib.parse import quote
+    safe_name = quote(f"svg-deck-{run_id}.zip", safe="")
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="svg-deck-{run_id}.zip"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}"},
     )
 
 
@@ -3176,5 +3539,6 @@ async def upload_column_template(config_id: str, file: UploadFile = File(...)):
 
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8765)
+    import sys, uvicorn
+    port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
+    uvicorn.run(app, host="0.0.0.0", port=port)

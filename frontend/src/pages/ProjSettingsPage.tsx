@@ -5,12 +5,12 @@ import { useModal } from '../components/ModalProvider'
 type MainTab = 'models' | 'columns'
 
 const COLUMN_GROUPS = [
-  { id: 'col1', label: '文案提取', hasTemplate: false, summary: '无模板 · 3 个配置项' },
-  { id: 'col2', label: '教学文档', hasTemplate: false, summary: '无模板 · 3 个配置项' },
-  { id: 'col3', label: '标准SOP', hasTemplate: true, summary: '有模板 · 1 个配置项', tmplFile: 'SOP标准模板.docx' },
-  { id: 'col4', label: '道与术PPT', hasTemplate: true, summary: '有模板 · 1 个配置项', tmplFile: 'PPT模板.pptx' },
-  { id: 'col5', label: '研学PPT', hasTemplate: true, summary: '有模板 · 1 个配置项', tmplFile: 'PPT模板.pptx' },
-  { id: 'col6', label: '口播文案', hasTemplate: false, summary: '无模板 · 1 个配置项' },
+  { id: 'col1', label: '素材输入', hasTemplate: false, summary: '输入配置' },
+  { id: 'col2', label: '文档生成', hasTemplate: false, summary: '文档配置' },
+  { id: 'col3', label: '文档导出', hasTemplate: true, summary: '导出配置', tmplFile: '' },
+  { id: 'col4', label: 'PPT 生成 A', hasTemplate: true, summary: 'PPT配置', tmplFile: '' },
+  { id: 'col5', label: 'PPT 生成 B', hasTemplate: true, summary: 'PPT配置', tmplFile: '' },
+  { id: 'col6', label: '口播生成', hasTemplate: false, summary: '口播配置' },
   { id: 'col7', label: '语音合成', hasTemplate: false, summary: '音色库管理' },
 ]
 
@@ -93,11 +93,24 @@ export default function ProjSettingsPage() {
   const [apvSaving, setApvSaving] = useState(false)
   const [asrTestingId, setAsrTestingId] = useState<string | null>(null)
 
+  // Image Provider state
+  const [imageProviders, setImageProviders] = useState<any[]>([])
+  const [showImageProviderForm, setShowImageProviderForm] = useState(false)
+  const [editImageProviderId, setEditImageProviderId] = useState<string | null>(null)
+  const [ipvName, setIpvName] = useState('')
+  const [ipvKey, setIpvKey] = useState('')
+  const [ipvUrl, setIpvUrl] = useState('')
+  const [ipvModels, setIpvModels] = useState('')
+  const [ipvDefault, setIpvDefault] = useState(false)
+  const [ipvSaving, setIpvSaving] = useState(false)
+  const [imageTestingId, setImageTestingId] = useState<string | null>(null)
+
   const load = () => {
     api.listProviders().then(setProviders).catch(() => {})
     api.listTtsProviders().then(setTtsProviders).catch(() => {})
     api.listVoices().then(setVoices).catch(() => {})
     api.listAsrProviders().then(setAsrProviders).catch(() => {})
+    api.listImageProviders().then(setImageProviders).catch(() => {})
     api.listColumnConfigs().then((configs: ColumnConfig[]) => {
       setColumnConfigs(configs)
       const vals: Record<string, { prompt: string; skill: string }> = {}
@@ -386,6 +399,63 @@ export default function ProjSettingsPage() {
     } catch (e: any) { modal.toast('删除失败: ' + e.message, 'error') }
   }
 
+  // ── Image Provider actions ──
+  const openNewImageProvider = () => {
+    setEditImageProviderId(null)
+    setIpvName('')
+    setIpvKey('')
+    setIpvUrl('https://dashscope.aliyuncs.com/compatible-mode/v1')
+    setIpvModels('wanx-v1')
+    setIpvDefault(false)
+    setShowImageProviderForm(true)
+  }
+  const openEditImageProvider = (p: any) => {
+    setEditImageProviderId(p.id)
+    setIpvName(p.name || '')
+    setIpvKey(p.api_key || '')
+    setIpvUrl(p.base_url || '')
+    setIpvModels(Array.isArray(p.models) ? p.models.join(', ') : (p.models || ''))
+    setIpvDefault(!!p.is_default)
+    setShowImageProviderForm(true)
+  }
+  const saveImageProvider = async () => {
+    if (!ipvName.trim()) { modal.toast('请输入名称', 'error'); return }
+    setIpvSaving(true)
+    try {
+      const models = ipvModels.split(',').map((s: string) => s.trim()).filter(Boolean)
+      if (editImageProviderId) {
+        await api.updateImageProvider(editImageProviderId, { name: ipvName.trim(), api_key: ipvKey, base_url: ipvUrl, models, is_default: ipvDefault ? 1 : 0 })
+      } else {
+        await api.createImageProvider({ name: ipvName.trim(), api_key: ipvKey, base_url: ipvUrl, models, is_default: ipvDefault ? 1 : 0 })
+      }
+      await api.listImageProviders().then(setImageProviders)
+      setShowImageProviderForm(false)
+      modal.toast(editImageProviderId ? '图片提供商已更新' : '图片提供商已添加', 'success')
+    } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
+    finally { setIpvSaving(false) }
+  }
+  const testImageProvider = async (id: string) => {
+    setImageTestingId(id)
+    try {
+      const result: any = await api.testImageProvider(id)
+      if (result.ok) {
+        modal.toast('图片生成连接成功', 'success')
+      } else {
+        modal.toast('图片生成连接失败: ' + (result.error || '未知错误'), 'error')
+      }
+    } catch (e: any) { modal.toast('测试失败: ' + e.message, 'error') }
+    finally { setImageTestingId(null) }
+  }
+  const deleteImageProvider = async (id: string, name: string) => {
+    const ok = await modal.confirm(`确定删除图片提供商「${name}」？`)
+    if (!ok) return
+    try {
+      await api.deleteImageProvider(id)
+      await api.listImageProviders().then(setImageProviders)
+      modal.toast('已删除', 'success')
+    } catch (e: any) { modal.toast('删除失败: ' + e.message, 'error') }
+  }
+
   return (
     <div>
       {/* Tab Bar — mgmt-tabs style */}
@@ -493,10 +563,43 @@ export default function ProjSettingsPage() {
                       </tbody>
                     </table>
                     <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewAsrProvider}>+ 添加 ASR 提供商</button>
+
+                  {/* Image Providers */}
+                  <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 8 }}>图片生成提供商</div>
+                    <table className="output-table" style={{ marginBottom: 8, tableLayout: 'fixed' }}>
+                      <colgroup><col width="16%" /><col width="44%" /><col width="10%" /><col width="30%" /></colgroup>
+                      <thead><tr><th>名称</th><th>Base URL</th><th>状态</th><th>操作</th></tr></thead>
+                      <tbody>
+                        {imageProviders.map((p: any) => (
+                          <tr key={p.id}>
+                            <td>{p.name}</td>
+                            <td style={{ fontSize: 11 }}>{p.base_url}</td>
+                            <td style={{ color: p.is_enabled ? 'var(--success)' : 'var(--text-secondary)' }}>
+                              {p.is_enabled ? '已连接' : '未配置'}
+                            </td>
+                            <td style={{ display: 'flex', gap: 5 }}>
+                              <button className="btn btn-ghost btn-sm" onClick={() => testImageProvider(p.id)}
+                                disabled={imageTestingId === p.id}>
+                                {imageTestingId === p.id ? '测试中...' : '测试'}
+                              </button>
+                              <button className="btn btn-ghost btn-sm" onClick={() => openEditImageProvider(p)}>编辑</button>
+                              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
+                                onClick={() => deleteImageProvider(p.id, p.name)}>删除</button>
+                            </td>
+                          </tr>
+                        ))}
+                        {imageProviders.length === 0 && (
+                          <tr><td colSpan={4} style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>暂无图片生成提供商</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                    <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewImageProvider}>+ 添加图片生成提供商</button>
                   </div>
                 </div>
               </div>
           </div>
+        </div>
         )}
 
         {/* ═══ Tab: 栏目配置 ═══ */}
@@ -719,6 +822,31 @@ export default function ProjSettingsPage() {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowAsrProviderForm(false)}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={saveAsrProvider} disabled={apvSaving}>{apvSaving ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Image Provider Form Modal ═══ */}
+      {showImageProviderForm && (
+        <div className="dialog-overlay" onClick={e => { if (e.target === e.currentTarget) setShowImageProviderForm(false) }}>
+          <div className="dialog-box" style={{ minWidth: 480 }}>
+            <div className="dialog-title">{editImageProviderId ? '编辑图片生成提供商' : '添加图片生成提供商'}</div>
+            <div className="form-label">名称</div>
+            <input className="form-input" value={ipvName} onChange={e => setIpvName(e.target.value)} placeholder="如 通义万相" autoFocus />
+            <div className="form-label" style={{ marginTop: 12 }}>API Key</div>
+            <input className="form-input" value={ipvKey} onChange={e => setIpvKey(e.target.value)} placeholder="sk-..." />
+            <div className="form-label" style={{ marginTop: 12 }}>Base URL</div>
+            <input className="form-input" value={ipvUrl} onChange={e => setIpvUrl(e.target.value)} placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" />
+            <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div>
+            <input className="form-input" value={ipvModels} onChange={e => setIpvModels(e.target.value)} placeholder="wanx-v1" />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, cursor: 'pointer' }}>
+              <input type="checkbox" checked={ipvDefault} onChange={e => setIpvDefault(e.target.checked)} />
+              <span style={{ fontSize: 12 }}>设为默认提供商</span>
+            </label>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowImageProviderForm(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={saveImageProvider} disabled={ipvSaving}>{ipvSaving ? '保存中...' : '保存'}</button>
             </div>
           </div>
         </div>

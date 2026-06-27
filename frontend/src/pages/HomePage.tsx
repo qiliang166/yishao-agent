@@ -34,13 +34,55 @@ function HomePage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const createProject = async () => {
-    const name = await modal.prompt('请输入食谱名称：')
+    const name = await modal.prompt('请输入项目名称：')
     if (!name) return
+
+    // Ask if user wants to copy from existing project
+    const useCopy = await modal.confirm('是否从已有项目复制配置？\n\n选择"确定"将打开项目列表供你选择复制来源，选择"取消"将创建空白项目。')
+    let copiedFrom = ''
+    if (useCopy) {
+      const sourceName = await modal.prompt('请输入要复制的源项目名称（部分匹配即可）：')
+      if (sourceName) {
+        const matches = projects.filter(p => p.name.includes(sourceName))
+        if (matches.length === 0) {
+          modal.toast('未找到匹配的项目，将创建空白项目', 'error')
+        } else if (matches.length === 1) {
+          copiedFrom = matches[0].id
+        } else {
+          const names = matches.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
+          const idx = await modal.prompt(`找到多个匹配项目：\n${names}\n\n输入序号选择，或按取消创建空白项目：`)
+          if (idx) {
+            const n = parseInt(idx) - 1
+            if (n >= 0 && n < matches.length) copiedFrom = matches[n].id
+          }
+        }
+      }
+    }
+
     try {
       const project = await api.createProject(name)
+      if (copiedFrom) {
+        try {
+          await api.copyProjectItems(project.id, copiedFrom)
+        } catch (e: any) {
+          modal.toast('配置复制失败：' + e.message, 'error')
+        }
+      }
       navigate(`/project/${project.id}`)
     } catch (err: any) {
       modal.toast('创建失败：' + err.message, 'error')
+    }
+  }
+
+  const copyProject = async (id: string, name: string) => {
+    try {
+      const result = await api.copyProject(id)
+      const newId = (result as any).project?.id
+      modal.toast(`已复制项目「${name}」`, 'success')
+      loadProjects(page)
+      if (newId) navigate(`/project/${newId}`)
+    } catch (err: any) {
+      modal.toast('复制失败：' + err.message, 'error')
     }
   }
 
@@ -137,28 +179,28 @@ function HomePage() {
                     loadProjects(page)
                     setSelected(new Set())
                     modal.toast(`已标记 ${ids.length} 个项目为已完成`, 'success')
-                  }}>✅ 批量完成</button>
+                  }}>批量完成</button>
                   <button className="btn btn-outline btn-sm" onClick={async () => {
                     const ids = [...selected]
                     await Promise.all(ids.map(id => api.updateProject(id, { status: 'draft' })))
                     loadProjects(page)
                     setSelected(new Set())
                     modal.toast(`已标记 ${ids.length} 个项目为草稿`, 'success')
-                  }}>📝 批量草稿</button>
+                  }}>批量草稿</button>
                   <button className="btn btn-outline btn-sm" onClick={async () => {
                     const ids = [...selected]
                     await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 1 })))
                     loadProjects(page)
                     setSelected(new Set())
                     modal.toast(`已锁定 ${ids.length} 个项目`, 'success')
-                  }}>🔒 批量锁定</button>
+                  }}>批量锁定</button>
                   <button className="btn btn-outline btn-sm" onClick={async () => {
                     const ids = [...selected]
                     await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 0 })))
                     loadProjects(page)
                     setSelected(new Set())
                     modal.toast(`已解锁 ${ids.length} 个项目`, 'success')
-                  }}>🔓 批量解锁</button>
+                  }}>批量解锁</button>
                   <button className="btn btn-sm" onClick={batchDelete}
                     style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)' }}>
                     删除选中({selected.size})
@@ -177,6 +219,9 @@ function HomePage() {
                 style={{ marginRight: 8 }} />
               <span className="pc-name" style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/project/${p.id}`)}>{p.name}</span>
+              {p.copied_from_project_id && (
+                <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 4 }} title="从其他项目复制">📋</span>
+              )}
               <span className={`pc-status ${p.status}`}
                 style={{ cursor: 'pointer' }}
                 onClick={async e => {
@@ -187,6 +232,10 @@ function HomePage() {
                 }}>{statusLabel(p.status)}</span>
               <span className="pc-date">{new Date(p.updated_at).toLocaleDateString('zh-CN')}</span>
               <span className="pc-actions" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <button className="btn btn-ghost btn-sm"
+                  onClick={e => { e.stopPropagation(); copyProject(p.id, p.name) }}
+                  style={{ color: 'var(--accent)', fontSize: 11 }}
+                  title="复制项目及其配置">复制</button>
                 <span style={{
                     cursor: 'pointer', fontSize: 11, marginLeft: 4,
                     color: p.is_locked ? 'var(--warning)' : 'var(--text-secondary)',
@@ -198,7 +247,7 @@ function HomePage() {
                     await api.updateProject(p.id, { is_locked: locked })
                     loadProjects(page)
                   }} title={p.is_locked ? '点击解锁' : '点击锁定'}>
-                  {p.is_locked ? '🔒 已锁定' : '🔓 锁定'}
+                  {p.is_locked ? '已锁定' : '锁定'}
                 </span>
                 {!p.is_locked && (
                   <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}

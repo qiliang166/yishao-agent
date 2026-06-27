@@ -1,10 +1,26 @@
 const BASE = ''
 
 async function request(path: string, options?: RequestInit) {
-  const res = await fetch(BASE + path, options)
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || 'Request failed')
-  return data
+  const ctrl = new AbortController()
+  const existingSignal = options?.signal
+  if (existingSignal) {
+    existingSignal.addEventListener('abort', () => ctrl.abort())
+  }
+
+  try {
+    const res = await fetch(BASE + path, { ...options, signal: ctrl.signal })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || `服务器错误 (${res.status})`)
+    return data
+  } catch (e: any) {
+    if (e.name === 'AbortError') {
+      throw new Error('请求已取消')
+    }
+    if (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError')) {
+      throw new Error('无法连接服务器，请确认后端是否正常运行')
+    }
+    throw e
+  }
 }
 
 export interface LLMProvider {
@@ -36,6 +52,16 @@ export interface ASRProvider {
   is_default?: number
 }
 
+export interface ImageProvider {
+  id: string
+  name: string
+  api_key: string
+  base_url: string
+  models: string[]
+  is_enabled: number
+  is_default?: number
+}
+
 export interface Voice {
   id: string
   name: string
@@ -54,6 +80,7 @@ export interface Project {
   source_type: string
   storage_path?: string
   is_locked?: number
+  copied_from_project_id?: string
   created_at: string
   updated_at: string
 }
@@ -205,15 +232,33 @@ export const api = {
   deleteAsrProvider: (id: string) => request(`/api/asr/providers/${id}`, { method: 'DELETE' }),
   testAsrProvider: (id: string) => request(`/api/asr/providers/${id}/test`, { method: 'POST' }),
 
+  // Image Providers
+  listImageProviders: () => request('/api/image/providers').then(d => d.providers as ImageProvider[]),
+  createImageProvider: (data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
+    request('/api/image/providers', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  updateImageProvider: (id: string, data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
+    request(`/api/image/providers/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  deleteImageProvider: (id: string) => request(`/api/image/providers/${id}`, { method: 'DELETE' }),
+  testImageProvider: (id: string) => request(`/api/image/providers/${id}/test`, { method: 'POST' }),
+
+  // Image Generation
+  generateImage: (data: {
+    prompt: string; provider_id?: string; model?: string; size?: string; n?: number;
+    negative_prompt?: string; prompt_extend?: boolean; watermark?: boolean; seed?: number;
+    reference_images?: string[];
+  }) =>
+    request('/api/image/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+
   // LLM calls
   llmGenerate: (data: {
     provider_id: string; model: string; system_prompt: string;
-    user_message: string; temperature?: number
+    user_message: string; temperature?: number; signal?: AbortSignal
   }) =>
     request('/api/llm/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      signal: data.signal,
     }),
   // LLM streaming generate (SSE)
   llmGenerateStream: async function* (data: {
@@ -372,14 +417,42 @@ export const api = {
     request(`/api/projects/${projectId}/files`),
 
   // PPT
-  generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal) =>
-    request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4'}), signal }),
+  generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
+    request('/api/ppt/outline', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', temperature: temperature ?? 0.3, temp_outline: tempOutline || 0, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_fill: tempFill || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal })
+      .then(d => d as { outline_json: any[]; outline_text: string }),
 
-  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[], signal?: AbortSignal, columnId?: string) =>
-    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null, column_id: columnId || ''}), signal }),
+  convertOutlineToJson: (text: string, originalJson: any[], providerId: string, model: string) =>
+    request('/api/ppt/outline/convert', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content: text, slide_plan: originalJson, provider_id: providerId, model: model}) })
+      .then(d => d as { outline_json: any[] }),
+
+  generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
+    request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal }),
+
+  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[], signal?: AbortSignal, columnId?: string, temperature?: number, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
+    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null, column_id: columnId || '', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_svg_batch: tempSvgBatch || 0, temp_svg_single: tempSvgSingle || 0, temp_review: tempReview || 0, temp_fix: tempFix || 0, temp_holistic: tempHolistic || 0, temp_holistic_fix: tempHolisticFix || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal }),
 
   // PPT Styles (17 PPT-Agent YAML styles)
   listStyles: () => request('/api/ppt/styles').then(d => d.styles as StyleItem[]),
+
+  // VI & Prompt file editor (directory-aware)
+  getStyleVI: (styleId: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi`).then(d => d as { content: string; exists: boolean }),
+  saveStyleVI: (styleId: string, content: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
+  getStylePrompt: (styleId: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/prompt`).then(d => d as { content: string; exists: boolean }),
+  saveStylePrompt: (styleId: string, content: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/prompt`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
+  // VI sub-files (directory structure)
+  listStyleVIFiles: (styleId: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi/files`).then(d => d as { files: {name: string; size: number; section: string}[]; exists: boolean }),
+  getStyleVISection: (styleId: string, section: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi/${encodeURIComponent(section)}`).then(d => d as { content: string; exists: boolean; section: string }),
+  saveStyleVISection: (styleId: string, section: string, content: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi/${encodeURIComponent(section)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
+  // Page types (scanned from VI directory)
+  getPageTypes: (styleId: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/page-types`).then(d => d.page_types as {type: string; label: string; purpose: string}[]),
 
   exportSvgZip: (runId: string) => `${BASE}/api/ppt/export-zip/${encodeURIComponent(runId)}`,
 
@@ -389,6 +462,10 @@ export const api = {
   // Load existing PPT results for a project (survives page reload / timeout)
   listPptResults: (projectId: string) =>
     request(`/api/projects/${encodeURIComponent(projectId)}/ppt-results`).then(d => d.results as any[]),
+
+  // PPT generation progress polling
+  getPptStatus: (projectId: string) =>
+    request(`/api/projects/${encodeURIComponent(projectId)}/ppt-status`),
 
   // SOP Export
   exportSOP: (content: string, branding?: Record<string, string>, projectId?: string) =>
@@ -422,40 +499,8 @@ export const api = {
     if (model) params.set('model', model)
     return request(`/api/templates/${encodeURIComponent(templateId)}/analyze?${params.toString()}`, { method: 'POST' })
   },
-  generateTemplatePlan: (templateId: string, content: string, providerId?: string, model?: string, columnId?: string) =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/generate-plan`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, provider_id: providerId || '', model: model || '', column_id: columnId || 'col4' }),
-    }),
-  updateTemplateSlidePlan: (templateId: string, slidePlan: any[]) =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/slide-plan`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slide_plan: slidePlan }),
-    }),
-  previewSlide: (templateId: string, slide: { type: string; zones: Record<string, any> }) =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/preview-slide`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slide }),
-    }),
-  previewDeck: (templateId: string, slidePlan: any[]) =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/preview-deck`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slide_plan: slidePlan }),
-    }),
-  exportHtmlUrl: (templateId: string) =>
-    `/api/templates/${encodeURIComponent(templateId)}/export-html`,
-  listAvailablePresets: () =>
-    request('/api/templates/presets/available').then(d => d.presets),
-  createPresetTemplate: (data: { name: string; style_family: string; colors: Record<string, string>; fonts?: Record<string, string>; spacing?: Record<string, number>; layout_types?: any[] }) =>
-    request('/api/templates/presets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }),
+  toggleTemplateEnabled: (templateId: string) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}/toggle-enabled`, { method: 'PUT' }).then(d => d as { ok: boolean; enabled: boolean }),
   uploadColumnTemplate: async (id: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
@@ -464,6 +509,45 @@ export const api = {
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { ok: boolean; path: string; content?: string }
   },
+
+  // Source Materials (multi-format input)
+  listMaterials: (projectId: string) =>
+    request(`/api/projects/${projectId}/materials`).then(d => d.materials || []),
+  addMaterial: (projectId: string, data: { source_type: string; source_name?: string; raw_content?: string; processed_content?: string }) =>
+    request(`/api/projects/${projectId}/materials`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  uploadMaterial: async (projectId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`/api/projects/${projectId}/materials/upload`, { method: 'POST', body: formData })
+    if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed')
+    return res.json()
+  },
+  deleteMaterial: (projectId: string, materialId: string) =>
+    request(`/api/projects/${projectId}/materials/${materialId}`, { method: 'DELETE' }),
+  updateMaterial: (projectId: string, materialId: string, data: Record<string, string>) =>
+    request(`/api/projects/${projectId}/materials/${materialId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  // Project Items (dynamic output steps)
+  listProjectItems: (projectId: string) =>
+    request(`/api/projects/${projectId}/items`).then(d => d.items || []),
+  createProjectItem: (projectId: string, data: Record<string, any>) =>
+    request(`/api/projects/${projectId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  updateProjectItem: (projectId: string, itemId: string, data: Record<string, any>) =>
+    request(`/api/projects/${projectId}/items/${itemId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  deleteProjectItem: (projectId: string, itemId: string) =>
+    request(`/api/projects/${projectId}/items/${itemId}`, { method: 'DELETE' }),
+  copyProjectItems: (projectId: string, sourceProjectId: string) =>
+    request(`/api/projects/${projectId}/items/copy-from/${sourceProjectId}`, { method: 'POST' }),
+
+  // Project Item Results
+  listItemResults: (projectId: string, itemId: string) =>
+    request(`/api/projects/${projectId}/items/${itemId}/results`).then(d => d.results || []),
+  saveItemResult: (projectId: string, itemId: string, data: { content: string; content_type?: string; file_path?: string; quality_score?: number }) =>
+    request(`/api/projects/${projectId}/items/${itemId}/results`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+
+  // Project Copy (project itself is the template)
+  copyProject: (projectId: string) =>
+    request(`/api/projects/${projectId}/copy`, { method: 'POST' }),
 
   // Version
   getVersion: () => request('/api/version'),

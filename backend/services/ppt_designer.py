@@ -694,103 +694,6 @@ def build_grid_cards(prs: Presentation, zones: dict, design: DesignSystem):
                          font_name=design.font_name)
 
 
-@_register("food_archive")
-def build_food_archive(prs: Presentation, zones: dict, design: DesignSystem):
-    """Ingredient archive card: food name + params + mechanism + substitutes."""
-    slide_layout = _blank_layout(prs)
-    slide = prs.slides.add_slide(slide_layout)
-
-    food_name = zones.get("food_name", "").strip()
-    params = zones.get("params", "").strip()
-    mechanism = zones.get("mechanism", "").strip()
-    substitutes = zones.get("substitutes", "").strip()
-
-    # Title bar
-    _add_rect(slide, 0, 0, design.slide_width, int(1.0 * 914400), design.primary_color)
-    if food_name:
-        _add_textbox(slide, Emu(design.margin_left), Emu(int(0.15 * 914400)),
-                     Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)),
-                     food_name, font_size_pt=design.title_size_pt,
-                     color=design.light_text_color, bold=True,
-                     font_name=design.font_name)
-
-    y = int(1.3 * 914400)
-    sections = [
-        ("黄金参数", params, design.accent_color),
-        ("作用机理", mechanism, design.primary_color),
-        ("替代与风险", substitutes, design.text_color),
-    ]
-
-    for label, content, label_color in sections:
-        if not content:
-            continue
-        _add_textbox(slide, Emu(design.margin_left), Emu(y),
-                     Emu(int(2.5 * 914400)), Emu(int(0.4 * 914400)),
-                     f"▎{label}", font_size_pt=design.subtitle_size_pt,
-                     color=label_color, bold=True,
-                     font_name=design.font_name)
-        y += int(0.5 * 914400)
-        line_count = max(1, len(content) // 50 + content.count('\n') + 1)
-        _add_textbox(slide, Emu(int(1.0 * 914400)), Emu(y),
-                     Emu(int(11.3 * 914400)), Emu(int(line_count * 0.45 * 914400)),
-                     content, font_size_pt=design.body_size_pt,
-                     color=design.text_color, bold=False,
-                     font_name=design.font_name)
-        y += int(line_count * 0.5 * 914400)
-
-
-@_register("skill_card")
-def build_skill_card(prs: Presentation, zones: dict, design: DesignSystem):
-    """Technique skill card: name + description + flowchart ref + migration."""
-    slide_layout = _blank_layout(prs)
-    slide = prs.slides.add_slide(slide_layout)
-
-    skill_name = zones.get("skill_name", "").strip()
-    description = zones.get("description", "").strip()
-    flowchart = zones.get("flowchart", "").strip()
-    migration = zones.get("migration", "").strip()
-
-    # Header — accent background
-    _add_rect(slide, 0, 0, design.slide_width, int(1.0 * 914400), design.accent_color)
-    if skill_name:
-        _add_textbox(slide, Emu(design.margin_left), Emu(int(0.15 * 914400)),
-                     Emu(int(11.3 * 914400)), Emu(int(0.7 * 914400)),
-                     skill_name, font_size_pt=design.title_size_pt,
-                     color=design.light_text_color, bold=True,
-                     font_name=design.font_name)
-
-    y = int(1.3 * 914400)
-    sections = [
-        ("技法描述", description),
-        ("可迁移至", migration),
-    ]
-
-    for label, content in sections:
-        if not content:
-            continue
-        _add_textbox(slide, Emu(design.margin_left), Emu(y),
-                     Emu(int(3.0 * 914400)), Emu(int(0.4 * 914400)),
-                     f"▎{label}", font_size_pt=design.subtitle_size_pt,
-                     color=design.primary_color, bold=True,
-                     font_name=design.font_name)
-        y += int(0.5 * 914400)
-        line_count = max(1, len(content) // 50 + content.count('\n') + 1)
-        _add_textbox(slide, Emu(int(1.0 * 914400)), Emu(y),
-                     Emu(int(11.3 * 914400)), Emu(int(line_count * 0.45 * 914400)),
-                     content, font_size_pt=design.body_size_pt,
-                     color=design.text_color, bold=False,
-                     font_name=design.font_name)
-        y += int(line_count * 0.5 * 914400)
-
-    if flowchart:
-        y += int(0.2 * 914400)
-        _add_textbox(slide, Emu(design.margin_left), Emu(y),
-                     Emu(int(11.3 * 914400)), Emu(int(0.5 * 914400)),
-                     f"→ 流程: {flowchart}", font_size_pt=design.small_size_pt,
-                     color=design.accent_color, bold=False,
-                     font_name=design.font_name)
-
-
 @_register("troubleshoot")
 def build_troubleshoot(prs: Presentation, zones: dict, design: DesignSystem):
     """Troubleshooting diagnosis page: problem → cause → solution → prevention."""
@@ -922,30 +825,41 @@ def build_timeline(prs: Presentation, zones: dict, design: DesignSystem):
 
 @_register("image_hero")
 def build_image_hero(prs: Presentation, zones: dict, design: DesignSystem):
-    """Full-width image placeholder with caption."""
+    """Full-width image with caption. Uses real image if available, placeholder otherwise."""
+    import os
     slide_layout = _blank_layout(prs)
     slide = prs.slides.add_slide(slide_layout)
 
     caption = zones.get("caption", zones.get("heading", "")).strip()
-    image_zone = zones.get("image", "").strip()
+    image_path = (zones.get("image_url", "") or zones.get("image", "")).strip()
 
-    # Image placeholder (gray block)
-    _add_rect(slide, Emu(int(0.5 * 914400)), Emu(int(0.5 * 914400)),
-              Emu(int(12.3 * 914400)), Emu(int(5.5 * 914400)),
-              (0xE0, 0xE0, 0xE0))
-    # Placeholder icon text
-    _add_textbox(slide, Emu(int(3.0 * 914400)), Emu(int(2.5 * 914400)),
-                 Emu(int(7.3 * 914400)), Emu(int(1.0 * 914400)),
-                 "📷 图片区域", font_size_pt=design.title_size_pt,
-                 color=(0x99, 0x99, 0x99), bold=False,
-                 alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+    img_left = Emu(int(0.5 * 914400))
+    img_top = Emu(int(0.5 * 914400))
+    img_width = Emu(int(12.3 * 914400))
+    img_height = Emu(int(5.5 * 914400))
 
-    if image_zone:
-        _add_textbox(slide, Emu(int(3.0 * 914400)), Emu(int(3.5 * 914400)),
-                     Emu(int(7.3 * 914400)), Emu(int(0.6 * 914400)),
-                     image_zone, font_size_pt=design.small_size_pt,
+    has_image = False
+    if image_path and os.path.isfile(image_path):
+        try:
+            slide.shapes.add_picture(image_path, img_left, img_top, img_width, img_height)
+            has_image = True
+        except Exception:
+            pass
+
+    if not has_image:
+        # Gray placeholder
+        _add_rect(slide, img_left, img_top, img_width, img_height, (0xE0, 0xE0, 0xE0))
+        _add_textbox(slide, Emu(int(3.0 * 914400)), Emu(int(2.5 * 914400)),
+                     Emu(int(7.3 * 914400)), Emu(int(1.0 * 914400)),
+                     "📷 图片区域", font_size_pt=design.title_size_pt,
                      color=(0x99, 0x99, 0x99), bold=False,
                      alignment=PP_ALIGN.CENTER, font_name=design.font_name)
+        if image_path:
+            _add_textbox(slide, Emu(int(3.0 * 914400)), Emu(int(3.5 * 914400)),
+                         Emu(int(7.3 * 914400)), Emu(int(0.6 * 914400)),
+                         image_path, font_size_pt=design.small_size_pt,
+                         color=(0x99, 0x99, 0x99), bold=False,
+                         alignment=PP_ALIGN.CENTER, font_name=design.font_name)
 
     # Caption at bottom
     if caption:

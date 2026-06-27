@@ -27,24 +27,17 @@ _STYLE_GROUPS = {
 
 
 def _resolve_styles_dir():
-    for d in [
-        os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared", "references", "styles"),
-        os.path.join(BASE_DIR, "services", "ppt_engine", "styles"),
-    ]:
-        if os.path.isdir(d):
-            return d
+    d = os.path.join(BASE_DIR, "data", "styles")
+    if os.path.isdir(d):
+        return d
     return ""
 
 
 def _load_index():
-    for d in [
-        os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared"),
-        os.path.join(BASE_DIR, "services", "ppt_engine"),
-    ]:
-        p = os.path.join(d, "index.json")
-        if os.path.exists(p):
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
+    p = os.path.join(BASE_DIR, "data", "styles", "index.json")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
     return {"resources": []}
 
 

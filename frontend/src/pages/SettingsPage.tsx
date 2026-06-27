@@ -26,7 +26,7 @@ function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
   // -- 通用设置 state --
-  const [brandLogo, setBrandLogo] = useState('🍽')
+  const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
   const [savePath, setSavePath] = useState('D:\\YISHAOAGENT\\data\\output')
   const [brandingCopyright, setBrandingCopyright] = useState('')
@@ -268,7 +268,7 @@ function SettingsPage() {
             <div className="settings-row">
               <label>签名/作者</label>
               <input className="form-input" type="text" value={brandingSignature}
-                onChange={e => setBrandingSignature(e.target.value)} placeholder="例如：Chef Zhang" style={{ maxWidth: 300 }} />
+                onChange={e => setBrandingSignature(e.target.value)} placeholder="例如：作者名称" style={{ maxWidth: 300 }} />
             </div>
           </div>
 

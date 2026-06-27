@@ -197,10 +197,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
         _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成大纲...", "message": "AI 分析内容中"}
 
     # Build human-readable dir name: "{项目名}_{类型}" (e.g. "测试1_道术PPT")
-    col_label_map = {"col4": "道术PPT", "col5": "研学PPT", "col3": "SOP课件", "col2": "SOP课件"}
     safe_proj = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip() if project_name else ""
-    col_label = col_label_map.get(column_id, "PPT")
-    dir_name = f"{safe_proj}_{col_label}" if safe_proj else ""
+    dir_name = f"{safe_proj}_{column_id}" if safe_proj and column_id else ""
     prs = None
     slide_data = None
     rules = {}
@@ -852,7 +850,6 @@ def _slides_to_human_text(slides: list) -> str:
         "comparison": "对比页", "duo_compare": "双栏对比",
         "table": "表格页", "grid_cards": "卡片组", "image_grid": "图片网格",
         "quote": "引言页", "image_hero": "图片突出",
-        "food_archive": "美食档案", "skill_card": "技能卡片",
         "troubleshoot": "问题排查",
         "appendix": "附录", "copyright": "版权页",
         "closing": "结尾页", "summary": "总结页",
@@ -1210,13 +1207,11 @@ PAGE_TYPE_ORDER = [
     "image_grid",      # 17. 图片网格 — 图片展示
     "quote",           # 18. 引言页 — 引用/引言
     "image_hero",      # 19. 图片突出 — 大图+文字
-    "food_archive",    # 20. 美食档案 — 菜品展示
-    "skill_card",      # 21. 技能卡片 — 技能展示
-    "troubleshoot",    # 22. 问题排查 — 排查指南
-    "appendix",        # 23. 附录页 — 补充参考资料
-    "copyright",       # 24. 版权页 — 版权信息
-    "closing",         # 25. 结尾页 — 感谢/结束
-    "summary",         # 26. 总结页 — 结尾收束
+    "troubleshoot",    # 20. 问题排查 — 排查指南
+    "appendix",        # 21. 附录页 — 补充参考资料
+    "copyright",       # 22. 版权页 — 版权信息
+    "closing",         # 23. 结尾页 — 感谢/结束
+    "summary",         # 24. 总结页 — 结尾收束
 ]
 
 def _page_type_sort_key(ptype: str) -> int:
@@ -1366,7 +1361,7 @@ def _validate_cards(slides: list) -> list[str]:
         "content", "data", "data_hero",
         "technique", "principle", "process_flow", "process_timeline", "timeline",
         "comparison", "duo_compare", "table", "grid_cards", "image_grid",
-        "quote", "image_hero", "food_archive", "skill_card",
+        "quote", "image_hero",
         "troubleshoot", "appendix", "copyright",
         "closing", "summary",
     }

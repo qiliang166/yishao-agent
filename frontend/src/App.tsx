@@ -13,7 +13,7 @@ import './App.css'
 function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [brandLogo, setBrandLogo] = useState('🍽')
+  const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
   const [projName, setProjName] = useState('')
   const isWorkspace = location.pathname.startsWith('/project/')

@@ -11,14 +11,14 @@ export interface TeachingDocPanelProps {
   skill: string
   llmProviders: { id: string; name: string; is_enabled: number; models: string[] }[]
   onRefresh: () => Promise<any>
-  batchGenerating?: boolean
   hideControls?: boolean
   dataSource?: string
   onDataSourceChange?: (val: string) => void
+  temperature?: number
 }
 
 const DOC_LABELS: Record<string, string> = {
-  sop: 'SOP文案', dao: '道与术文案', yanxi: '研学手册文案',
+  sop: '文档', dao: '分析', yanxi: '手册',
 }
 const DOC_COLORS: Record<string, string> = {
   sop: 'var(--success)', dao: 'var(--purple)', yanxi: 'var(--warning)',
@@ -33,14 +33,14 @@ const MODEL_KEYS: Record<string, string> = {
   sop: '_model_s2_sop', dao: '_model_s2_dao', yanxi: '_model_s2_yanxi',
 }
 const DEFAULT_PROMPTS: Record<string, string> = {
-  sop: '请将以下食谱内容整理为标准操作流程(SOP)文案。按步骤、操作、标准、备注四列整理。',
-  dao: '请分析以下食谱内容的道（原理、烹饪哲学）与术（具体技巧、手法）。',
-  yanxi: '请将以下食谱内容整理为研学手册文案，包含背景知识、动手步骤、观察要点。',
+  sop: '请将以下内容整理为标准文档格式。',
+  dao: '请分析以下内容的原理与方法。',
+  yanxi: '请将以下内容整理为手册格式，包含背景知识和要点。',
 }
 
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
-  docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh, batchGenerating,
-  hideControls, dataSource: dataSourceProp, onDataSourceChange,
+  docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
+  hideControls, dataSource: dataSourceProp, onDataSourceChange, temperature = 0.3,
 }, ref) => {
   const modal = useModal()
 
@@ -53,6 +53,8 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     const defMs = Array.isArray(defP?.models) ? defP.models : []
     return defP && defMs.length > 0 ? `${defP.id}:${defMs[0]}` : ''
   }
+  const tempKey = `_temp_s2_${docType}`
+  const resolvedTemperature = temperature ?? (steps[tempKey] ? parseFloat(steps[tempKey]) : 0.3)
   const [model, setModel] = useState(() => getDefaultModel())
   const lastModelKey = useRef(modelKey)
   const mountedRef = useRef(true)
@@ -101,9 +103,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   // ── Data source text ──
   const getSourceText = (src: string) => {
     switch (src) {
-      case 'video': return steps.raw_video || ''
-      case 'text': return steps.raw_text || ''
-      case 'file': return steps.raw_file || ''
+      case 'video': return steps.raw_video || steps.step1_video || ''
+      case 'text': return steps.raw_text || steps.step1_text || ''
+      case 'file': return steps.raw_file || steps.step1_file || ''
       default: return ''
     }
   }
@@ -124,6 +126,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       console.log('[TeachingDocPanel] already generating (ref), skipping')
       return
     }
+    const ctrl = new AbortController(); abortRef.current = ctrl
     generatingRef.current = true
     setGenerating(true)
     try {
@@ -132,10 +135,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       const userMessage = skill
         ? `请将以下内容按指定格式整理：\n\n${sourceText}\n\n输出格式要求：\n${skill}`
         : sourceText
-      console.log('[TeachingDocPanel] calling llmGenerate...', { pid, mdl })
+      console.log('[TeachingDocPanel] calling llmGenerate...', { pid, mdl, temperature: resolvedTemperature })
       const result: any = await api.llmGenerate({
         provider_id: pid, model: mdl,
-        system_prompt: systemPrompt, user_message: userMessage,
+        system_prompt: systemPrompt, user_message: userMessage, temperature: resolvedTemperature,
+        signal: ctrl.signal,
       })
       console.log('[TeachingDocPanel] llmGenerate result', { hasContent: !!result?.content, contentLen: result?.content?.length, mounted: mountedRef.current })
       if (!mountedRef.current) return
@@ -149,10 +153,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       }
     } catch (e: any) {
       console.error('[TeachingDocPanel] generate error', e)
-      if (mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
+      if (e.name !== 'AbortError' && mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
       generatingRef.current = false
       if (mountedRef.current) setGenerating(false)
+      abortRef.current = null
     }
   }, [dataSource, model, prompt, skill, docType, projectId, stepKey, onRefresh])
 
@@ -199,8 +204,13 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     api.saveStep(projectId, MODEL_KEYS[docType], val)
   }, [projectId, docType])
 
-  // ── Expose triggerGenerate for batch (returns Promise for await) ──
-  useImperativeHandle(ref, () => ({ triggerGenerate: handleGenerate }), [handleGenerate])
+  const abortRef = useRef<AbortController | null>(null)
+
+  // ── Expose triggerGenerate + cancel for batch ──
+  useImperativeHandle(ref, () => ({
+    triggerGenerate: handleGenerate,
+    cancel: () => { abortRef.current?.abort(); setGenerating(false); generatingRef.current = false },
+  }), [handleGenerate])
 
   // ── Button helpers ──
   const getSaveLabel = () => {
@@ -218,9 +228,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   const color = DOC_COLORS[docType]
   const icon = DOC_ICONS[docType]
   const sourceText = {
-    video: steps.raw_video ? '已有内容' : '暂无内容',
-    text: steps.raw_text ? '已有内容' : '暂无内容',
-    file: steps.raw_file ? '已有内容' : '暂无内容',
+    video: (steps.raw_video || steps.step1_video) ? '已有内容' : '暂无内容',
+    text: (steps.raw_text || steps.step1_text) ? '已有内容' : '暂无内容',
+    file: (steps.raw_file || steps.step1_file) ? '已有内容' : '暂无内容',
   }
 
   const controls = (
@@ -249,9 +259,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         )}
       </select>
       <button className="btn btn-primary btn-sm w-full"
-        disabled={!getSourceText(dataSource) || !model || generating || batchGenerating}
+        disabled={!getSourceText(dataSource) || !model || generating}
         onClick={handleGenerate}>
-        {(generating || batchGenerating) ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
+        {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
       </button>
     </>
   )
