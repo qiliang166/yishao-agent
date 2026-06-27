@@ -75,10 +75,12 @@ def _safe_run_async(coro):
             try:
                 result[0] = loop.run_until_complete(coro)
             finally:
-                # Pump remaining callbacks before closing
-                loop.call_soon(lambda: None)
-                loop.run_until_complete(asyncio.sleep(0))
-                loop.close()
+                try:
+                    loop.call_soon(lambda: None)
+                    loop.run_until_complete(asyncio.sleep(0))
+                    loop.close()
+                except RuntimeError:
+                    pass  # Event loop already closed by httpx cleanup on Windows
         except Exception as e:
             error[0] = e
 
@@ -135,16 +137,65 @@ def _load_style_from_template(template_id: str = None) -> str:
 
 
 
+
+# In-memory status for PPT generation progress polling
+_ppt_status: dict = {}
+
+def get_ppt_status(project_id: str) -> dict | None:
+    """Return current PPT generation status for a project, or None if idle."""
+    return _ppt_status.get(project_id)
+
+
 def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                  output_dir: str = None, provider_id: str = "",
                  model: str = "", slide_plan: list = None, format: str = "svg",
-                 project_name: str = "", column_id: str = "") -> str:
+                 project_name: str = "", column_id: str = "",
+                 temperature: float = 0.3, project_id: str = "",
+                 temp_keyword: float = 0, temp_research: float = 0,
+                 temp_outline: float = 0, temp_fill: float = 0,
+                 temp_cards: float = 0, temp_html: float = 0,
+                 temp_svg_batch: float = 0, temp_svg_single: float = 0,
+                 temp_review: float = 0, temp_fix: float = 0,
+                 temp_holistic: float = 0, temp_holistic_fix: float = 0,
+                 temp_stage_outline: float = 0, temp_stage_generation: float = 0,
+                 temp_stage_review: float = 0) -> str:
     """Generate presentation from content. Default: SVG (PPT-Agent Bento Grid).
 
-    When provider+model provided, uses AI staged generation.
-    When format='pptx', falls back to legacy PPTX pipeline.
-    Returns (output_path, slide_data) — output_path is HTML path for SVG, PPTX path for PPTX.
-    """
+    All 12 stage temperatures follow the pattern: 0 = use `temperature` as fallback."""
+
+    def _t(val, default=0.3):
+        return val if val > 0 else temperature
+
+    st = dict(
+        keyword=_t(temp_keyword, 0.3),
+        research=_t(temp_research, 0.7),
+        outline=_t(temp_outline, 1.0),
+        fill=_t(temp_fill, 1.0),
+        cards=_t(temp_cards, 0.7),
+        html=_t(temp_html, 0.8),
+        svg_batch=_t(temp_svg_batch, 0.7),
+        svg_single=_t(temp_svg_single, 0.7),
+        review=_t(temp_review, 0.3),
+        fix=_t(temp_fix, 0.7),
+        holistic=_t(temp_holistic, 0.3),
+        holistic_fix=_t(temp_holistic_fix, 0.7),
+    )
+
+    # Stage-level overrides: when set, override all per-step temps in that stage
+    if temp_stage_outline > 0:
+        st.update(keyword=temp_stage_outline, research=temp_stage_outline,
+                  outline=temp_stage_outline, fill=temp_stage_outline)
+    if temp_stage_generation > 0:
+        st.update(cards=temp_stage_generation, html=temp_stage_generation,
+                  svg_batch=temp_stage_generation, svg_single=temp_stage_generation)
+    if temp_stage_review > 0:
+        st.update(review=temp_stage_review, fix=temp_stage_review,
+                  holistic=temp_stage_review, holistic_fix=temp_stage_review)
+
+    # Track status for progress polling
+    if project_id:
+        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成大纲...", "message": "AI 分析内容中"}
+
     # Build human-readable dir name: "{项目名}_{类型}" (e.g. "测试1_道术PPT")
     col_label_map = {"col4": "道术PPT", "col5": "研学PPT", "col3": "SOP课件", "col2": "SOP课件"}
     safe_proj = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip() if project_name else ""
@@ -227,7 +278,9 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                     except Exception:
                         pass
                     slide_data = _generate_slides_staged(provider_id, model, rules, content,
-                                                         col_prompt, col_skill)
+                                                         col_prompt, col_skill,
+                                                         temperature=temperature,
+                                                         st=st)
                     print(f"[PPT-DBG] AI result: {bool(slide_data)}, "
                           f"slides={len(slide_data) if slide_data else 0}", flush=True)
                     if not slide_data:
@@ -238,8 +291,52 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
         finally:
             db.close()
 
-    # ── SVG path (default: try AI-SVG direct first, fall back to code-rendered) ──
+    # ── HTML path (new two-phase pipeline: slides have 'html' field) ──
     if format != "pptx" and slide_data and isinstance(slide_data, list) and len(slide_data) > 0:
+        first = slide_data[0]
+        if isinstance(first, dict) and "html" not in first and "heading" in first and provider_id and model:
+            # Outline format — need to run Phase 5a (Structure) + Phase 5b (HTML)
+            print(f"[PPT-DBG] Outline input detected: {len(slide_data)} slides, running Structure+HTML", flush=True)
+            from services.llm_service import generate as llm_generate
+            structure = _stage2_structure(provider_id, model, llm_generate,
+                                           slide_data, style_id=style_id,
+                                           temperature=st['cards'])
+            if structure:
+                html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
+                                                      structure, style_id=style_id,
+                                                      temperature=st['html'])
+                if html_slides:
+                    slide_data = html_slides
+                    first = slide_data[0] if slide_data else {}
+        if isinstance(first, dict) and "html" in first:
+            # New HTML pipeline — slides already have complete HTML, just assemble
+            print(f"[PPT-DBG] HTML pipeline: {len(slide_data)} slides with inline HTML", flush=True)
+            title = first.get("heading", "") or "Presentation"
+
+            # Build output directory
+            html_dir = output_dir if output_dir else os.path.join(EXPORT_DIR, "html_decks")
+            if dir_name:
+                html_dir = os.path.join(html_dir, dir_name)
+            os.makedirs(html_dir, exist_ok=True)
+
+            deck_html = _assemble_html_deck(slide_data, title, style_id)
+            html_path = os.path.join(html_dir, "index.html")
+            with open(html_path, "w", encoding="utf-8") as f:
+                f.write(deck_html)
+            _logger.info(f"HTML deck written: {html_path}")
+
+            # Speaker notes
+            notes_path = os.path.join(html_dir, "speaker-notes.md")
+            try:
+                notes_md = _generate_speaker_notes(slide_data, title)
+                with open(notes_path, "w", encoding="utf-8") as f:
+                    f.write(notes_md)
+            except Exception as e:
+                _logger.warning(f"Speaker notes failed (non-critical): {e}")
+
+            return html_path, slide_data
+
+        # ── Old SVG path (legacy: slides have 'zones' field) ──
         print(f"[PPT-DBG] Rendering SVG deck: {len(slide_data)} slides, style={style_id}", flush=True)
         from services.svg_designer import DeckDesigner
         from services.llm_service import generate as llm_generate
@@ -258,7 +355,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                 try:
                     ai_svg_slides = _stage3_svg(provider_id, model, llm_generate,
                                                  slide_data, style_id=style_id,
-                                                 rules=rules)
+                                                 rules=rules, temperature=temperature,
+                                                 st=st)
                 except Exception as e:
                     print(f"[PPT-DBG] AI-SVG generation failed: {e}", flush=True)
 
@@ -344,9 +442,13 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
         os.makedirs(target_dir, exist_ok=True)
         filepath = os.path.join(target_dir, filename)
         prs.save(filepath)
+        if project_id:
+            _ppt_status.pop(project_id, None)
         return filepath, slide_data
 
     # No viable path
+    if project_id:
+        _ppt_status.pop(project_id, None)
     return None, None
 
 
@@ -536,7 +638,9 @@ def _web_search(query: str, max_results: int = 5) -> str:
         return ""
 
 
-def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: str) -> str:
+def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: str,
+                     temperature: float = 0.3,
+                     temp_keyword: float = 0, temp_research: float = 0) -> str:
     """Phase 2 (Research): Deep SOP content analysis — matches PPT-Agent research-core.
 
     PPT-Agent research-core uses agent-reach for web search, producing
@@ -564,7 +668,7 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
         keywords = []
         try:
             kw_resp = _safe_run_async(llm_generate(provider_id, model,
-                kw_system, kw_user, temperature=0.3))
+                kw_system, kw_user, temperature=temp_keyword or temperature))
             keywords = [l.strip() for l in kw_resp.strip().split("\n") if l.strip()][:5]
             # Clean: remove numbering/bullet prefixes
             keywords = [k.lstrip("0123456789.-•*# ") for k in keywords if len(k) > 2]
@@ -633,7 +737,7 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
 
     try:
         response = _safe_run_async(llm_generate(provider_id, model,
-            research_system, research_user, temperature=0.7))
+            research_system, research_user, temperature=temp_research or temperature))
         _logger.info(f"Phase 2 research: {len(response)} chars of analysis")
         return response
     except Exception as e:
@@ -642,22 +746,27 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
 
 
 def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_content: str,
-                            system_prompt: str = "", skill_template: str = "") -> list | None:
-    """Pipeline matching PPT-Agent Phases 2-6:
+                            system_prompt: str = "", skill_template: str = "",
+                            temperature: float = 0.3,
+                            st: dict = None) -> list | None:
+    """Two-phase HTML slide generation pipeline.
 
     Phase 2 (Research): Deep SOP analysis → research context.
     Phase 4 (Outline): Extract & organize content → outline with body text.
-    Phase 5+6 (Cards): AI selects layout + fills card content → structured data.
-    Rendering: svg_designer.render_deck() mechanically renders SVG from card data.
+    Phase 5a (Structure): AI plans slide types, layouts, card allocations — lightweight.
+    Phase 5b (HTML): Per-slide parallel HTML generation with design-system.md as guide.
 
-    AI does NOT write SVG. Code renders SVG.
-    """
+    AI generates complete inline-styled HTML. No JSON cards, no SVG code rendering."""
     from services.llm_service import generate as llm_generate
+    if st is None:
+        st = {}
 
     # ── Phase 2: Research (SOP deep analysis → research-context) ──
     research_context = ""
     try:
-        research_context = _phase2_research(provider_id, model, llm_generate, sop_content)
+        research_context = _phase2_research(provider_id, model, llm_generate, sop_content,
+                                            temp_keyword=st.get('keyword', temperature),
+                                            temp_research=st.get('research', temperature))
         if research_context:
             _logger.info(f"Phase 2 research done: {len(research_context)} chars")
     except Exception as e:
@@ -665,33 +774,198 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
 
     # ── Phase 4: Content extraction (outline + body per slide) ──
     stage1 = _stage1_content(provider_id, model, llm_generate, rules, sop_content,
-                             system_prompt, skill_template, research_context=research_context)
+                             system_prompt, skill_template, research_context=research_context,
+                             temp_outline=st.get('outline', temperature),
+                             temp_fill=st.get('fill', temperature))
     if not stage1:
         return None
     _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
 
-    # ── Phase 5+6: Card content filling (AI selects layout + structures cards) ──
+    # ── Two-Phase HTML Pipeline ──
     style_id = rules.get("style_id", "business")
-    stage2 = _stage2_cards(provider_id, model, llm_generate, rules,
-                           stage1, style_id=style_id)
-    if not stage2:
-        return None
-    _logger.info(f"Phase 5+6 cards: {len(stage2)} slides structured")
 
-    return stage2
+    # Phase 1: Structure planning (lightweight, one LLM call for all slides)
+    structure = _stage2_structure(provider_id, model, llm_generate,
+                                  stage1, style_id=style_id,
+                                  temperature=st.get('cards', temperature))
+    if not structure:
+        return None
+    _logger.info(f"Phase 1 structure: {len(structure)} slides planned")
+
+    # Phase 2: Per-slide HTML generation (parallel, design-system.md guided)
+    html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
+                                         structure, style_id=style_id,
+                                         temperature=st.get('html', temperature))
+    if not html_slides:
+        _logger.warning("Phase 2 HTML generation failed, using fallback")
+        html_slides = _fallback_stage1_to_html_slides(stage1, style_id)
+
+    _logger.info(f"Phase 2 HTML: {len(html_slides)} slides generated")
+    return html_slides
+
+
+def _generate_outline_only(provider_id, model, rules, sop_content,
+                           system_prompt="", skill_template="",
+                           temperature: float = 0.3,
+                           st: dict = None) -> tuple:
+    """Run only Phase 2 (Research) + Phase 4 (Outline+Content Fill).
+
+    Returns (outline_json, outline_text) — outline_json is the structured
+    JSON data, outline_text is natural-language text for human reading/editing.
+    """
+    from services.llm_service import generate as llm_generate
+    if st is None:
+        st = {}
+
+    research_context = ""
+    try:
+        research_context = _phase2_research(provider_id, model, llm_generate, sop_content,
+                                            temp_keyword=st.get('keyword', temperature),
+                                            temp_research=st.get('research', temperature))
+        if research_context:
+            _logger.info(f"Outline-only research done: {len(research_context)} chars")
+    except Exception as e:
+        _logger.warning(f"Outline-only research failed (proceeding without): {e}")
+
+    stage1 = _stage1_content(provider_id, model, llm_generate, rules, sop_content,
+                              system_prompt, skill_template, research_context=research_context,
+                              temp_outline=st.get('outline', temperature),
+                              temp_fill=st.get('fill', temperature))
+    if not stage1:
+        return None, ""
+
+    outline_text = _slides_to_human_text(stage1)
+    return stage1, outline_text
+
+
+def _slides_to_human_text(slides: list) -> str:
+    """Convert structured slide outline into natural-language text.
+
+    No field labels, no machine tokens — just readable paragraphs that
+    anyone can understand and edit.
+    """
+    type_labels = {
+        "cover": "封面", "toc": "目录", "section": "章节分隔", "chapter": "章节页",
+        "content": "内容页", "data": "数据页", "data_hero": "数据突出",
+        "technique": "技法页", "principle": "原则页", "process_flow": "流程图",
+        "process_timeline": "流程时间线", "timeline": "时间线",
+        "comparison": "对比页", "duo_compare": "双栏对比",
+        "table": "表格页", "grid_cards": "卡片组", "image_grid": "图片网格",
+        "quote": "引言页", "image_hero": "图片突出",
+        "food_archive": "美食档案", "skill_card": "技能卡片",
+        "troubleshoot": "问题排查",
+        "appendix": "附录", "copyright": "版权页",
+        "closing": "结尾页", "summary": "总结页",
+    }
+
+    parts = []
+    for s in slides:
+        seq = s.get("seq", len(parts) + 1)
+        heading = s.get("heading", "")
+        page_type = s.get("page_type", "content")
+        type_cn = type_labels.get(page_type, page_type)
+        lead = s.get("lead", "")
+        body = s.get("body", "")
+        key_points = s.get("key_points", [])
+        notes = s.get("notes", "")
+        kicker = s.get("kicker", "")
+
+        block = f"第{seq}页 — {type_cn}"
+        if kicker:
+            block += f" · {kicker}"
+        block += "\n"
+
+        if heading:
+            block += f"\n{heading}\n"
+        if lead:
+            block += f"\n{lead}\n"
+        if body:
+            block += f"\n{body}\n"
+        if key_points:
+            kp_text = " · ".join(str(kp) for kp in key_points if isinstance(kp, str) and kp.strip())
+            if kp_text:
+                block += f"\n关键要点：{kp_text}\n"
+        if notes:
+            block += f"\n（{notes}）\n"
+
+        parts.append(block.strip())
+
+    return "\n\n———\n\n".join(parts)
+
+
+def _human_text_to_json(provider_id, model, human_text: str, original_json: list) -> list | None:
+    """Use LLM to convert edited natural-language text back to structured JSON.
+
+    Low temperature (0.1) ensures near-deterministic output. The LLM is
+    instructed to preserve all content — no additions, deletions, or rewrites.
+    Falls back to original_json on any failure.
+    """
+    from services.llm_service import generate as llm_generate
+
+    if not provider_id or not model:
+        _logger.warning("No LLM configured for human_text_to_json — returning original JSON")
+        return original_json
+
+    # Provide original JSON as schema reference so LLM knows the exact structure
+    original_schema = json.dumps(original_json[:2], ensure_ascii=False, indent=2) if len(original_json) > 1 else json.dumps(original_json, ensure_ascii=False, indent=2)
+
+    # Extract unique page_types from original JSON as the allowed set
+    existing_types = set()
+    if isinstance(original_json, list):
+        for s in original_json:
+            if isinstance(s, dict) and s.get("page_type"):
+                existing_types.add(s["page_type"])
+    type_list = ", ".join(sorted(existing_types)) if existing_types else "cover, toc, content, summary"
+
+    system = f"""你是数据整理专家。你的唯一任务是将人类编辑的自然文本转回结构化 JSON。
+
+严格规则：
+1. 从原文中提取每一页的序号(seq)、类型(page_type)、标题(heading)、副标题(lead)、正文(body)、关键要点(key_points)、备注(notes)、章节标签(kicker)
+2. page_type 只使用: {type_list}
+3. 不新增任何内容，不删除任何内容，不改写原文
+4. 原文中没提到的字段不要编造
+5. key_points 是字符串数组
+6. 输出纯 JSON 数组，不要用 markdown 包裹"""
+
+    user = f"""## 原始 JSON 结构参考（字段名和类型以此为基准）
+```json
+{original_schema}
+```
+
+## 用户编辑后的文本（唯一内容来源）
+{human_text}
+
+## 任务
+将上述文本的每一页转为 JSON，保持原始结构的所有字段名和类型。输出纯 JSON 数组。"""
+
+    for attempt in range(2):
+        try:
+            response = _safe_run_async(llm_generate(provider_id, model, system, user, temperature=0.1))
+            response = _clean_json_response(response)
+            data = json.loads(response)
+            if isinstance(data, list) and len(data) > 0:
+                # Validate: every slide must have at least heading or body
+                valid = [s for s in data if isinstance(s, dict) and (s.get("heading") or s.get("body"))]
+                if len(valid) > 0:
+                    _logger.info(f"Human text → JSON: {len(valid)} slides converted (attempt {attempt+1})")
+                    return valid
+            _logger.warning(f"Human text → JSON attempt {attempt+1}: invalid output structure")
+        except Exception as e:
+            _logger.warning(f"Human text → JSON attempt {attempt+1} failed: {e}")
+
+    _logger.error("Human text → JSON: all attempts failed, returning original JSON as fallback")
+    return original_json
 
 
 def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
                     system_prompt: str = "", skill_template: str = "",
-                    research_context: str = "") -> list | None:
+                    research_context: str = "", temperature: float = 0.3,
+                    temp_outline: float = 0, temp_fill: float = 0) -> list | None:
     """Stage 1: Two-phase — outline first, then fill content per slide in batches.
 
     research_context from Phase 2 (research-core) provides pre-analyzed SOP structure,
     key insights, data points, and suggested focus areas.
     """
-    content_spec = rules.get("content_spec", "")
-    page_rhythm = rules.get("page_rhythm", {})
-
     # Load outline-architect prompt (UI-configurable via column_configs rules, disk fallback)
     outline_spec = ""
     if rules.get("outline_architect_prompt"):
@@ -716,8 +990,6 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     每页一主题，内容聚焦不堆砌。输出纯 JSON，不要用 markdown 包裹。"""
     )
 
-    rhythm_seq = " → ".join(page_rhythm.get("sequence", ["cover", "toc", "content*N", "summary"]))
-
     skill_block = ""
     if skill_template:
         skill_block = f"""## 幻灯片结构模板（必须严格遵循的页面结构和字段）
@@ -736,41 +1008,25 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 """
 
     # ── Phase 1: Generate outline (headings + page types + layout hints, lightweight) ──
-    outline_user = f"""{research_block}{skill_block}## 内容大纲（强制结构，每个 ### 节点至少一页）
-{content_spec if content_spec else '封面 + 目录 + 内容章节 + 总结'}
-
-## 页面结构约束（铁律）
-- 序列: {rhythm_seq}
-- 封面 1 页 + 目录 1 页 + 总结 1 页 = 至少 3 页结构页，不可删减
-- 大纲中每个 ### 技法节点 = 独立一页，多个技法 = 多页，禁止合并
-- 只有内容极丰富的单个技法才可拆分为多页
-- 每页只传达一个核心信息（4±1 个信息单元）
-- 视觉节奏：避免连续 3 页以上高密度，高低交错
-
-## SOP 文章（唯一内容来源）
+    style_id = rules.get("style_id", "business")
+    page_type_prompt = _build_page_type_prompt(style_id)
+    outline_user = f"""{research_block}{skill_block}## SOP 文章（唯一内容来源）
 {sop_content}
 
-## 输出格式（仅输出大纲，每页包含 heading, page_type, layout_hint, visual_weight, key_points）
-```json
-{{"slides": [
-  {{"seq":1,"heading":"页标题","page_type":"cover","layout_hint":"single_focus","visual_weight":"low","key_points":["要点1"]}},
-  {{"seq":2,"heading":"目录","page_type":"toc","layout_hint":"three_column","visual_weight":"low","key_points":["章节概览"]}},
-  ...
-]}}
-```
-铁律：
-- 大纲的每个 ### 节点至少对应一张幻灯片
-- page_type 从以下选择: cover, toc, content, technique, principle, process_flow, comparison, duo_compare, table, grid_cards, troubleshoot, summary, copyright, appendix
+{page_type_prompt}
+
+## 输出要求
+- 严格遵循上方「幻灯片结构模板」的栏目章节结构和 JSON 格式
+- 栏目结构、页面类型、硬约束均以模板为准，不得自行增删章节
 - layout_hint 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
 - visual_weight 从以下选择: low, medium, high
-- key_points 为每页 3-5 个关键点
 - 仅输出 JSON，不输出其他文字"""
 
     outline = None
     for attempt in range(2):
         try:
             response = _safe_run_async(llm_generate(provider_id, model,
-                base_system, outline_user, temperature=1.0))
+                base_system, outline_user, temperature=temp_outline or temperature))
             response = _clean_json_response(response)
             data = json.loads(response)
             slides = data.get("slides", data) if isinstance(data, dict) else data
@@ -816,7 +1072,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
         for attempt in range(2):
             try:
                 response = _safe_run_async(llm_generate(provider_id, model,
-                    fill_system, fill_user, temperature=1.0))
+                    fill_system, fill_user, temperature=temp_fill or temperature))
                 response = _clean_json_response(response)
                 data = json.loads(response)
                 filled = data.get("slides", data) if isinstance(data, dict) else data
@@ -840,24 +1096,22 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 
 def _load_svg_prompt_specs() -> tuple[str, str]:
-    """Load svg-generator.md and bento-grid-layout.md from ppt_agent/."""
-    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared", "references", "prompts")
-    prompts_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
+    """Load svg-generator.md and bento-grid-layout.md from data/prompts/."""
+    prompts_dir = os.path.join(BASE_DIR, "data", "prompts")
 
     def _read(filename):
-        for d in [ppt_agent_dir, prompts_dir]:
-            p = os.path.join(d, filename)
-            if os.path.exists(p):
-                with open(p, "r", encoding="utf-8") as f:
-                    return f.read()
+        p = os.path.join(prompts_dir, filename)
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                return f.read()
         return ""
 
     return _read("svg-generator.md"), _read("bento-grid-layout.md")
 
 
 def _load_outline_spec() -> str:
-    """Load outline-architect.md from ppt_engine/prompts/."""
-    prompts_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
+    """Load outline-architect.md from data/prompts/."""
+    prompts_dir = os.path.join(BASE_DIR, "data", "prompts")
     outline_path = os.path.join(prompts_dir, "outline-architect.md")
     if os.path.exists(outline_path):
         with open(outline_path, "r", encoding="utf-8") as f:
@@ -866,39 +1120,234 @@ def _load_outline_spec() -> str:
 
 
 def _load_style_yaml_text(style_id: str) -> str:
-    """Load a style YAML file as text for embedding in AI prompts."""
-    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared", "references", "styles")
-    legacy_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "styles")
-    for d in [ppt_agent_dir, legacy_dir]:
-        p = os.path.join(d, f"{style_id}.yaml")
-        if os.path.exists(p):
-            with open(p, "r", encoding="utf-8") as f:
-                return f.read()
+    """Load YAML structured data for a style.
+
+    Priority: 1) {style_id}/tokens.yaml (directory structure),
+    2) standalone {style_id}.yaml file in data/styles/.
+    """
+    import re
+    styles_dir = os.path.join(BASE_DIR, "data", "styles")
+    vi_dir = os.path.join(BASE_DIR, "data", "vi")
+
+    # 1) Directory structure: data/vi/{style_id}/tokens.yaml
+    tokens_path = os.path.join(vi_dir, style_id, "tokens.yaml")
+    if os.path.exists(tokens_path):
+        with open(tokens_path, "r", encoding="utf-8") as f:
+            return f.read()
+
+    # 2) Fall back to standalone YAML file
+    p = os.path.join(styles_dir, f"{style_id}.yaml")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
     return ""
 
 
+def _load_style_vi(style_id: str) -> str:
+    """Load the Visual Identity System document from data/vi/{style_id}/vi.md."""
+    vi_md_path = os.path.join(BASE_DIR, "data", "vi", style_id, "vi.md")
+    if os.path.exists(vi_md_path):
+        with open(vi_md_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def _load_style_prompt(style_id: str) -> str:
+    """Load the style-specific LLM persona + task prompt from data/vi/{style_id}/prompt.md."""
+    prompt_path = os.path.join(BASE_DIR, "data", "vi", style_id, "prompt.md")
+    if os.path.exists(prompt_path):
+        with open(prompt_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def _load_style_vi_section(style_id: str, section: str) -> str:
+    """Load a specific VI sub-file from data/vi/{style_id}/.
+
+    section: 'cover', 'content', 'data', or 'summary'.
+    Loads both vi.md (general) and the section-specific file, concatenated.
+    """
+    vi_dir = os.path.join(BASE_DIR, "data", "vi", style_id)
+    parts = []
+
+    # Always include general vi.md first
+    vi_md_path = os.path.join(vi_dir, "vi.md")
+    if os.path.exists(vi_md_path):
+        with open(vi_md_path, "r", encoding="utf-8") as f:
+            parts.append(f.read())
+
+    # Section-specific file — dynamic lookup
+    if section != "toc":
+        section_file = os.path.join(vi_dir, f"{section}.md")
+        if os.path.exists(section_file):
+            with open(section_file, "r", encoding="utf-8") as f:
+                parts.append(f.read())
+
+    if not parts:
+        return _load_style_vi(style_id)
+
+    return "\n\n---\n\n".join(parts)
+
+
+# Canonical page type order — follows document writing conventions (cover → content → closing)
+PAGE_TYPE_ORDER = [
+    "cover",           # 1. 封面 — 开场页
+    "toc",             # 2. 目录 — 内容导航
+    "section",         # 3. 章节分隔 — 章节过渡
+    "chapter",         # 4. 章节页 — 章节起始
+    "content",         # 5. 内容页 — 通用内容展示
+    "data",            # 6. 数据页 — 数据可视化
+    "data_hero",       # 7. 数据突出 — 核心指标卡片
+    "technique",       # 8. 技法页 — 方法步骤
+    "principle",       # 9. 原则页 — 核心理念
+    "process_flow",    # 10. 流程图 — 流程展示
+    "process_timeline",# 11. 流程时间线 — 时序流程
+    "timeline",        # 12. 时间线 — 时间轴
+    "comparison",      # 13. 对比页 — 多项对比
+    "duo_compare",     # 14. 双项对比 — 两项对比
+    "table",           # 15. 表格页 — 数据表格
+    "grid_cards",      # 16. 网格卡片 — 多卡片网格
+    "image_grid",      # 17. 图片网格 — 图片展示
+    "quote",           # 18. 引言页 — 引用/引言
+    "image_hero",      # 19. 图片突出 — 大图+文字
+    "food_archive",    # 20. 美食档案 — 菜品展示
+    "skill_card",      # 21. 技能卡片 — 技能展示
+    "troubleshoot",    # 22. 问题排查 — 排查指南
+    "appendix",        # 23. 附录页 — 补充参考资料
+    "copyright",       # 24. 版权页 — 版权信息
+    "closing",         # 25. 结尾页 — 感谢/结束
+    "summary",         # 26. 总结页 — 结尾收束
+]
+
+def _page_type_sort_key(ptype: str) -> int:
+    try:
+        return PAGE_TYPE_ORDER.index(ptype)
+    except ValueError:
+        return 99  # unknown types sort to end
+
+
+def _scan_vi_page_types(style_id: str) -> list[dict]:
+    """Read VI index.md to get the canonical page type list.
+
+    Parses the "页面类型" markdown table from index.md.
+    Only returns page types (excludes design principles and elements).
+    """
+    vi_dir = os.path.join(BASE_DIR, "data", "vi")
+    index_path = os.path.join(vi_dir, style_id, "index.md")
+
+    if not os.path.exists(index_path):
+        return _fallback_page_types()
+
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return _fallback_page_types()
+
+    # Parse the "页面类型" markdown table
+    types = []
+    in_page_type_section = False
+    for line in content.split("\n"):
+        line = line.strip()
+        if line.startswith("## 页面类型"):
+            in_page_type_section = True
+            continue
+        if in_page_type_section and line.startswith("## "):
+            break  # next section starts
+        if not in_page_type_section or not line.startswith("|") or "---" in line or "类型名" in line:
+            continue
+        # Parse: | cover | 封面 | 开场页... | cover.md |
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) >= 3:
+            types.append({
+                "type": cells[0],
+                "label": cells[1],
+                "purpose": cells[2],
+            })
+
+    if not types:
+        return _fallback_page_types()
+    return types
+
+
+def _fallback_page_types() -> list[dict]:
+    """Minimal page type set when VI directory doesn't exist."""
+    return [
+        {"type": "cover", "label": "封面", "purpose": "开场页，全屏视觉冲击"},
+        {"type": "toc", "label": "目录", "purpose": "内容导航与章节概览"},
+        {"type": "content", "label": "内容页", "purpose": "通用内容展示"},
+        {"type": "summary", "label": "总结页", "purpose": "结尾收束与核心要点回顾"},
+    ]
+
+
+def _build_page_type_prompt(style_id: str) -> str:
+    """Generate the page_type selection prompt block from VI index.md."""
+    types = _scan_vi_page_types(style_id)
+    lines = [
+        "## 可用页面类型（来源：VI 索引 index.md）",
+        f"当前模板: {style_id}，共 {len(types)} 种页面类型：",
+        "",
+    ]
+    for t in types:
+        lines.append(f"- **{t['type']}**（{t['label']}）：{t['purpose']}")
+    lines.extend([
+        "",
+        "## 设计规范来源",
+        "所有设计规范均从 VI 索引文件（index.md）获取：",
+        "- **页面类型详细规范**：读取对应的页面类型 .md 文件（如 cover.md、content.md 等）",
+        "- **设计原则**（7项）：principles.md / consistency.md / richness.md / checklist.md / images.md / data_rules.md / decorations.md",
+        "- **设计参数**（8项）：colors.md / typography.md / card_styles.md / charts.md / layouts.md / card_roles.md / chart_decision.md / icons.md",
+        "",
+        "## 规则",
+        "1. 只使用上述 26 种类型，不要编造新类型。",
+        "2. 为每页选择最匹配内容特征的 page_type。",
+        "3. 需要某类型的详细布局规范时，读取该类型对应的 .md 文件。",
+        "4. 需要设计参数（颜色/字号/圆角等）时，读取设计元素对应的 .md 文件。",
+    ])
+    return "\n".join(lines)
+
 def _load_cognitive_spec() -> str:
-    """Load cognitive-design-principles.md from ppt_agent/."""
-    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "_shared", "references", "prompts")
-    legacy_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
-    for d in [ppt_agent_dir, legacy_dir]:
-        p = os.path.join(d, "cognitive-design-principles.md")
-        if os.path.exists(p):
-            with open(p, "r", encoding="utf-8") as f:
-                return f.read()
+    """Load cognitive-design-principles.md from data/prompts/."""
+    p = os.path.join(BASE_DIR, "data", "prompts", "cognitive-design-principles.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
     return ""
 
 
 def _load_reviewer_spec() -> str:
-    """Load reviewer.md from ppt_agent/ — PPT-Agent review-core's reviewer prompt."""
-    ppt_agent_dir = os.path.join(BASE_DIR, "ppt_agent", "skills", "gemini-cli", "references", "roles")
-    prompts_dir = os.path.join(BASE_DIR, "services", "ppt_engine", "prompts")
-    for d in [ppt_agent_dir, prompts_dir]:
-        p = os.path.join(d, "reviewer.md")
-        if os.path.exists(p):
-            with open(p, "r", encoding="utf-8") as f:
-                return f.read()
+    """Load reviewer.md from data/prompts/."""
+    p = os.path.join(BASE_DIR, "data", "prompts", "reviewer.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
     return ""
+
+
+def _load_design_system() -> str:
+    """Load design-system.md — the HTML slide design guide for LLM."""
+    path = os.path.join(BASE_DIR, "data", "prompts", "design-system.md")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def _resolve_font_range(style_yaml_text: str) -> dict:
+    """Extract font size thresholds from style YAML for the LLM prompt."""
+    import yaml
+    try:
+        data = yaml.safe_load(style_yaml_text)
+        typography = data.get("typography", {})
+        return {
+            "h1": typography.get("cover_title", {}).get("size", "58-65px"),
+            "h2": typography.get("page_title", {}).get("size", "36-44px"),
+            "h3": typography.get("card_title", {}).get("size", "22-24px"),
+            "body": typography.get("body", {}).get("size", "16-18px"),
+            "caption": typography.get("caption", {}).get("size", "12-14px"),
+        }
+    except Exception:
+        return {}
 
 
 def _validate_cards(slides: list) -> list[str]:
@@ -913,11 +1362,13 @@ def _validate_cards(slides: list) -> list[str]:
         "hero_grid", "mixed_grid", "dashboard", "timeline", "horizontal_split", "full_bleed"
     }
     VALID_TYPES = {
-        "cover", "toc", "content", "technique", "principle", "process_flow",
-        "comparison", "duo_compare", "table", "grid_cards", "troubleshoot",
-        "summary", "copyright", "appendix", "data_hero", "timeline", "section",
-        "quote", "closing", "chapter", "image_hero", "food_archive", "skill_card",
-        "image_grid", "process_timeline"
+        "cover", "toc", "section", "chapter",
+        "content", "data", "data_hero",
+        "technique", "principle", "process_flow", "process_timeline", "timeline",
+        "comparison", "duo_compare", "table", "grid_cards", "image_grid",
+        "quote", "image_hero", "food_archive", "skill_card",
+        "troubleshoot", "appendix", "copyright",
+        "closing", "summary",
     }
     issues = []
     for i, slide in enumerate(slides):
@@ -972,7 +1423,7 @@ def _validate_cards(slides: list) -> list[str]:
 
 
 def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
-                   style_id: str = "business") -> list | None:
+                   style_id: str = "business", temperature: float = 0.3) -> list | None:
     """Phase 5+6: AI selects Bento Grid layout + fills card content per slide.
 
     Input: stage1_slides [{seq, heading, page_type, layout_hint, body, ...}, ...]
@@ -981,32 +1432,42 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
     Includes validation loop: generate → validate → if issues → fix (max 2 rounds).
     On generation failure, converts raw zones as fallback.
     """
-    svg_spec, bento_spec = _load_svg_prompt_specs()
-    cognitive_spec = _load_cognitive_spec()
-    reviewer_spec = _load_reviewer_spec()
+    design_system = _load_design_system()
     style_yaml = _load_style_yaml_text(style_id)
+    cognitive_spec = _load_cognitive_spec()
 
     spec_version = rules.get("spec_version", "2.2.1")
 
-    # ── System prompt for card generation (PPT-Agent design-core + reviewer) ──
-    cards_system = f"""{svg_spec}
+    # ── System prompt: AI as designer with strict structural rules ──
+    cards_system = f"""你是一位演示文稿设计师。你必须严格按照设计系统为每页幻灯片生成结构化的卡片数据。
 
-{bento_spec}
+{design_system}
+
+## 风格 Token（颜色/字体/阴影/圆角/渐变）
+```yaml
+{style_yaml}
+```
 
 ## 认知设计原则
 {cognitive_spec}
 
-## 设计评审标准（用于自检）
-{reviewer_spec}
+## 你的任务
 
-## 风格 Token（颜色/字体/阴影/圆角）
-{style_yaml}
+根据大纲内容，为每页幻灯片做出设计决策：
+1. **选择布局** — 根据内容语义从 10 种布局中选择（参考第十节决策树），封面必须用 full_bleed
+2. **确定卡片** — 按布局→卡片映射表确定 role 和数量（参考第十一节卡片目录），每页 ≤5 张
+3. **数据可视化** — 识别大纲中的数字并转化为 chart（参考第十二节 chart 决策树），有数字必有图表
+4. **色彩分配** — 遵循色彩角色分工：accent=页面框架装饰，chart_colors=卡片色条轮换，primary=标题
+5. **文案精炼** — 将大纲 body 文字转化为精炼的卡片 title（≤48字）+ body
 
-你是演示文稿设计专家。根据大纲内容和以上设计规范：
-1. 为每页选择合适的 Bento Grid 布局
-2. 将内容转化为结构化的卡片数据（role, title, body, chart）
-3. 每页最多 5 张卡片（Miller's Law: 4±1 个信息单元）
-4. 封面最多 3 个信息单元
+## 硬性规则
+
+- 封面页 layout=full_bleed，cards ≤3 个，禁止 hero 卡带 chart_colors 色块背景
+- 每卡必有 role + (title 或 body 或 chart)
+- 卡片色条颜色按 chart_colors[0]→[1]→[2]→[3]→[4] 轮换，禁止所有卡片同一颜色
+- 数据页（含 %/数字/占比）→ 优先 dashboard 或 mixed_grid 布局
+- 对比内容（优劣/A vs B）→ two_column 布局
+- 流程/步骤 → timeline 布局
 
 输出纯 JSON，不要用 markdown 包裹。"""
 
@@ -1044,7 +1505,7 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
 
 铁律：
 - 只输出此批次的幻灯片，按 seq 顺序
-- type 从以下选择: cover, toc, content, technique, principle, process_flow, comparison, duo_compare, table, grid_cards, summary, data_hero, troubleshoot, quote, closing, section, appendix, copyright
+{_build_page_type_prompt(style_id)}
 - layout 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
 - 每卡必有 role (hero/metric/card_0/card_1/left/right/cell_0_0 等)
 - 每卡必有 title 或 body 或 chart
@@ -1058,7 +1519,7 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
         while fix_round <= MAX_FIX_ROUNDS and not generated:
             try:
                 response = _safe_run_async(llm_generate(provider_id, model,
-                    cards_system, cards_user, temperature=1.0))
+                    cards_system, cards_user, temperature=temperature))
                 response = _clean_json_response(response)
                 data = json.loads(response)
                 slides = data.get("slides", data) if isinstance(data, dict) else data
@@ -1179,6 +1640,609 @@ def _fallback_zones_to_cards(slides: list) -> list:
     return result
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Two-Phase HTML Pipeline (replaces old JSON card → SVG flow)
+# Phase 1: Structure planning (lightweight, one call)
+# Phase 2: Per-slide HTML generation (parallel, design-system.md guided)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _fallback_stage1_structure(stage1_slides: list) -> list:
+    """Build slide structure from stage1 outline deterministically — no LLM needed."""
+    fallback_layouts = [
+        "full_bleed", "three_column", "two_column", "hero_grid",
+        "mixed_grid", "dashboard", "two_column_asymmetric", "full_bleed"
+    ]
+    result = []
+    for s in stage1_slides:
+        if not isinstance(s, dict):
+            continue
+        seq = s.get("seq", 0)
+        layout_idx = (seq - 1) % len(fallback_layouts)
+        ptype = s.get("page_type", "content")
+        heading = s.get("heading", "")
+        cards = [{"role": "hero", "content_hint": heading}]
+        has_chart = any(kw in (heading + s.get("body", ""))
+                       for kw in ["%", "数据", "指标", "占比", "率", "值", "量"])
+        result.append({
+            "seq": seq,
+            "type": ptype,
+            "layout": s.get("layout_hint") or fallback_layouts[layout_idx],
+            "heading": heading,
+            "body": s.get("body", ""),
+            "key_points": s.get("key_points", []),
+            "kicker": s.get("kicker", ""),
+            "lead": s.get("lead", ""),
+            "notes": s.get("notes", ""),
+            "cards": cards,
+            "has_chart": has_chart,
+            "chart_hint": "big_number" if has_chart else "",
+        })
+    return result
+
+
+def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
+                      style_id: str = "business", temperature: float = 0.3) -> list | None:
+    """Phase 1 of two-phase HTML pipeline: Lightweight structure planning.
+
+    One LLM call for ALL slides. AI decides: slide types, layouts, card count/roles,
+    whether each slide needs a chart. Output is a structural blueprint that Phase 2
+    uses to generate per-slide HTML.
+
+    This is intentionally lightweight — no JSON card filling, just structure decisions.
+    """
+    design_system = _load_design_system()
+    style_yaml = _load_style_yaml_text(style_id)
+    style_vi = _load_style_vi(style_id)
+    style_prompt = _load_style_prompt(style_id)
+
+    if style_prompt:
+        persona_block = style_prompt
+    else:
+        persona_block = "你是演示文稿结构规划师。你必须严格按照以下设计系统为每页幻灯片做出结构设计决策。"
+
+    vi_block = ""
+    if style_vi:
+        vi_block = f"""
+
+## 视觉识别系统 (VIS) — 本风格的权威视觉规范
+{style_vi}
+"""
+
+    system = f"""{persona_block}
+
+{design_system}
+
+## 风格 Token
+```yaml
+{style_yaml}
+```
+{vi_block}
+## 输出格式要求
+
+为每页输出结构决策：
+{_build_page_type_prompt(style_id)}
+2. layout: 从第十节布局库中选择
+3. cards: 每张卡指定 role 和 content_hint
+4. has_chart: 有数字/百分比时 = true
+5. chart_hint: big_number/donut/bar/progress_bar/timeline/sparkline
+
+页面数量严格等于大纲给出的页数，不增不减。
+
+输出纯 JSON，不要用 markdown 包裹。"""
+
+    outline_json = json.dumps(stage1_slides, ensure_ascii=False, indent=2)
+    user = f"""## 大纲（{len(stage1_slides)} 页）
+{outline_json}
+
+## 任务
+为每页做出结构决策，输出格式：
+```json
+{{"slides": [
+  {{"seq":1,"type":"cover","layout":"full_bleed","cards":[{{"role":"hero","content_hint":"主标题+副标题"}}],"has_chart":false,"chart_hint":""}},
+  {{"seq":2,"type":"content","layout":"hero_grid","cards":[{{"role":"hero","content_hint":"核心观点"}},{{"role":"metric","content_hint":"关键指标"}}],"has_chart":true,"chart_hint":"big_number"}},
+  ...
+]}}
+```
+
+严格遵守设计系统中的所有规则。仅输出 JSON。"""
+
+    for attempt in range(2):
+        try:
+            response = _safe_run_async(llm_generate(provider_id, model,
+                system, user, temperature=temperature))
+            response = _clean_json_response(response)
+            data = json.loads(response)
+            slides = data.get("slides", data) if isinstance(data, dict) else data
+            if isinstance(slides, list) and len(slides) > 0:
+                # Merge with stage1 content
+                for s in slides:
+                    seq = s.get("seq", 0)
+                    s1 = next((x for x in stage1_slides if x.get("seq") == seq), None)
+                    if s1:
+                        s["heading"] = s1.get("heading", "")
+                        s["body"] = s1.get("body", "")
+                        s["key_points"] = s1.get("key_points", [])
+                        s["kicker"] = s1.get("kicker", "")
+                        s["lead"] = s1.get("lead", "")
+                        s["notes"] = s1.get("notes", "")
+                _logger.info(f"Stage 2 structure: {len(slides)} slides planned "
+                           f"({sum(1 for s in slides if s.get('has_chart'))} with charts)")
+                return slides
+        except Exception as e:
+            _logger.warning(f"Stage 2 structure attempt {attempt+1} failed: {e}")
+
+    # Fallback: deterministic structure from stage1
+    _logger.info("Stage 2 structure: using deterministic fallback")
+    return _fallback_stage1_structure(stage1_slides)
+
+
+def _fallback_single_slide_html(slide: dict, style_id: str) -> dict:
+    """Generate minimal HTML for a single slide when AI generation fails."""
+    seq = slide.get("seq", 0)
+    stype = slide.get("type", "content")
+    layout = slide.get("layout", "hero_grid")
+    heading = slide.get("heading", "Untitled")
+    body = slide.get("body", "")
+    kicker = slide.get("kicker", "")
+    lead = slide.get("lead", "")
+    key_points = slide.get("key_points", [])
+
+    body_html = ""
+    if body:
+        body_html = f'<p style="font-size:18px;line-height:1.7;color:#444;margin:0 0 16px">{body[:500]}</p>'
+    if key_points:
+        pts = "".join(f'<li style="font-size:16px;line-height:1.6;margin-bottom:6px">{kp}</li>'
+                      for kp in key_points[:5] if isinstance(kp, str))
+        body_html += f'<ul style="padding-left:20px;margin:0">{pts}</ul>'
+
+    kicker_html = f'<div style="font-size:14px;color:#888;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">{kicker}</div>' if kicker else ""
+    lead_html = f'<div style="font-size:20px;color:#666;margin-bottom:24px">{lead}</div>' if lead else ""
+
+    html = f"""<section style="width:1280px;height:720px;background:#fff;position:relative;overflow:hidden;font-family:system-ui,-apple-system,sans-serif">
+<div style="position:absolute;top:0;left:0;right:0;height:4px;background:#2563eb"></div>
+<div style="padding:60px 80px 40px">
+{kicker_html}
+<h1 style="font-size:38px;font-weight:700;color:#1e293b;margin:0 0 8px;letter-spacing:-0.3px">{heading}</h1>
+<div style="width:40px;height:3px;background:#2563eb;border-radius:2px;margin-bottom:32px"></div>
+{lead_html}
+{body_html}
+</div>
+<div style="position:absolute;bottom:28px;right:48px;display:flex;align-items:center;gap:8px;font-size:13px;color:#94a3b8">
+<span style="width:6px;height:6px;border-radius:50%;background:#2563eb"></span>
+{seq}
+</div>
+</section>"""
+
+    return {"seq": seq, "type": stype, "layout": layout, "html": html}
+
+
+def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
+                           style_id: str = "business", parallel: int = 3,
+                           temperature: float = 0.3) -> list | None:
+    """Phase 2 of two-phase HTML pipeline: Per-slide parallel HTML generation.
+
+    Each slide gets its own LLM call with the full design-system.md as the design guide.
+    Calls run in parallel (default 3 at a time) via ThreadPoolExecutor.
+
+    LLM generates complete inline-styled HTML for a 1280x720 slide section.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import re
+
+    design_system = _load_design_system()
+    style_yaml = _load_style_yaml_text(style_id)
+    font_range = _resolve_font_range(style_yaml)
+    style_vi_base = _load_style_vi(style_id)         # general vi.md only
+    style_prompt = _load_style_prompt(style_id)
+
+    if not design_system:
+        _logger.error("design-system.md not found — cannot generate HTML slides")
+        return None
+
+    font_info = ""
+    if font_range:
+        font_info = "\n".join(f"- {k}: {v}" for k, v in font_range.items())
+        font_info = f"\n## 字号参考（从 style YAML 提取）\n{font_info}"
+
+    if style_prompt:
+        persona_block = style_prompt
+    else:
+        persona_block = "你是演示文稿设计艺术总监。你必须严格按照《幻灯片 HTML 设计系统 v2》为每一页生成完整的 HTML。"
+
+    vi_block = ""
+    if style_vi_base:
+        vi_content = style_vi_base[:6000]
+        vi_block = f"""
+
+## 视觉识别系统 (VIS) — 通用规范（色彩、排版、卡片、图标 — 逐条逐一精确执行）
+{vi_content}
+"""
+
+    system = f"""{persona_block}
+
+## 设计系统（唯一权威来源，逐条遵守）
+
+{design_system[:15000]}
+
+## 风格 Token
+```yaml
+{style_yaml[:4000]}
+```
+{font_info}
+{vi_block}
+## 技术约束（非设计规则，仅限输出格式和工程限制）
+
+- 尺寸: width:1280px; height:720px, position:relative, overflow:hidden
+- 安全区: 所有内容必须在 (60,60) 到 (1220,660) 范围内，底部 60px 预留给页码标记
+- 样式: 全部内联（inline style），禁止 class/id/<style>/@import/@font-face 标签
+- 背景: 使用 style YAML 的 background 色铺满 viewport
+- 字体: 使用 typography token 中的字体族
+- 全部 CSS 属性必须带单位（px），不完整代码禁止输出
+- 禁止输出 <!DOCTYPE html>、<html>、<head>、<body>、<title>、<meta>、<link> 标签
+- 禁止输出页码元素（页码由管线统一注入）
+- 你的输出只包含一个 div 容器（width:1280px;height:720px）及其所有子元素
+
+## 间距硬约束（违反即错误）
+- 数字下方的标签 margin-top ≥ 12px（禁止 4/6/8px）
+- SVG 图标与下方内容 margin-bottom ≥ 20px
+- 卡片内标题与正文间距 ≥ 12px
+- 相邻独立元素间距 ≥ 16px
+- line-height 禁止使用 1px 作为可见文字的行高；正文 1.6-1.8，标题 1.15-1.25，装饰大字 ≥ 0.15
+
+## 画布密度硬约束（违反即设计失败）
+- 内容区 (y:60-660, x:60-1220) 不得有连续 >80px 的空白区域
+- 页面下方留白 → 必须添加图表 / 插图 / SVG 装饰填充
+- 卡片区占画布 55-70%，不足 → 扩大卡片或添加装饰插图
+- 不确定加什么时：有数据→图表，有流程→timeline，有对比→对照图，以上均不适用→SVG 主题插画
+
+所有设计规则（色彩、排版、卡片、装饰、图表、图层结构、封面规则、字号下限）均已在《设计系统》中定义，此处不重复。严格遵守设计系统即可。
+
+输出一个 HTML 代码块，用 ```html ... ``` 包裹。仅输出 HTML。"""
+
+    total = len(structure_slides)
+
+    def _gen_one(slide, idx):
+        seq = slide.get("seq", idx + 1)
+        stype = slide.get("type", "content")
+        layout = slide.get("layout", "hero_grid")
+        heading = slide.get("heading", "")
+        body = slide.get("body", "")
+        key_points = slide.get("key_points", [])
+        kicker = slide.get("kicker", "")
+        lead = slide.get("lead", "")
+        cards = slide.get("cards", [])
+        has_chart = slide.get("has_chart", False)
+        chart_hint = slide.get("chart_hint", "")
+        notes = slide.get("notes", "")
+
+        content_parts = [
+            f"页码: {seq}/{total}",
+            f"类型: {stype}",
+            f"布局: {layout}",
+            f"标题: {heading}",
+        ]
+        if kicker:
+            content_parts.append(f"章节标签: {kicker}")
+        if lead:
+            content_parts.append(f"副标题: {lead}")
+        if body:
+            content_parts.append(f"正文内容: {body[:1000]}")
+        if key_points:
+            content_parts.append(f"关键点: {'; '.join(str(kp) for kp in key_points[:5])}")
+        if cards:
+            cards_desc = "; ".join(
+                f"[{c.get('role','card')}] {c.get('content_hint','')}" for c in cards)
+            content_parts.append(f"卡片分配: {cards_desc}")
+        if notes:
+            content_parts.append(f"备注: {notes[:300]}")
+        if has_chart:
+            content_parts.append(
+                f"需要数据图表: {chart_hint or '根据内容中的数据选择合适的图表类型(big_number/donut/bar/progress_bar)'}")
+
+        # Append slide-type-specific VI section
+        vi_section = _load_style_vi_section(style_id, stype)
+        if vi_section:
+            content_parts.append(f"\n## 当前幻灯片类型 ({stype}) 专属视觉规范（叠加通用规范之上，逐条执行）\n{vi_section[:4000]}")
+
+        user = "\n".join(content_parts)
+
+        for attempt in range(2):
+            try:
+                response = _safe_run_async(llm_generate(provider_id, model,
+                    system, user, temperature=temperature))
+                # Extract HTML
+                m = re.search(r'```html\s*\n(.*?)\n```', response, re.DOTALL)
+                if m:
+                    html = m.group(1).strip()
+                else:
+                    m = re.search(r'(<section[\s\S]*?</section>)', response, re.IGNORECASE)
+                    if m:
+                        html = m.group(1).strip()
+                    else:
+                        html = response.strip()
+                        if html.startswith("```"):
+                            html = re.sub(r'^```\w*\n?', '', html)
+                            html = re.sub(r'\n?```$', '', html)
+
+                if html and len(html) > 300:
+                    # Post-process: fix common LLM HTML errors
+                    html = _fix_llm_html_errors(html)
+                    # Check for truncation: HTML must end with a properly closed tag
+                    stripped = html.rstrip()
+                    if not stripped.endswith('>'):
+                        _logger.warning(f"Slide {seq} attempt {attempt+1}: "
+                                        f"truncated (ends with '{stripped[-50:]}')")
+                        continue  # retry
+                    _logger.info(f"Slide {seq}: HTML {len(html)} chars")
+                    return {"seq": seq, "type": stype, "layout": layout, "html": html}
+                else:
+                    _logger.warning(f"Slide {seq} attempt {attempt+1}: HTML too short ({len(html)} chars)")
+            except Exception as e:
+                _logger.warning(f"Slide {seq} HTML attempt {attempt+1} failed: {e}")
+
+        _logger.warning(f"Slide {seq}: all attempts failed, using fallback")
+        return _fallback_single_slide_html(slide, style_id)
+
+    _logger.info(f"Stage 2 HTML: dispatching {total} slides in parallel (workers={parallel})")
+    t0 = __import__("time").time()
+
+    result = []
+    with ThreadPoolExecutor(max_workers=parallel) as ex:
+        futures = {ex.submit(_gen_one, s, i): i for i, s in enumerate(structure_slides)}
+        for f in as_completed(futures):
+            try:
+                r = f.result()
+                if r:
+                    result.append(r)
+            except Exception as e:
+                _logger.error(f"Slide HTML generation crashed: {e}")
+
+    elapsed = __import__("time").time() - t0
+    result.sort(key=lambda s: s.get("seq", 0))
+    _logger.info(f"Stage 2 HTML: {len(result)}/{total} slides generated in {elapsed:.1f}s")
+    return result if result else None
+
+
+def _fallback_stage1_to_html_slides(stage1_slides: list, style_id: str = "business") -> list:
+    """Convert stage1 outline directly to HTML slides — fallback when AI HTML fails."""
+    structure = _fallback_stage1_structure(stage1_slides)
+    result = []
+    for s in structure:
+        result.append(_fallback_single_slide_html(s, style_id))
+    return result
+
+
+def _fix_llm_html_errors(html: str) -> str:
+    """Fix common LLM HTML generation mistakes.
+
+    1. Missing px units on CSS position/size properties (e.g., top:28 → top:28px)
+    2. <!DOCTYPE html> or <html>/<head>/<body> tags inside slide content
+    3. Truncated content ending mid-tag
+    """
+    import re
+
+    # ── 1. Add missing px units ──
+    # CSS properties that require length units for non-zero values.
+    # Careful: don't add px to z-index, opacity, font-weight, flex, order, etc.
+    dim_props = r'(?:top|right|bottom|left|width|height|min-width|max-width|min-height|max-height|margin|margin-top|margin-right|margin-bottom|margin-left|padding|padding-top|padding-right|padding-bottom|padding-left|font-size|border-radius|gap|row-gap|column-gap|letter-spacing|border-width|outline-width|text-indent|word-spacing)'
+    # Match: prop: NUMBER (not followed by a unit or another digit)
+    html = re.sub(
+        rf'({dim_props})\s*:\s*(\d+)\s*(?=[;!"\'>\s])',
+        r'\1: \2px',
+        html
+    )
+
+    # ── 2. Strip DOCTYPE and outer HTML structure if LLM generated a full page ──
+    html = re.sub(r'<!DOCTYPE\s+html[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?html[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?head[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'</?body[^>]*>', '', html, flags=re.IGNORECASE)
+    # Remove <title>, <meta>, <link> tags the LLM might generate
+    html = re.sub(r'<title[^>]*>.*?</title>', '', html, flags=re.IGNORECASE | re.DOTALL)
+    html = re.sub(r'<meta[^>]*>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'<link[^>]*>', '', html, flags=re.IGNORECASE)
+
+    # ── 3. Fix truncated ending (content ending mid-tag) ──
+    # If the HTML ends with an unclosed tag or mid-attribute, remove the fragment
+    last_gt = html.rfind('>')
+    last_lt = html.rfind('<')
+    if last_lt > last_gt:
+        # Content ends inside a tag — truncate to last complete tag
+        html = html[:last_gt + 1]
+
+    # ── 4. Detect truncated style attributes (e.g., style="font-size</div>) ──
+    # The last style=" in the HTML should have a closing " before the next >
+    last_style = html.rfind('style="')
+    if last_style > 0:
+        after = html[last_style + 7:]
+        close_quote = after.find('"')
+        next_gt = after.find('>')
+        # If the quote never closes, or > comes before ", the style is broken
+        if close_quote < 0:
+            html = html[:last_style]
+        elif next_gt > 0 and next_gt < close_quote:
+            # "font-size</div> — style ends without value or closing quote
+            html = html[:last_style]
+
+    # ── 5. Fix accent bar border-radius mismatch ──
+    # A 4px-wide left-edge strip with its own border-radius can never
+    # geometrically match the parent card's corner curves.
+    html = re.sub(
+        r'border-radius:\s*\d+px\s+0\s+0\s+\d+px\s*;?',
+        '',
+        html
+    )
+    # Fix card containers: position:relative is required so absolute-positioned
+    # accent bars inside the card use the card as their containing block.
+    # overflow:hidden clips them to the card's rounded corners.
+    def _fix_card_container(m):
+        tag = m.group(0)
+        if 'position:' not in tag:
+            tag = tag.replace(
+                'background:#1e293b;',
+                'position:relative;background:#1e293b;'
+            )
+        if 'overflow:' not in tag:
+            tag = tag.replace('border-radius:', 'overflow:hidden;border-radius:')
+        return tag
+    html = re.sub(
+        r'<div[^>]*background:\s*#1e293b[^>]*border-radius:\s*\d+px[^>]*>',
+        _fix_card_container,
+        html
+    )
+
+    # ── 6. Enforce minimum font-size 14px ──
+    def _bump_font_size(m):
+        sz = int(m.group(1))
+        if sz < 14:
+            return f'font-size:14px'
+        return m.group(0)
+    html = re.sub(r'font-size:(\d+)px', _bump_font_size, html)
+
+    # ── 7. Fix dangerous line-height: 1px on visible elements ──
+    # AI sometimes generates line-height:1px on decorative text, causing overlap.
+    # Replace with a safe minimum. Only fix when the same element has visible font-size.
+    def _fix_line_height(m):
+        tag = m.group(0)
+        # Check if the same style attr has a font-size that's visible (>20px)
+        fs_match = re.search(r'font-size:\s*(\d+)px', tag)
+        if fs_match and int(fs_match.group(1)) > 20:
+            # Large decorative text: line-height:1 is safe (prevents overlap)
+            return re.sub(r'line-height:\s*1px', 'line-height:1', tag)
+        else:
+            # Small text or unknown: use safe 1.2
+            return re.sub(r'line-height:\s*1px', 'line-height:1.2', tag)
+    html = re.sub(
+        r'<[^>]*line-height:\s*1px[^>]*>',
+        _fix_line_height,
+        html
+    )
+
+    # ── 8. Enforce minimum margin-top: 4px and 6px are always too small at 1280x720 ──
+    html = re.sub(r'margin-top:\s*4px', 'margin-top:12px', html)
+    html = re.sub(r'margin-top:\s*6px', 'margin-top:12px', html)
+
+    # ── 9. Fix SVG icon margin-bottom too small ──
+    # Icons before numbers need ≥20px gap
+    def _fix_icon_margin(m):
+        tag = m.group(0)
+        mb_match = re.search(r'margin-bottom:\s*(\d+)px', tag)
+        if mb_match and int(mb_match.group(1)) < 20:
+            tag = tag.replace(mb_match.group(0), 'margin-bottom:20px')
+        return tag
+    html = re.sub(
+        r'<svg[^>]*margin-bottom:\s*\d+px[^>]*>',
+        _fix_icon_margin,
+        html
+    )
+
+    return html
+
+
+def _assemble_html_deck(slides: list, title: str = "Presentation",
+                        style_id: str = "business") -> str:
+    """Wrap individual slide HTML sections into a complete HTML document.
+
+    Also injects unified page numbers and strips AI-generated ones.
+    """
+    import re
+
+    valid_slides = [s for s in slides if s.get("html")]
+    total = len(valid_slides)
+
+    wrapped_parts = []
+    for i, s in enumerate(slides):
+        html = s.get("html", "")
+        if not html:
+            continue
+        slide_num = i + 1
+
+        # Strip AI-generated page number divs (position:absolute + bottom: + right: + XX/YY)
+        html = re.sub(
+            r'<div[^>]*position:\s*absolute[^>]*bottom:\s*\d+px[^>]*right:\s*\d+px[^>]*>.*?\d{1,2}\s*/\s*\d{1,2}.*?</div>',
+            '', html, flags=re.DOTALL
+        )
+
+        # Inject unified page number (skip cover slide)
+        if slide_num > 1:
+            pn_tag = (
+                f'<div style="position:absolute;bottom:16px;right:48px;'
+                f'background:#0f172a;padding:5px 14px;'
+                f'border-radius:16px;z-index:50;box-shadow:0 0 0 2px rgba(15,23,42,0.6);">'
+                f'<span style="font-size:14px;color:#94a3b8;font-weight:500;letter-spacing:0.3px;">'
+                f'{slide_num:02d} / {total:02d}</span>'
+                f'</div>'
+            )
+            # Insert before the outermost closing tag (prefer </section>)
+            last_section = html.rfind('</section>')
+            if last_section > 0:
+                html = html[:last_section] + pn_tag + '\n' + html[last_section:]
+            else:
+                # Trace depth from first <div to find TRUE outermost </div>
+                first_open = html.find('<div')
+                if first_open >= 0:
+                    depth = 0
+                    pos = first_open
+                    outer_close = -1
+                    while pos < len(html):
+                        no = html.find('<div', pos)
+                        nc = html.find('</div>', pos)
+                        if nc == -1:
+                            break
+                        if no != -1 and no < nc:
+                            depth += 1
+                            pos = no + 4
+                        else:
+                            depth -= 1
+                            if depth == 0:
+                                outer_close = nc
+                                break
+                            pos = nc + 6
+                    if outer_close > 0:
+                        html = html[:outer_close] + pn_tag + '\n' + html[outer_close:]
+                    else:
+                        # Outer <div> not properly closed — close it, insert before
+                        html = html.rstrip() + '\n' + pn_tag + '\n</div>'
+                else:
+                    html = html + '\n' + pn_tag
+
+        wrapped_parts.append(f'<div class="slide-wrapper">{html}</div>')
+
+    wrapped = "\n".join(wrapped_parts)
+
+    return f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{title}</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    background: #0f172a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }}
+  .slide-wrapper {{
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }}
+</style>
+</head>
+<body>
+{wrapped}
+</body>
+</html>"""
+
+
 def _extract_svg(response: str) -> str | None:
     """Extract SVG XML from AI response — handles markdown-wrapped and raw SVG."""
     import re
@@ -1274,7 +2338,8 @@ def _check_svg(svg: str, idx: int) -> list[str]:
 
 def _stage3_svg(provider_id, model, llm_generate, slide_data,
                  style_id: str = "business", rules: dict = None,
-                 batch_size: int = 2) -> list | None:
+                 batch_size: int = 2, temperature: float = 0.3,
+                 st: dict = None) -> list | None:
     """Phase 6 (AI-SVG): AI generates complete SVG XML per slide — PPT-Agent quality.
 
     Unlike the code-rendered path (AI→JSON→Code→SVG), this has AI write SVG directly,
@@ -1289,11 +2354,21 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
         style_id: style YAML name
         rules: optional rules dict
         batch_size: slides per LLM call (1-2, lower = better quality)
+        st: stage temperatures dict with keys: svg_batch, svg_single, review, fix, holistic, holistic_fix
 
     Returns:
         [{seq, file, svg_content, type, label}] or None on failure
     """
     import re
+    if st is None:
+        st = {}
+
+    gt_batch = st.get('svg_batch', temperature)
+    gt_single = st.get('svg_single', temperature)
+    rt_review = st.get('review', temperature)
+    rt_fix = st.get('fix', temperature)
+    rt_holistic = st.get('holistic', temperature)
+    rt_holistic_fix = st.get('holistic_fix', temperature)
 
     svg_spec, bento_spec = _load_svg_prompt_specs()
     cognitive_spec = _load_cognitive_spec()
@@ -1385,7 +2460,7 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
         for attempt in range(2):
             try:
                 response = _safe_run_async(llm_generate(provider_id, model,
-                    svg_system, svg_user, temperature=0.7))
+                    svg_system, svg_user, temperature=gt_batch))
 
                 svg_matches = re.findall(r'```svg\s*\n(.*?)\n```', response, re.DOTALL | re.IGNORECASE)
                 if not svg_matches:
@@ -1470,7 +2545,7 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
                 for sa in range(3):
                     try:
                         resp = _safe_run_async(llm_generate(provider_id, model,
-                            svg_system, single_user, temperature=0.7))
+                            svg_system, single_user, temperature=gt_single))
                         svg_content = _extract_svg(resp)
                         if svg_content and "<svg" in svg_content and "</svg>" in svg_content:
                             errors = _check_svg(svg_content, seq)
@@ -1504,20 +2579,25 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
     if provider_id and model:
         result = _review_and_fix_slides(review_pid, review_m, llm_generate, result,
                                         style_yaml, style_id, svg_system,
-                                        review_mode=review_mode)
+                                        review_mode=review_mode,
+                                        temp_review=rt_review, temp_fix=rt_fix)
 
     # ── Phase 6c: Holistic deck review (cross-slide consistency) ──
     if provider_id and model and result and len(result) >= 3:
         result = _holistic_review(review_pid, review_m, llm_generate, result,
                                   slide_data, style_yaml, style_id, svg_system,
-                                  review_mode=review_mode)
+                                  review_mode=review_mode,
+                                  temp_holistic=rt_holistic,
+                                  temp_holistic_fix=rt_holistic_fix)
 
     return result
 
 
 def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
                            style_id, svg_system, max_rounds=2,
-                           review_mode: str = "self_review"):
+                           review_mode: str = "self_review",
+                           temperature: float = 0.3,
+                           temp_review: float = 0, temp_fix: float = 0):
     """PPT-Agent review-core equivalent: review each slide, fix if score < 7.
 
     Uses the same LLM (DeepSeek/Moonshot) with PPT-Agent's reviewer.md prompt.
@@ -1579,7 +2659,7 @@ Review this slide and provide your full Quality Gate scores + Suggestions JSON."
 
             try:
                 response = _safe_run_async(llm_generate(provider_id, model,
-                    review_system, review_user, temperature=0.3))
+                    review_system, review_user, temperature=temp_review or temperature))
             except Exception as e:
                 _logger.warning(f"Review round {round_num+1} slide {seq} failed: {e}")
                 continue
@@ -1665,7 +2745,7 @@ Review this slide and provide your full Quality Gate scores + Suggestions JSON."
             for fa in range(2):
                 try:
                     resp = _safe_run_async(llm_generate(provider_id, model,
-                        svg_system, fix_user, temperature=0.7))
+                        svg_system, fix_user, temperature=temp_fix or temperature))
                     new_svg = _extract_svg(resp)
                     if new_svg and "<svg" in new_svg and "</svg>" in new_svg:
                         slide["svg_content"] = new_svg
@@ -1683,7 +2763,9 @@ Review this slide and provide your full Quality Gate scores + Suggestions JSON."
 
 def _holistic_review(provider_id, model, llm_generate, slides, slide_data,
                      style_yaml, style_id, svg_system,
-                     review_mode: str = "self_review"):
+                     review_mode: str = "self_review",
+                     temperature: float = 0.3,
+                     temp_holistic: float = 0, temp_holistic_fix: float = 0):
     """Phase 6c: Holistic deck review — cross-slide consistency evaluation.
 
     PPT-Agent review-core holistic mode (reviewer.md:286-331): reads ALL slide
@@ -1839,7 +2921,7 @@ Output:
 
     try:
         response = _safe_run_async(llm_generate(provider_id, model,
-            holistic_system, holistic_user, temperature=0.3))
+            holistic_system, holistic_user, temperature=temp_holistic or temperature))
     except Exception as e:
         _logger.warning(f"Holistic review failed: {e}")
         return slides
@@ -1902,7 +2984,7 @@ Output:
             for fa in range(2):
                 try:
                     resp = _safe_run_async(llm_generate(provider_id, model,
-                        svg_system, fix_user, temperature=0.7))
+                        svg_system, fix_user, temperature=temp_holistic_fix or temperature))
                     new_svg = _extract_svg(resp)
                     if new_svg and "<svg" in new_svg and "</svg>" in new_svg:
                         slide["svg_content"] = new_svg
