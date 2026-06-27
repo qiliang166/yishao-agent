@@ -1097,7 +1097,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 def _load_svg_prompt_specs() -> tuple[str, str]:
     """Load svg-generator.md and bento-grid-layout.md from data/prompts/."""
-    prompts_dir = os.path.join(BASE_DIR, "data", "prompts")
+    prompts_dir = os.path.join(BASE_DIR, "resources", "prompts")
 
     def _read(filename):
         p = os.path.join(prompts_dir, filename)
@@ -1111,7 +1111,7 @@ def _load_svg_prompt_specs() -> tuple[str, str]:
 
 def _load_outline_spec() -> str:
     """Load outline-architect.md from data/prompts/."""
-    prompts_dir = os.path.join(BASE_DIR, "data", "prompts")
+    prompts_dir = os.path.join(BASE_DIR, "resources", "prompts")
     outline_path = os.path.join(prompts_dir, "outline-architect.md")
     if os.path.exists(outline_path):
         with open(outline_path, "r", encoding="utf-8") as f:
@@ -1127,7 +1127,7 @@ def _load_style_yaml_text(style_id: str) -> str:
     """
     import re
     styles_dir = os.path.join(BASE_DIR, "data", "styles")
-    vi_dir = os.path.join(BASE_DIR, "data", "vi")
+    vi_dir = os.path.join(BASE_DIR, "resources", "vi")
 
     # 1) Directory structure: data/vi/{style_id}/tokens.yaml
     tokens_path = os.path.join(vi_dir, style_id, "tokens.yaml")
@@ -1145,7 +1145,7 @@ def _load_style_yaml_text(style_id: str) -> str:
 
 def _load_style_vi(style_id: str) -> str:
     """Load the Visual Identity System document from data/vi/{style_id}/vi.md."""
-    vi_md_path = os.path.join(BASE_DIR, "data", "vi", style_id, "vi.md")
+    vi_md_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "vi.md")
     if os.path.exists(vi_md_path):
         with open(vi_md_path, "r", encoding="utf-8") as f:
             return f.read()
@@ -1154,7 +1154,7 @@ def _load_style_vi(style_id: str) -> str:
 
 def _load_style_prompt(style_id: str) -> str:
     """Load the style-specific LLM persona + task prompt from data/vi/{style_id}/prompt.md."""
-    prompt_path = os.path.join(BASE_DIR, "data", "vi", style_id, "prompt.md")
+    prompt_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "prompt.md")
     if os.path.exists(prompt_path):
         with open(prompt_path, "r", encoding="utf-8") as f:
             return f.read()
@@ -1167,7 +1167,7 @@ def _load_style_vi_section(style_id: str, section: str) -> str:
     section: 'cover', 'content', 'data', or 'summary'.
     Loads both vi.md (general) and the section-specific file, concatenated.
     """
-    vi_dir = os.path.join(BASE_DIR, "data", "vi", style_id)
+    vi_dir = os.path.join(BASE_DIR, "resources", "vi", style_id)
     parts = []
 
     # Always include general vi.md first
@@ -1232,7 +1232,7 @@ def _scan_vi_page_types(style_id: str) -> list[dict]:
     Parses the "页面类型" markdown table from index.md.
     Only returns page types (excludes design principles and elements).
     """
-    vi_dir = os.path.join(BASE_DIR, "data", "vi")
+    vi_dir = os.path.join(BASE_DIR, "resources", "vi")
     index_path = os.path.join(vi_dir, style_id, "index.md")
 
     if not os.path.exists(index_path):
@@ -1308,7 +1308,7 @@ def _build_page_type_prompt(style_id: str) -> str:
 
 def _load_cognitive_spec() -> str:
     """Load cognitive-design-principles.md from data/prompts/."""
-    p = os.path.join(BASE_DIR, "data", "prompts", "cognitive-design-principles.md")
+    p = os.path.join(BASE_DIR, "resources", "prompts", "cognitive-design-principles.md")
     if os.path.exists(p):
         with open(p, "r", encoding="utf-8") as f:
             return f.read()
@@ -1317,7 +1317,7 @@ def _load_cognitive_spec() -> str:
 
 def _load_reviewer_spec() -> str:
     """Load reviewer.md from data/prompts/."""
-    p = os.path.join(BASE_DIR, "data", "prompts", "reviewer.md")
+    p = os.path.join(BASE_DIR, "resources", "prompts", "reviewer.md")
     if os.path.exists(p):
         with open(p, "r", encoding="utf-8") as f:
             return f.read()
@@ -1326,7 +1326,7 @@ def _load_reviewer_spec() -> str:
 
 def _load_design_system() -> str:
     """Load design-system.md — the HTML slide design guide for LLM."""
-    path = os.path.join(BASE_DIR, "data", "prompts", "design-system.md")
+    path = os.path.join(BASE_DIR, "resources", "prompts", "design-system.md")
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()

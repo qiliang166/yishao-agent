@@ -1,0 +1,258 @@
+# Business Professional — 结构化设计 Token
+# 程序解析用，所有色值/字号/间距的精确数值
+
+color_scheme:
+  primary: "#1a365d"
+  secondary: "#2d5f8a"
+  accent: "#e67e22"
+  background: "#ffffff"
+  text: "#1a202c"
+  card_bg: "#f0f4f8"
+  chart_colors:
+    - "#c8752e"  # Deep Copper 深铜 — 焦点/主要数据
+    - "#2d5f8a"  # Medium Blue 中蓝 — 次级数据/正向
+    - "#3b6b9e"  # Steel Blue 钢蓝 — 辅助数据/增长/达标
+    - "#d4956a"  # Copper Clay 铜陶 — 负向/下降/风险/警示
+    - "#2980b9"  # Bright Blue 亮蓝 — 中性/补充/链接
+  semantic:
+    deep_copper: "#c8752e"   # 强调/焦点/主要数据
+    steel_blue: "#3b6b9e"    # 正向/增长/优势/达标
+    copper_clay: "#d4956a"   # 负向/下降/风险/警示
+    brass_accent: "#e67e22"  # 页面级装饰/标题短线
+
+typography:
+  heading_font: "DM Sans, Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  body_font: "Inter, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  cover_title:
+    size: "58-65px"
+    weight: 700
+  page_title:
+    size: "36-44px"
+    weight: 700
+  card_title:
+    size: "22-24px"
+    weight: 600
+  body:
+    size: "16-18px"
+    weight: 400
+  caption:
+    size: "12-14px"
+    weight: 400
+  line_height:
+    heading: 1.15-1.25
+    body: 1.6-1.8
+  letter_spacing:
+    heading: "-0.3~-0.5px"
+
+card_style:
+  border_radius: 12
+  shadow: "0 2px 8px rgba(0,0,0,0.08)"
+  border: "1px solid #e2e8f0"
+  gap: 24
+  left_stripe_width: 4
+
+gradients:
+  hero_bg: "linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)"
+  card_highlight: "linear-gradient(180deg, #f0f4f8 0%, #ffffff 100%)"
+
+elevation:
+  shadow_sm: "0 1px 2px rgba(0,0,0,0.05)"
+  shadow_md: "0 4px 12px rgba(0,0,0,0.08)"
+  shadow_lg: "0 12px 40px rgba(0,0,0,0.15)"
+
+slide_type_overrides:
+  cover:
+    card_bg: "#1a365d"
+    text: "#ffffff"
+    heading_scale: 1.3
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "#1a365d"
+    text: "#ffffff"
+    body_font_style: "italic"
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "#1a365d"
+    text: "#ffffff"
+    layout: full_bleed
+  summary:
+    background: "#1a365d"
+    text: "#ffffff"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "© YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.4-0.5
+  content:
+    background: "#ffffff"
+    layout: mixed_grid
+
+layout_types:
+  - id: full_bleed
+    cards: "1-3"
+    description: "垂直居中，全屏"
+    use: "封面、章节分隔、总结"
+  - id: three_column
+    cards: 3
+    description: "水平等分，每栏 ~373px"
+    use: "并列要点、三大优势"
+  - id: two_column
+    cards: 2
+    description: "水平等分，每栏 ~550px"
+    use: "对比分析、优劣对比"
+  - id: two_column_asymmetric
+    cards: 2
+    description: "左宽 62% + 右窄 38%"
+    use: "主次内容、问题+方案"
+  - id: dashboard
+    cards: "3-5"
+    description: "顶行 metric 卡 + 底行 summary"
+    use: "数据总览、KPI 展示"
+  - id: mixed_grid
+    cards: "3-4"
+    description: "顶行 hero(全宽) + 底行 2-3 小卡"
+    use: "核心观点+支撑论据"
+  - id: hero_grid
+    cards: "2-4"
+    description: "左 hero 大卡 + 右 1-2 小卡堆叠"
+    use: "论点+数据佐证"
+  - id: single_focus
+    cards: 1
+    description: "居中大卡 ~900px"
+    use: "核心结论、金句"
+  - id: timeline
+    cards: "2-5"
+    description: "水平排列，步骤节点+连接线"
+    use: "流程步骤、时间线"
+  - id: horizontal_split
+    cards: "3-4"
+    description: "顶全宽 hero + 底行 2-3 小卡"
+    use: "标题+支撑指标"
+
+card_roles:
+  - role: hero
+    visual: "大卡，大面积，核心信息"
+    required: [title, body]
+    optional: [chart]
+  - role: metric
+    visual: "居中大数字/进度条，顶部短色条"
+    required: [chart]
+    optional: []
+  - role: card_0
+    visual: "标准卡，色条(chart_colors[0])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_1
+    visual: "标准卡，色条(chart_colors[1])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_2
+    visual: "标准卡，色条(chart_colors[2])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_3
+    visual: "标准卡，色条(chart_colors[3])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_4
+    visual: "标准卡，色条(chart_colors[4])"
+    required: [title or body]
+    optional: [chart]
+  - role: left
+    visual: "钢蓝顶条 + ▲ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比左/正面/优势"
+  - role: right
+    visual: "铜陶顶条 + ▼ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比右/反面/劣势"
+  - role: summary
+    visual: "全宽浅色/半透明卡"
+    required: [title or body]
+    optional: [chart]
+    use: "数据总结、页面收尾"
+  - role: step_N
+    visual: "圆形编号 + 标题 + 描述"
+    required: [title, body]
+    optional: []
+    use: "时间线步骤 1~5"
+
+decoration:
+  accent_stripe: "4px solid #E67E22"
+  title_underline: "40×3px #E67E22"
+  page_dot: "6px #E67E22"
+  layers: ["背景层", "装饰层", "结构层", "内容层", "标识层"]
+  types:
+    - id: type_a
+      name: "圆形点缀"
+      description: "右上角半透明圆 + 顶部色条 + 标题短线 + 页码"
+    - id: type_b
+      name: "双几何"
+      description: "左上圆 + 右下旋转方形，对角线平衡"
+    - id: type_c
+      name: "条纹肌理"
+      description: "细网格纹理 + 右下角半透明大圆"
+
+icons:
+  style: "outline"
+  stroke_width: "1.5px"
+  card_size: 20
+  hero_size: 36
+  metric_size: 16
+  color_rule: "跟随所在卡片的 chart_color, opacity: 0.7"
+
+illustrations:
+  label_align: "text-anchor=middle, label_x=graphic_cx"
+  label_spacing: "≥22px from graphic bottom to label baseline"
+  guide_spacing: "≥20px"
+  min_stroke: "1px"
+  min_font: "14px"
+
+quality_checklist:
+  - "5 层结构完整"
+  - "≥3 个 SVG 元素"
+  - "≥4 种不同 chart_color"
+  - "≥1 个半透明几何装饰"
+  - "每卡: SVG图标 + 标题 + 正文"
+  - "数字→图表形态"
+  - "顶部 accent 色条(4px)"
+  - "标题短线(40×3px)"
+  - "页码(dot + 页号)"
+  - "标题 primary 色"
+  - "正文 text 色"
+  - "卡片 card_bg 色"
+  - "背景 background 色"
+  - "字体 typography token"
+  - "圆角 12px"
+  - "阴影 elevation token"
+  - "插图标签居中"
+  - "插图间距 ≥22px"
+  - "插图字号 ≥14px"
+  - "SVG描边 ≥1px"
+  - "封面/总结无卡片容器"
+  - "色条轮换"
+
+font_thresholds:
+  slide_title: { min: 28, max: 44 }
+  card_title: { min: 18, max: 32 }
+  body: { min: 14, max: 20 }
+  label: { min: 14, max: 14 }
+  absolute_min: 14
+
+safe_area:
+  x_min: 40
+  y_min: 28
+  y_max: 710
+
+visual_richness:
+  min_svg_elements: 3
+  min_colors: 4
+  min_cards: 3
+  min_decorations: 2
+  min_layers: 5
