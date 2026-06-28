@@ -9,8 +9,8 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:8766',
         changeOrigin: true,
-        timeout: 600000,        // 10 min for AI generation (3-stage pipeline)
-        proxyTimeout: 600000,   // 10 min response wait
+        timeout: 1200000,        // 20 min for AI generation (3-stage pipeline)
+        proxyTimeout: 1200000,   // 20 min response wait
       },
     },
   },

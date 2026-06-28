@@ -280,7 +280,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                                          col_prompt, col_skill,
                                                          temperature=temperature,
                                                          st=st, column_id=column_id,
-                                                         color_scheme=color_scheme)
+                                                         color_scheme=color_scheme,
+                                                         project_id=project_id)
                     print(f"[PPT-DBG] AI result: {bool(slide_data)}, "
                           f"slides={len(slide_data) if slide_data else 0}", flush=True)
                     if not slide_data:
@@ -308,7 +309,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                                       structure, style_id=style_id,
                                                       temperature=st['html'],
                                                       column_id=column_id,
-                                                      color_scheme=color_scheme)
+                                                      color_scheme=color_scheme,
+                                                      project_id=project_id)
                 if html_slides:
                     slide_data = html_slides
                     first = slide_data[0] if slide_data else {}
@@ -346,6 +348,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             except Exception as e:
                 _logger.warning(f"Speaker notes failed (non-critical): {e}")
 
+            if project_id:
+                _ppt_status.pop(project_id, None)
             return html_path, slide_data
 
         # ── Old SVG path (legacy: slides have 'zones' field) ──
@@ -396,6 +400,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             except Exception as e:
                 _logger.warning(f"Speaker notes generation failed (non-critical): {e}")
 
+            if project_id:
+                _ppt_status.pop(project_id, None)
             return html_path, slide_data
         except Exception as e:
             print(f"[PPT-DBG] SVG rendering failed ({e}), falling back to PPTX", flush=True)
@@ -653,7 +659,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                             system_prompt: str = "", skill_template: str = "",
                             temperature: float = 0.3,
                             st: dict = None, column_id: str = "",
-                            color_scheme: str = "deep-blue") -> list | None:
+                            color_scheme: str = "deep-blue",
+                            project_id: str = "") -> list | None:
     """Two-phase HTML slide generation pipeline.
 
     Phase 2 (Research): Deep SOP analysis → research context.
@@ -674,6 +681,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                                             temp_research=st.get('research', temperature))
         if research_context:
             _logger.info(f"Phase 2 research done: {len(research_context)} chars")
+            if project_id:
+                _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在分析内容...", "message": "研究完成，进入大纲规划"}
     except Exception as e:
         _logger.warning(f"Phase 2 research failed (proceeding without): {e}")
 
@@ -686,6 +695,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     if not stage1:
         return None
     _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
+    if project_id:
+        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在规划布局...", "message": f"已提取 {len(stage1)} 页大纲"}
 
     # ── Two-Phase HTML Pipeline ──
     style_id = rules.get("style_id", "business")
@@ -699,13 +710,16 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     if not structure:
         return None
     _logger.info(f"Phase 1 structure: {len(structure)} slides planned")
+    if project_id:
+        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"16 页布局已规划，并行生成 HTML 中", "slides_done": 0, "slides_total": len(structure)}
 
     # Phase 2: Per-slide HTML generation (parallel, design-system.md guided)
     html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
                                          structure, style_id=style_id,
                                          temperature=st.get('html', temperature),
                                          column_id=column_id,
-                                         color_scheme=color_scheme)
+                                         color_scheme=color_scheme,
+                                         project_id=project_id)
     if not html_slides:
         _logger.warning("Phase 2 HTML generation failed, using fallback")
         html_slides = _fallback_stage1_to_html_slides(stage1, style_id)
@@ -2101,7 +2115,8 @@ def _fallback_single_slide_html(slide: dict, style_id: str) -> dict:
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
                            temperature: float = 0.3, column_id: str = "",
-                           color_scheme: str = "deep-blue") -> list | None:
+                           color_scheme: str = "deep-blue",
+                           project_id: str = "") -> list | None:
     """Phase 2 of two-phase HTML pipeline: Per-slide parallel HTML generation.
 
     Each slide gets its own LLM call with the full design-system.md as the design guide.
@@ -2135,6 +2150,10 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         persona_block = "你是演示文稿设计艺术总监。你必须严格按照《幻灯片 HTML 设计系统 v2》为每一页生成完整的 HTML。"
 
     total = len(structure_slides)
+
+    import threading as _threading
+    _done_lock = _threading.Lock()
+    _done_count = [0]
 
     def _gen_one(slide, idx):
         seq = slide.get("seq", idx + 1)
@@ -2321,6 +2340,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                                         f"after retries, accepting (reviewer should catch)")
 
                     _logger.info(f"Slide {seq}: HTML {len(html)} chars")
+                    # Update progress for status polling
+                    if project_id:
+                        with _done_lock:
+                            _done_count[0] += 1
+                            _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"已完成 {_done_count[0]}/{total} 页", "slides_done": _done_count[0], "slides_total": total}
                     return {"seq": seq, "type": stype, "layout": layout, "html": html, "html_vars": html_vars}
                 else:
                     _logger.warning(f"Slide {seq} attempt {attempt+1}: HTML too short ({len(html)} chars)")
