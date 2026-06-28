@@ -16,12 +16,12 @@
 - 标签 14px Inter
 
 ## 环形图（Donut）
-- 中心文字 18px, primary `#1a365d`, 加粗 700
+- 中心文字 18px, primary `{{primary}}`, 加粗 700
 - 环形色使用 chart_colors 序列
-- 轨道用 card_bg `#f0f4f8`
+- 轨道用 card_bg `{{card_bg}}`
 
 ## 进度条（Progress Bar）
-- 轨道: card_bg `#f0f4f8`
+- 轨道: card_bg `{{card_bg}}`
 - 填充: chart_color → secondary 渐变
 - 圆角: 12px（同卡片 token）
 

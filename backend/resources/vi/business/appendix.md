@@ -25,12 +25,12 @@
 - 每条包含: 标题、作者、来源、链接
 - 字号: 14-16px
 - 行间距: 1.8-2.0
-- 链接色: accent `#e67e22` 或 钢蓝 `#3B6B9E`
+- 链接色: accent `{{accent}}` 或 钢蓝 `#3B6B9E`
 
 ### 术语表
 - 两栏布局: 术语（左 30%）+ 定义（右 70%）
-- 术语: font-weight:600, primary `#1a365d`
-- 定义: 14-16px, text `#1a202c`
+- 术语: font-weight:600, primary `{{primary}}`
+- 定义: 14-16px, text `{{text}}`
 - 行间分隔线: 1px `#edf2f7`
 
 ### 数据来源

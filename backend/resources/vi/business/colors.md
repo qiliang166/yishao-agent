@@ -8,12 +8,12 @@
 
 | 角色 | 色值 | 用途 |
 |------|------|------|
-| primary | `#1a365d` | 标题文字、hero 卡背景 |
-| secondary | `#2d5f8a` | 辅助色、渐变终点 |
-| accent | `#e67e22` | 页面级装饰（顶部色条、标题短线） |
+| primary | `{{primary}}` | 标题文字、hero 卡背景 |
+| secondary | `{{secondary}}` | 辅助色、渐变终点 |
+| accent | `{{accent}}` | 页面级装饰（顶部色条、标题短线） |
 | background | `#ffffff` | 页面底色 |
-| text | `#1a202c` | 正文 |
-| card_bg | `#f0f4f8` | 卡片背景 |
+| text | `{{text}}` | 正文 |
+| card_bg | `{{card_bg}}` | 卡片背景 |
 
 ## 图表色序列（chart_colors）
 
@@ -21,31 +21,31 @@
 
 | 索引 | 色值 | 名称 | 语义 |
 |------|------|------|------|
-| 0 | `#c8752e` | Deep Copper 深铜 | 视觉焦点 / 主要数据强调 |
-| 1 | `#2d5f8a` | Medium Blue 中蓝 | 次级数据 / 正向指标 |
-| 2 | `#3b6b9e` | Steel Blue 钢蓝 | 辅助数据 / 增长/达标 |
-| 3 | `#d4956a` | Copper Clay 铜陶 | 负向 / 下降 / 风险 / 警示 |
-| 4 | `#2980b9` | Bright Blue 亮蓝 | 中性 / 补充 / 链接 / 高亮 |
+| 0 | `{{chart_0}}` | Deep Copper 深铜 | 视觉焦点 / 主要数据强调 |
+| 1 | `{{secondary}}` | Medium Blue 中蓝 | 次级数据 / 正向指标 |
+| 2 | `{{chart_2}}` | Steel Blue 钢蓝 | 辅助数据 / 增长/达标 |
+| 3 | `{{chart_3}}` | Copper Clay 铜陶 | 负向 / 下降 / 风险 / 警示 |
+| 4 | `{{chart_4}}` | Bright Blue 亮蓝 | 中性 / 补充 / 链接 / 高亮 |
 
 ## 色彩语义映射
 
 | 色值 | 名称 | 语义 |
 |------|------|------|
-| `#3b6b9e` | 钢蓝 Steel Blue | 正向/增长/优势/达标 |
-| `#d4956a` | 铜陶 Copper Clay | 负向/下降/风险/警示 |
-| `#c8752e` | 深铜 Deep Copper | 强调/主要数据/焦点 |
-| `#e67e22` | 黄铜 ACCENT | 页面级装饰/标题短线/高光 |
+| `{{chart_2}}` | 钢蓝 Steel Blue | 正向/增长/优势/达标 |
+| `{{chart_3}}` | 铜陶 Copper Clay | 负向/下降/风险/警示 |
+| `{{chart_0}}` | 深铜 Deep Copper | 强调/主要数据/焦点 |
+| `{{accent}}` | 黄铜 ACCENT | 页面级装饰/标题短线/高光 |
 
 ## 色彩角色分工（铁律）
 
 | 色彩来源 | 用途 | 占比上限 |
 |---------|------|---------|
 | chart_colors[0..4] | 卡片色条轮换 + 图表色序列 + 图标颜色 | 每卡用不同色 |
-| primary `#1a365d` | 内容页标题色 + 卡片标题色 | 标题文字专用 |
-| accent `#e67e22` | 页面级装饰线（顶部色条 + 标题短线） | ≤8% |
+| primary `{{primary}}` | 内容页标题色 + 卡片标题色 | 标题文字专用 |
+| accent `{{accent}}` | 页面级装饰线（顶部色条 + 标题短线） | ≤8% |
 | background `#ffffff` | 页面底色 | 全画布 |
-| text `#1a202c` | 正文 | 全页 |
-| card_bg `#f0f4f8` | 卡片背景 | 卡片区域 |
+| text `{{text}}` | 正文 | 全页 |
+| card_bg `{{card_bg}}` | 卡片背景 | 卡片区域 |
 
 ## 禁止事项
 

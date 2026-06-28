@@ -37,6 +37,25 @@ These are hard rules — violations are reported in the Hard Rule Violations sec
 | Text overflow | Text elements MUST NOT extend beyond their parent card boundaries | Critical |
 | Body text size | No body text below 14px font-size | Major |
 
+### Container Violation Detection — 硬检测（逐页必扫）
+
+Before scoring ANY slide, scan the HTML for these **forbidden patterns**. Each hit = Critical violation, `layout_restructure` suggestion, auto-fail:
+
+| # | 检测模式 (grep) | 违规描述 | 严重度 |
+|---|----------------|---------|--------|
+| 1 | `left:180px` | 禁止的 180px 边距 — 卡片缩窄居中 | Critical |
+| 2 | `transform:translateX(-50%)` | 禁止的居中定位 — 无基准容器 | Critical |
+| 3 | `left:30px\|left:36px\|left:40px\|left:48px\|left:80px\|left:88px` (内容区) | 非标准 left 边距 | Critical |
+| 4 | `right:30px\|right:36px\|right:40px\|right:48px\|right:80px\|right:88px` (内容区) | 非标准 right 边距 | Critical |
+| 5 | `width:920px` 或 `width:960px` 出现在内容卡片上 | 卡片宽度过窄 — 未用基准容器 | Critical |
+| 6 | `left:50%` + `width:` 在同一 div（非装饰层） | 居中定位替代基准容器 | Critical |
+
+**检测流程**：每页先跑这 6 条 grep，命中任一条 → Hard Rule Violations 表记录 → overall_score 扣 3 分 → pass=false → 输出 `layout_restructure` suggestion 要求改用 `left:60px; right:60px`。
+
+**例外**：仅封面(cover)、金句(quote)、章节分隔(section)页允许使用居中布局。这些页面类型跳过检测。
+
+**扫描范围**：只扫描第 3 层（结构层）和第 4 层（内容层）的 div。第 1 层（背景）、第 2 层（装饰）、第 5 层（标识）中的 `left` 值不受此限制。
+
 ## Content Density Targets by Page Type
 
 | Page Type | Target Info Units | Max Key Points | Preferred Layout |
@@ -283,6 +302,10 @@ Technical-only fallback (no Gemini): only hard-rule fixes, no suggestion routing
 ### Text Overflow Checks
 
 Check each card for text that might overflow at presentation resolution. Flag any text that appears cramped (< 16px padding from card edge) as a Minor issue.
+
+### Card overflow:hidden Check
+
+Every card container MUST have `overflow:hidden` in its inline style. Cards are flex children with constrained heights; without `overflow:hidden`, content spills out and creates independent scrollbars. Flag any card missing `overflow:hidden` as a **Critical** issue.
 
 Beyond measurable quality standards, actively suggest aesthetic improvements — better visual flow, more compelling card arrangements, more effective use of whitespace and accent colors. Think like a designer optimizing for impact, not just an auditor checking boxes.
 

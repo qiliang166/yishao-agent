@@ -46,6 +46,38 @@ export default function ProjSettingsPage() {
   // Accordion state
   const [openCols, setOpenCols] = useState<Set<string>>(new Set())
 
+  // Scenario file editor state (per-column design rule files)
+  const [scenarioFiles, setScenarioFiles] = useState<Record<string, {name: string; size: number; source: string}[]>>({})
+  const [editingScFile, setEditingScFile] = useState<{colId: string; filename: string} | null>(null)
+  const [scFileContent, setScFileContent] = useState('')
+  const [scFileSaving, setScFileSaving] = useState(false)
+
+  const loadScenarioFiles = (colId: string) => {
+    api.listScenarioFiles(colId).then(data => {
+      setScenarioFiles(prev => ({ ...prev, [colId]: data.files }))
+    }).catch(() => {})
+  }
+  const openScenarioFile = async (colId: string, filename: string) => {
+    setEditingScFile({ colId, filename })
+    setScFileContent('')
+    try {
+      const data = await api.getScenarioFile(colId, filename)
+      setScFileContent(data.content || '')
+    } catch { setScFileContent('') }
+  }
+  const saveScenarioFile = async () => {
+    if (!editingScFile) return
+    setScFileSaving(true)
+    try {
+      await api.saveScenarioFile(editingScFile.colId, editingScFile.filename, scFileContent)
+      modal.toast('已保存', 'success')
+      loadScenarioFiles(editingScFile.colId)
+      setEditingScFile(null)
+    } catch (e: any) {
+      modal.toast('保存失败: ' + e.message, 'error')
+    } finally { setScFileSaving(false) }
+  }
+
 
   // Provider form
   const [showProviderForm, setShowProviderForm] = useState(false)
@@ -127,7 +159,13 @@ export default function ProjSettingsPage() {
   const toggleCol = (id: string) => {
     setOpenCols(prev => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      if (next.has(id)) next.delete(id); else {
+        next.add(id)
+        // Load scenario files for PPT columns
+        if ((id === 'col4' || id === 'col5') && !scenarioFiles[id]) {
+          loadScenarioFiles(id)
+        }
+      }
       return next
     })
   }
@@ -706,6 +744,51 @@ export default function ProjSettingsPage() {
                           </div>
                         </div>
                       ))}
+                      {/* Scenario design rule files — PPT columns only */}
+                      {(col.id === 'col4' || col.id === 'col5') && (
+                        <div style={{marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)'}}>
+                          <div style={{fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)'}}>
+                            设计规则文件 — 当前栏目独立副本，修改不影响其他栏目
+                          </div>
+                          <div style={{display: 'flex', flexDirection: 'column', gap: 3}}>
+                            {(scenarioFiles[col.id] || []).map(f => (
+                              <div key={f.name} style={{display: 'flex', alignItems: 'center', gap: 8, padding: '4px 8px', borderRadius: 4, background: editingScFile?.colId === col.id && editingScFile?.filename === f.name ? 'var(--bg-secondary)' : 'transparent'}}>
+                                <span style={{flex: 1, fontSize: 11, fontWeight: editingScFile?.colId === col.id && editingScFile?.filename === f.name ? 600 : 400}}>{f.name}</span>
+                                <span style={{fontSize: 9, color: f.source === 'custom' ? 'var(--success)' : 'var(--text-secondary)', background: f.source === 'custom' ? 'rgba(34,197,94,0.1)' : 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: 3}}>
+                                  {f.source === 'custom' ? '已自定义' : '默认'}
+                                </span>
+                                <span style={{fontSize: 9, color: 'var(--text-secondary)', minWidth: 40, textAlign: 'right'}}>{f.size > 1024 ? `${(f.size/1024).toFixed(1)}k` : `${f.size}B`}</span>
+                                <button className="btn btn-ghost btn-sm" style={{fontSize: 10, padding: '1px 8px'}}
+                                  onClick={() => openScenarioFile(col.id, f.name)}>
+                                  编辑
+                                </button>
+                              </div>
+                            ))}
+                            {(!scenarioFiles[col.id] || scenarioFiles[col.id].length === 0) && (
+                              <span style={{fontSize: 10, color: 'var(--text-secondary)'}}>点击展开栏目以加载文件列表</span>
+                            )}
+                          </div>
+                          {/* Inline editor */}
+                          {editingScFile && editingScFile.colId === col.id && (
+                            <div style={{marginTop: 8}}>
+                              <div style={{fontSize: 10, color: 'var(--text-secondary)', marginBottom: 4}}>
+                                编辑: {editingScFile.filename}
+                              </div>
+                              <textarea
+                                value={scFileContent}
+                                onChange={e => setScFileContent(e.target.value)}
+                                style={{width: '100%', minHeight: 260, fontFamily: 'monospace', fontSize: 11}}
+                              />
+                              <div style={{display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6}}>
+                                <button className="btn btn-ghost btn-sm" onClick={() => setEditingScFile(null)}>取消</button>
+                                <button className="btn btn-primary btn-sm" onClick={saveScenarioFile} disabled={scFileSaving}>
+                                  {scFileSaving ? '保存中...' : '保存文件'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

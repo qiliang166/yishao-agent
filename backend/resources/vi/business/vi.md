@@ -24,12 +24,12 @@
 
 | 角色 | 色值 | 用途 |
 |------|------|------|
-| primary | `#1a365d` | 标题文字、hero 卡背景 |
-| secondary | `#2d5f8a` | 辅助色、渐变终点 |
-| accent | `#e67e22` | 页面级装饰（顶部色条、标题短线） |
+| primary | `{{primary}}` | 标题文字、hero 卡背景 |
+| secondary | `{{secondary}}` | 辅助色、渐变终点 |
+| accent | `{{accent}}` | 页面级装饰（顶部色条、标题短线） |
 | background | `#ffffff` | 页面底色 |
-| text | `#1a202c` | 正文 |
-| card_bg | `#f0f4f8` | 卡片背景 |
+| text | `{{text}}` | 正文 |
+| card_bg | `{{card_bg}}` | 卡片背景 |
 
 ### 图表色序列（chart_colors）
 
@@ -37,31 +37,31 @@
 
 | 索引 | 色值 | 名称 | 语义 |
 |------|------|------|------|
-| 0 | `#c8752e` | Deep Copper 深铜 | 视觉焦点 / 主要数据强调 |
-| 1 | `#2d5f8a` | Medium Blue 中蓝 | 次级数据 / 正向指标 |
-| 2 | `#3b6b9e` | Steel Blue 钢蓝 | 辅助数据 / 增长/达标 |
-| 3 | `#d4956a` | Copper Clay 铜陶 | 负向 / 下降 / 风险 / 警示 |
-| 4 | `#2980b9` | Bright Blue 亮蓝 | 中性 / 补充 / 链接 / 高亮 |
+| 0 | `{{chart_0}}` | Deep Copper 深铜 | 视觉焦点 / 主要数据强调 |
+| 1 | `{{secondary}}` | Medium Blue 中蓝 | 次级数据 / 正向指标 |
+| 2 | `{{chart_2}}` | Steel Blue 钢蓝 | 辅助数据 / 增长/达标 |
+| 3 | `{{chart_3}}` | Copper Clay 铜陶 | 负向 / 下降 / 风险 / 警示 |
+| 4 | `{{chart_4}}` | Bright Blue 亮蓝 | 中性 / 补充 / 链接 / 高亮 |
 
 ### 色彩语义映射
 
 | 色值 | 名称 | 语义 |
 |------|------|------|
-| `#3b6b9e` | 钢蓝 Steel Blue | 正向/增长/优势/达标 |
-| `#d4956a` | 铜陶 Copper Clay | 负向/下降/风险/警示 |
-| `#c8752e` | 深铜 Deep Copper | 强调/主要数据/焦点 |
-| `#e67e22` | 黄铜 ACCENT | 页面级装饰/标题短线/高光 |
+| `{{chart_2}}` | 钢蓝 Steel Blue | 正向/增长/优势/达标 |
+| `{{chart_3}}` | 铜陶 Copper Clay | 负向/下降/风险/警示 |
+| `{{chart_0}}` | 深铜 Deep Copper | 强调/主要数据/焦点 |
+| `{{accent}}` | 黄铜 ACCENT | 页面级装饰/标题短线/高光 |
 
 ### 色彩角色分工（铁律）
 
 | 色彩来源 | 用途 | 占比上限 |
 |---------|------|---------|
 | chart_colors[0..4] | 卡片色条轮换 + 图表色序列 + 图标颜色 | 每卡用不同色 |
-| primary `#1a365d` | 内容页标题色 + 卡片标题色 | 标题文字专用 |
-| accent `#e67e22` | 页面级装饰线（顶部色条 + 标题短线） | ≤8% |
+| primary `{{primary}}` | 内容页标题色 + 卡片标题色 | 标题文字专用 |
+| accent `{{accent}}` | 页面级装饰线（顶部色条 + 标题短线） | ≤8% |
 | background `#ffffff` | 页面底色 | 全画布 |
-| text `#1a202c` | 正文 | 全页 |
-| card_bg `#f0f4f8` | 卡片背景 | 卡片区域 |
+| text `{{text}}` | 正文 | 全页 |
+| card_bg `{{card_bg}}` | 卡片背景 | 卡片区域 |
 
 ### 禁止事项
 
@@ -114,8 +114,8 @@
 
 | 名称 | 值 |
 |------|-----|
-| hero_bg | `linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)` |
-| card_highlight | `linear-gradient(180deg, #f0f4f8 0%, #ffffff 100%)` |
+| hero_bg | `linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)` |
+| card_highlight | `linear-gradient(180deg, {{card_bg}} 0%, #ffffff 100%)` |
 
 ### 阴影层级
 
@@ -166,12 +166,12 @@
 - 标签 14px Inter
 
 ### 环形图（Donut）
-- 中心文字 18px, primary `#1a365d`, 加粗 700
+- 中心文字 18px, primary `{{primary}}`, 加粗 700
 - 环形色使用 chart_colors 序列
-- 轨道用 card_bg `#f0f4f8`
+- 轨道用 card_bg `{{card_bg}}`
 
 ### 进度条（Progress Bar）
-- 轨道: card_bg `#f0f4f8`
+- 轨道: card_bg `{{card_bg}}`
 - 填充: chart_color → secondary 渐变
 - 圆角: 12px（同卡片 token）
 
@@ -365,7 +365,7 @@
 | 15 | table | 表格页 | #fff | — | single_focus | 经典表格 · 条件格式 |
 | 16 | grid_cards | 网格卡片 | #fff | — | hero_grid | 等宽等高网格 · 色条轮换 |
 | 17 | image_grid | 图片网格 | #fff | — | grid_cards | 图片 + 标注 · 4:3 比例 |
-| 18 | quote | 引言页 | #1a365d | #fff | single_focus | 斜体引文 · 大号引号装饰 |
+| 18 | quote | 引言页 | {{primary}} | #fff | single_focus | 斜体引文 · 大号引号装饰 |
 | 19 | image_hero | 图片突出 | 深色渐变 | #fff | full_bleed | 大图 + 文字叠加层 |
 | 20 | food_archive | 美食档案 | #fff | — | hero_grid | hero 大卡 + 特征标签 + 参数卡 |
 | 21 | skill_card | 技能卡片 | #fff | — | grid_cards | 技能名 + 星级 + 年限 |

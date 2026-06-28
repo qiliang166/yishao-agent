@@ -21,8 +21,8 @@
 
 ### 原则卡片
 - 大号引号图标（opacity 0.15）作为卡片背景装饰
-- 原则陈述: 22-26px, primary `#1a365d`, DM Sans, font-weight:600
-- 理由/解释: 16-18px, text `#1a202c`, Inter
+- 原则陈述: 22-26px, primary `{{primary}}`, DM Sans, font-weight:600
+- 理由/解释: 16-18px, text `{{text}}`, Inter
 - 卡片左侧: chart_color 色条 4px
 
 ### 图标系统

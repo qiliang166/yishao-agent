@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, Project } from '../services/api'
 import { useModal } from '../components/ModalProvider'
@@ -14,6 +14,30 @@ function HomePage() {
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const navigate = useNavigate()
+  const overlayMouseDownRef = useRef(false)
+
+  // Create dialog state
+  const [showCreate, setShowCreate] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createCopy, setCreateCopy] = useState(false)
+  const [createSourceQuery, setCreateSourceQuery] = useState('')
+  const [createSourceId, setCreateSourceId] = useState('')
+  const [createSourceName, setCreateSourceName] = useState('')
+  const [allProjects, setAllProjects] = useState<Project[]>([])
+  const [creating, setCreating] = useState(false)
+  const [srcDropdown, setSrcDropdown] = useState(false)
+  const srcRef = useRef<HTMLDivElement>(null)
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (srcRef.current && !srcRef.current.contains(e.target as Node)) {
+        setSrcDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const loadProjects = (p: number) => {
     setLoading(true)
@@ -33,44 +57,42 @@ function HomePage() {
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
-  const createProject = async () => {
-    const name = await modal.prompt('请输入项目名称：')
-    if (!name) return
-
-    // Ask if user wants to copy from existing project
-    const useCopy = await modal.confirm('是否从已有项目复制配置？\n\n选择"确定"将打开项目列表供你选择复制来源，选择"取消"将创建空白项目。')
-    let copiedFrom = ''
-    if (useCopy) {
-      const sourceName = await modal.prompt('请输入要复制的源项目名称（部分匹配即可）：')
-      if (sourceName) {
-        const matches = projects.filter(p => p.name.includes(sourceName))
-        if (matches.length === 0) {
-          modal.toast('未找到匹配的项目，将创建空白项目', 'error')
-        } else if (matches.length === 1) {
-          copiedFrom = matches[0].id
-        } else {
-          const names = matches.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
-          const idx = await modal.prompt(`找到多个匹配项目：\n${names}\n\n输入序号选择，或按取消创建空白项目：`)
-          if (idx) {
-            const n = parseInt(idx) - 1
-            if (n >= 0 && n < matches.length) copiedFrom = matches[n].id
-          }
-        }
-      }
-    }
-
+  const openCreateDialog = async () => {
+    setShowCreate(true)
+    setCreateName('')
+    setCreateCopy(false)
+    setCreateSourceQuery('')
+    setCreateSourceId('')
+    setCreateSourceName('')
+    setSrcDropdown(false)
     try {
-      const project = await api.createProject(name)
-      if (copiedFrom) {
+      const data = await api.listProjects(1, 1000)
+      setAllProjects(data.projects)
+    } catch {}
+  }
+
+  const sourceMatches = createSourceQuery
+    ? allProjects.filter(p => p.name.toLowerCase().includes(createSourceQuery.toLowerCase()))
+    : allProjects
+
+  const handleCreate = async () => {
+    if (!createName.trim()) return
+    setCreating(true)
+    try {
+      const project = await api.createProject(createName.trim())
+      if (createCopy && createSourceId) {
         try {
-          await api.copyProjectItems(project.id, copiedFrom)
+          await api.copyProjectItems(project.id, createSourceId)
         } catch (e: any) {
           modal.toast('配置复制失败：' + e.message, 'error')
         }
       }
+      setShowCreate(false)
       navigate(`/project/${project.id}`)
     } catch (err: any) {
       modal.toast('创建失败：' + err.message, 'error')
+    } finally {
+      setCreating(false)
     }
   }
 
@@ -154,7 +176,7 @@ function HomePage() {
         <input className="form-input" type="text" placeholder="搜索项目..."
           style={{ flex: 1, maxWidth: 300 }}
           value={search} onChange={e => setSearch(e.target.value)} />
-        <button className="btn btn-primary btn-sm" onClick={createProject}>+ 新建项目</button>
+        <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建项目</button>
 
       </div>
 
@@ -217,6 +239,9 @@ function HomePage() {
                 onChange={() => toggleSelect(p.id)}
                 onClick={e => e.stopPropagation()}
                 style={{ marginRight: 8 }} />
+              {p.project_code && (
+                <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--accent)', fontWeight: 600, background: 'var(--bg-hover)', padding: '1px 5px', borderRadius: 3, marginRight: 4 }}>{p.project_code}</span>
+              )}
               <span className="pc-name" style={{ cursor: 'pointer' }}
                 onClick={() => navigate(`/project/${p.id}`)}>{p.name}</span>
               {p.copied_from_project_id && (
@@ -269,6 +294,102 @@ function HomePage() {
           )}
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 11 }}>
             {filtered.length === 0 ? '没有匹配的项目' : `共 ${total} 个项目`}
+          </div>
+        </div>
+      )}
+
+      {/* Create Project Dialog */}
+      {showCreate && (
+        <div className="dialog-overlay"
+          onMouseDown={(e: any) => { overlayMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={() => { if (overlayMouseDownRef.current) setShowCreate(false) }}>
+          <div className="dialog-box" style={{ width: 460, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">新建项目</div>
+
+            <div className="form-group">
+              <label className="form-label">项目名称</label>
+              <input className="form-input" type="text"
+                value={createName}
+                onChange={e => setCreateName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && createName.trim()) handleCreate() }}
+                placeholder="输入项目名称" autoFocus />
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                <input type="checkbox" checked={createCopy}
+                  onChange={e => setCreateCopy(e.target.checked)} />
+                从已有项目复制配置
+              </label>
+            </div>
+
+            <div style={{
+              maxHeight: createCopy ? 300 : 0,
+              overflow: 'hidden',
+              transition: 'max-height 0.25s ease',
+            }}>
+              {createCopy && (
+              <div className="form-group" ref={srcRef} style={{ minHeight: 0 }}>
+                <label className="form-label">源项目</label>
+                <input className="form-input" type="text"
+                  value={createSourceQuery}
+                  onChange={e => { setCreateSourceQuery(e.target.value); setSrcDropdown(true) }}
+                  onFocus={() => setSrcDropdown(true)}
+                  placeholder="输入关键词搜索项目..." />
+                {srcDropdown && sourceMatches.length > 0 && (
+                  <div style={{
+                    maxHeight: 180, overflow: 'auto', background: 'var(--bg)',
+                    border: '1px solid var(--border)', borderRadius: 6, marginTop: 2,
+                  }}>
+                    {sourceMatches.map(p => (
+                      <div key={p.id}
+                        onClick={() => {
+                          setCreateSourceId(p.id)
+                          setCreateSourceName(p.name)
+                          setCreateSourceQuery(p.name)
+                          setSrcDropdown(false)
+                        }}
+                        style={{
+                          padding: '8px 12px', cursor: 'pointer', fontSize: 13,
+                          borderBottom: '1px solid var(--border)',
+                          background: createSourceId === p.id ? 'var(--bg-hover)' : 'transparent',
+                          display: 'flex', alignItems: 'center', gap: 8,
+                        }}>
+                        {p.project_code && (
+                          <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--accent)', fontWeight: 600, marginRight: 4 }}>{p.project_code}</span>
+                        )}
+                        <span style={{ fontWeight: 500, flex: 1 }}>{p.name}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                          {p.status === 'completed' ? '已完成' : '草稿'} · {new Date(p.created_at).toLocaleDateString('zh-CN')}
+                        </span>
+                        {p.copied_from_project_id && (
+                          <span style={{ fontSize: 10, color: 'var(--accent)' }} title="副本">📋</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {createSourceId && (
+                  <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    已选择: <strong>{createSourceName}</strong>
+                    <button className="btn btn-ghost btn-sm" onClick={() => {
+                      setCreateSourceId('')
+                      setCreateSourceName('')
+                      setCreateSourceQuery('')
+                    }} style={{ fontSize: 10, padding: '2px 6px' }}>清除</button>
+                  </div>
+                )}
+              </div>
+            )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleCreate}
+                disabled={!createName.trim() || creating}>
+                {creating ? '创建中...' : '创建'}
+              </button>
+            </div>
           </div>
         </div>
       )}

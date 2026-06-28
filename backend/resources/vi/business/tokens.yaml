@@ -1,25 +1,101 @@
 # Business Professional — 结构化设计 Token
 # 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
 
-color_scheme:
-  primary: "#1a365d"
-  secondary: "#2d5f8a"
-  accent: "#e67e22"
-  background: "#ffffff"
-  text: "#1a202c"
-  card_bg: "#f0f4f8"
-  chart_colors:
-    - "#c8752e"  # Deep Copper 深铜 — 焦点/主要数据
-    - "#2d5f8a"  # Medium Blue 中蓝 — 次级数据/正向
-    - "#3b6b9e"  # Steel Blue 钢蓝 — 辅助数据/增长/达标
-    - "#d4956a"  # Copper Clay 铜陶 — 负向/下降/风险/警示
-    - "#2980b9"  # Bright Blue 亮蓝 — 中性/补充/链接
-  semantic:
-    deep_copper: "#c8752e"   # 强调/焦点/主要数据
-    steel_blue: "#3b6b9e"    # 正向/增长/优势/达标
-    copper_clay: "#d4956a"   # 负向/下降/风险/警示
-    brass_accent: "#e67e22"  # 页面级装饰/标题短线
+# 当前激活的色系（兼容字段）
+color_scheme: deep-blue
 
+color_schemes:
+  deep-blue:
+    label: "深海蓝"
+    primary: "#1a365d"
+    secondary: "#2d5f8a"
+    accent: "#e67e22"
+    background: "#ffffff"
+    text: "#1a202c"
+    card_bg: "#f0f4f8"
+    chart_colors:
+      - "#c8752e"
+      - "#2d5f8a"
+      - "#3b6b9e"
+      - "#d4956a"
+      - "#2980b9"
+    semantic:
+      positive: "#27ae60"
+      negative: "#c0392b"
+    persona_hint: "深海蓝主色（#1a365d）奠定权威基调，暖橙（#e67e22）仅用于关键强调，占比不超过 8%。大面积白色背景与浅灰蓝卡片形成清晰的色彩层级。"
+  chinese-red:
+    label: "中国红"
+    primary: "#c41e3a"
+    secondary: "#8b1a2b"
+    accent: "#d4a017"
+    background: "#fff8f0"
+    text: "#2c1810"
+    card_bg: "#fef5e6"
+    chart_colors:
+      - "#c41e3a"
+      - "#8b1a2b"
+      - "#d4a017"
+      - "#b33a2e"
+      - "#e8c547"
+    semantic:
+      positive: "#27ae60"
+      negative: "#c0392b"
+    persona_hint: "中国红主色（#c41e3a）传达热烈与传统，金色（#d4a017）点缀强调。米白底色与浅米卡片营造温暖、庄重的东方美学。"
+  jade-green:
+    label: "翡翠绿"
+    primary: "#0d6b42"
+    secondary: "#1a7a54"
+    accent: "#27ae60"
+    background: "#fafdfb"
+    text: "#1a2c1e"
+    card_bg: "#f0f9f4"
+    chart_colors:
+      - "#0d6b42"
+      - "#1a7a54"
+      - "#27ae60"
+      - "#2ecc71"
+      - "#52c77e"
+    semantic:
+      positive: "#27ae60"
+      negative: "#c0392b"
+    persona_hint: "翡翠绿主色（#0d6b42）传达自然与健康，翠绿（#27ae60）点缀生机。清新白底与浅绿卡片营造干净、可信赖的观感。"
+  tech-purple:
+    label: "科技紫"
+    primary: "#4f46e5"
+    secondary: "#6366f1"
+    accent: "#818cf8"
+    background: "#ffffff"
+    text: "#1a1a2e"
+    card_bg: "#f5f3ff"
+    chart_colors:
+      - "#4f46e5"
+      - "#6366f1"
+      - "#818cf8"
+      - "#a78bfa"
+      - "#c4b5fd"
+    semantic:
+      positive: "#27ae60"
+      negative: "#c0392b"
+    persona_hint: "紫色主色（#4f46e5）传达创新与智慧，浅紫（#818cf8）点缀科技感。白色底与紫色调卡片营造前瞻、智能的视觉风格。"
+  dark-gold:
+    label: "暗夜金"
+    primary: "#1a1a2e"
+    secondary: "#2d2d44"
+    accent: "#c9a84c"
+    background: "#fafafa"
+    text: "#1a1a2e"
+    card_bg: "#f5f5f0"
+    chart_colors:
+      - "#c9a84c"
+      - "#1a1a2e"
+      - "#2d2d44"
+      - "#b8963e"
+      - "#d4b96a"
+    semantic:
+      positive: "#27ae60"
+      negative: "#c0392b"
+    persona_hint: "暗夜底色（#1a1a2e）与金色（#c9a84c）传达奢华与克制，极简黑白金配色营造高端品牌质感。"
 typography:
   heading_font: "DM Sans, Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif"
   body_font: "Inter, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
@@ -52,8 +128,8 @@ card_style:
   left_stripe_width: 4
 
 gradients:
-  hero_bg: "linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)"
-  card_highlight: "linear-gradient(180deg, #f0f4f8 0%, #ffffff 100%)"
+  hero_bg: "linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)"
+  card_highlight: "linear-gradient(180deg, {{card_bg}} 0%, {{background}} 100%)"
 
 elevation:
   shadow_sm: "0 1px 2px rgba(0,0,0,0.05)"
@@ -62,13 +138,13 @@ elevation:
 
 slide_type_overrides:
   cover:
-    card_bg: "#1a365d"
+    card_bg: "{{primary}}"
     text: "#ffffff"
     heading_scale: 1.3
     layout: full_bleed
     no_card_container: true
   quote:
-    card_bg: "#1a365d"
+    card_bg: "{{primary}}"
     text: "#ffffff"
     body_font_style: "italic"
     layout: single_focus
@@ -76,11 +152,11 @@ slide_type_overrides:
     heading_scale: 0.9
     layout: dashboard
   section:
-    background: "#1a365d"
+    background: "{{primary}}"
     text: "#ffffff"
     layout: full_bleed
   summary:
-    background: "#1a365d"
+    background: "{{primary}}"
     text: "#ffffff"
     heading_scale: 1.1
     layout: full_bleed
@@ -184,9 +260,9 @@ card_roles:
     use: "时间线步骤 1~5"
 
 decoration:
-  accent_stripe: "4px solid #E67E22"
-  title_underline: "40×3px #E67E22"
-  page_dot: "6px #E67E22"
+  accent_stripe: "4px solid {{accent}}"
+  title_underline: "40×3px {{accent}}"
+  page_dot: "6px {{accent}}"
   layers: ["背景层", "装饰层", "结构层", "内容层", "标识层"]
   types:
     - id: type_a

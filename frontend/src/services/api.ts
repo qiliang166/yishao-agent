@@ -1,25 +1,36 @@
 const BASE = ''
 
-async function request(path: string, options?: RequestInit) {
+async function request(path: string, options?: RequestInit & { timeoutMs?: number }) {
   const ctrl = new AbortController()
   const existingSignal = options?.signal
   if (existingSignal) {
     existingSignal.addEventListener('abort', () => ctrl.abort())
   }
 
+  // Auto-abort after timeout (default 30s, 0 = no timeout)
+  const timeoutMs = options?.timeoutMs ?? 30000
+  let timer: any = null
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  }
+
   try {
-    const res = await fetch(BASE + path, { ...options, signal: ctrl.signal })
+    // Remove custom field before passing to fetch
+    const { timeoutMs: _, ...fetchOpts } = (options || {})
+    const res = await fetch(BASE + path, { ...fetchOpts, signal: ctrl.signal })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || `服务器错误 (${res.status})`)
     return data
   } catch (e: any) {
     if (e.name === 'AbortError') {
-      throw new Error('请求已取消')
+      throw new Error('请求超时或已取消')
     }
     if (e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError')) {
       throw new Error('无法连接服务器，请确认后端是否正常运行')
     }
     throw e
+  } finally {
+    if (timer) clearTimeout(timer)
   }
 }
 
@@ -75,6 +86,7 @@ export interface Voice {
 
 export interface Project {
   id: string
+  project_code?: string
   name: string
   status: string
   source_type: string
@@ -428,36 +440,101 @@ export const api = {
   generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
     request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal }),
 
-  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[], signal?: AbortSignal, columnId?: string, temperature?: number, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
-    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null, column_id: columnId || '', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_svg_batch: tempSvgBatch || 0, temp_svg_single: tempSvgSingle || 0, temp_review: tempReview || 0, temp_fix: tempFix || 0, temp_holistic: tempHolistic || 0, temp_holistic_fix: tempHolisticFix || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal }),
+  generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[], signal?: AbortSignal, columnId?: string, colorScheme?: string, temperature?: number, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
+    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 600000, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null, column_id: columnId || '', color_scheme: colorScheme || 'deep-blue', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_svg_batch: tempSvgBatch || 0, temp_svg_single: tempSvgSingle || 0, temp_review: tempReview || 0, temp_fix: tempFix || 0, temp_holistic: tempHolistic || 0, temp_holistic_fix: tempHolisticFix || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal }),
 
   // PPT Styles (17 PPT-Agent YAML styles)
   listStyles: () => request('/api/ppt/styles').then(d => d.styles as StyleItem[]),
 
   // VI & Prompt file editor (directory-aware)
-  getStyleVI: (styleId: string) =>
-    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi`).then(d => d as { content: string; exists: boolean }),
+  getStyleVI: (styleId: string, colorScheme?: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi` + (colorScheme ? `?color_scheme=${encodeURIComponent(colorScheme)}` : '')).then(d => d as { content: string; exists: boolean }),
   saveStyleVI: (styleId: string, content: string) =>
     request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
   getStylePrompt: (styleId: string) =>
     request(`/api/ppt/styles/${encodeURIComponent(styleId)}/prompt`).then(d => d as { content: string; exists: boolean }),
   saveStylePrompt: (styleId: string, content: string) =>
     request(`/api/ppt/styles/${encodeURIComponent(styleId)}/prompt`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
+  listColorSchemes: (styleId: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/color-schemes`).then(d => d.color_schemes as {id: string; label: string; primary: string; accent: string; background: string; text: string; card_bg: string}[]),
+
   // VI sub-files (directory structure)
   listStyleVIFiles: (styleId: string) =>
     request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi/files`).then(d => d as { files: {name: string; size: number; section: string}[]; exists: boolean }),
-  getStyleVISection: (styleId: string, section: string) =>
-    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi/${encodeURIComponent(section)}`).then(d => d as { content: string; exists: boolean; section: string }),
+  getStyleVISection: (styleId: string, section: string, colorScheme?: string) =>
+    request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi/${encodeURIComponent(section)}` + (colorScheme ? `?color_scheme=${encodeURIComponent(colorScheme)}` : '')).then(d => d as { content: string; exists: boolean; section: string }),
   saveStyleVISection: (styleId: string, section: string, content: string) =>
     request(`/api/ppt/styles/${encodeURIComponent(styleId)}/vi/${encodeURIComponent(section)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
   // Page types (scanned from VI directory)
   getPageTypes: (styleId: string) =>
     request(`/api/ppt/styles/${encodeURIComponent(styleId)}/page-types`).then(d => d.page_types as {type: string; label: string; purpose: string}[]),
 
+  // Scenario prompt files (per-column design rule overrides)
+  listScenarioFiles: (columnId: string) =>
+    request(`/api/scenarios/${encodeURIComponent(columnId)}/files`).then(d => d as {files: {name: string; size: number; source: string}[]; column_id: string}),
+  getScenarioFile: (columnId: string, filename: string) =>
+    request(`/api/scenarios/${encodeURIComponent(columnId)}/files/${encodeURIComponent(filename)}`).then(d => d as {content: string; exists: boolean; filename: string}),
+  saveScenarioFile: (columnId: string, filename: string, content: string) =>
+    request(`/api/scenarios/${encodeURIComponent(columnId)}/files/${encodeURIComponent(filename)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
+
   exportSvgZip: (runId: string) => `${BASE}/api/ppt/export-zip/${encodeURIComponent(runId)}`,
 
   // PPT Preview URL
   previewUrl: (runId: string) => `${BASE}/api/exports/${encodeURIComponent(runId)}/index.html`,
+
+  // PPT Slide Recolor — direct color replacement (no AI)
+  recolorSlide: (data: {
+    run_id: string
+    slide_seq: number
+    style?: string
+    color_scheme?: string
+  }) =>
+    request('/api/ppt/recolor-slide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean; changed: boolean; message?: string }),
+
+  // PPT Slide Editing (natural language → LLM edit → code check → save)
+  editSlide: (data: {
+    run_id: string
+    slide_seq: number
+    instruction: string
+    provider_id?: string
+    model?: string
+    style?: string
+    color_scheme?: string
+    signal?: AbortSignal
+  }) =>
+    request('/api/ppt/edit-slide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      signal: data.signal,
+    }).then(d => d as { ok: boolean; slide_seq: number; html?: string; error?: string; detail?: string; violation?: string }),
+
+  // Save slide images to project directory
+  saveSlideImages: (runId: string) =>
+    request(`/api/ppt/save-images/${encodeURIComponent(runId)}`, { method: 'POST' })
+      .then(d => d as { ok: boolean; saved: number; files: string[]; dir: string; detail?: string }),
+
+  // Commit edit preview to real index.html
+  saveEdit: (runId: string) =>
+    request(`/api/ppt/save-edit/${encodeURIComponent(runId)}`, { method: 'POST' })
+      .then(d => d as { ok: boolean; saved: boolean }),
+
+  // Discard edit preview
+  discardEdit: (runId: string) =>
+    request(`/api/ppt/discard-edit/${encodeURIComponent(runId)}`, { method: 'POST' })
+      .then(d => d as { ok: boolean; discarded: boolean }),
+
+  // Direct source edit — write full HTML document to preview
+  editSlideSource: (runId: string, html: string) =>
+    request(`/api/ppt/slide-source/${encodeURIComponent(runId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html }),
+    }).then(d => d as { ok: boolean; saved: boolean }),
 
   // Load existing PPT results for a project (survives page reload / timeout)
   listPptResults: (projectId: string) =>

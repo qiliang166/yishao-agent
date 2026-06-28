@@ -288,6 +288,30 @@ def init_db():
         except Exception:
             pass
 
+        # Add project_code column to projects if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()]
+            if 'project_code' not in existing_cols:
+                conn.execute("ALTER TABLE projects ADD COLUMN project_code TEXT DEFAULT ''")
+            # Backfill missing/old-format project codes: KH{YYMMDD}-{seq} per creation date
+            rows = conn.execute(
+                "SELECT id, created_at FROM projects WHERE project_code IS NULL OR project_code = ''"
+                " OR project_code LIKE 'P-%' ORDER BY created_at ASC"
+            ).fetchall()
+            if rows:
+                day_counters: dict[str, int] = {}
+                for pid, created_at in rows:
+                    # Extract YYMMDD from created_at (format: "2026-06-27 10:30:00")
+                    date_str = created_at[:10] if created_at else "2000-01-01"
+                    yymmdd = date_str[2:].replace("-", "")  # "2026-06-27" → "260627"
+                    day_counters[yymmdd] = day_counters.get(yymmdd, 0) + 1
+                    seq = day_counters[yymmdd]
+                    conn.execute(
+                        "UPDATE projects SET project_code = ? WHERE id = ?",
+                        (f"KH{yymmdd}-{seq:04d}", pid))
+        except Exception:
+            pass
+
         # Add prompt column to templates if missing (migration)
         try:
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()]

@@ -17,8 +17,8 @@
 
 | 名称 | 值 |
 |------|-----|
-| hero_bg | `linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)` |
-| card_highlight | `linear-gradient(180deg, #f0f4f8 0%, #ffffff 100%)` |
+| hero_bg | `linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)` |
+| card_highlight | `linear-gradient(180deg, {{card_bg}} 0%, #ffffff 100%)` |
 
 ## 阴影层级
 

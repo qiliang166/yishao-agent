@@ -8,7 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from database import init_db, get_db
 from models import (ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest,
-    LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest,
+    LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest, PPTEditSlideRequest,
+    PPTSlideSourceRequest,
     ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
     ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave)
 from typing import Optional
@@ -103,7 +104,10 @@ def api_serve_export_file(run_id: str, filename: str):
         raise HTTPException(status_code=403, detail="Path traversal denied")
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="Not Found")
-    return _sr.FileResponse(filepath)
+    headers = {}
+    if filepath.endswith('.html'):
+        headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return _sr.FileResponse(filepath, headers=headers)
 
 import re
 
@@ -222,9 +226,18 @@ def create_project(req: ProjectCreate):
         storage_path = os.path.normpath(req.storage_path or os.path.join(base, folder))
         os.makedirs(storage_path, exist_ok=True)
 
+        # Generate project code KH{YYMMDD}-{seq} (seq resets daily)
+        from datetime import date
+        today = date.today().strftime("%y%m%d")  # "260627"
+        today_prefix = f"KH{today}-%"
+        today_count = db.execute(
+            "SELECT COUNT(*) FROM projects WHERE project_code LIKE ?", (today_prefix,)
+        ).fetchone()[0]
+        project_code = f"KH{today}-{today_count + 1:04d}"
+
         db.execute(
-            "INSERT INTO projects (id, name, source_type, storage_path) VALUES (?, ?, ?, ?)",
-            (pid, req.name, req.source_type, storage_path))
+            "INSERT INTO projects (id, name, source_type, storage_path, project_code) VALUES (?, ?, ?, ?, ?)",
+            (pid, req.name, req.source_type, storage_path, project_code))
         db.commit()
         row = db.execute("SELECT * FROM projects WHERE id = ?", (pid,)).fetchone()
         return dict(row)
@@ -691,10 +704,17 @@ def copy_project(project_id: str):
         if not src:
             raise HTTPException(404, "Source project not found")
         new_id = uuid.uuid4().hex[:12]
+        from datetime import date
+        today = date.today().strftime("%y%m%d")
+        today_prefix = f"KH{today}-%"
+        today_count = db.execute(
+            "SELECT COUNT(*) FROM projects WHERE project_code LIKE ?", (today_prefix,)
+        ).fetchone()[0]
+        project_code = f"KH{today}-{today_count + 1:04d}"
         db.execute(
-            "INSERT INTO projects (id, name, storage_path, copied_from_project_id) "
-            "VALUES (?, ?, ?, ?)",
-            (new_id, f"{src['name']} (副本)", "", project_id))
+            "INSERT INTO projects (id, name, storage_path, copied_from_project_id, project_code) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (new_id, f"{src['name']} (副本)", "", project_id, project_code))
         db.commit()
         # Copy project items
         copy_project_items(new_id, project_id)
@@ -2613,7 +2633,7 @@ def api_generate_ppt(req: PPTGenerateRequest):
             detail = "；".join(missing) if missing else "缺少必要参数，请检查后再试"
             raise HTTPException(status_code=400, detail=detail)
 
-        filepath, generated_slides = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, slide_plan, project_name=project_name, column_id=req.column_id, temperature=req.temperature, project_id=req.project_id or "", temp_keyword=req.temp_keyword, temp_research=req.temp_research, temp_outline=req.temp_outline, temp_fill=req.temp_fill, temp_cards=req.temp_cards, temp_html=req.temp_html, temp_svg_batch=req.temp_svg_batch, temp_svg_single=req.temp_svg_single, temp_review=req.temp_review, temp_fix=req.temp_fix, temp_holistic=req.temp_holistic, temp_holistic_fix=req.temp_holistic_fix, temp_stage_outline=req.temp_stage_outline, temp_stage_generation=req.temp_stage_generation, temp_stage_review=req.temp_stage_review)
+        filepath, generated_slides = generate_ppt(req.content, req.template_id, req.branding, output_dir, req.provider_id, req.model, slide_plan, project_name=project_name, column_id=req.column_id, color_scheme=req.color_scheme, temperature=req.temperature, project_id=req.project_id or "", temp_keyword=req.temp_keyword, temp_research=req.temp_research, temp_outline=req.temp_outline, temp_fill=req.temp_fill, temp_cards=req.temp_cards, temp_html=req.temp_html, temp_svg_batch=req.temp_svg_batch, temp_svg_single=req.temp_svg_single, temp_review=req.temp_review, temp_fix=req.temp_fix, temp_holistic=req.temp_holistic, temp_holistic_fix=req.temp_holistic_fix, temp_stage_outline=req.temp_stage_outline, temp_stage_generation=req.temp_stage_generation, temp_stage_review=req.temp_stage_review)
         if generated_slides is not None:
             slide_plan = generated_slides
 
@@ -2627,6 +2647,10 @@ def api_generate_ppt(req: PPTGenerateRequest):
             run_id = os.path.basename(run_dir)
             _run_dirs[run_id] = run_dir
             _save_run_dirs(_run_dirs)
+            # Save color_scheme metadata so recolor can deterministically know the source scheme
+            cs = getattr(req, "color_scheme", None) or "deep-blue"
+            with open(os.path.join(run_dir, "color_scheme.txt"), "w", encoding="utf-8") as _csf:
+                _csf.write(cs)
             preview_url = f"/api/exports/{run_id}/index.html"
             zip_url = f"/api/ppt/export-zip/{run_id}"
             # Persist result metadata so page reload can restore without re-generating
@@ -2640,28 +2664,14 @@ def api_generate_ppt(req: PPTGenerateRequest):
                         "slide_count": len(generated_slides) if generated_slides else 0,
                         "template_id": req.template_id,
                         "format": "svg",
+                        "color_scheme": cs,
                         "generated_at": _dt.datetime.now().isoformat(),
                     }
                     with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as _rf:
-                        json.dump(result_meta, _rf, ensure_ascii=False)
-                    # Save to step_results in the format the frontend expects for restoration
-                    col_to_step = {}
-                    mapped_step = col_to_step.get(req.column_id, f"step_{req.column_id}")
-                    if mapped_step:
-                        plan_data = {
-                            "slides": slide_plan or [],
-                            "filename": f"svg-deck-{run_id}",
-                            "downloadUrl": zip_url,
-                            "previewUrl": preview_url,
-                            "zipUrl": zip_url,
-                            "templateId": req.template_id,
-                            "format": "svg",
-                        }
-                        save_step_meta(req.project_id, f"_ppt_plan_{mapped_step}",
-                                       json.dumps(plan_data, ensure_ascii=False))
-                        save_step_meta(req.project_id, f"_preview_html_{mapped_step}",
-                                       f"__SVG__{preview_url}")
-                    # Also save with run_id key for the listPptResults endpoint
+                        json.dump(result_meta, _rf, ensure_ascii=False, indent=2)
+                    # Persist result metadata for frontend auto-load on page refresh.
+                    # _ppt_result_{run_id} is the single source of truth — slide_plan,
+                    # preview_url, run_id, and all metadata are stored here.
                     save_step_meta(req.project_id, f"_ppt_result_{run_id}",
                                    json.dumps(result_meta, ensure_ascii=False))
                 except Exception as _e:
@@ -2838,6 +2848,349 @@ def api_ppt_plan(req: PPTPlanRequest):
         db.close()
 
 
+@app.post("/api/ppt/recolor-slide")
+def api_ppt_recolor_slide(
+    run_id: str = Body(...),
+    slide_seq: int = Body(...),
+    style: str = Body("business"),
+    color_scheme: str = Body("deep-blue"),
+):
+    """Recolor all slides to a new color scheme.
+
+    Prefers index_vars.html ({{primary}} variable format from new generation pipeline)
+    and resolves variables with the new scheme. Falls back to legacy hex-replacement
+    for old-format slides.
+    """
+    from services.ppt_service import _resolve_color_vars, _recolor_slide_html, _load_scheme_data
+
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir or not os.path.isdir(run_dir):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    # Prefer the edit preview file if it exists
+    preview_path = os.path.join(run_dir, "index_preview.html")
+    vars_path = os.path.join(run_dir, "index_vars.html")
+    html_path = os.path.join(run_dir, "index.html")
+
+    sid = style or "business"
+    cs = color_scheme or "deep-blue"
+
+    # ── New path: variable-format HTML, just re-resolve ──
+    if os.path.exists(vars_path):
+        new_scheme = _load_scheme_data(sid, cs)
+        if new_scheme:
+            with open(vars_path, encoding="utf-8") as f:
+                vars_html = f.read()
+            # Re-resolve with new scheme
+            resolved = _resolve_color_vars(vars_html, new_scheme)
+            # Also update color_scheme metadata
+            cs_path = os.path.join(run_dir, "color_scheme.txt")
+            with open(cs_path, "w", encoding="utf-8") as _csf:
+                _csf.write(cs)
+            # Write resolved HTML
+            target = preview_path if os.path.exists(preview_path) else html_path
+            with open(target, "w", encoding="utf-8") as f:
+                f.write(resolved)
+            return {"ok": True, "changed": True, "method": "resolve_vars"}
+
+    # ── Legacy fallback: hex-to-hex replacement ──
+    if not os.path.exists(html_path):
+        if os.path.exists(preview_path):
+            html_path = preview_path
+        else:
+            raise HTTPException(status_code=404, detail="index.html not found")
+
+    with open(html_path, encoding="utf-8") as f:
+        full_html = f.read()
+
+    import re
+    slides_raw = re.findall(r'(<section[\s\S]*?</section>)', full_html, re.IGNORECASE)
+    if not slides_raw:
+        slides_raw = re.findall(
+            r'<div\s+class="slide-wrapper"\s*>\s*(<div\s[^>]*width\s*:\s*1280px[\s\S]*?</div>)\s*</div>',
+            full_html, re.IGNORECASE
+        )
+
+    if not slides_raw:
+        raise HTTPException(status_code=400, detail="No slides found in HTML")
+
+    # Read source color_scheme metadata
+    source_scheme = None
+    cs_path = os.path.join(run_dir, "color_scheme.txt")
+    if os.path.exists(cs_path):
+        with open(cs_path, encoding="utf-8") as _csf:
+            source_scheme = _csf.read().strip()
+    if not source_scheme:
+        rj_path = os.path.join(run_dir, "result.json")
+        if os.path.exists(rj_path):
+            try:
+                with open(rj_path, encoding="utf-8") as _rjf:
+                    rj = json.loads(_rjf.read())
+                    source_scheme = rj.get("color_scheme") or ""
+            except Exception:
+                pass
+
+    changed_count = 0
+    for i, old_slide in enumerate(slides_raw):
+        new_slide = _recolor_slide_html(sid, old_slide, cs, source_scheme)
+        if new_slide != old_slide:
+            full_html = full_html.replace(old_slide, new_slide)
+            changed_count += 1
+
+    if changed_count == 0:
+        return {"ok": True, "changed": False, "message": "颜色无变化（可能已使用该色系）"}
+
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(full_html)
+
+    return {"ok": True, "changed": True, "method": "hex_replace"}
+
+
+@app.post("/api/ppt/edit-slide")
+def api_ppt_edit_slide(req: PPTEditSlideRequest):
+    """Edit a single slide via natural language instruction.
+
+    Flow:
+      1. Read index.html from output directory
+      2. Extract the target slide's HTML
+      3. Send to LLM with editing instruction
+      4. Run three code checks on the result
+      5. If clean → write back → return ok
+      6. If violation → return error with details
+    """
+    import re
+    from bs4 import BeautifulSoup
+    from services.ppt_service import (
+        _detect_container_violation,
+        _detect_content_overflow,
+        _detect_fullscreen_mask,
+    )
+
+    run_dir = _run_dirs.get(req.run_id)
+    if not run_dir or not os.path.isdir(run_dir):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    html_path = os.path.join(run_dir, "index.html")
+    if not os.path.exists(html_path):
+        raise HTTPException(status_code=404, detail="index.html not found")
+
+    with open(html_path, encoding="utf-8") as f:
+        full_html = f.read()
+
+    # Extract slides from raw HTML (use regex to preserve original formatting)
+    slides_raw = []
+
+    # Try <section> tags first (legacy format)
+    section_matches = re.findall(r'(<section[\s\S]*?</section>)', full_html, re.IGNORECASE)
+    if section_matches:
+        slides_raw = section_matches
+    else:
+        # Match <div class="slide-wrapper">...inner 1280x720 div...</div></div>
+        wrapper_matches = re.findall(
+            r'<div\s+class="slide-wrapper"\s*>\s*(<div\s[^>]*width\s*:\s*1280px[\s\S]*?</div>)\s*</div>',
+            full_html, re.IGNORECASE
+        )
+        slides_raw = wrapper_matches
+
+    if not slides_raw:
+        raise HTTPException(status_code=400, detail="No slides found in HTML")
+
+    seq = req.slide_seq
+    if seq < 1 or seq > len(slides_raw):
+        raise HTTPException(status_code=400, detail=f"Slide {seq} out of range (1–{len(slides_raw)})")
+
+    slide_html = slides_raw[seq - 1]
+
+    # Extract page_type and layout from the slide element for code checks
+    page_type = ""
+    layout = ""
+    type_m = re.search(r'data-type\s*=\s*"(\w+)"', slide_html)
+    layout_m = re.search(r'data-layout\s*=\s*"(\w+)"', slide_html)
+    if type_m:
+        page_type = type_m.group(1)
+    if layout_m:
+        layout = layout_m.group(1)
+
+    # Build the edit system prompt — persona from template, knowledge from global core/
+    from services.ppt_service import _safe_run_async, _build_edit_system_prompt, _run_edit_agent
+
+    edit_system = _build_edit_system_prompt(req.style or "business", req.color_scheme or "deep-blue")
+
+    edit_user = (
+        f"当前幻灯片 HTML：\n\n```html\n{slide_html}\n```\n\n"
+        f"修改要求：{req.instruction}"
+    )
+
+    p_id = req.provider_id
+    model = req.model
+    if not p_id or not model:
+        # Fallback to first enabled provider
+        db = get_db()
+        try:
+            row = db.execute(
+                "SELECT id, models FROM llm_providers WHERE is_enabled=1 LIMIT 1"
+            ).fetchone()
+            if row:
+                p_id = row["id"]
+                models = json.loads(row["models"]) if row["models"] else []
+                model = models[0] if models else ""
+        finally:
+            db.close()
+
+    if not p_id or not model:
+        raise HTTPException(status_code=400, detail="没有可用的 LLM 提供商")
+
+    try:
+        raw = _safe_run_async(_run_edit_agent(p_id, model, edit_system, edit_user))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Agent 调用失败: {e}")
+
+    # Extract edited HTML
+    edited = ""
+    m = re.search(r'```html\s*\n(.*?)\n```', raw, re.DOTALL)
+    if m:
+        edited = m.group(1).strip()
+    else:
+        # Try matching a full slide div (div-based or section-based)
+        m = re.search(r'(<section[\s\S]*?</section>)', raw, re.IGNORECASE)
+        if not m:
+            m = re.search(r'(<div\s[^>]*width:1280px[^>]*>[\s\S]*?</div>\s*</div>)', raw, re.IGNORECASE)
+        if not m:
+            m = re.search(r'(<div\s[^>]*width:\s*1280px[^>]*>[\s\S]*?</div>)', raw, re.IGNORECASE)
+        if m:
+            edited = m.group(1).strip()
+        else:
+            edited = raw.strip()
+
+    if not edited or len(edited) < 200:
+        # No valid HTML found in response — return as a chat message
+        text_answer = raw.strip()
+        if text_answer:
+            return {
+                "ok": False,
+                "slide_seq": seq,
+                "error": "chat_reply",
+                "detail": text_answer,
+            }
+
+    # Run code checks
+    violation = _detect_container_violation(edited, page_type)
+    if violation:
+        return {
+            "ok": False,
+            "slide_seq": seq,
+            "error": "container_violation",
+            "violation": violation,
+            "detail": f"容器违规: {violation}。请换一种描述重试。",
+        }
+
+    overflow = _detect_content_overflow(edited, page_type, layout)
+    if overflow:
+        cards_str = ", ".join(f"卡片{i}有{c}个内容块" for i, c in overflow.items())
+        return {
+            "ok": False,
+            "slide_seq": seq,
+            "error": "content_overflow",
+            "violation": cards_str,
+            "detail": f"内容溢出: {cards_str}（每张卡片最多 8 个信息单元）。请减少内容或指定多卡片布局重试。",
+        }
+
+    mask = _detect_fullscreen_mask(edited)
+    if mask:
+        return {
+            "ok": False,
+            "slide_seq": seq,
+            "error": "fullscreen_mask",
+            "violation": mask,
+            "detail": f"全屏遮罩: {mask}。请删除不透明覆盖层重试。",
+        }
+
+    # Check that the edit actually changed something
+    if edited == slide_html:
+        return {
+            "ok": False,
+            "slide_seq": seq,
+            "error": "no_change",
+            "detail": "编辑后内容未变化，请更具体地描述修改要求。",
+        }
+
+    # Write to preview file (not the real index.html)
+    old_slide = slides_raw[seq - 1]
+    new_html = full_html.replace(old_slide, edited, 1)
+
+    preview_path = os.path.join(run_dir, "index_preview.html")
+    with open(preview_path, "w", encoding="utf-8") as f:
+        f.write(new_html)
+
+    return {"ok": True, "slide_seq": seq, "html": edited,
+            "preview": True, "saved": False}
+
+
+@app.post("/api/ppt/save-edit/{run_id}")
+def api_save_edit(run_id: str):
+    """Commit the preview file to the real index.html."""
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir:
+        candidate = os.path.join(EXPORT_DIR, run_id)
+        if os.path.isdir(candidate):
+            run_dir = candidate
+    if not run_dir:
+        raise HTTPException(status_code=404, detail="Export not found")
+
+    preview_path = os.path.join(run_dir, "index_preview.html")
+    if not os.path.exists(preview_path):
+        raise HTTPException(status_code=400, detail="No preview to save")
+
+    import shutil
+    real_path = os.path.join(run_dir, "index.html")
+    # Backup original
+    backup_path = os.path.join(run_dir, "index_backup.html")
+    if os.path.exists(real_path):
+        shutil.copy2(real_path, backup_path)
+    shutil.copy2(preview_path, real_path)
+    os.remove(preview_path)
+    return {"ok": True, "saved": True}
+
+
+@app.post("/api/ppt/discard-edit/{run_id}")
+def api_discard_edit(run_id: str):
+    """Discard the preview file, keeping the original index.html unchanged."""
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir:
+        candidate = os.path.join(EXPORT_DIR, run_id)
+        if os.path.isdir(candidate):
+            run_dir = candidate
+    if not run_dir:
+        raise HTTPException(status_code=404, detail="Export not found")
+
+    preview_path = os.path.join(run_dir, "index_preview.html")
+    if os.path.exists(preview_path):
+        os.remove(preview_path)
+    return {"ok": True, "discarded": True}
+
+
+@app.put("/api/ppt/slide-source/{run_id}")
+def api_slide_source(run_id: str, req: PPTSlideSourceRequest):
+    """Write the full HTML document directly to the preview file.
+
+    Used by the source-code editor tab — the user edits the complete
+    HTML document and applies it.  Same draft/preview workflow as AI editing.
+    """
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir:
+        candidate = os.path.join(EXPORT_DIR, run_id)
+        if os.path.isdir(candidate):
+            run_dir = candidate
+    if not run_dir or not os.path.isdir(run_dir):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    preview_path = os.path.join(run_dir, "index_preview.html")
+    with open(preview_path, "w", encoding="utf-8") as f:
+        f.write(req.html)
+
+    return {"ok": True, "saved": True}
+
+
 # ── PPT Styles (17 PPT-Agent YAML styles) ──
 
 @app.get("/api/ppt/styles")
@@ -2863,7 +3216,7 @@ def api_ppt_styles():
 # ── VI & Prompt file editor (directory-aware) ──
 
 VI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                      "data", "vi")
+                      "resources", "vi")
 
 VI_SECTIONS = ["vi", "cover", "content", "data", "summary", "prompt"]
 
@@ -2911,14 +3264,29 @@ def api_get_page_types(style_id: str):
     return {"page_types": types}
 
 
+@app.get("/api/ppt/styles/{style_id}/color-schemes")
+def api_list_color_schemes(style_id: str):
+    """List available color schemes for a style from its tokens.yaml."""
+    from services.ppt_service import _list_color_schemes
+    schemes = _list_color_schemes(style_id)
+    return {"color_schemes": schemes, "exists": len(schemes) > 0}
+
+
 @app.get("/api/ppt/styles/{style_id}/vi/{section}")
-def api_get_style_vi_section(style_id: str, section: str):
-    """Load a specific VI sub-file (vi, cover, content, data, summary, prompt, tokens)."""
+def api_get_style_vi_section(style_id: str, section: str, color_scheme: str = ""):
+    """Load a specific VI sub-file. Resolves {{color}} variables when color_scheme is provided."""
+    from services.ppt_service import _load_scheme_data, _resolve_color_vars
+
     p = _vi_section_path(style_id, section)
     if not os.path.exists(p):
         return {"content": "", "exists": False, "section": section}
     with open(p, "r", encoding="utf-8") as f:
-        return {"content": f.read(), "exists": True, "section": section}
+        content = f.read()
+    if color_scheme:
+        scheme = _load_scheme_data(style_id, color_scheme)
+        if scheme:
+            content = _resolve_color_vars(content, scheme)
+    return {"content": content, "exists": True, "section": section}
 
 
 @app.put("/api/ppt/styles/{style_id}/vi/{section}")
@@ -2932,10 +3300,85 @@ def api_save_style_vi_section(style_id: str, section: str, body: VIFileUpdate):
     return {"ok": True, "path": p, "section": section}
 
 
+# ── Scenario prompt files (per-column design rule overrides) ──
+
+SCENARIOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "scenarios")
+SCENARIO_FILES = [
+    "design-system.md",
+    "outline-architect.md",
+    "cognitive-design-principles.md",
+    "reviewer.md",
+    "svg-generator.md",
+    "bento-grid-layout.md",
+]
+
+
+def _scenario_file_path(column_id: str, filename: str, for_write: bool = False) -> str:
+    """Resolve a scenario file path. For read: custom → default → None.
+    For write: always returns custom path (auto-creates dir)."""
+    fname = os.path.basename(str(filename))
+    if fname != filename or fname.startswith(".") or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    if for_write:
+        d = os.path.join(SCENARIOS_DIR, column_id)
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, fname)
+    # Read path: check custom first, then default
+    p = os.path.join(SCENARIOS_DIR, column_id, fname)
+    if os.path.exists(p):
+        return p
+    p = os.path.join(SCENARIOS_DIR, "_default", fname)
+    if os.path.exists(p):
+        return p
+    return ""
+
+
+@app.get("/api/scenarios/{column_id}/files")
+def api_list_scenario_files(column_id: str):
+    """List all 6 scenario files with their source (custom / default / missing)."""
+    files = []
+    for fname in SCENARIO_FILES:
+        custom_path = os.path.join(SCENARIOS_DIR, column_id, fname)
+        default_path = os.path.join(SCENARIOS_DIR, "_default", fname)
+        if os.path.exists(custom_path):
+            source = "custom"
+            size = os.path.getsize(custom_path)
+        elif os.path.exists(default_path):
+            source = "default"
+            size = os.path.getsize(default_path)
+        else:
+            source = "missing"
+            size = 0
+        files.append({"name": fname, "size": size, "source": source})
+    return {"files": files, "column_id": column_id}
+
+
+@app.get("/api/scenarios/{column_id}/files/{filename}")
+def api_get_scenario_file(column_id: str, filename: str):
+    """Get a scenario file content (custom → default → 404)."""
+    p = _scenario_file_path(column_id, filename)
+    if not p:
+        return {"content": "", "exists": False, "filename": filename}
+    with open(p, "r", encoding="utf-8") as f:
+        return {"content": f.read(), "exists": True, "filename": filename}
+
+
+@app.put("/api/scenarios/{column_id}/files/{filename}")
+def api_save_scenario_file(column_id: str, filename: str, body: VIFileUpdate):
+    """Save a scenario file to the per-column custom directory."""
+    p = _scenario_file_path(column_id, filename, for_write=True)
+    with open(p, "w", encoding="utf-8") as f:
+        f.write(body.content)
+    return {"ok": True, "path": p, "filename": filename}
+
+
 # Backward-compatible: GET /vi returns the full combined VI for a style
 @app.get("/api/ppt/styles/{style_id}/vi")
-def api_get_style_vi(style_id: str):
-    """Load full VI — concatenates all sub-files if directory exists, else legacy file."""
+def api_get_style_vi(style_id: str, color_scheme: str = ""):
+    """Load full VI — concatenates all sub-files if directory exists, else legacy file.
+    Resolves {{color}} variables against color_scheme when provided."""
+    from services.ppt_service import _load_scheme_data, _resolve_color_vars, _load_style_vi
+
     d = _style_dir(style_id)
     if os.path.isdir(d):
         parts = []
@@ -2949,10 +3392,14 @@ def api_get_style_vi(style_id: str):
                 with open(sp, "r", encoding="utf-8") as f:
                     parts.append(f.read())
         if parts:
-            return {"content": "\n\n---\n\n".join(parts), "exists": True}
+            content = "\n\n---\n\n".join(parts)
+            if color_scheme:
+                scheme = _load_scheme_data(style_id, color_scheme)
+                if scheme:
+                    content = _resolve_color_vars(content, scheme)
+            return {"content": content, "exists": True}
     # Legacy fallback
-    from services.ppt_service import _load_style_vi
-    content = _load_style_vi(style_id)
+    content = _load_style_vi(style_id, color_scheme or "deep-blue")
     return {"content": content, "exists": bool(content)}
 
 
@@ -3031,6 +3478,48 @@ def api_export_svg_zip(run_id: str):
         media_type="application/zip",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}"},
     )
+
+
+@app.post("/api/ppt/save-images/{run_id}")
+async def api_save_slide_images(run_id: str):
+    """Render each slide as a 1280x720 PNG and save to the export directory."""
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir:
+        candidate = os.path.join(EXPORT_DIR, run_id)
+        if os.path.isdir(candidate):
+            run_dir = candidate
+    if not run_dir:
+        raise HTTPException(status_code=404, detail="Export not found")
+
+    html_path = os.path.join(run_dir, "index.html")
+    if not os.path.exists(html_path):
+        raise HTTPException(status_code=404, detail="index.html not found")
+
+    try:
+        from playwright.async_api import async_playwright
+    except ImportError:
+        raise HTTPException(status_code=500, detail="playwright not installed")
+
+    saved = []
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch()
+        page = await browser.new_page(viewport={"width": 1280, "height": 720})
+        await page.goto("file:///" + html_path.replace("\\", "/"))
+        await page.wait_for_timeout(500)
+
+        slides = await page.query_selector_all(".slide-wrapper, section")
+        if not slides:
+            slides = await page.query_selector_all('[style*="1280px"]')
+
+        for i, slide in enumerate(slides):
+            png_path = os.path.join(run_dir, f"slide_{i+1:02d}.png")
+            await slide.screenshot(path=png_path)
+            saved.append(png_path)
+
+        await browser.close()
+
+    return {"ok": True, "saved": len(saved), "files": [os.path.basename(f) for f in saved],
+            "dir": run_dir}
 
 
 # ── SOP Export ──

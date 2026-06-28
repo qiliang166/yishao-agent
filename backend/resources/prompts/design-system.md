@@ -10,6 +10,14 @@
 - **装饰不是点缀，是视觉锚点。** 没有装饰元素的幻灯片 = 未完成品。
 - **数据必须可视化。** 裸数字是犯罪。任何数字必须有图表形态。
 
+## ⛔ 三条铁律 — 违反任意一条 = 废稿
+
+1. **容器铁律**：所有内容页（除封面/金句/章节页外）的内容区必须使用 `left:60px; right:60px` 基准容器。**绝对禁止** `left:180px; width:920px`、`transform:translateX(-50%)`、以及任何非 60px 的 left/right 值。
+2. **标题铁律**：页面标题必须是画布的直接子元素（第 3 层绝对定位），**禁止**嵌套在内容卡片内部。
+3. **五层铁律**：每页必须包含全部 5 层（背景→装饰→结构→内容→标识），缺层 = 未完成。
+
+上述三条铁律在后续章节中有详细说明和 HTML 示例。铁律优先于所有其他设计考量——即使它"看起来更好看"，违反就是错的。
+
 ---
 
 ## 一、页面构图：1280×720 画布的 5 层结构
@@ -107,10 +115,9 @@
 每张卡片不是 div+文字。每张卡片包含以下元素：
 
 ```
-┌─ 卡片容器（card_bg 背景 + border_radius 圆角 + shadow 阴影）──────┐
-│ ▓▓▓▓ 左侧 4px 色条（chart_colors[n]）                              │
+┌─ 卡片容器（card_bg 背景 + border_radius 圆角 + border-left: 4px solid chart_colors[n] + shadow 阴影 + overflow:hidden）┐
 │                                                                    │
-│  🔷 SVG 图标（16-24px，颜色跟随色条）  +  标题（card_title 字号）    │
+│  🔷 SVG 图标（16-24px，颜色跟随 border-left 色）  +  标题（card_title 字号）│
 │                                                                    │
 │  正文（body 字号，line-height: 1.6-1.8）                            │
 │                                                                    │
@@ -120,9 +127,11 @@
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-**每张卡片 = 色条 + 图标 + 标题 + 正文。** 四要素缺一不可。
+**每张卡片 = border-left 色条 + 图标 + 标题 + 正文。** 四要素缺一不可。
 
-**色条轮换规则**：多卡片页面，每张卡左色条使用不同 chart_color，按 chart_colors[0]→[1]→[2]→[3]→[4] 依次轮换。禁止所有卡片同一颜色。
+**左侧色条实现方式**：使用 CSS `border-left: 4px solid {chart_colors[n]}` 直接写在卡片容器上。禁止使用 `<div style="position:absolute;left:0;width:4px;...">` 独立元素实现色条。`border-left` 原生跟随 `border-radius` 圆角，无需裁剪。
+
+**色条轮换规则**：多卡片页面，每张卡 border-left 使用不同 chart_color，按 chart_colors[0]→[1]→[2]→[3]→[4] 依次轮换。禁止所有卡片同一颜色。
 
 ---
 
@@ -132,7 +141,7 @@
 
 | 色彩来源 | 用途 | 占比 |
 |---------|------|------|
-| `chart_colors[0..7]` | **卡片色条轮换** + 图表色序列 + 图标颜色 | 每卡用不同色 |
+| `chart_colors[0..7]` | **卡片 border-left 轮换** + 图表色序列 + 图标颜色 | 每卡用不同色 |
 | `primary` | 内容页标题色 + 卡片标题色 | 标题文字专用 |
 | `accent` | 页面级装饰线（顶部色条 + 标题短线） | 仅页面框架，不用于卡片 |
 | `background` | 页面底色 | 全画布 |
@@ -140,8 +149,8 @@
 | `card_bg` | 卡片背景 | 卡片区域 |
 
 ### 禁止事项
-- 禁止 accent 色用于卡片色条（accent 是页面级装饰色）
-- 禁止所有卡片色条同一颜色
+- 禁止 accent 色用于卡片 border-left（accent 是页面级装饰色）
+- 禁止所有卡片 border-left 同一颜色
 - 禁止 chart_colors[0] 独占所有卡片
 
 ---
@@ -262,6 +271,32 @@
 - **相邻独立元素**（非同一组内）：间距 ≥ 16px
 - **装饰层文字**（背景大字/水印）：line-height ≥ 1，font-size ≥ 120px 时 line-height ≥ 0.15；禁止 line-height: 1px 用于可见文字
 
+### 文本段落格式化（硬约束）
+
+正文内容必须遵循书写规范，禁止"文字墙"（一坨文字无分段）：
+
+- **段落拆分**：正文超过 3 句话或超过 120 字时，必须拆分为多个段落。每个段落使用独立的 `<p>` 标签包裹。
+- **段落间距**：相邻 `<p>` 标签之间 `margin-bottom: 10-14px`。
+- **层次结构**：结论/核心观点句单独成段并加粗（`font-weight:600`），支撑细节作为后续段落。
+- **分行规则**：段落内需要分行时使用 `<br/>`，禁止段落内文字自然折行导致行宽超过 900px。
+- **每段长度**：单段落不超过 180 字，视觉上不超过 5 行。
+- **列表化**：并列要点（≥3 项）使用 `<ul>` + `<li>` 列表格式，每项 `margin-bottom: 6-8px`，禁止用 `<br/>` 模拟列表。
+- **正文换行必须在 HTML 源码中体现**：下载后可见的文本应有清晰的段落结构，不是一整块无间断的文字。
+
+示例：
+
+```html
+<!-- ✅ 正确：分段落，有层次 -->
+<div style="font-size:16px;line-height:1.7;color:#333">
+  <p style="font-weight:600;margin-bottom:12px">核心结论：流程标准化可将整体效率提升 35%。</p>
+  <p style="margin-bottom:12px">通过对关键路径进行重新规划，消除冗余环节。具体措施包括：将上下游模块直线对接，取消中间转运步骤，减少等待时间。</p>
+  <p style="margin-bottom:12px">实际验证数据表明：平均交付周期从 18 天缩短至 12 天，且返工率下降 8%。</p>
+</div>
+
+<!-- ❌ 错误：文字墙，无段落 -->
+<div style="font-size:16px;line-height:1.7">核心结论流程标准化可将整体效率提升35%通过对关键路径进行重新规划消除冗余环节具体措施包括将上下游模块直线对接取消中间转运步骤减少等待时间实际验证数据表明平均交付周期从18天缩短至12天且返工率下降8%。</div>
+```
+
 ---
 
 ## 八、跨页一致性
@@ -292,8 +327,8 @@
 [ ] ≥3 个 SVG 元素
 [ ] ≥4 种不同 chart_color 出现在页面
 [ ] ≥1 个半透明几何装饰图形
-[ ] 每张卡片有：色条 + SVG 图标 + 标题 + 正文
-[ ] 卡片色条颜色互不相同（轮换 chart_colors）
+[ ] 每张卡片有：border-left 色条 + SVG 图标 + 标题 + 正文
+[ ] 卡片 border-left 颜色互不相同（轮换 chart_colors）
 [ ] 有数字的地方有图表形态
 [ ] 顶部有 accent 色条
 [ ] 标题下方有 accent 短线
@@ -331,7 +366,7 @@
 | 5 | `dashboard` | 3-5 | 顶行 metric 卡 + 底行 summary | 数据总览、KPI 展示 |
 | 6 | `mixed_grid` | 3-4 | 顶行 hero(全宽) + 底行 2-3 小卡 | 核心观点+支撑论据 |
 | 7 | `hero_grid` | 2-4 | 左 hero 大卡 + 右 1-2 小卡堆叠 | 论点+数据佐证 |
-| 8 | `single_focus` | 1 | 居中大卡 ~900px | **仅限封面、金句、章节分隔页。内容页（含表格/流程/对比/数据）禁止使用此布局** |
+| 8 | `single_focus` | 1 | 单一全宽卡片（使用基准容器 `left:60px;right:60px`，不是居中窄卡） | **仅限封面、金句、章节分隔、总结、结尾页。** 内容页（content/data/comparison/process/timeline/table/technique/skill_card/food_archive/troubleshoot 等）禁止使用此布局 |
 | 9 | `timeline` | 2-5 | 水平排列，步骤节点+连接线 | 流程步骤、时间线 |
 | 10 | `horizontal_split` | 3-4 | 顶全宽 hero + 底行 2-3 小卡 | 标题+支撑指标 |
 
@@ -339,7 +374,7 @@
 
 ```
 内容是什么类型？
-├─ 封面/章节分隔/结束页 → full_bleed
+├─ 封面/章节分隔/结束页/总结页 → full_bleed 或 single_focus
 ├─ 单一核心观点/结论/金句 → single_focus
 ├─ 流程/步骤/时间线/里程碑 → timeline
 ├─ 含对立内容（优劣/前后/A vs B） → two_column
@@ -373,13 +408,13 @@ horizontal_split      → [hero, card_0, card_1, card_2?]
 |------|---------|---------|---------|---------|
 | `hero` | 大卡，大面积，核心信息 | title + body | chart | 核心观点、封面、结论 |
 | `metric` | 居中大数字/进度条，顶部短色条 | chart | 无 | 数据指标、KPI |
-| `card_0` | 标准卡，左侧 4px 色条(chart_colors[0]) | title 或 body | chart | 网格第 1 张 |
-| `card_1` | 标准卡，左侧 4px 色条(chart_colors[1]) | title 或 body | chart | 网格第 2 张 |
-| `card_2` | 标准卡，左侧 4px 色条(chart_colors[2]) | title 或 body | chart | 网格第 3 张 |
-| `card_3` | 标准卡，左侧 4px 色条(chart_colors[3]) | title 或 body | chart | 网格第 4 张 |
-| `card_4` | 标准卡，左侧 4px 色条(chart_colors[4]) | title 或 body | chart | 网格第 5 张 |
-| `left` | 绿色顶条 + "▲ " 前缀 | title + body | 无 | 双栏对比左/正面 |
-| `right` | 红色顶条 + "▼ " 前缀 | title + body | 无 | 双栏对比右/反面 |
+| `card_0` | 标准卡，border-left:4px solid chart_colors[0] | title 或 body | chart | 网格第 1 张 |
+| `card_1` | 标准卡，border-left:4px solid chart_colors[1] | title 或 body | chart | 网格第 2 张 |
+| `card_2` | 标准卡，border-left:4px solid chart_colors[2] | title 或 body | chart | 网格第 3 张 |
+| `card_3` | 标准卡，border-left:4px solid chart_colors[3] | title 或 body | chart | 网格第 4 张 |
+| `card_4` | 标准卡，border-left:4px solid chart_colors[4] | title 或 body | chart | 网格第 5 张 |
+| `left` | 绿色 border-left + "▲ " 前缀 | title + body | 无 | 双栏对比左/正面 |
+| `right` | 红色 border-left + "▼ " 前缀 | title + body | 无 | 双栏对比右/反面 |
 | `summary` | 全宽浅色/半透明卡 | title 或 body | chart | 数据总结、页面收尾 |
 | `step_1`~`step_5` | 圆形/圆角方形编号 + 标题 | title + body | 无 | 时间线步骤 |
 
@@ -424,8 +459,8 @@ horizontal_split      → [hero, card_0, card_1, card_2?]
 
 | 颜色 | 色值 | 语义 | 使用场景 |
 |------|------|------|---------|
-| 绿 | `#27ae60` / chart_colors emerald | 正向/增长/优势/达标 | 正面指标、left 卡色条 |
-| 红 | `#c0392b` / chart_colors red/pink | 负向/下降/风险/警示 | 负面指标、right 卡色条 |
+| 绿 | `#27ae60` / chart_colors emerald | 正向/增长/优势/达标 | 正面指标、left 卡 border-left |
+| 红 | `#c0392b` / chart_colors red/pink | 负向/下降/风险/警示 | 负面指标、right 卡 border-left |
 | accent | style YAML accent 色 | 强调/装饰/高光 | 页面框架装饰、标题短线 |
 | primary | style YAML primary 色 | 标题/重点 | 标题文字、hero 卡背景 |
 | amber/orange | chart_colors amber | 中性/注意/待定 | 中间指标、进度提示 |

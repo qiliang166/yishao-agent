@@ -23,7 +23,7 @@
 
 ### VS 徽章
 - 居中圆形或菱形 VS 徽章
-- 背景: accent `#e67e22`
+- 背景: accent `{{accent}}`
 - 文字: 白色, font-weight:700, 16px
 - 位于左右分栏之间的分隔线上
 

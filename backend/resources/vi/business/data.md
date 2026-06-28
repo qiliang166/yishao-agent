@@ -23,20 +23,20 @@
 
 | 索引 | 色值 | 名称 | 语义 |
 |------|------|------|------|
-| 0 | `#c8752e` | Deep Copper 深铜 | 焦点/主要数据 |
-| 1 | `#2d5f8a` | Medium Blue 中蓝 | 次级数据/正向 |
-| 2 | `#3b6b9e` | Steel Blue 钢蓝 | 辅助数据/增长 |
-| 3 | `#d4956a` | Copper Clay 铜陶 | 负向/警示 |
-| 4 | `#2980b9` | Bright Blue 亮蓝 | 中性/补充 |
+| 0 | `{{chart_0}}` | Deep Copper 深铜 | 焦点/主要数据 |
+| 1 | `{{secondary}}` | Medium Blue 中蓝 | 次级数据/正向 |
+| 2 | `{{chart_2}}` | Steel Blue 钢蓝 | 辅助数据/增长 |
+| 3 | `{{chart_3}}` | Copper Clay 铜陶 | 负向/警示 |
+| 4 | `{{chart_4}}` | Bright Blue 亮蓝 | 中性/补充 |
 
 ## 色彩语义映射
 
 | 色值 | 名称 | 语义 |
 |------|------|------|
-| `#c8752e` | 深铜 | 强调/焦点/主要数据 |
-| `#3b6b9e` | 钢蓝 | 正向/增长/优势/达标 |
-| `#d4956a` | 铜陶 | 负向/下降/风险/警示 |
-| `#e67e22` | 黄铜 ACCENT | 页面级装饰/标题短线 |
+| `{{chart_0}}` | 深铜 | 强调/焦点/主要数据 |
+| `{{chart_2}}` | 钢蓝 | 正向/增长/优势/达标 |
+| `{{chart_3}}` | 铜陶 | 负向/下降/风险/警示 |
+| `{{accent}}` | 黄铜 ACCENT | 页面级装饰/标题短线 |
 
 ---
 
@@ -56,13 +56,13 @@
 - 标签: 14px opacity 0.6
 
 ### 环形图（Donut）
-- 中心文字: 18px primary `#1a365d`, 加粗 700
+- 中心文字: 18px primary `{{primary}}`, 加粗 700
 - 环形色: chart_colors 序列
-- 轨道: card_bg `#f0f4f8`
+- 轨道: card_bg `{{card_bg}}`
 
 ### 进度条（Progress Bar）
-- 轨道: card_bg `#f0f4f8`, 圆角 12px
-- 填充: chart_color → secondary `#2d5f8a` 渐变
+- 轨道: card_bg `{{card_bg}}`, 圆角 12px
+- 填充: chart_color → secondary `{{secondary}}` 渐变
 
 ### 折线图 / 面积图
 - 线条: 2px, 圆角端点

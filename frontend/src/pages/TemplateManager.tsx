@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api, StyleItem } from '../services/api'
+import { useModal } from '../components/ModalProvider'
 
 const VI_LABELS: Record<string, string> = {
   vi: '通用规范', prompt: '提示词', tokens: 'Token',
@@ -48,7 +49,29 @@ function pageTypeSortKey(section: string): number {
   return 999
 }
 
-function mdToHtml(md: string, title: string): string {
+// Resolve {{primary}}, {{chart_0}}, {{semantic_*}} etc. in text to styled color swatches
+function resolveColorVarsInText(text: string, schemeColors: SchemeColors | null, fallbackPrimary: string): string {
+  if (!schemeColors) return text
+  return text.replace(/\{\{(\w+)\}\}/g, (_m: string, key: string) => {
+    let val = (schemeColors as any)[key] || ''
+    if (!val) {
+      const chartMatch = key.match(/^chart_(\d+)$/)
+      if (chartMatch && schemeColors.chart_colors) {
+        val = schemeColors.chart_colors[parseInt(chartMatch[1])] || ''
+      }
+    }
+    if (!val && schemeColors.semantic) {
+      const semMatch = key.match(/^semantic_(\w+)$/)
+      if (semMatch) val = schemeColors.semantic[semMatch[1]] || ''
+    }
+    if (val && val.startsWith('#')) return `<span style="color:${val};font-weight:600">${val}</span>`
+    if (val && val.startsWith('rgb')) return `<span style="color:${fallbackPrimary};font-weight:600">${val}</span>`
+    return _m
+  })
+}
+
+function mdToHtml(md: string, title: string, schemeColors?: SchemeColors | null): string {
+  const C = makeColors(schemeColors || null)
   // Minimal markdown → styled HTML for preview
   let body = md
     // Escapes
@@ -86,13 +109,31 @@ function mdToHtml(md: string, title: string): string {
     .replace(/^(?!<[a-z/])(.+)$/gm, '<p>$1</p>')
     // Fix nested ps in blockquotes
     .replace(/<blockquote><p>(.*?)<\/p><\/blockquote>/g, '<blockquote>$1</blockquote>')
+    // Resolve {{color}} placeholders in text content from scheme data
+    .replace(/\{\{(\w+)\}\}/g, (_m: string, key: string) => {
+      if (!schemeColors) return _m
+      let val = (schemeColors as any)[key] || ''
+      if (!val) {
+        const chartMatch = key.match(/^chart_(\d+)$/)
+        if (chartMatch && schemeColors.chart_colors) {
+          val = schemeColors.chart_colors[parseInt(chartMatch[1])] || ''
+        }
+      }
+      if (!val && schemeColors.semantic) {
+        const semMatch = key.match(/^semantic_(\w+)$/)
+        if (semMatch) val = schemeColors.semantic[semMatch[1]] || ''
+      }
+      if (val && val.startsWith('#')) return `<span style="color:${val};font-weight:600">${val}</span>`
+      if (val && val.startsWith('rgb')) return `<span style="color:${schemeColors.primary || C.p};font-weight:600">${val}</span>`
+      return _m
+    })
 
   return `<!DOCTYPE html>
 <html lang="zh">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${title}</title>
 <style>
-  :root { --bg:#fff; --text:#1a202c; --muted:#718096; --primary:#1a365d; --accent:#e67e22; --border:#e2e8f0; --code-bg:#f0f4f8; }
+  :root { --bg:${C.bg}; --text:${C.tp}; --muted:${C.tm}; --primary:${C.p}; --accent:${C.a}; --border:${C.b}; --code-bg:${C.cb}; }
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font:16px/1.8 Inter,'PingFang SC','Microsoft YaHei',sans-serif; color:var(--text); background:var(--bg); max-width:900px; margin:0 auto; padding:40px 48px; }
   h1 { font:700 28px/1.3 'DM Sans',Inter,'PingFang SC',sans-serif; color:var(--primary); margin:32px 0 12px; padding-bottom:8px; border-bottom:2px solid var(--border); }
@@ -114,40 +155,68 @@ function mdToHtml(md: string, title: string): string {
 <body>${body}</body></html>`
 }
 
-function genSlidePreview(section: string, styleName: string): string {
-  // ── VIS Design Tokens (matching VIS manual :root) ──
-  const C = {
-    // Primary palette
-    p:   '#1a365d', // --primary
-    pd:  '#0f2340', // --primary-deep
-    ps:  '#2d5f8a', // --primary-soft
-    pp:  '#d1dce6', // --primary-pale
-    // Surface
-    bg:  '#ffffff', // --bg-page
-    cb:  '#f0f4f8', // --bg-card
-    // Accent (brass)
-    a:   '#e67e22', // --accent
-    al:  '#fdebd0', // --accent-light
-    as:  '#fef5e7', // --accent-soft
-    // Text
-    tp:  '#1a202c', // --text-primary
-    ts:  '#3d3d3d', // --text-secondary
-    tm:  '#6b6b6b', // --text-muted
-    // Border
-    b:   '#e2e8f0', // --border
-    bl:  '#eff1f4', // --border-light
-    // Chart colors — copper + blue two-pillar system
-    cc:  ['#c8752e','#2d5f8a','#3b6b9e','#d4956a','#2980b9'],
-    // Hero gradient
+// ── Hex color utilities ──
+function hexToRgb(h: string): [number,number,number] {
+  const v = parseInt(h.replace('#',''), 16)
+  return [(v>>16)&255, (v>>8)&255, v&255]
+}
+function rgbToHex(r:number,g:number,b:number): string {
+  return '#' + [r,g,b].map(c => Math.max(0,Math.min(255,c)).toString(16).padStart(2,'0')).join('')
+}
+function lighten(hex: string, amt: number): string {
+  const [r,g,b] = hexToRgb(hex)
+  return rgbToHex(r+amt, g+amt, b+amt)
+}
+function darken(hex: string, amt: number): string {
+  return lighten(hex, -amt)
+}
+
+// ── Build full color tokens from a color scheme dict ──
+type SchemeColors = Record<string, any>
+function makeColors(scheme: SchemeColors | null) {
+  // Default deep-blue tokens
+  const def: Record<string, any> = {
+    p:'#1a365d', pd:'#0f2340', ps:'#2d5f8a', pp:'#d1dce6',
+    bg:'#ffffff', cb:'#f0f4f8',
+    a:'#e67e22', al:'#fdebd0', as:'#fef5e7',
+    tp:'#1a202c', ts:'#3d3d3d', tm:'#6b6b6b',
+    b:'#e2e8f0', bl:'#eff1f4',
+    cc:['#c8752e','#2d5f8a','#3b6b9e','#d4956a','#2980b9'],
+    sem:{ positive:'#27ae60', negative:'#c0392b' },
     hero:'linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)',
-    // Typography
-    fh:  "'DM Sans','Inter','PingFang SC','Microsoft YaHei',sans-serif",
-    fb:  "'Inter','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif",
-    fm:  "'SF Mono','Cascadia Code','Consolas',monospace",
-    // Legacy aliases
-    s:   '#2d5f8a', // = ps
-    t:   '#1a202c', // = tp
+    fh:"'DM Sans','Inter','PingFang SC','Microsoft YaHei',sans-serif",
+    fb:"'Inter','PingFang SC','Microsoft YaHei','Helvetica Neue',sans-serif",
+    fm:"'SF Mono','Cascadia Code','Consolas',monospace",
+    s:'#2d5f8a', t:'#1a202c',
   }
+  if (!scheme || !scheme.primary) return def
+
+  const p = scheme.primary       // e.g. #c41e3a
+  const s = scheme.secondary || darken(p, 20)
+  const a = scheme.accent || '#e67e22'
+  const bg = scheme.background || '#ffffff'
+  const cb = scheme.card_bg || '#f0f4f8'
+  const tp = scheme.text || '#1a202c'
+  const cc = scheme.chart_colors && scheme.chart_colors.length >= 5
+    ? scheme.chart_colors.slice(0, 5)
+    : def.cc
+  const sem = scheme.semantic || { positive: '#27ae60', negative: '#c0392b' }
+
+  return {
+    p, pd: darken(p, 30), ps: s, pp: lighten(p, 140),
+    bg, cb,
+    a, al: lighten(a, 100), as: lighten(a, 140),
+    tp, ts: lighten(tp, 40), tm: lighten(tp, 90),
+    b: def.b, bl: def.bl,
+    cc, sem,
+    hero: `linear-gradient(135deg, ${p} 0%, ${darken(p, 15)} 100%)`,
+    fh: def.fh, fb: def.fb, fm: def.fm,
+    s, t: tp,
+  }
+}
+
+function genSlidePreview(section: string, styleName: string, schemeColors?: SchemeColors | null): string {
+  const C = makeColors(schemeColors || null)
   const label = VI_LABELS[section] || section
   const shell = (body: string, cls='') =>
     `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${label} · ${styleName}</title><style>
@@ -192,7 +261,7 @@ function genSlidePreview(section: string, styleName: string): string {
     .big-num .unit{font-size:32px}
     /* content — tags */
     .tag{display:inline-block;padding:2px 8px;border-radius:10px;font:10px/1.4 var(--fm);font-weight:600}
-    .tag.accent{background:var(--as);color:#b85c0c}
+    .tag.accent{background:var(--as);color:${C.a}}
     /* content — table */
     .tbl{width:100%;border-collapse:collapse;font-size:14px}
     .tbl th{font:600 0.7rem var(--fm);color:#fff;background:var(--p);padding:10px 14px;text-align:left;letter-spacing:.05em;text-transform:uppercase}
@@ -200,10 +269,10 @@ function genSlidePreview(section: string, styleName: string): string {
     .tbl tr:nth-child(even) td{background:#fafbfc}
     /* content — flow node */
     .flow-node{display:inline-flex;align-items:center;justify-content:center;padding:8px 18px;border:2px solid var(--p);background:#fff;font:600 0.7rem var(--fm);color:var(--p);border-radius:4px;margin:6px;letter-spacing:.06em}
-    .flow-node.accent{border-color:var(--a);background:var(--as);color:#b85c0c}
+    .flow-node.accent{border-color:var(--a);background:var(--as);color:${C.a}}
     .flow-arrow{display:inline-block;margin:0 10px;color:var(--a);font-size:1.2rem;font-weight:700}
     /* content — callout */
-    .callout{background:#f8f9fc;border-left:3px solid var(--p);padding:16px 20px;margin:20px 0;font-size:0.85rem;color:#2e3b4e;border-radius:0 var(--r-sm) var(--r-sm) 0}
+    .callout{background:${C.cb};border-left:3px solid var(--p);padding:16px 20px;margin:20px 0;font-size:0.85rem;color:${C.ts};border-radius:0 var(--r-sm) var(--r-sm) 0}
     /* utilities */
     .flex-row{display:flex;gap:16px}
     .flex-col{display:flex;flex-direction:column;gap:12px}
@@ -296,7 +365,7 @@ function genSlidePreview(section: string, styleName: string): string {
             <div class="card" style="flex:1;text-align:center;padding:24px 16px">
               <div class="card-bar" style="background:${C.cc[m.c]};width:40px;height:3px;top:0;left:50%;transform:translateX(-50%);border-radius:2px"></div>
               <div style="font:700 36px/1 'DM Sans',sans-serif;color:${C.cc[m.c]};margin:8px 0 4px">${m.v}<span style="font-size:18px">${m.u}</span></div>
-              <div style="font-size:13px;color:#718096">${m.l}</div>
+              <div style="font-size:13px;color:${C.tm}">${m.l}</div>
             </div>
           `).join('')}
         </div>
@@ -345,7 +414,7 @@ function genSlidePreview(section: string, styleName: string): string {
               <div style="width:28px;height:28px;border-radius:50%;background:${C.cc[i]};color:#fff;display:flex;align-items:center;justify-content:center;font:700 13px 'DM Sans',sans-serif;flex-shrink:0">${i+1}</div>
               <div>
                 <div style="font:600 16px 'DM Sans',sans-serif;color:${C.p}">${s}</div>
-                <div style="font-size:13px;color:#718096">关键步骤描述，确保团队理解执行要点</div>
+                <div style="font-size:13px;color:${C.tm}">关键步骤描述，确保团队理解执行要点</div>
               </div>
             </div>
           `).join('')}
@@ -365,7 +434,7 @@ function genSlidePreview(section: string, styleName: string): string {
             <div style="display:flex;align-items:center;gap:0">
               <div style="background:#fff;border:2px solid ${C.cc[i]};border-radius:12px;padding:12px 18px;text-align:center;min-width:100px">
                 <div style="font:600 14px 'DM Sans',sans-serif;color:${C.p}">${s}</div>
-                <div style="font-size:11px;color:#718096;margin-top:4px">步骤 ${i+1}</div>
+                <div style="font-size:11px;color:${C.tm};margin-top:4px">步骤 ${i+1}</div>
               </div>
               ${i<a.length-1?`<div style="width:24px;height:2px;background:${C.a};margin:0 2px;position:relative"><div style="position:absolute;right:-4px;top:-4px;border:5px solid transparent;border-left-color:${C.a}"></div></div>`:''}
             </div>
@@ -402,7 +471,7 @@ function genSlidePreview(section: string, styleName: string): string {
               <div style="text-align:center;width:120px">
                 <div style="width:14px;height:14px;border-radius:50%;background:${C.cc[m.c]};margin:9px auto 16px;position:relative;z-index:1"></div>
                 <div style="font:600 13px 'DM Sans',sans-serif;color:${C.p}">${m.t}</div>
-                <div style="font-size:12px;color:#718096;margin-top:4px">${m.e}</div>
+                <div style="font-size:12px;color:${C.tm};margin-top:4px">${m.e}</div>
               </div>
             `).join('')}
           </div>
@@ -430,14 +499,14 @@ function genSlidePreview(section: string, styleName: string): string {
       <div style="display:flex;align-items:center;justify-content:center;height:100%;text-align:center;position:relative">
         <div class="deco-circle" style="top:-20%;right:-10%;width:50%;height:80%;background:rgba(230,126,34,0.03)"></div>
         <div style="z-index:1">
-          <div style="font-size:16px;color:#718096;margin-bottom:8px">年度总营收</div>
+          <div style="font-size:16px;color:${C.tm};margin-bottom:8px">年度总营收</div>
           <div style="font:800 96px/1 'DM Sans',sans-serif;color:${C.cc[0]}">68.3<span style="font-size:32px">M</span></div>
           <div style="display:flex;gap:32px;justify-content:center;margin-top:32px">
             ${[{v:'+17.6%',l:'同比增长',c:2},{v:'94.2%',l:'目标完成',c:1},{v:'#1',l:'市场排名',c:0}].map(m=>`
               <div class="card" style="text-align:center;padding:16px 24px;min-width:120px">
                 <div class="card-bar" style="background:${C.cc[m.c]};width:30px;height:3px;top:0;left:50%;transform:translateX(-50%);border-radius:2px"></div>
                 <div style="font:700 24px/1 'DM Sans',sans-serif;color:${C.cc[m.c]};margin:8px 0 4px">${m.v}</div>
-                <div style="font-size:12px;color:#718096">${m.l}</div>
+                <div style="font-size:12px;color:${C.tm}">${m.l}</div>
               </div>
             `).join('')}
           </div>
@@ -458,7 +527,7 @@ function genSlidePreview(section: string, styleName: string): string {
               <div class="card-bar" style="background:${C.cc[i]};width:100%;height:3px;top:0;left:0;border-radius:0 0 2px 2px"></div>
               <div style="width:44px;height:44px;border-radius:50%;background:${C.cc[i]};color:#fff;display:flex;align-items:center;justify-content:center;font:700 18px 'DM Sans',sans-serif;margin:8px auto 10px">${n[0]}</div>
               <div style="font:600 15px 'DM Sans',sans-serif;color:${C.p}">${n}</div>
-              <div style="font-size:12px;color:#718096;margin-top:4px">${['CEO','CTO','CFO','COO'][i]} · 核心合伙人</div>
+              <div style="font-size:12px;color:${C.tm};margin-top:4px">${['CEO','CTO','CFO','COO'][i]} · 核心合伙人</div>
             </div>
           `).join('')}
         </div>
@@ -554,7 +623,7 @@ function genSlidePreview(section: string, styleName: string): string {
         ].map((r,i)=>`
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:12px 14px;background:${i%2?'#fff':C.cb};border-radius:6px;font-size:13px;line-height:1.6;margin-bottom:6px">
             <div style="font-weight:600;color:${C.cc[0]}">${r[0]}</div>
-            <div style="color:#4a5568">${r[1]}</div>
+            <div style="color:${C.ts}">${r[1]}</div>
             <div style="color:${C.s}">${r[2]}</div>
           </div>
         `).join('')}
@@ -591,14 +660,14 @@ function genSlidePreview(section: string, styleName: string): string {
             '[1] Chen, L. et al. "Deep Learning for NLP." JMLR 2025.',
             '[2] Smith, R. "System Design at Scale." O\'Reilly 2024.',
             '[3] Kumar, A. & Zhang, W. "Cloud Native Patterns." ACM Queue 22(3).',
-          ].map(r=>`<div style="padding:5px 0;font-size:13px;color:#4a5568;border-bottom:1px solid ${C.cb}">${r}</div>`).join('')}
+          ].map(r=>`<div style="padding:5px 0;font-size:13px;color:${C.ts};border-bottom:1px solid ${C.cb}">${r}</div>`).join('')}
         </div>
         <div style="margin-top:16px">
           <h3 style="font:600 16px 'DM Sans',sans-serif;color:${C.p};margin-bottom:6px">术语表</h3>
           <div style="display:grid;grid-template-columns:2fr 5fr;gap:4px 16px;font-size:13px">
             ${[['SLA','Service Level Agreement — 服务等级协议'],['MTTR','Mean Time To Recovery — 平均恢复时间'],['RPO','Recovery Point Objective — 恢复点目标']].map(([t,d])=>`
               <div style="font-weight:600;color:${C.p};padding:3px 0">${t}</div>
-              <div style="color:#4a5568;padding:3px 0;border-bottom:1px solid ${C.cb}">${d}</div>
+              <div style="color:${C.ts};padding:3px 0;border-bottom:1px solid ${C.cb}">${d}</div>
             `).join('')}
           </div>
         </div>
@@ -747,8 +816,9 @@ function encodeHtmlAttr(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 }
 
-function genFoundationHTML(type: string): string {
-  const cc = ['#c8752e','#2d5f8a','#3b6b9e','#d4956a','#2980b9']
+function genFoundationHTML(type: string, schemeColors?: SchemeColors | null): string {
+  const C = makeColors(schemeColors || null)
+  const cc = C.cc
   // ── VIS slide design pattern helpers ──
   const hd = (t: string, s?: string) => `<div style="margin-bottom:24px"><h2 style="font:700 22px/1.2 'DM Sans','Inter','PingFang SC','Microsoft YaHei',sans-serif;color:var(--p);margin:0 0 6px">${t}</h2><div style="width:40px;height:3px;background:var(--a);border-radius:2px;margin-bottom:8px"></div>${s?`<p style="font-size:13px;color:var(--m);line-height:1.6;margin:0;max-width:640px">${s}</p>`:''}</div>`
   const cd = (c: string, body: string) => `<div style="background:var(--cb);border-radius:12px;padding:20px 20px 20px 24px;position:relative;overflow:hidden;border:1px solid var(--b)"><div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${c};border-radius:0 2px 2px 0"></div>${body}</div>`
@@ -782,19 +852,22 @@ function genFoundationHTML(type: string): string {
 
     // ── II. 色彩系统 ──
     case 'colors':
-      return hd('色彩系统','主色调 7 色 + 图表色 5 色 = 12 色令牌。禁止混用，禁止超过上限。')
-      + `<div style="margin-bottom:28px">${ct('主色调 (7 色)')}<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px">${[
-        {l:'Primary',c:'#1a365d',v:'--p',w:'标题、深色背景'},
-        {l:'Secondary',c:'#2d5f8a',v:'--s',w:'强调、图表主色'},
-        {l:'Accent',c:'#e67e22',v:'--a',w:'CTA、装饰、页码'},
-        {l:'Background',c:'#ffffff',v:'--bg',w:'页面底色'},
-        {l:'Card BG',c:'#f0f4f8',v:'--cb',w:'卡片容器'},
-        {l:'Text',c:'#1a202c',v:'--t',w:'正文'},
-        {l:'Muted',c:'#718096',v:'--m',w:'辅助文字'},
-      ].map(x=>`<div style="text-align:center;flex:1;min-width:80px"><div style="width:56px;height:56px;border-radius:10px;background:${x.c};border:1px solid var(--b);margin:0 auto 8px;box-shadow:0 2px 6px rgba(0,0,0,0.06)"></div><div style="font:600 12px 'DM Sans',sans-serif;color:var(--p)">${x.l}</div><div style="font-size:10px;color:var(--m);font-family:'SF Mono',monospace">${x.c}</div><div style="font-size:10px;color:var(--m)">${x.v} · ${x.w}</div></div>`).join('')}</div></div>`
-      + `<div style="margin-bottom:24px">${ct('图表色 chart_color (5 色)')}<div style="display:flex;gap:8px;border-radius:8px;overflow:hidden;margin:10px 0 6px">${cc.map(c=>`<div style="flex:1;height:40px;background:${c}"></div>`).join('')}</div><div style="display:flex;gap:8px;font:10px 'SF Mono',monospace;color:var(--m)">${cc.map(c=>`<span style="flex:1;text-align:center">${c}</span>`).join('')}</div></div>`
-      + co(cc[0],`<b style="color:${cc[0]}">语义映射：</b>primary=标题 | secondary=强调 | accent=CTA及装饰条 | text=正文 | card_bg=卡片容器 | background=页面底色`)
-      + co('#c62828',`<b style="color:#c62828">禁止规则：</b>chart_color 用于正文 | text 色用于标题 | 单页使用超过 5 种主色 | 渐变背景覆盖正文区域`)
+      return hd('色彩系统','基础色 6 + 图表色 5 + 语义色 2 = 13 色令牌。全部来自 tokens.yaml color_schemes，禁止混用、禁止硬编码。')
+      + `<div style="margin-bottom:28px">${ct('基础色 (6 色)')}<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:12px">${[
+        {l:'Primary',c:C.p,v:'primary',w:'标题、深色背景'},
+        {l:'Secondary',c:C.s,v:'secondary',w:'强调、渐变端点'},
+        {l:'Accent',c:C.a,v:'accent',w:'CTA、装饰条、页码'},
+        {l:'Background',c:C.bg,v:'background',w:'页面底色'},
+        {l:'Card BG',c:C.cb,v:'card_bg',w:'卡片容器底色'},
+        {l:'Text',c:C.tp,v:'text',w:'正文颜色'},
+      ].map(x=>`<div style="text-align:center;flex:1;min-width:80px"><div style="width:56px;height:56px;border-radius:10px;background:${x.c};border:1px solid var(--b);margin:0 auto 8px;box-shadow:0 2px 6px rgba(0,0,0,0.06)"></div><div style="font:600 12px 'DM Sans',sans-serif;color:var(--p)">${x.l}</div><div style="font-size:10px;color:var(--m);font-family:'SF Mono',monospace">${x.c}</div><div style="font-size:10px;color:var(--m)">${x.v}</div></div>`).join('')}</div></div>`
+      + `<div style="margin-bottom:24px">${ct('图表色 chart_colors (5 色)')}<div style="display:flex;gap:8px;border-radius:8px;overflow:hidden;margin:10px 0 6px">${cc.map((c: string)=>`<div style="flex:1;height:40px;background:${c}"></div>`).join('')}</div><div style="display:flex;gap:8px;font:10px 'SF Mono',monospace;color:var(--m)">${cc.map((c: string)=>`<span style="flex:1;text-align:center">${c}</span>`).join('')}</div></div>`
+      + `<div style="margin-bottom:28px">${ct('语义色 semantic (2 色)')}<div style="display:flex;gap:14px;margin-top:12px">${[
+        {l:'Positive',c:C.sem.positive,k:'semantic.positive'},
+        {l:'Negative',c:C.sem.negative,k:'semantic.negative'},
+      ].map(x=>`<div style="text-align:center;min-width:100px"><div style="width:56px;height:56px;border-radius:10px;background:${x.c};border:1px solid var(--b);margin:0 auto 8px;box-shadow:0 2px 6px rgba(0,0,0,0.06)"></div><div style="font:600 12px 'DM Sans',sans-serif;color:var(--p)">${x.l}</div><div style="font-size:10px;color:var(--m);font-family:'SF Mono',monospace">${x.c}</div><div style="font-size:10px;color:var(--m)">${x.k}</div></div>`).join('')}</div></div>`
+      + co(cc[0],`<b style="color:${cc[0]}">语义映射：</b>primary=标题 | secondary=强调 | accent=CTA及装饰条 | text=正文 | card_bg=卡片容器 | background=页面底色 | semantic=正负面标记`)
+      + co('#c62828',`<b style="color:#c62828">禁止规则：</b>chart_color 用于正文 | text 色用于标题 | 单页超过 5 种主色 | 渐变背景覆盖正文区域 | 硬编码色值`)
 
     // ── III. 排版层级 ──
     case 'typography':
@@ -810,7 +883,7 @@ function genFoundationHTML(type: string): string {
         // Body font
         cd(cc[1],ct('正文字体 Inter')+`<div style="margin-top:8px"><div style="background:#fff;border-radius:6px;padding:16px;font:400 14px/1.7 'Inter','PingFang SC','Microsoft YaHei',sans-serif;color:var(--t)">正文使用 Inter 字族，line-height: 1.6~1.8，确保中英文混排阅读舒适度与可访问性。</div><div style="font-size:10px;color:var(--m);font-family:'SF Mono',monospace;margin-top:6px">400 14px/1.7 · Inter, PingFang SC, Microsoft YaHei</div></div>`),
         // Code font
-        cd(cc[2],ct('代码/数据字体 SF Mono')+`<div style="margin-top:8px"><div style="background:#1a202c;color:#e2e8f0;border-radius:6px;padding:14px 16px;font:400 12px/1.6 'SF Mono','Cascadia Code',monospace">const tokens = { primary: '#1a365d',<br/>  accent: '#e67e22', chart: [...] }</div><div style="font-size:10px;color:var(--m);font-family:'SF Mono',monospace;margin-top:6px">11-13px · type-tag / metadata / code</div></div>`),
+        cd(cc[2],ct('代码/数据字体 SF Mono')+`<div style="margin-top:8px"><div style="background:${C.tp};color:${C.b};border-radius:6px;padding:14px 16px;font:400 12px/1.6 'SF Mono','Cascadia Code',monospace">const tokens = { primary: '${C.p}',<br/>  accent: '${C.a}', chart: [...] }</div><div style="font-size:10px;color:var(--m);font-family:'SF Mono',monospace;margin-top:6px">11-13px · type-tag / metadata / code</div></div>`),
       ].join(''))
 
     // ── IV. 卡片样式 Token ──
@@ -1002,9 +1075,9 @@ function genFoundationHTML(type: string): string {
         '3. ≥4 种不同 chart_color 出现在页面','4. ≥1 个半透明几何装饰图形（rgba）',
         '5. 每张卡片有：SVG 图标 + 标题 + 正文','6. 有数字的地方有图表形态',
         '7. 顶部有 accent 色条（4px）','8. 标题下方有 accent 短线（40×3px）',
-        '9. 右下角有页码（dot + current/total）','10. 标题使用 primary 色（#1a365d）',
-        '11. 正文使用 text 色（#1a202c）','12. 卡片背景使用 card_bg 色（#f0f4f8）',
-        '13. 页面背景使用 background 色（#ffffff）','14. 字体来自 typography token（DM Sans + Inter）',
+        `9. 右下角有页码（dot + current/total）`,`10. 标题使用 primary 色（${C.p}）`,
+        `11. 正文使用 text 色（${C.tp}）`,`12. 卡片背景使用 card_bg 色（${C.cb}）`,
+        `13. 页面背景使用 background 色（${C.bg}）`,`14. 字体来自 typography token（DM Sans + Inter）`,
         '15. 圆角来自 card_style token（12px）','16. 阴影来自 elevation token',
         '17. 插图标签与图形居中对齐（text-anchor="middle"）','18. 插图标签与图形间距 ≥ 22px',
         '19. 插图内字号 ≥ 14px','20. 可见 SVG 描边 ≥ 1px',
@@ -1015,23 +1088,24 @@ function genFoundationHTML(type: string): string {
   }
 }
 
-function genFullManual(styleName: string): string {
+function genFullManual(styleName: string, schemeColors?: SchemeColors | null): string {
+  const C = makeColors(schemeColors || null)
   const items = PAGE_TYPE_ORDER.map(t => {
     const label = VI_LABELS[t] || t
-    const preview = genSlidePreview(t, styleName)
+    const preview = genSlidePreview(t, styleName, schemeColors)
     return { type: t, label, html: encodeHtmlAttr(preview) }
   })
   const FDN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV']
   const fdItems = FOUNDATION_ORDER.map((t, i) => {
     const label = VI_LABELS[t] || t
-    return { type: t, label, html: genFoundationHTML(t), isFd: true as const, roman: FDN[i] }
+    return { type: t, label, html: genFoundationHTML(t, schemeColors), isFd: true as const, roman: FDN[i] }
   })
   const allItems = [...fdItems, ...items.map(it=>({...it,isFd:false as const}))]
 
   return `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>VIS 视觉识别手册 · ${styleName}</title>
 <style>
-:root{--p:#1a365d;--s:#2d5f8a;--a:#e67e22;--bg:#fff;--cb:#f0f4f8;--t:#1a202c;--m:#718096;--b:#e2e8f0}
+:root{--p:${C.p};--s:${C.s};--a:${C.a};--bg:${C.bg};--cb:${C.cb};--t:${C.tp};--m:${C.tm};--b:${C.b}}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--t);background:#f7fafc}
 .hero{background:linear-gradient(135deg,var(--p) 0%,var(--s) 100%);color:#fff;padding:56px 40px 48px;text-align:center;border-bottom:8px solid var(--a)}
@@ -1105,6 +1179,240 @@ function TemplateManager() {
   const [editorLoading, setEditorLoading] = useState(false)
   const [editorMsg, setEditorMsg] = useState('')
 
+  // Color scheme management state
+  const [schemeData, setSchemeData] = useState<Record<string, any>>({})
+  const [editingSchemeId, setEditingSchemeId] = useState<string | null>(null)
+  const [schemesLoading, setSchemesLoading] = useState(false)
+  const [schemesSaving, setSchemesSaving] = useState(false)
+  const [showNewSchemeInput, setShowNewSchemeInput] = useState(false)
+  const [newSchemeName, setNewSchemeName] = useState('')
+  const [schemeStyleId, setSchemeStyleId] = useState('')
+  const [activeSchemeId, setActiveSchemeId] = useState('')
+  const [previewSchemeId, setPreviewSchemeId] = useState('')
+  const modal = useModal()
+
+  // ── Parse tokens.yaml → { schemes, activeId } ──
+  function parseTokensYaml(yamlText: string): { schemes: Record<string, any>; activeId: string } {
+    const schemes: Record<string, any> = {}
+    const activeMatch = yamlText.match(/^color_scheme:\s*(\S+)/m)
+    const activeId = activeMatch ? activeMatch[1] : ''
+    let inSchemes = false
+    let currentScheme = ''
+    let currentMap: Record<string, any> = {}
+    let inChartColors = false
+    let chartColorsList: string[] = []
+    let inSemantic = false
+    let semanticMap: Record<string, string> = {}
+    for (const line of yamlText.split('\n')) {
+      if (/^color_schemes:/.test(line)) { inSchemes = true; continue }
+      if (inSchemes && /^[a-z_]+:/.test(line) && !line.startsWith('  ')) { inSchemes = false; continue }
+      if (!inSchemes) continue
+      const indent2 = /^  [a-z]/.test(line)
+      const indent4 = /^    [a-z]/.test(line)
+      const indent6 = /^      [a-z-]/.test(line)
+      if (indent2) {
+        if (currentScheme) {
+          schemes[currentScheme] = { ...currentMap }
+          if (chartColorsList.length) schemes[currentScheme].chart_colors = [...chartColorsList]
+          if (Object.keys(semanticMap).length) schemes[currentScheme].semantic = { ...semanticMap }
+        }
+        currentScheme = line.replace(/:/, '').trim()
+        currentMap = {}
+        chartColorsList = []
+        semanticMap = {}
+        inChartColors = false
+        inSemantic = false
+      } else if (indent4 && currentScheme) {
+        const m = line.match(/^\s+(\w+):\s*"([^"]*)"/)
+        if (m) {
+          currentMap[m[1]] = m[2]
+        } else if (/^\s+chart_colors:/.test(line)) {
+          inChartColors = true
+          inSemantic = false
+        } else if (/^\s+semantic:/.test(line)) {
+          inSemantic = true
+          inChartColors = false
+        }
+      } else if (indent6 && inChartColors && currentScheme) {
+        const m = line.match(/"([^"]*)"/)
+        if (m) chartColorsList.push(m[1])
+      } else if (indent6 && inSemantic && currentScheme) {
+        const m = line.match(/^\s+(\w+):\s*"([^"]*)"/)
+        if (m) semanticMap[m[1]] = m[2]
+      } else if (indent4 && /^\s+label:/.test(line) && currentScheme) {
+        const m = line.match(/"([^"]*)"/)
+        if (m) currentMap['label'] = m[1]
+      } else if (indent4 && /^\s+persona_hint:/.test(line) && currentScheme) {
+        const m = line.match(/"([^"]*)"/)
+        if (m) currentMap['persona_hint'] = m[1]
+      }
+    }
+    if (currentScheme) {
+      schemes[currentScheme] = { ...currentMap }
+      if (chartColorsList.length) schemes[currentScheme].chart_colors = [...chartColorsList]
+      if (Object.keys(semanticMap).length) schemes[currentScheme].semantic = { ...semanticMap }
+    }
+    return { schemes, activeId }
+  }
+
+  const loadSchemes = useCallback(async (styleId: string) => {
+    setSchemesLoading(true)
+    setSchemeStyleId(styleId)
+    try {
+      const result: any = await api.getStyleVISection(styleId, 'tokens')
+      if (result?.content) {
+        const { schemes, activeId } = parseTokensYaml(result.content)
+        setActiveSchemeId(activeId)
+        setPreviewSchemeId(activeId)
+        setSchemeData(schemes)
+      }
+    } catch (e) {
+      console.error('Failed to load color schemes:', e)
+    } finally {
+      setSchemesLoading(false)
+    }
+  }, [])
+
+  const saveSchemes = useCallback(async () => {
+    if (!schemeStyleId || Object.keys(schemeData).length === 0) return
+    const ok = await modal.confirm('确认保存色系修改？')
+    if (!ok) return
+    setSchemesSaving(true)
+    try {
+      const result: any = await api.getStyleVISection(schemeStyleId, 'tokens')
+      if (result?.content) {
+        let yamlText = result.content
+        // Replace color_scheme field + color_schemes block in YAML
+        const lines = yamlText.split('\n')
+        const newLines: string[] = []
+        let inSchemes = false
+        let replacedSchemes = false
+        let replacedScheme = false
+        for (const line of lines) {
+          // Update active scheme field
+          if (/^color_scheme:/.test(line) && !replacedScheme) {
+            replacedScheme = true
+            newLines.push(`color_scheme: ${activeSchemeId || Object.keys(schemeData)[0]}`)
+            continue
+          }
+          // Replace color_schemes block
+          if (/^color_schemes:/.test(line) && !replacedSchemes) {
+            inSchemes = true
+            replacedSchemes = true
+            newLines.push('color_schemes:')
+            for (const [sid, scheme] of Object.entries(schemeData)) {
+              newLines.push(`  ${sid}:`)
+              if (scheme.label) newLines.push(`    label: "${scheme.label}"`)
+              for (const key of ['primary', 'secondary', 'accent', 'background', 'text', 'card_bg']) {
+                if (scheme[key]) newLines.push(`    ${key}: "${scheme[key]}"`)
+              }
+              if (scheme.chart_colors?.length) {
+                newLines.push('    chart_colors:')
+                for (const c of scheme.chart_colors) {
+                  newLines.push(`      - "${c}"`)
+                }
+              }
+              if (scheme.semantic) {
+                newLines.push('    semantic:')
+                for (const [sk, sv] of Object.entries(scheme.semantic)) {
+                  newLines.push(`      ${sk}: "${sv}"`)
+                }
+              }
+              if (scheme.persona_hint) {
+                newLines.push(`    persona_hint: "${scheme.persona_hint}"`)
+              }
+            }
+            continue
+          }
+          if (inSchemes) {
+            if (/^[a-z_]+:/.test(line) && !line.startsWith('  ')) {
+              inSchemes = false
+              newLines.push(line)
+            }
+            continue
+          }
+          newLines.push(line)
+        }
+        if (!replacedScheme) {
+          // Insert color_scheme field before color_schemes
+          const csIdx = newLines.findIndex(l => /^color_schemes:/.test(l))
+          if (csIdx > 0) newLines.splice(csIdx, 0, '', `color_scheme: ${activeSchemeId || Object.keys(schemeData)[0]}`)
+          else newLines.splice(2, 0, `color_scheme: ${activeSchemeId || Object.keys(schemeData)[0]}`, '')
+        }
+        if (!replacedSchemes) {
+          // Append color_schemes block before the first top-level key after the header
+          const insertIdx = newLines.findIndex((l, i) => i > 1 && /^[a-z_]+:/.test(l) && !l.startsWith('#') && !/^color_scheme:/.test(l))
+          if (insertIdx > 0) {
+            newLines.splice(insertIdx, 0, 'color_schemes:')
+          }
+        }
+        const newYaml = newLines.join('\n')
+        await api.saveStyleVISection(schemeStyleId, 'tokens', newYaml)
+        modal.toast('色系已保存', 'success')
+      }
+    } catch (e: any) {
+      modal.toast('保存失败: ' + (e?.message || e), 'error')
+    } finally {
+      setSchemesSaving(false)
+    }
+  }, [schemeData, schemeStyleId, activeSchemeId, modal])
+
+  const handleSchemeColorChange = (schemeId: string, key: string, value: string) => {
+    setSchemeData(prev => {
+      const scheme = { ...prev[schemeId] }
+      if (key.startsWith('chart_')) {
+        const idx = parseInt(key.split('_')[1])
+        const arr = [...(scheme.chart_colors || [])]
+        arr[idx] = value
+        scheme.chart_colors = arr
+      } else if (key.startsWith('semantic_')) {
+        const semKey = key.replace('semantic_', '')
+        scheme.semantic = { ...(scheme.semantic || {}), [semKey]: value }
+      } else {
+        scheme[key] = value
+      }
+      return { ...prev, [schemeId]: scheme }
+    })
+  }
+
+  const handleAddScheme = () => {
+    const name = newSchemeName.trim()
+    if (!name) return
+    const baseScheme = editingSchemeId ? schemeData[editingSchemeId] : Object.values(schemeData)[0]
+    const defBase = { primary: '#1a365d', secondary: '#2d5f8a', accent: '#e67e22', background: '#ffffff', text: '#1a202c', card_bg: '#f0f4f8', chart_colors: ['#c8752e','#2d5f8a','#3b6b9e','#d4956a','#2980b9'], semantic: { positive: '#27ae60', negative: '#c0392b' } }
+    setSchemeData(prev => ({
+      ...prev,
+      [name]: { ...defBase, ...(baseScheme || {}), label: name }
+    }))
+    setNewSchemeName('')
+    setShowNewSchemeInput(false)
+    setEditingSchemeId(name)
+  }
+
+  const handleDeleteScheme = async (schemeId: string) => {
+    if (Object.keys(schemeData).length <= 1) return
+    const ok = await modal.confirm('确认删除该色系？')
+    if (!ok) return
+    setSchemeData(prev => {
+      const next = { ...prev }
+      delete next[schemeId]
+      return next
+    })
+    if (editingSchemeId === schemeId) setEditingSchemeId(null)
+  }
+
+  // Auto-load schemes when a style card expands
+  useEffect(() => {
+    if (expandedStyle) {
+      loadSchemes(expandedStyle)
+    } else {
+      setSchemeData({})
+      setEditingSchemeId(null)
+      setActiveSchemeId('')
+      setPreviewSchemeId('')
+    }
+  }, [expandedStyle, loadSchemes])
+
   const loadStyles = useCallback(async () => {
     setLoading(true)
     try {
@@ -1173,6 +1481,10 @@ function TemplateManager() {
         }
         setEditorTabs(tabs)
         setEditorActiveSection('vi')
+        // Auto-load color schemes for preview
+        loadSchemes(styleId).then(() => {
+          // previewSchemeId will be set by loadSchemes via activeSchemeId
+        })
       } else {
         // Legacy prompt mode — single tab
         const res = await api.getStylePrompt(styleId)
@@ -1246,17 +1558,19 @@ function TemplateManager() {
     const raw = editorTabs[section] || ''
     const isMeta = section === 'vi' || section === 'prompt' || section === 'tokens'
     const isFoundation = FOUNDATION_ORDER.indexOf(section) >= 0
+    const scheme = previewSchemeId ? schemeData[previewSchemeId] : null
+    const C = makeColors(scheme)
     let html: string
     if (isMeta) {
       // meta tabs: render content as HTML (or convert md)
       const isHtml = /<html|<body|<div|<table|<svg|<!DOCTYPE/i.test(raw.trim().slice(0, 200))
-      html = isHtml ? raw : mdToHtml(raw, `${editorStyleName} · ${section}`)
+      html = isHtml ? resolveColorVarsInText(raw, scheme, C.p) : mdToHtml(raw, `${editorStyleName} · ${section}`, scheme)
     } else if (isFoundation) {
       // foundation tabs: render genFoundationHTML wrapped in a full document
       const label = VI_LABELS[section] || section
-      const body = genFoundationHTML(section)
+      const body = genFoundationHTML(section, scheme)
       html = `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${label} · ${editorStyleName}</title><style>
-:root{--p:#1a365d;--s:#2d5f8a;--a:#e67e22;--bg:#fff;--cb:#f0f4f8;--t:#1a202c;--m:#718096;--b:#e2e8f0}
+:root{--p:${C.p};--s:${C.s};--a:${C.a};--bg:${C.bg};--cb:${C.cb};--t:${C.tp};--m:${C.tm};--b:${C.b}}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--t);background:#f7fafc;padding:32px 40px;max-width:960px;margin:0 auto}
 .foundation-wrap{background:#fff;border-radius:12px;padding:32px 36px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid var(--b)}
@@ -1264,7 +1578,7 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
 </style></head><body><div class="foundation-wrap">${body}</div></body></html>`
     } else {
       // type tabs: generate visual slide preview
-      html = genSlidePreview(section, editorStyleName)
+      html = genSlidePreview(section, editorStyleName, scheme)
     }
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     window.open(URL.createObjectURL(blob), '_blank')
@@ -1354,9 +1668,18 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                             <button
                               className="btn btn-xs"
                               style={{ flex: 1, fontSize: 10, padding: '4px 0', opacity: 0.8 }}
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation()
-                                const html = genFullManual(style.name)
+                                // Fetch tokens and parse schemes directly (not via state)
+                                const result: any = await api.getStyleVISection(style.id, 'tokens')
+                                let activeScheme: Record<string, any> | null = null
+                                if (result?.content) {
+                                  const parsed = parseTokensYaml(result.content)
+                                  if (parsed.activeId && parsed.schemes[parsed.activeId]) {
+                                    activeScheme = parsed.schemes[parsed.activeId]
+                                  }
+                                }
+                                const html = genFullManual(style.name, activeScheme)
                                 const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
                                 window.open(URL.createObjectURL(blob), '_blank')
                               }}
@@ -1387,18 +1710,165 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                               background: 'var(--bg)', borderRadius: 6,
                               fontSize: 10, lineHeight: 1.8, color: 'var(--text-secondary)',
                             }}>
-                              <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 4 }}>配色详情</div>
-                              {Object.entries(p).filter(([, v]) => v).map(([k, v]) => (
-                                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ fontWeight: 600, color: 'var(--text)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <span>色系管理</span>
+                                {activeSchemeId && (
                                   <span style={{
-                                    display: 'inline-block', width: 12, height: 12, borderRadius: 2,
-                                    background: v,
-                                    border: v.toLowerCase() === '#ffffff' ? '1px solid #ddd' : '1px solid transparent',
-                                  }} />
-                                  <span style={{ color: 'var(--text)' }}>{k}</span>
-                                  <span style={{ fontFamily: 'monospace' }}>{v}</span>
-                                </div>
-                              ))}
+                                    fontSize: 9, fontWeight: 500,
+                                    background: 'var(--primary)', color: '#fff',
+                                    padding: '1px 6px', borderRadius: 3,
+                                  }}>
+                                    默认: {schemeData[activeSchemeId]?.label || activeSchemeId}
+                                  </span>
+                                )}
+                                {schemesLoading && <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>加载中...</span>}
+                                <div style={{ flex: 1 }} />
+                                <button className="btn btn-xs" style={{ fontSize: 9, padding: '2px 6px' }}
+                                  onClick={(e) => { e.stopPropagation(); loadSchemes(style.id) }}>刷新</button>
+                              </div>
+                              {!schemesLoading && Object.keys(schemeData).length > 0 && (
+                                <>
+                                  {Object.entries(schemeData).map(([schemeId, scheme]: [string, any]) => {
+                                    const isEditing = editingSchemeId === schemeId
+                                    const baseColors = [
+                                      scheme.primary, scheme.secondary, scheme.accent,
+                                      scheme.background, scheme.text, scheme.card_bg
+                                    ].filter(Boolean)
+                                    return (
+                                      <div key={schemeId} style={{
+                                        marginBottom: 4, border: '1px solid var(--border)',
+                                        borderRadius: 4, overflow: 'hidden',
+                                      }}>
+                                        <div
+                                          onClick={(e) => { e.stopPropagation(); setEditingSchemeId(isEditing ? null : schemeId) }}
+                                          style={{
+                                            display: 'flex', alignItems: 'center', gap: 6,
+                                            padding: '4px 8px', cursor: 'pointer',
+                                            background: isEditing ? 'var(--primary)' : 'transparent',
+                                            color: isEditing ? '#fff' : 'var(--text)',
+                                          }}>
+                                          {baseColors.map((c: string, i: number) => (
+                                            <span key={'b'+i} style={{
+                                              display: 'inline-block', width: 10, height: 10, borderRadius: 2,
+                                              background: c,
+                                              border: c?.toLowerCase() === '#ffffff' ? '1px solid #ddd' : '1px solid transparent',
+                                            }} />
+                                          ))}
+                                          <span style={{ flex: 1, fontSize: 10, fontWeight: 500 }}>
+                                            {scheme.label || schemeId}
+                                          </span>
+                                          {activeSchemeId === schemeId ? (
+                                            <span style={{ fontSize: 8, background: '#27ae60', color: '#fff', padding: '1px 5px', borderRadius: 2 }}>默认</span>
+                                          ) : (
+                                            <button className="btn btn-xs"
+                                              onClick={(e) => { e.stopPropagation(); setActiveSchemeId(schemeId); setPreviewSchemeId(schemeId) }}
+                                              style={{ fontSize: 8, padding: '1px 5px', opacity: 0.6 }}
+                                              title="设为默认色系">默认</button>
+                                          )}
+                                        </div>
+                                        {isEditing && (
+                                          <div style={{ padding: '6px 8px' }}>
+                                            {/* 基础色 6 */}
+                                            <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text)', marginBottom: 4, borderBottom: '1px solid var(--border)', paddingBottom: 2 }}>基础色 (6)</div>
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 8px' }}>
+                                              {[
+                                                {k:'primary',l:'主色'},{k:'secondary',l:'辅色'},{k:'accent',l:'强调'},
+                                                {k:'background',l:'背景'},{k:'text',l:'文字'},{k:'card_bg',l:'卡底'},
+                                              ].map(({k,l}) => (
+                                                <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                  <span style={{ fontSize: 9, width: 26, color: 'var(--text-muted)' }}>{l}</span>
+                                                  <input type="color" value={scheme[k] || '#000000'}
+                                                    onChange={e => { e.stopPropagation(); handleSchemeColorChange(schemeId, k, e.target.value) }}
+                                                    style={{ width: 18, height: 18, border: 'none', borderRadius: 2, cursor: 'pointer', padding: 0 }} />
+                                                  <input value={scheme[k] || ''}
+                                                    onChange={e => { e.stopPropagation(); handleSchemeColorChange(schemeId, k, e.target.value) }}
+                                                    style={{ flex: 1, fontSize: 9, fontFamily: 'monospace', border: '1px solid var(--border)', borderRadius: 2, padding: '1px 4px', width: 50 }} />
+                                                </div>
+                                              ))}
+                                            </div>
+                                            {/* 图表色 5 + 语义色 2 并列 */}
+                                            <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                                              <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text)', marginBottom: 4, borderBottom: '1px solid var(--border)', paddingBottom: 2 }}>图表色 (5)</div>
+                                                {[0,1,2,3,4].map(i => {
+                                                  const ck = `chart_${i}`
+                                                  const cv = scheme.chart_colors?.[i] || ''
+                                                  return (
+                                                    <div key={ck} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                                                      <span style={{ fontSize: 9, width: 20, color: 'var(--text-muted)', textAlign: 'right' }}>C{i}</span>
+                                                      <input type="color" value={cv || '#000000'}
+                                                        onChange={e => { e.stopPropagation(); handleSchemeColorChange(schemeId, ck, e.target.value) }}
+                                                        style={{ width: 18, height: 18, border: 'none', borderRadius: 2, cursor: 'pointer', padding: 0 }} />
+                                                      <input value={cv}
+                                                        onChange={e => { e.stopPropagation(); handleSchemeColorChange(schemeId, ck, e.target.value) }}
+                                                        style={{ flex: 1, fontSize: 9, fontFamily: 'monospace', border: '1px solid var(--border)', borderRadius: 2, padding: '1px 4px', width: 50 }} />
+                                                    </div>
+                                                  )
+                                                })}
+                                              </div>
+                                              <div style={{ flex: 1 }}>
+                                                <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text)', marginBottom: 4, borderBottom: '1px solid var(--border)', paddingBottom: 2 }}>语义色 (2)</div>
+                                                {[
+                                                  {k:'semantic_positive',l:'正面',cv: scheme.semantic?.positive || ''},
+                                                  {k:'semantic_negative',l:'负面',cv: scheme.semantic?.negative || ''},
+                                                ].map(({k,l,cv}) => (
+                                                  <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+                                                    <span style={{ fontSize: 9, width: 28, color: 'var(--text-muted)' }}>{l}</span>
+                                                    <input type="color" value={cv || '#000000'}
+                                                      onChange={e => { e.stopPropagation(); handleSchemeColorChange(schemeId, k, e.target.value) }}
+                                                      style={{ width: 18, height: 18, border: 'none', borderRadius: 2, cursor: 'pointer', padding: 0 }} />
+                                                    <input value={cv}
+                                                      onChange={e => { e.stopPropagation(); handleSchemeColorChange(schemeId, k, e.target.value) }}
+                                                      style={{ flex: 1, fontSize: 9, fontFamily: 'monospace', border: '1px solid var(--border)', borderRadius: 2, padding: '1px 4px', width: 50 }} />
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            </div>
+                                            <button className="btn btn-xs"
+                                              onClick={(e) => { e.stopPropagation(); handleDeleteScheme(schemeId) }}
+                                              disabled={Object.keys(schemeData).length <= 1}
+                                              style={{
+                                                fontSize: 9, padding: '2px 8px', marginTop: 4,
+                                                background: Object.keys(schemeData).length <= 1 ? '#ddd' : '#e74c3c',
+                                                color: '#fff', border: 'none', borderRadius: 3,
+                                                cursor: Object.keys(schemeData).length <= 1 ? 'not-allowed' : 'pointer',
+                                              }}>删除</button>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                  {showNewSchemeInput ? (
+                                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                                      <input value={newSchemeName}
+                                        onChange={(e) => setNewSchemeName(e.target.value)}
+                                        placeholder="色系名称"
+                                        style={{ flex: 1, fontSize: 10, border: '1px solid var(--border)', borderRadius: 3, padding: '3px 6px' }}
+                                        onClick={(e) => e.stopPropagation()}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddScheme() }} />
+                                      <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); handleAddScheme() }}
+                                        style={{ fontSize: 9, padding: '2px 6px', background: '#27ae60', color: '#fff', border: 'none', borderRadius: 3 }}>确认</button>
+                                      <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); setShowNewSchemeInput(false); setNewSchemeName('') }}
+                                        style={{ fontSize: 9, padding: '2px 6px' }}>取消</button>
+                                    </div>
+                                  ) : (
+                                    <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); setShowNewSchemeInput(true) }}
+                                      style={{ fontSize: 9, padding: '2px 8px', marginTop: 4 }}>+ 新增色系</button>
+                                  )}
+                                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                                    <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); saveSchemes() }}
+                                      disabled={schemesSaving}
+                                      style={{ flex: 1, fontSize: 10, padding: '4px 0', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4 }}>
+                                      {schemesSaving ? '保存中...' : '保存色系'}
+                                    </button>
+                                    <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); loadSchemes(style.id) }}
+                                      style={{ fontSize: 10, padding: '4px 8px', opacity: 0.7 }}>取消</button>
+                                  </div>
+                                </>
+                              )}
+                              {!schemesLoading && Object.keys(schemeData).length === 0 && (
+                                <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>暂无色系数据</div>
+                              )}
                               <div style={{ fontWeight: 600, color: 'var(--text)', margin: '6px 0 4px' }}>关键词</div>
                               <div>{style.keywords?.filter((k: string) => /^[a-zA-Z]/.test(k)).slice(0, 5).join(', ') || style.mood}</div>
                             </div>
@@ -1499,7 +1969,22 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
               <span style={{ fontSize: 11, color: editorMsg === '已保存' || editorMsg === '已复制' ? 'var(--success, #27ae60)' : 'var(--text-muted)' }}>
                 {editorMsg || (sections.length > 1 ? `${editorActiveSection} · 共 ${sections.length} 个文件` : '')}
               </span>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {editorMode === 'vi' && Object.keys(schemeData).length > 0 && (
+                  <select
+                    value={previewSchemeId || activeSchemeId || ''}
+                    onChange={(e) => setPreviewSchemeId(e.target.value)}
+                    style={{
+                      fontSize: 11, padding: '4px 6px', borderRadius: 4,
+                      border: '1px solid var(--border)', background: 'var(--bg)',
+                      color: 'var(--text)', maxWidth: 130,
+                    }}
+                  >
+                    {Object.entries(schemeData).map(([id, s]) => (
+                      <option key={id} value={id}>{s.label || id}</option>
+                    ))}
+                  </select>
+                )}
                 <button className="btn" style={{ fontSize: 12, padding: '6px 12px' }}
                   onClick={runPreview}>预览</button>
                 <button className="btn" style={{ fontSize: 12, padding: '6px 12px' }}

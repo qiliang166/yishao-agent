@@ -21,14 +21,14 @@
 ## 引文排版规则
 
 ### 引号装饰
-- 超大左引号: 72-96px, accent `#e67e22`, opacity 0.15-0.2
+- 超大左引号: 72-96px, accent `{{accent}}`, opacity 0.15-0.2
 - 位置: 引文左上角，作为背景装饰
 - 字体: Georgia 或 serif
 
 ### 引文正文
 - 字号: 28-36px, DM Sans 或 serif, font-weight:500
 - 行高: 1.5-1.7
-- 颜色: primary `#1a365d`
+- 颜色: primary `{{primary}}`
 - 居中或左对齐
 - 可选: 倾斜（italic）风格
 

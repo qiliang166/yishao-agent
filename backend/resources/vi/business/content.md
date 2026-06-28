@@ -8,11 +8,11 @@
 
 - **背景**: `#ffffff`
 - **布局**: 按布局选择决策树（10 种布局）
-- **顶部**: 4px accent 色条 `#e67e22`，横跨画布全宽
-- **标题**: 36-44px, primary `#1a365d`, DM Sans, font-weight:700
-- **标题下方**: accent 短线 40×3px `#e67e22`
+- **顶部**: 4px accent 色条 `{{accent}}`，横跨画布全宽
+- **标题**: 36-44px, primary `{{primary}}`, DM Sans, font-weight:700
+- **标题下方**: accent 短线 40×3px `{{accent}}`
 - **内容区**: 占画布 55-70%
-- **页码**: 右下角 dot(6px `#e67e22`) + 当前页/总页数，14px Inter
+- **页码**: 右下角 dot(6px `{{accent}}`) + 当前页/总页数，14px Inter
 
 ## 图层结构（5 层）
 
@@ -39,14 +39,14 @@
 
 | 属性 | 值 |
 |------|-----|
-| 背景 | `#f0f4f8` |
+| 背景 | `{{card_bg}}` |
 | 圆角 | 12px |
 | 阴影 | `0 4px 12px rgba(0,0,0,0.08)` (md) |
 | 边框 | `1px solid #e2e8f0` |
 | 卡片间距 | 24px |
 | 左色条 | 4px, chart_colors 轮换（每卡不同色） |
-| 标题字号 | 22-24px, primary `#1a365d`, DM Sans, font-weight:600 |
-| 正文字号 | 16-18px, text `#1a202c`, Inter, line-height:1.6-1.8 |
+| 标题字号 | 22-24px, primary `{{primary}}`, DM Sans, font-weight:600 |
+| 正文字号 | 16-18px, text `{{text}}`, Inter, line-height:1.6-1.8 |
 | 图标 | 20px, outline 风格, 跟随卡片 chart_color, opacity:0.7 |
 
 ## 卡片色条轮换规则
@@ -54,7 +54,7 @@
 - N 张卡片 → 使用 chart_colors[0..N-1]，每卡一个不同色
 - 禁止所有卡片色条同一颜色
 - 禁止 chart_colors[0] 独占所有卡片
-- 禁止 accent 色 `#e67e22` 用于卡片色条（accent 是页面级装饰色）
+- 禁止 accent 色 `{{accent}}` 用于卡片色条（accent 是页面级装饰色）
 
 ## 跨页一致性
 

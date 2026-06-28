@@ -92,6 +92,20 @@ class SynthesizeRequest(BaseModel):
     provider_id: Optional[str] = None
 
 
+class PPTEditSlideRequest(BaseModel):
+    run_id: str
+    slide_seq: int
+    instruction: str
+    provider_id: str = ""
+    model: str = ""
+    style: str = "business"
+    color_scheme: str = "deep-blue"
+
+
+class PPTSlideSourceRequest(BaseModel):
+    html: str
+
+
 class PPTGenerateRequest(BaseModel):
     content: str
     template_id: str = ""
@@ -101,6 +115,7 @@ class PPTGenerateRequest(BaseModel):
     model: str = ""
     slide_plan: Optional[list] = None
     column_id: str = ""
+    color_scheme: str = "deep-blue"
     temperature: float = 0.3  # base fallback
     # Tab 1: 生成大纲
     temp_keyword: float = 0     # 提取关键词搜资料

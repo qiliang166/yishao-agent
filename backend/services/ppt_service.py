@@ -150,7 +150,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                  output_dir: str = None, provider_id: str = "",
                  model: str = "", slide_plan: list = None, format: str = "svg",
                  project_name: str = "", column_id: str = "",
-                 temperature: float = 0.3, project_id: str = "",
+                 color_scheme: str = "deep-blue", temperature: float = 0.3,
+                 project_id: str = "",
                  temp_keyword: float = 0, temp_research: float = 0,
                  temp_outline: float = 0, temp_fill: float = 0,
                  temp_cards: float = 0, temp_html: float = 0,
@@ -278,7 +279,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                     slide_data = _generate_slides_staged(provider_id, model, rules, content,
                                                          col_prompt, col_skill,
                                                          temperature=temperature,
-                                                         st=st)
+                                                         st=st, column_id=column_id,
+                                                         color_scheme=color_scheme)
                     print(f"[PPT-DBG] AI result: {bool(slide_data)}, "
                           f"slides={len(slide_data) if slide_data else 0}", flush=True)
                     if not slide_data:
@@ -298,11 +300,15 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             from services.llm_service import generate as llm_generate
             structure = _stage2_structure(provider_id, model, llm_generate,
                                            slide_data, style_id=style_id,
-                                           temperature=st['cards'])
+                                           temperature=st['cards'],
+                                           column_id=column_id,
+                                           color_scheme=color_scheme)
             if structure:
                 html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
                                                       structure, style_id=style_id,
-                                                      temperature=st['html'])
+                                                      temperature=st['html'],
+                                                      column_id=column_id,
+                                                      color_scheme=color_scheme)
                 if html_slides:
                     slide_data = html_slides
                     first = slide_data[0] if slide_data else {}
@@ -322,6 +328,14 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(deck_html)
             _logger.info(f"HTML deck written: {html_path}")
+
+            # Save unresolved variable version for future color scheme switching
+            vars_slide_data = [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_data]
+            deck_vars = _assemble_html_deck(vars_slide_data, title, style_id)
+            vars_path = os.path.join(html_dir, "index_vars.html")
+            with open(vars_path, "w", encoding="utf-8") as f:
+                f.write(deck_vars)
+            _logger.info(f"Variable-version deck written: {vars_path}")
 
             # Speaker notes
             notes_path = os.path.join(html_dir, "speaker-notes.md")
@@ -354,7 +368,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                     ai_svg_slides = _stage3_svg(provider_id, model, llm_generate,
                                                  slide_data, style_id=style_id,
                                                  rules=rules, temperature=temperature,
-                                                 st=st)
+                                                 st=st, column_id=column_id,
+                                                 color_scheme=color_scheme)
                 except Exception as e:
                     print(f"[PPT-DBG] AI-SVG generation failed: {e}", flush=True)
 
@@ -458,6 +473,30 @@ def _generate_speaker_notes(slide_data: list, title: str) -> str:
     Extracts talking points, transitions, and timing from outline data.
     Output format matches PPT-Agent's speaker-notes.md structure.
     """
+    import re
+
+    def _extract_from_html(html: str, field: str) -> str:
+        """Extract heading or body content from inline HTML when JSON fields are empty."""
+        if not html:
+            return ""
+        if field == "heading":
+            # Try h1/h2/h3 with font-size > 30px
+            m = re.search(r'<(?:h[123]|div)\s[^>]*?font-size:\s*(\d+)px[^>]*?>\s*(.+?)\s*</(?:h[123]|div)>', html)
+            if m and int(m.group(1)) >= 30:
+                return m.group(2).strip()
+            # Fallback: any heading-like div
+            m = re.search(r'font-size:\s*(3[6-9]|[4-9]\d)px[^>]*?>\s*(.{1,80}?)\s*</div>', html)
+            if m:
+                return m.group(2).strip()
+            return ""
+        if field == "body":
+            # Extract longest text block
+            texts = re.findall(r'font-size:\s*1[6-8]px[^>]*?>\s*(.{30,500}?)\s*</(?:p|div)>', html)
+            if texts:
+                return max(texts, key=len).strip()
+            return ""
+        return ""
+
     lines = [f"# Speaker Notes: {title}", "", f"**Total slides**: {len(slide_data)}", ""]
     total_minutes = 0
 
@@ -466,8 +505,9 @@ def _generate_speaker_notes(slide_data: list, title: str) -> str:
             continue
         seq = sd.get("seq", i + 1)
         zones = sd.get("zones", {}) if isinstance(sd.get("zones"), dict) else {}
-        heading = zones.get("heading", "") or sd.get("heading", "") or f"Slide {seq}"
-        body = zones.get("body", "") or sd.get("body", "")
+        html = sd.get("html", "")
+        heading = zones.get("heading", "") or sd.get("heading", "") or _extract_from_html(html, "heading") or f"Slide {seq}"
+        body = zones.get("body", "") or sd.get("body", "") or _extract_from_html(html, "body")
         notes = zones.get("notes", "") or sd.get("notes", "")
         key_points = sd.get("key_points", []) or zones.get("key_points", [])
         stype = sd.get("type", "content")
@@ -497,7 +537,9 @@ def _generate_speaker_notes(slide_data: list, title: str) -> str:
         if body and body.strip():
             # Take first 2 sentences of body as context
             sentences = body.strip().split("。")
-            context = "。".join(sentences[:2]) + "。" if len(sentences) > 1 else sentences[0]
+            context = "。".join(sentences[:2])
+            if len(sentences) > 1:
+                context += "。"
             lines.append(f"**Context**: {context.strip()}")
             lines.append("")
 
@@ -506,7 +548,8 @@ def _generate_speaker_notes(slide_data: list, title: str) -> str:
             next_slide = slide_data[i + 1]
             if isinstance(next_slide, dict):
                 next_zones = next_slide.get("zones", {}) if isinstance(next_slide.get("zones"), dict) else {}
-                next_heading = next_zones.get("heading", "") or next_slide.get("heading", "")
+                next_html = next_slide.get("html", "")
+                next_heading = next_zones.get("heading", "") or next_slide.get("heading", "") or _extract_from_html(next_html, "heading")
                 if next_heading:
                     lines.append(f'**Transition**: "Now moving on to {next_heading}..."')
                     lines.append("")
@@ -562,144 +605,16 @@ def _resolve_review_models(provider_id: str, model: str) -> tuple[str, str, str]
         return provider_id, model, "self_review"
 
 
-def _web_search(query: str, max_results: int = 5) -> str:
-    """Superior to PPT-Agent agent-reach: always-on web search, zero dependencies.
-
-    PPT-Agent's agent-reach probes for shell tools (curl/gh/yt-dlp/mcporter/xreach),
-    degrades through 4 tiers, and risks partial results when tools are missing.
-    Our implementation is always available — no probing, always the same quality.
-
-    Uses DuckDuckGo Instant Answer API (free, no API key, no rate limits).
-    """
-    import urllib.parse
-    try:
-        import httpx
-        url = "https://api.duckduckgo.com/"
-        params = {"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"}
-        resp = httpx.get(url, params=params, timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
-
-        parts = []
-        heading = data.get("Heading", "")
-        if heading:
-            parts.append(f"Subject: {heading}")
-        if data.get("AbstractText"):
-            parts.append(data["AbstractText"])
-        abstract_url = data.get("AbstractURL", "")
-        if abstract_url:
-            parts.append(f"Reference: {abstract_url}")
-        for r in data.get("RelatedTopics", [])[:max_results]:
-            text = r.get("Text", "")
-            if text and text not in parts:
-                parts.append(text)
-
-        return "\n\n---\n".join(parts) if parts else ""
-    except Exception as e:
-        _logger.info(f"Web search skipped ({e})")
-        return ""
-    """Equivalent to PPT-Agent agent-reach: search the web for context enrichment.
-
-    Uses DuckDuckGo Instant Answer API (free, no API key needed).
-    Returns concatenated search result text, or empty string on failure.
-    """
-    import urllib.parse
-    try:
-        import httpx
-        url = "https://api.duckduckgo.com/"
-        params = {"q": query, "format": "json", "no_html": "1", "skip_disambig": "1"}
-        resp = httpx.get(url, params=params, timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
-
-        parts = []
-        # Heading (topic disambiguation) — placed first for context
-        heading = data.get("Heading", "")
-        if heading:
-            parts.append(f"主题: {heading}")
-        # Abstract (main curated answer) — highest quality signal
-        if data.get("AbstractText"):
-            parts.append(data["AbstractText"])
-        # Abstract URL (external reference for deeper reading)
-        abstract_url = data.get("AbstractURL", "")
-        if abstract_url:
-            parts.append(f"参考来源: {abstract_url}")
-        # Related topics — semantically related, broadens context
-        for r in data.get("RelatedTopics", [])[:max_results]:
-            text = r.get("Text", "")
-            if text and text not in parts:
-                parts.append(text)
-
-        return "\n\n---\n".join(parts) if parts else ""
-    except Exception as e:
-        _logger.info(f"Web search skipped ({e})")
-        return ""
-
-
 def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: str,
                      temperature: float = 0.3,
                      temp_keyword: float = 0, temp_research: float = 0) -> str:
-    """Phase 2 (Research): Deep SOP content analysis — matches PPT-Agent research-core.
+    """Phase 2 (Research): Direct deep analysis of SOP using LLM trained knowledge.
 
-    PPT-Agent research-core uses agent-reach for web search, producing
-    research-context.md with: Background, Key Insights, Common Angles,
-    Suggested Focus Areas.
-
-    Our equivalent: web search enriches the LLM's internal knowledge,
-    then the LLM produces the same structured research context.
+    No web search — the LLM already has sufficient domain knowledge.
+    One LLM call produces the full structured research context.
     """
-    import re
-
     if not sop_content or not sop_content.strip():
         return ""
-
-    # ── Extract search queries from SOP content ──
-    # PPT-Agent: single topic search. Ours: extract 3-5 keywords for richer context.
-    search_results = ""
-    try:
-        # Quick LLM call to extract keywords from SOP
-        kw_system = (
-            "从以下文档中提取 3-5 个最重要的搜索关键词（短语），用于网络搜索补充上下文。"
-            "每行一个关键词，不要编号，不要其他文字。优先提取：核心概念、专有名词、行业术语、方法论名称。"
-        )
-        kw_user = sop_content[:2000]
-        keywords = []
-        try:
-            kw_resp = _safe_run_async(llm_generate(provider_id, model,
-                kw_system, kw_user, temperature=temp_keyword or temperature))
-            keywords = [l.strip() for l in kw_resp.strip().split("\n") if l.strip()][:5]
-            # Clean: remove numbering/bullet prefixes
-            keywords = [k.lstrip("0123456789.-•*# ") for k in keywords if len(k) > 2]
-        except Exception:
-            pass
-
-        # Fallback: extract from headings
-        if not keywords:
-            lines = [l.strip() for l in sop_content.split("\n") if l.strip()]
-            heading_match = re.search(r'^#+\s*(.+)$', sop_content, re.MULTILINE)
-            if heading_match:
-                keywords = [heading_match.group(1).strip()]
-            elif lines:
-                keywords = [lines[0][:120]]
-
-        # Parallel search all keywords, deduplicate results
-        all_parts = []
-        seen = set()
-        for kw in keywords[:5]:
-            _logger.info(f"Phase 2 web search: '{kw[:80]}'")
-            result = _web_search(kw, max_results=3)
-            if result:
-                for part in result.split("\n\n---\n"):
-                    key = part[:100]
-                    if key not in seen:
-                        seen.add(key)
-                        all_parts.append(part)
-
-        if all_parts:
-            search_results = "\n\n---\n".join(all_parts)
-            _logger.info(f"Phase 2 web search: {len(keywords)} keywords → {len(all_parts)} unique results, {len(search_results)} chars")
-    except Exception as e:
-        _logger.info(f"Phase 2 web search skipped (non-critical): {e}")
 
     research_system = (
         "你是专业的内容研究员。对提供的 SOP 文档进行深度结构化分析。"
@@ -718,16 +633,7 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
         "\n## 潜在图表机会"
     )
 
-    search_block = ""
-    if search_results:
-        search_block = f"""## 网络搜索结果（补充上下文，非直接内容来源）
-{search_results}
-
----
-
-"""
-
-    research_user = f"""{search_block}## SOP 文档（唯一分析对象）
+    research_user = f"""## SOP 文档（唯一分析对象）
 {sop_content}
 
 ## 任务
@@ -746,7 +652,8 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
 def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_content: str,
                             system_prompt: str = "", skill_template: str = "",
                             temperature: float = 0.3,
-                            st: dict = None) -> list | None:
+                            st: dict = None, column_id: str = "",
+                            color_scheme: str = "deep-blue") -> list | None:
     """Two-phase HTML slide generation pipeline.
 
     Phase 2 (Research): Deep SOP analysis → research context.
@@ -774,7 +681,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     stage1 = _stage1_content(provider_id, model, llm_generate, rules, sop_content,
                              system_prompt, skill_template, research_context=research_context,
                              temp_outline=st.get('outline', temperature),
-                             temp_fill=st.get('fill', temperature))
+                             temp_fill=st.get('fill', temperature),
+                             column_id=column_id)
     if not stage1:
         return None
     _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
@@ -785,7 +693,9 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     # Phase 1: Structure planning (lightweight, one LLM call for all slides)
     structure = _stage2_structure(provider_id, model, llm_generate,
                                   stage1, style_id=style_id,
-                                  temperature=st.get('cards', temperature))
+                                  temperature=st.get('cards', temperature),
+                                  column_id=column_id,
+                                  color_scheme=color_scheme)
     if not structure:
         return None
     _logger.info(f"Phase 1 structure: {len(structure)} slides planned")
@@ -793,7 +703,9 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     # Phase 2: Per-slide HTML generation (parallel, design-system.md guided)
     html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
                                          structure, style_id=style_id,
-                                         temperature=st.get('html', temperature))
+                                         temperature=st.get('html', temperature),
+                                         column_id=column_id,
+                                         color_scheme=color_scheme)
     if not html_slides:
         _logger.warning("Phase 2 HTML generation failed, using fallback")
         html_slides = _fallback_stage1_to_html_slides(stage1, style_id)
@@ -957,7 +869,8 @@ def _human_text_to_json(provider_id, model, human_text: str, original_json: list
 def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
                     system_prompt: str = "", skill_template: str = "",
                     research_context: str = "", temperature: float = 0.3,
-                    temp_outline: float = 0, temp_fill: float = 0) -> list | None:
+                    temp_outline: float = 0, temp_fill: float = 0,
+                    column_id: str = "") -> list | None:
     """Stage 1: Two-phase — outline first, then fill content per slide in batches.
 
     research_context from Phase 2 (research-core) provides pre-analyzed SOP structure,
@@ -968,12 +881,12 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     if rules.get("outline_architect_prompt"):
         outline_spec = rules["outline_architect_prompt"]
     if not outline_spec:
-        outline_spec = _load_outline_spec()
+        outline_spec = _load_outline_spec(column_id)
 
     # Load cognitive design principles (referenced by outline-architect.md)
     cognitive_spec_stage1 = rules.get("cognitive_design_principles", "") if rules else ""
     if not cognitive_spec_stage1:
-        cognitive_spec_stage1 = _load_cognitive_spec()
+        cognitive_spec_stage1 = _load_cognitive_spec(column_id)
 
     base_system = system_prompt if system_prompt else (
         f"""{outline_spec}
@@ -1038,18 +951,22 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
         return None
     _logger.info(f"Stage 1 outline: {len(outline)} slides")
 
-    # ── Phase 2: Fill content per slide in batches ──
+    # ── Phase 2: Fill content per slide in parallel batches ──
     BATCH_SIZE = 4
     fill_system = (
         "你是内容编辑专家。根据 SOP 文章和金字塔原理为指定幻灯片填充正文内容。"
         "遵循结论先行、以上统下、归类分组(MECE)、逻辑递进四大原则。"
         "从 SOP 中提取归纳对应部分的内容，不编造。输出纯 JSON，不要用 markdown 包裹。"
+        "正文必须分段落：核心结论单独一段，支撑细节分段展开。用 \\n\\n 分隔段落，"
+        "每段不超过 180 字。并列要点用编号列表（1. 2. 3. 换行分隔）。"
+        "禁止把全部内容塞进一个不换行的长段落。"
     )
 
-    for batch_start in range(0, len(outline), BATCH_SIZE):
-        batch = outline[batch_start:batch_start + BATCH_SIZE]
-        batch_json = json.dumps(batch, ensure_ascii=False, indent=2)
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
+    def _fill_batch(batch: list) -> list:
+        """Fill one batch of slides. Returns filled slide dicts, or [] on failure."""
+        batch_json = json.dumps(batch, ensure_ascii=False, indent=2)
         fill_user = f"""## SOP 文章（唯一内容来源）
 {sop_content}
 
@@ -1058,12 +975,12 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 ## 输出格式
 ```json
-{{"slides": [{{"seq":1,"heading":"原样保留","body":"从此 SOP 提取归纳的正文（结论先行，先给核心论点再展开）","notes":"备注或反面后果(可选)","layout_hint":"原样保留","visual_weight":"原样保留","key_points":["原文保留"]}}, ...]}}
+{{"slides": [{{"seq":1,"heading":"原样保留","body":"从此 SOP 提取归纳的正文（结论先行，分段落，用 \\n\\n 分隔段落，每段不超过180字，并列要点用编号列表）","notes":"备注或反面后果(可选)","layout_hint":"原样保留","visual_weight":"原样保留","key_points":["原文保留"]}}, ...]}}
 ```
 铁律：
 - 只输出以上幻灯片，不增减
 - heading, layout_hint, visual_weight, key_points 保持原样
-- body 从此 SOP 对应部分提取归纳，每页至少 80 字，结论先行
+- body 从此 SOP 对应部分提取归纳，每页至少 80 字，结论先行，必须分段落
 - 仅输出 JSON"""
 
         for attempt in range(2):
@@ -1074,55 +991,161 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
                 data = json.loads(response)
                 filled = data.get("slides", data) if isinstance(data, dict) else data
                 if isinstance(filled, list):
-                    for f in filled:
-                        seq = f.get("seq", 0)
-                        idx = seq - 1
-                        if 0 <= idx < len(outline):
-                            outline[idx]["body"] = f.get("body", outline[idx].get("body", ""))
-                            outline[idx]["notes"] = f.get("notes", outline[idx].get("notes", ""))
-                            if f.get("layout_hint"):
-                                outline[idx]["layout_hint"] = f["layout_hint"]
-                            if f.get("visual_weight"):
-                                outline[idx]["visual_weight"] = f["visual_weight"]
-                break
+                    return filled
             except Exception as e:
                 if attempt == 1:
-                    _logger.warning(f"Stage 1 fill batch {batch_start//BATCH_SIZE+1} failed: {e}")
+                    _logger.warning(f"Stage 1 fill batch failed: {e}")
+        return []
+
+    # Create batches
+    batches = [outline[i:i + BATCH_SIZE] for i in range(0, len(outline), BATCH_SIZE)]
+
+    # Parallel fill all batches
+    with ThreadPoolExecutor(max_workers=len(batches)) as ex:
+        futures = {ex.submit(_fill_batch, b): b for b in batches}
+        for future in as_completed(futures):
+            try:
+                filled = future.result()
+                for f in filled:
+                    seq = f.get("seq", 0)
+                    idx = seq - 1
+                    if 0 <= idx < len(outline):
+                        outline[idx]["body"] = f.get("body", outline[idx].get("body", ""))
+                        outline[idx]["notes"] = f.get("notes", outline[idx].get("notes", ""))
+                        if f.get("layout_hint"):
+                            outline[idx]["layout_hint"] = f["layout_hint"]
+                        if f.get("visual_weight"):
+                            outline[idx]["visual_weight"] = f["visual_weight"]
+            except Exception as e:
+                _logger.warning(f"Stage 1 fill batch failed: {e}")
 
     return outline
 
 
-def _load_svg_prompt_specs() -> tuple[str, str]:
-    """Load svg-generator.md and bento-grid-layout.md from data/prompts/."""
-    prompts_dir = os.path.join(BASE_DIR, "resources", "prompts")
+# ── Scenario prompt files ──
+SCENARIOS_DIR = os.path.join(BASE_DIR, "resources", "scenarios")
+SCENARIO_FILES = [
+    "design-system.md",
+    "outline-architect.md",
+    "cognitive-design-principles.md",
+    "reviewer.md",
+    "svg-generator.md",
+    "bento-grid-layout.md",
+]
 
-    def _read(filename):
-        p = os.path.join(prompts_dir, filename)
+
+def _load_scenario_file(filename: str, column_id: str = "") -> str:
+    """Load a scenario prompt file with fallback chain.
+
+    Priority: scenarios/{column_id}/ → scenarios/_default/ → prompts/ (legacy)
+    """
+    # 1) Per-column custom file
+    if column_id:
+        p = os.path.join(SCENARIOS_DIR, column_id, filename)
         if os.path.exists(p):
             with open(p, "r", encoding="utf-8") as f:
                 return f.read()
-        return ""
-
-    return _read("svg-generator.md"), _read("bento-grid-layout.md")
-
-
-def _load_outline_spec() -> str:
-    """Load outline-architect.md from data/prompts/."""
-    prompts_dir = os.path.join(BASE_DIR, "resources", "prompts")
-    outline_path = os.path.join(prompts_dir, "outline-architect.md")
-    if os.path.exists(outline_path):
-        with open(outline_path, "r", encoding="utf-8") as f:
+    # 2) Default scenario template
+    p = os.path.join(SCENARIOS_DIR, "_default", filename)
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    # 3) Legacy prompts directory
+    p = os.path.join(BASE_DIR, "resources", "prompts", filename)
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
             return f.read()
     return ""
 
 
-def _load_style_yaml_text(style_id: str) -> str:
-    """Load YAML structured data for a style.
+def _load_svg_prompt_specs(column_id: str = "") -> tuple[str, str]:
+    """Load svg-generator.md and bento-grid-layout.md from scenario files."""
+    return (
+        _load_scenario_file("svg-generator.md", column_id),
+        _load_scenario_file("bento-grid-layout.md", column_id),
+    )
+
+
+def _load_outline_spec(column_id: str = "") -> str:
+    """Load outline-architect.md from scenario files."""
+    return _load_scenario_file("outline-architect.md", column_id)
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert hex color like '#1a365d' or '#1A365D' to (r, g, b) tuple."""
+    h = hex_color.lstrip("#")
+    if len(h) == 6:
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    if len(h) == 3:
+        return (int(h[0] * 2, 16), int(h[1] * 2, 16), int(h[2] * 2, 16))
+    return (0, 0, 0)
+
+
+def _resolve_color_vars(text: str, scheme: dict) -> str:
+    """Replace {{primary}}, {{accent_rgb}}, {{chart_0}}, etc. with scheme values.
+
+    Supported variable forms for each color key:
+      {{key}}          → hex value (#1a365d)
+      {{key_r}}        → red component (26)
+      {{key_g}}        → green component (54)
+      {{key_b}}        → blue component (93)
+      {{key_rgb}}      → rgb tuple (26, 54, 93)
+    """
+    import re as _re
+
+    vars_map: dict[str, str] = {}
+
+    # Base color keys
+    color_keys = ["primary", "secondary", "accent", "background", "text", "card_bg"]
+    for key in color_keys:
+        val = scheme.get(key, "")
+        if val and val.startswith("#"):
+            vars_map[key] = val
+            r, g, b = _hex_to_rgb(val)
+            vars_map[f"{key}_r"] = str(r)
+            vars_map[f"{key}_g"] = str(g)
+            vars_map[f"{key}_b"] = str(b)
+            vars_map[f"{key}_rgb"] = f"{r}, {g}, {b}"
+
+    # Chart colors
+    chart_colors = scheme.get("chart_colors", [])
+    if isinstance(chart_colors, list):
+        for i, c in enumerate(chart_colors):
+            if c and c.startswith("#"):
+                vars_map[f"chart_{i}"] = c
+                r, g, b = _hex_to_rgb(c)
+                vars_map[f"chart_{i}_rgb"] = f"{r}, {g}, {b}"
+
+    # Semantic colors
+    semantic = scheme.get("semantic", {})
+    if isinstance(semantic, dict):
+        for k, v in semantic.items():
+            if v and v.startswith("#"):
+                vars_map[f"semantic_{k}"] = v
+                r, g, b = _hex_to_rgb(v)
+                vars_map[f"semantic_{k}_rgb"] = f"{r}, {g}, {b}"
+
+    # Replace all {{var}} placeholders
+    def _replacer(m):
+        var_name = m.group(1)
+        return vars_map.get(var_name, m.group(0))
+
+    return _re.sub(r"\{\{(\w+)\}\}", _replacer, text)
+
+
+def _load_style_yaml_text(style_id: str, color_scheme: str = "deep-blue", resolve_vars: bool = True) -> str:
+    """Load YAML structured data for a style, with optional color scheme override.
 
     Priority: 1) {style_id}/tokens.yaml (directory structure),
     2) standalone {style_id}.yaml file in data/styles/.
+
+    When color_scheme is specified and tokens.yaml has a color_schemes block,
+    the selected scheme's values are injected as the flat color_scheme block.
+
+    When resolve_vars=False, {{primary}} placeholders are kept as-is (for LLM prompts)
+    and the color_scheme hex block is stripped from the YAML output.
     """
-    import re
+    import yaml
     styles_dir = os.path.join(BASE_DIR, "data", "styles")
     vi_dir = os.path.join(BASE_DIR, "resources", "vi")
 
@@ -1130,7 +1153,31 @@ def _load_style_yaml_text(style_id: str) -> str:
     tokens_path = os.path.join(vi_dir, style_id, "tokens.yaml")
     if os.path.exists(tokens_path):
         with open(tokens_path, "r", encoding="utf-8") as f:
-            return f.read()
+            raw = f.read()
+        try:
+            parsed = yaml.safe_load(raw)
+            if parsed and isinstance(parsed, dict) and "color_schemes" in parsed:
+                schemes = parsed.pop("color_schemes", {})
+                parsed.pop("color_scheme", None)  # remove legacy flat key
+                active_scheme: dict = {}
+                if color_scheme in schemes:
+                    active_scheme = schemes[color_scheme]
+                elif schemes:
+                    first = next(iter(schemes.keys()))
+                    active_scheme = schemes[first]
+                import io as _io
+                out = _io.StringIO()
+                if resolve_vars:
+                    parsed["color_scheme"] = active_scheme
+                yaml.dump(parsed, out, allow_unicode=True, default_flow_style=False, sort_keys=False)
+                yaml_text = out.getvalue()
+                # Resolve color variables in non-scheme sections (gradients, decoration, etc.)
+                if resolve_vars and active_scheme:
+                    yaml_text = _resolve_color_vars(yaml_text, active_scheme)
+                return yaml_text
+        except Exception:
+            pass
+        return raw
 
     # 2) Fall back to standalone YAML file
     p = os.path.join(styles_dir, f"{style_id}.yaml")
@@ -1140,29 +1187,264 @@ def _load_style_yaml_text(style_id: str) -> str:
     return ""
 
 
-def _load_style_vi(style_id: str) -> str:
-    """Load the Visual Identity System document from data/vi/{style_id}/vi.md."""
+def _load_style_vi(style_id: str, color_scheme: str = "deep-blue", resolve_vars: bool = True) -> str:
+    """Load the Visual Identity System document from data/vi/{style_id}/vi.md.
+
+    Resolves {{color}} variables against the active color_scheme.
+    When resolve_vars=False, keeps {{primary}} etc. as placeholders (for LLM prompts).
+    """
     vi_md_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "vi.md")
     if os.path.exists(vi_md_path):
         with open(vi_md_path, "r", encoding="utf-8") as f:
-            return f.read()
+            result = f.read()
+        if resolve_vars:
+            scheme = _load_scheme_data(style_id, color_scheme)
+            if scheme:
+                result = _resolve_color_vars(result, scheme)
+        return result
     return ""
 
 
-def _load_style_prompt(style_id: str) -> str:
-    """Load the style-specific LLM persona + task prompt from data/vi/{style_id}/prompt.md."""
+def _load_style_prompt(style_id: str, color_scheme: str = "deep-blue") -> str:
+    """Load the style-specific LLM persona + task prompt.
+
+    Injects the color scheme persona_hint from tokens.yaml if available,
+    replacing {{PERSONA_HINT}} in the prompt template.
+    """
+    import yaml
     prompt_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "prompt.md")
-    if os.path.exists(prompt_path):
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+    if not os.path.exists(prompt_path):
+        return ""
+
+    with open(prompt_path, "r", encoding="utf-8") as f:
+        prompt = f.read()
+
+    # Inject persona_hint from tokens.yaml if available
+    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    if os.path.exists(tokens_path):
+        try:
+            with open(tokens_path, "r", encoding="utf-8") as f:
+                tokens = yaml.safe_load(f.read())
+            schemes = tokens.get("color_schemes", {}) if isinstance(tokens, dict) else {}
+            scheme = schemes.get(color_scheme, {})
+            if isinstance(scheme, dict):
+                hint = scheme.get("persona_hint", "")
+                if hint:
+                    prompt = prompt.replace("{{PERSONA_HINT}}", hint)
+        except Exception:
+            pass
+
+    return prompt
 
 
-def _load_style_vi_section(style_id: str, section: str) -> str:
+def _list_color_schemes(style_id: str) -> list:
+    """List available color schemes for a style from tokens.yaml.
+
+    Returns list of {id, label, primary, accent, background, text, card_bg}
+    for use in UI pickers.
+    """
+    import yaml
+    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    if not os.path.exists(tokens_path):
+        return []
+    try:
+        with open(tokens_path, "r", encoding="utf-8") as f:
+            tokens = yaml.safe_load(f.read())
+        if not isinstance(tokens, dict):
+            return []
+        schemes = tokens.get("color_schemes", {})
+        result = []
+        for sid, scheme in schemes.items():
+            if isinstance(scheme, dict):
+                result.append({
+                    "id": sid,
+                    "label": scheme.get("label", sid),
+                    "primary": scheme.get("primary", ""),
+                    "accent": scheme.get("accent", ""),
+                    "background": scheme.get("background", ""),
+                    "text": scheme.get("text", ""),
+                    "card_bg": scheme.get("card_bg", ""),
+                })
+        return result
+    except Exception:
+        return []
+
+
+def _recolor_slide_html(style_id: str, slide_html: str, new_color_scheme: str, source_scheme: str | None = None) -> str:
+    """Direct color replacement: map old scheme colors → new scheme colors.
+
+    1. Detect which scheme the slide currently uses (most color matches)
+    2. Build a role-for-role mapping from old scheme to new scheme
+    3. Apply all replacements in a single pass
+    No AI involved — pure deterministic string replacement.
+    """
+    import yaml, re
+    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    if not os.path.exists(tokens_path):
+        return slide_html
+
+    with open(tokens_path, "r", encoding="utf-8") as f:
+        tokens = yaml.safe_load(f.read())
+    if not isinstance(tokens, dict):
+        return slide_html
+
+    schemes = tokens.get("color_schemes", {})
+    if not schemes or new_color_scheme not in schemes:
+        return slide_html
+
+    target = schemes[new_color_scheme]
+    lower_html = slide_html.lower()
+    base_keys = ["primary", "secondary", "accent", "background", "text", "card_bg"]
+
+    # Step 1: Determine which scheme the slide currently uses
+    # If caller provides source_scheme metadata (saved during generation), use it directly.
+    # Otherwise fall back to weighted color-match detection.
+    if source_scheme and source_scheme in schemes:
+        best_scheme = source_scheme
+    else:
+        def _all_colors(scheme_data: dict) -> set:
+            cs2: set = set()
+            for k in base_keys:
+                v = scheme_data.get(k, "")
+                if v and len(v) >= 4:
+                    cs2.add(v.lower())
+            for c in (scheme_data.get("chart_colors") or []):
+                if c and len(c) >= 4:
+                    cs2.add(c.lower())
+            for v in (scheme_data.get("semantic") or {}).values():
+                if v and len(v) >= 4:
+                    cs2.add(v.lower())
+            return cs2
+
+        # Build per-color specificity: how many schemes share each color
+        all_colors: dict[str, list[str]] = {}
+        for sname, sdata in schemes.items():
+            if not isinstance(sdata, dict):
+                continue
+            for c in _all_colors(sdata):
+                all_colors.setdefault(c, []).append(sname)
+
+        # Weighted scoring: unique colors → weight 1.0, shared colors → 1/N
+        # Tiebreaker: if scores are equal, prefer the scheme with more matching colors
+        best_scheme = None
+        best_score = 0.0
+        best_match_count = 0
+        for sname, sdata in schemes.items():
+            if not isinstance(sdata, dict):
+                continue
+            colors = _all_colors(sdata)
+            if not colors:
+                continue
+            score = 0.0
+            match_count = 0
+            for c in colors:
+                if c in lower_html:
+                    n_shared = len(all_colors.get(c, [1]))
+                    score += 1.0 / n_shared
+                    match_count += 1
+            if score > best_score or (score == best_score and match_count > best_match_count):
+                best_score = score
+                best_scheme = sname
+                best_match_count = match_count
+
+        # Fallback: if detection finds nothing, use "deep-blue" (the PPTGenerateRequest default)
+        if best_score == 0:
+            best_scheme = "deep-blue"
+
+    old = schemes[best_scheme]
+    if best_scheme == new_color_scheme:
+        return slide_html  # Already using this scheme
+
+    # Step 2: Build old_scheme → new_scheme replacement map
+    # IMPORTANT: Use insertion order to resolve conflicts — "first role wins".
+    # When a scheme uses the same hex for multiple roles (e.g. dark-gold
+    # primary=text=#1a1a2e), the first role in base_keys order keeps the mapping,
+    # preventing later roles (text) from overwriting earlier ones (primary).
+    replacements: dict[str, str] = {}
+
+    def _add(old_val: str, new_val: str):
+        if old_val and new_val and len(old_val) >= 4 and len(new_val) >= 4:
+            old_lower = old_val.lower()
+            if old_lower == new_val.lower():
+                return
+            if old_lower not in replacements:
+                replacements[old_lower] = new_val.lower()
+
+    # Base keys (by role priority: primary > secondary > accent > background > text > card_bg)
+    for k in base_keys:
+        _add(old.get(k, ""), target.get(k, ""))
+
+    # Chart colors (positional)
+    old_charts = old.get("chart_colors") or []
+    new_charts = target.get("chart_colors") or []
+    for i in range(min(len(old_charts), len(new_charts))):
+        _add(old_charts[i], new_charts[i])
+
+    # Semantic colors (by key)
+    old_sem = old.get("semantic") or {}
+    new_sem = target.get("semantic") or {}
+    for k in old_sem:
+        if k in new_sem:
+            _add(old_sem[k], new_sem[k])
+
+    if not replacements:
+        return slide_html
+
+    # Step 3: Apply replacements (hex + rgba + rgb)
+    result = slide_html
+    for old_c, new_c in replacements.items():
+        # Hex literal replacement
+        result = re.sub(re.escape(old_c), new_c, result, flags=re.IGNORECASE)
+        # rgba / rgb variants: convert hex→rgb components and build regex patterns
+        if old_c.startswith("#") and new_c.startswith("#"):
+            r_old, g_old, b_old = _hex_to_rgb(old_c)
+            r_new, g_new, b_new = _hex_to_rgb(new_c)
+            # rgba(R, G, B, opacity) → preserve opacity
+            result = re.sub(
+                rf"rgba\(\s*{r_old}\s*,\s*{g_old}\s*,\s*{b_old}\s*,\s*([\d.]+)\s*\)",
+                rf"rgba({r_new}, {g_new}, {b_new}, \1)",
+                result,
+                flags=re.IGNORECASE,
+            )
+            # rgb(R, G, B) without alpha
+            result = re.sub(
+                rf"rgb\(\s*{r_old}\s*,\s*{g_old}\s*,\s*{b_old}\s*\)",
+                rf"rgb({r_new}, {g_new}, {b_new})",
+                result,
+                flags=re.IGNORECASE,
+            )
+
+    return result
+
+
+def _load_scheme_data(style_id: str, color_scheme: str = "deep-blue") -> dict:
+    """Load a single color scheme dict from tokens.yaml by name. Returns empty dict if not found."""
+    import yaml
+    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    if not os.path.exists(tokens_path):
+        return {}
+    try:
+        with open(tokens_path, "r", encoding="utf-8") as f:
+            tokens = yaml.safe_load(f.read())
+        if not isinstance(tokens, dict):
+            return {}
+        schemes = tokens.get("color_schemes", {})
+        if color_scheme in schemes:
+            return schemes[color_scheme]
+        if schemes:
+            return next(iter(schemes.values()))
+    except Exception:
+        pass
+    return {}
+
+
+def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "deep-blue", resolve_vars: bool = True) -> str:
     """Load a specific VI sub-file from data/vi/{style_id}/.
 
     section: 'cover', 'content', 'data', or 'summary'.
     Loads both vi.md (general) and the section-specific file, concatenated.
+    Resolves {{color}} variables against the active color_scheme.
+    When resolve_vars=False, keeps {{primary}} etc. as placeholders (for LLM prompts).
     """
     vi_dir = os.path.join(BASE_DIR, "resources", "vi", style_id)
     parts = []
@@ -1181,9 +1463,16 @@ def _load_style_vi_section(style_id: str, section: str) -> str:
                 parts.append(f.read())
 
     if not parts:
-        return _load_style_vi(style_id)
+        return _load_style_vi(style_id, color_scheme, resolve_vars=resolve_vars)
 
-    return "\n\n---\n\n".join(parts)
+    result = "\n\n---\n\n".join(parts)
+
+    if resolve_vars:
+        scheme = _load_scheme_data(style_id, color_scheme)
+        if scheme:
+            result = _resolve_color_vars(result, scheme)
+
+    return result
 
 
 # Canonical page type order — follows document writing conventions (cover → content → closing)
@@ -1301,31 +1590,19 @@ def _build_page_type_prompt(style_id: str) -> str:
     ])
     return "\n".join(lines)
 
-def _load_cognitive_spec() -> str:
-    """Load cognitive-design-principles.md from data/prompts/."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "cognitive-design-principles.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+def _load_cognitive_spec(column_id: str = "") -> str:
+    """Load cognitive-design-principles.md from scenario files."""
+    return _load_scenario_file("cognitive-design-principles.md", column_id)
 
 
-def _load_reviewer_spec() -> str:
-    """Load reviewer.md from data/prompts/."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "reviewer.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+def _load_reviewer_spec(column_id: str = "") -> str:
+    """Load reviewer.md from scenario files."""
+    return _load_scenario_file("reviewer.md", column_id)
 
 
-def _load_design_system() -> str:
+def _load_design_system(column_id: str = "") -> str:
     """Load design-system.md — the HTML slide design guide for LLM."""
-    path = os.path.join(BASE_DIR, "resources", "prompts", "design-system.md")
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+    return _load_scenario_file("design-system.md", column_id)
 
 
 def _resolve_font_range(style_yaml_text: str) -> dict:
@@ -1418,7 +1695,8 @@ def _validate_cards(slides: list) -> list[str]:
 
 
 def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
-                   style_id: str = "business", temperature: float = 0.3) -> list | None:
+                   style_id: str = "business", temperature: float = 0.3,
+                   column_id: str = "", color_scheme: str = "deep-blue") -> list | None:
     """Phase 5+6: AI selects Bento Grid layout + fills card content per slide.
 
     Input: stage1_slides [{seq, heading, page_type, layout_hint, body, ...}, ...]
@@ -1427,9 +1705,9 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
     Includes validation loop: generate → validate → if issues → fix (max 2 rounds).
     On generation failure, converts raw zones as fallback.
     """
-    design_system = _load_design_system()
-    style_yaml = _load_style_yaml_text(style_id)
-    cognitive_spec = _load_cognitive_spec()
+    design_system = _load_design_system(column_id)
+    style_yaml = _load_style_yaml_text(style_id, color_scheme)
+    cognitive_spec = _load_cognitive_spec(column_id)
 
     spec_version = rules.get("spec_version", "2.2.1")
 
@@ -1502,6 +1780,7 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
 - 只输出此批次的幻灯片，按 seq 顺序
 {_build_page_type_prompt(style_id)}
 - layout 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
+- ⛔ layout=single_focus 仅限 cover/quote/section 页使用。summary/closing/content/data/comparison/process/timeline 等所有其余类型一律禁止 single_focus
 - 每卡必有 role (hero/metric/card_0/card_1/left/right/cell_0_0 等)
 - 每卡必有 title 或 body 或 chart
 - 封面页 layout=full_bleed，cards 最多 3 个
@@ -1676,7 +1955,8 @@ def _fallback_stage1_structure(stage1_slides: list) -> list:
 
 
 def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
-                      style_id: str = "business", temperature: float = 0.3) -> list | None:
+                      style_id: str = "business", temperature: float = 0.3,
+                      column_id: str = "", color_scheme: str = "deep-blue") -> list | None:
     """Phase 1 of two-phase HTML pipeline: Lightweight structure planning.
 
     One LLM call for ALL slides. AI decides: slide types, layouts, card count/roles,
@@ -1685,10 +1965,10 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 
     This is intentionally lightweight — no JSON card filling, just structure decisions.
     """
-    design_system = _load_design_system()
-    style_yaml = _load_style_yaml_text(style_id)
-    style_vi = _load_style_vi(style_id)
-    style_prompt = _load_style_prompt(style_id)
+    design_system = _load_design_system(column_id)
+    style_yaml = _load_style_yaml_text(style_id, color_scheme, resolve_vars=False)
+    style_vi = _load_style_vi(style_id, color_scheme, resolve_vars=False)
+    style_prompt = _load_style_prompt(style_id, color_scheme)
 
     if style_prompt:
         persona_block = style_prompt
@@ -1724,6 +2004,15 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 页面数量严格等于大纲给出的页数，不增不减。
 
 输出纯 JSON，不要用 markdown 包裹。"""
+
+    # ── DEBUG: monitor structure prompt for hex ──
+    import re as _re_mon3
+    struct_hex = len(_re_mon3.findall(r'#[0-9a-fA-F]{6}', system))
+    _logger.info(f"[MONITOR] Structure system prompt: {len(system)} chars, hex_count={struct_hex}")
+    debug_dir = os.path.join(BASE_DIR, "data", "debug")
+    os.makedirs(debug_dir, exist_ok=True)
+    with open(os.path.join(debug_dir, "last_structure_prompt.txt"), "w", encoding="utf-8") as _df3:
+        _df3.write(system)
 
     outline_json = json.dumps(stage1_slides, ensure_ascii=False, indent=2)
     user = f"""## 大纲（{len(stage1_slides)} 页）
@@ -1808,12 +2097,11 @@ def _fallback_single_slide_html(slide: dict, style_id: str) -> dict:
 </div>
 </section>"""
 
-    return {"seq": seq, "type": stype, "layout": layout, "html": html}
-
-
+    return {"seq": seq, "type": stype, "layout": layout, "html": html, "html_vars": html}
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
-                           temperature: float = 0.3) -> list | None:
+                           temperature: float = 0.3, column_id: str = "",
+                           color_scheme: str = "deep-blue") -> list | None:
     """Phase 2 of two-phase HTML pipeline: Per-slide parallel HTML generation.
 
     Each slide gets its own LLM call with the full design-system.md as the design guide.
@@ -1824,14 +2112,16 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import re
 
-    design_system = _load_design_system()
-    style_yaml = _load_style_yaml_text(style_id)
+    # resolve_vars=False: LLM gets {{primary}} placeholders, not hex values
+    style_yaml = _load_style_yaml_text(style_id, color_scheme, resolve_vars=False)
+    active_scheme = _load_scheme_data(style_id, color_scheme)
     font_range = _resolve_font_range(style_yaml)
-    style_vi_base = _load_style_vi(style_id)         # general vi.md only
-    style_prompt = _load_style_prompt(style_id)
+    style_prompt = _load_style_prompt(style_id, color_scheme)
 
-    if not design_system:
-        _logger.error("design-system.md not found — cannot generate HTML slides")
+    # Verify modular core files exist
+    core_identity = os.path.join(BASE_DIR, "resources", "prompts", "core", "always", "identity.md")
+    if not os.path.exists(core_identity):
+        _logger.error("core/always/identity.md not found — cannot build per-slide prompts")
         return None
 
     font_info = ""
@@ -1843,56 +2133,6 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         persona_block = style_prompt
     else:
         persona_block = "你是演示文稿设计艺术总监。你必须严格按照《幻灯片 HTML 设计系统 v2》为每一页生成完整的 HTML。"
-
-    vi_block = ""
-    if style_vi_base:
-        vi_content = style_vi_base[:6000]
-        vi_block = f"""
-
-## 视觉识别系统 (VIS) — 通用规范（色彩、排版、卡片、图标 — 逐条逐一精确执行）
-{vi_content}
-"""
-
-    system = f"""{persona_block}
-
-## 设计系统（唯一权威来源，逐条遵守）
-
-{design_system[:15000]}
-
-## 风格 Token
-```yaml
-{style_yaml[:4000]}
-```
-{font_info}
-{vi_block}
-## 技术约束（非设计规则，仅限输出格式和工程限制）
-
-- 尺寸: width:1280px; height:720px, position:relative, overflow:hidden
-- 安全区: 所有内容必须在 (60,60) 到 (1220,660) 范围内，底部 60px 预留给页码标记
-- 样式: 全部内联（inline style），禁止 class/id/<style>/@import/@font-face 标签
-- 背景: 使用 style YAML 的 background 色铺满 viewport
-- 字体: 使用 typography token 中的字体族
-- 全部 CSS 属性必须带单位（px），不完整代码禁止输出
-- 禁止输出 <!DOCTYPE html>、<html>、<head>、<body>、<title>、<meta>、<link> 标签
-- 禁止输出页码元素（页码由管线统一注入）
-- 你的输出只包含一个 div 容器（width:1280px;height:720px）及其所有子元素
-
-## 间距硬约束（违反即错误）
-- 数字下方的标签 margin-top ≥ 12px（禁止 4/6/8px）
-- SVG 图标与下方内容 margin-bottom ≥ 20px
-- 卡片内标题与正文间距 ≥ 12px
-- 相邻独立元素间距 ≥ 16px
-- line-height 禁止使用 1px 作为可见文字的行高；正文 1.6-1.8，标题 1.15-1.25，装饰大字 ≥ 0.15
-
-## 画布密度硬约束（违反即设计失败）
-- 内容区 (y:60-660, x:60-1220) 不得有连续 >80px 的空白区域
-- 页面下方留白 → 必须添加图表 / 插图 / SVG 装饰填充
-- 卡片区占画布 55-70%，不足 → 扩大卡片或添加装饰插图
-- 不确定加什么时：有数据→图表，有流程→timeline，有对比→对照图，以上均不适用→SVG 主题插画
-
-所有设计规则（色彩、排版、卡片、装饰、图表、图层结构、封面规则、字号下限）均已在《设计系统》中定义，此处不重复。严格遵守设计系统即可。
-
-输出一个 HTML 代码块，用 ```html ... ``` 包裹。仅输出 HTML。"""
 
     total = len(structure_slides)
 
@@ -1909,6 +2149,51 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         has_chart = slide.get("has_chart", False)
         chart_hint = slide.get("chart_hint", "")
         notes = slide.get("notes", "")
+
+        # ── Per-slide lean system prompt ──
+        # Build a tailored system prompt: core rules + slide-type-specific sections
+        core_system = build_slide_prompt(stype, layout, has_chart)
+        # Append VI section for this slide type (design instruction, not user content)
+        vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False)
+        vi_append = ""
+        if vi_section:
+            vi_append = f"\n\n## {stype} 类型专属视觉规范\n{vi_section[:4000]}"
+
+        tailored_system = f"""{persona_block}
+
+{core_system}
+
+## 风格 Token（仅排版，无颜色 hex）
+```yaml
+{style_yaml[:4000]}
+```
+{font_info}
+{vi_append}
+
+## 颜色变量（必须使用，禁止硬编码 hex）
+所有颜色必须使用以下变量语法，绝对禁止写入任何 hex 色值（如 #1a365d、#ffffff）：
+- 基础色：{{{{primary}}}} {{{{secondary}}}} {{{{accent}}}} {{{{background}}}} {{{{text}}}} {{{{card_bg}}}}
+- 图表色：{{{{chart_0}}}} {{{{chart_1}}}} {{{{chart_2}}}} {{{{chart_3}}}} {{{{chart_4}}}}
+- 语义色：{{{{semantic_positive}}}} {{{{semantic_negative}}}}
+- RGB 形式（用于 rgba 透明度）：{{{{primary_rgb}}}} → rgba({{{{primary_rgb}}}}, 0.5)
+- 单通道（用于 hsla）：{{{{primary_r}}}} {{{{primary_g}}}} {{{{primary_b}}}}
+示例：`color: {{{{text}}}}; background: {{{{card_bg}}}}; border-left: 4px solid {{{{chart_0}}}};`
+
+## 技术约束
+- 尺寸: width:1280px; height:720px, position:relative, overflow:hidden
+- 安全区: 所有内容必须在 (60,60) 到 (1220,660) 范围内
+- 样式: 全部内联 inline style，禁止 class/id/<style>/@import/@font-face
+- 全部 CSS 属性必须带单位（px）
+- 禁止输出 <!DOCTYPE html>/<html>/<head>/<body>/<title>/<meta>/<link>
+- 输出只包含一个 div 容器（width:1280px;height:720px）及其子元素
+
+## ⛔ 容器铁律（违反=废稿）
+禁止: left:180px, width:920px/960px, transform:translateX(-50%), left:30/40/48/80/88px
+必须: 内容页用 left:60px; right:60px 基准容器
+例外: 仅 cover/quote/section/summary/closing 可用居中布局
+每页生成前自检：你的内容卡片用了 left:60px; right:60px 吗？
+
+输出一个 HTML 代码块，用 ```html ... ``` 包裹。仅输出 HTML。"""
 
         content_parts = [
             f"页码: {seq}/{total}",
@@ -1934,17 +2219,28 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             content_parts.append(
                 f"需要数据图表: {chart_hint or '根据内容中的数据选择合适的图表类型(big_number/donut/bar/progress_bar)'}")
 
-        # Append slide-type-specific VI section
-        vi_section = _load_style_vi_section(style_id, stype)
-        if vi_section:
-            content_parts.append(f"\n## 当前幻灯片类型 ({stype}) 专属视觉规范（叠加通用规范之上，逐条执行）\n{vi_section[:4000]}")
-
         user = "\n".join(content_parts)
+
+        # ── DEBUG: monitor prompt for color hex leakage ──
+        if idx == 0:
+            import re as _re_monitor
+            hex_count = len(_re_monitor.findall(r'#[0-9a-fA-F]{6}', tailored_system))
+            has_colors_md = "四、色彩使用原则" in tailored_system
+            has_semantics_md = "十四、色彩语义" in tailored_system
+            has_var_law = "颜色变量铁律" in tailored_system
+            _logger.info(f"[MONITOR] Slide {seq} system prompt: {len(tailored_system)} chars, "
+                        f"hex_count={hex_count}, colors_md={has_colors_md}, "
+                        f"color_semantics_md={has_semantics_md}, var_iron_law={has_var_law}")
+            # Dump to file for inspection
+            debug_dir = os.path.join(BASE_DIR, "data", "debug")
+            os.makedirs(debug_dir, exist_ok=True)
+            with open(os.path.join(debug_dir, "last_system_prompt.txt"), "w", encoding="utf-8") as _df:
+                _df.write(tailored_system)
 
         for attempt in range(2):
             try:
                 response = _safe_run_async(llm_generate(provider_id, model,
-                    system, user, temperature=temperature))
+                    tailored_system, user, temperature=temperature))
                 # Extract HTML
                 m = re.search(r'```html\s*\n(.*?)\n```', response, re.DOTALL)
                 if m:
@@ -1960,16 +2256,72 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                             html = re.sub(r'\n?```$', '', html)
 
                 if html and len(html) > 300:
+                    # ── DEBUG: monitor LLM output for hex leakage ──
+                    if idx == 0:
+                        import re as _re_monitor2
+                        html_hex_count = len(_re_monitor2.findall(r'#[0-9a-fA-F]{6}', html))
+                        html_var_count = len(_re_monitor2.findall(r'\{\{[a-z_]+\}\}', html))
+                        _logger.info(f"[MONITOR] Slide {seq} LLM output: {len(html)} chars, "
+                                    f"hex_count={html_hex_count}, var_count={html_var_count}")
+                        with open(os.path.join(debug_dir, "last_llm_output.txt"), "w", encoding="utf-8") as _df2:
+                            _df2.write(html)
+
                     # Post-process: fix common LLM HTML errors
                     html = _fix_llm_html_errors(html)
+                    # Save unresolved HTML for later recolor (before hex resolution)
+                    html_vars = html
+                    # Resolve {{primary}} etc. → actual hex from active color scheme
+                    if active_scheme:
+                        html = _resolve_color_vars(html, active_scheme)
                     # Check for truncation: HTML must end with a properly closed tag
                     stripped = html.rstrip()
                     if not stripped.endswith('>'):
                         _logger.warning(f"Slide {seq} attempt {attempt+1}: "
                                         f"truncated (ends with '{stripped[-50:]}')")
                         continue  # retry
+                    # --- Code-based structural checks (not LLM self-review) ---
+                    retry_msg = ""
+
+                    # Check 1: container violations (forbidden centered-card patterns)
+                    violation = _detect_container_violation(html, stype)
+                    if violation:
+                        retry_msg = f"⛔ 容器违规({violation})，已废弃。重新生成必须：内容区用 left:60px; right:60px 基准容器，禁止 left:180px 和 transform:translateX(-50%)。"
+
+                    # Check 2: content overflow (too many content blocks per card)
+                    if not retry_msg:
+                        overflow = _detect_content_overflow(html, stype, layout)
+                        if overflow:
+                            cards_str = ", ".join(
+                                f"卡片{i}有{c}个内容块" for i, c in overflow.items()
+                            )
+                            retry_msg = (
+                                f"⛔ 内容溢出({cards_str})，已废弃。"
+                                f"重新生成必须：将内容拆分到更多卡片中。"
+                                f"每张卡片最多容纳 8 个信息单元（标题/指标/步骤/段落），"
+                                f"超出必须使用多卡片布局或拆分到多页。"
+                                f"当前检测到 {overflow} 张卡片内容超载。"
+                            )
+
+                    # Check 3: full-screen opaque mask
+                    if not retry_msg:
+                        mask = _detect_fullscreen_mask(html)
+                        if mask:
+                            retry_msg = (
+                                f"⛔ 全屏遮罩({mask})，已废弃。"
+                                f"重新生成必须：禁止使用覆盖整个画布的不透明 div。"
+                                f"装饰元素必须使用半透明背景或限制在局部区域。"
+                            )
+
+                    if retry_msg and attempt < 1:
+                        _logger.warning(f"Slide {seq} attempt {attempt+1}: {retry_msg[:120]}")
+                        user += f"\n\n{retry_msg}"
+                        continue
+                    elif retry_msg:
+                        _logger.warning(f"Slide {seq}: {retry_msg[:120]} "
+                                        f"after retries, accepting (reviewer should catch)")
+
                     _logger.info(f"Slide {seq}: HTML {len(html)} chars")
-                    return {"seq": seq, "type": stype, "layout": layout, "html": html}
+                    return {"seq": seq, "type": stype, "layout": layout, "html": html, "html_vars": html_vars}
                 else:
                     _logger.warning(f"Slide {seq} attempt {attempt+1}: HTML too short ({len(html)} chars)")
             except Exception as e:
@@ -2005,6 +2357,614 @@ def _fallback_stage1_to_html_slides(stage1_slides: list, style_id: str = "busine
     for s in structure:
         result.append(_fallback_single_slide_html(s, style_id))
     return result
+
+
+def _detect_container_violation(html: str, page_type: str = "") -> str | None:
+    """Scan HTML for forbidden container patterns.
+
+    Returns violation description string if found, None if clean.
+    Cover, quote, and section pages are exempt from container width checks.
+    """
+    import re
+
+    exempt_types = {"cover", "quote", "section", "summary", "closing"}
+    if page_type in exempt_types:
+        return None
+
+    # Check 1: Forbidden left:180px on content area (not decorative)
+    if re.search(r'left\s*:\s*180px', html):
+        return "left:180px (forbidden margin, use left:60px; right:60px)"
+
+    # Check 2: Centered positioning with transform
+    if re.search(r'transform\s*:\s*translateX\s*\(\s*-50%\s*\)', html):
+        return "transform:translateX(-50%) (centered card, use base container)"
+
+    # Check 3: Non-standard left margins on content cards
+    # Only flag if width is also specified (indicating a centered card, not a full-width container)
+    narrow_card = re.search(r'left\s*:\s*(30|36|40|48|80|88)px.*?width\s*:\s*\d+px', html)
+    if narrow_card:
+        return f"left:{narrow_card.group(1)}px + fixed width (non-standard margin)"
+
+    # Check 4: Fixed-width card with no right edge constraint (orphan card)
+    # Pattern: a content div with width:920px or width:960px and no right:60px sibling
+    if re.search(r'(?:width\s*:\s*920px|width\s*:\s*960px)', html):
+        # Make sure it's not a decorative element
+        if not re.search(r'right\s*:\s*60px', html):
+            return "narrow card (920/960px) without right-edge anchor"
+
+    return None
+
+
+def _parse_style(style_str: str) -> dict:
+    """Parse inline CSS style string into a dict of property:value pairs."""
+    if not style_str:
+        return {}
+    result = {}
+    for part in style_str.split(";"):
+        part = part.strip()
+        if ":" in part:
+            k, v = part.split(":", 1)
+            result[k.strip()] = v.strip()
+    return result
+
+
+def _detect_fullscreen_mask(html: str) -> str | None:
+    """Detect full-screen opaque divs that cover all slide content.
+
+    Pattern: a div with position:absolute covering the full 1280x720 canvas
+    with an opaque background (no transparency).
+    """
+    from bs4 import BeautifulSoup
+    import re
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    for div in soup.find_all("div"):
+        s = _parse_style(div.get("style", ""))
+        pos = s.get("position", "")
+        if pos not in ("absolute", "fixed"):
+            continue
+        top = s.get("top", "").strip()
+        left = s.get("left", "").strip()
+        width = s.get("width", "")
+        height = s.get("height", "")
+        # Check full-viewport coverage
+        covers_top_left = (top in ("0", "0px") and left in ("0", "0px"))
+        covers_size = (
+            width in ("100%", "100vw", "1280px")
+            and height in ("100%", "100vh", "720px")
+        )
+        if not (covers_top_left and covers_size):
+            continue
+        # Skip empty background layers — an empty full-screen div is a
+        # legitimate slide background, not a content-hiding mask.
+        if not div.get_text(strip=True) and not div.find():
+            continue
+        # Check if background is opaque
+        bg = s.get("background", "")
+        bg_color = s.get("background-color", "")
+        combined = f"{bg} {bg_color}"
+        # Look for solid colors (not rgba with alpha < 1, not transparent)
+        if re.search(r'#[0-9a-fA-F]{6}', combined):
+            return f"opaque full-screen mask (bg={bg or bg_color})"
+        if re.search(
+            r'rgba?\s*\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)', combined
+        ):
+            return f"opaque full-screen mask (bg={bg or bg_color})"
+        if re.search(
+            r'rgba?\s*\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*1\s*\)', combined
+        ):
+            return f"opaque full-screen mask (bg={bg or bg_color})"
+        # Named colors (white, black, etc.) without transparency
+        named_opaques = [
+            "white", "#fff", "#ffffff", "black", "#000", "#000000",
+            "red", "blue", "green", "gray", "grey",
+        ]
+        for c in named_opaques:
+            if c in combined.lower() and "transparent" not in combined.lower():
+                # Check it's not rgba with alpha < 1
+                if "rgba" not in combined.lower():
+                    return f"opaque full-screen mask (bg={bg or bg_color})"
+
+    return None
+
+
+def _detect_content_overflow(html: str, page_type: str = "", layout: str = "") -> dict | None:
+    """Detect cards whose content exceeds their physical capacity.
+
+    Parses the HTML DOM tree, finds card containers, and counts distinct
+    content blocks within each.  Returns {card_index: block_count} for any
+    card exceeding the threshold, or None if all cards are within capacity.
+
+    This is purely mechanical — no LLM involved.  The physical constraint:
+    a card inside a 720px slide (130px top + 50px bottom = 540px available)
+    with 28px padding can hold at most 8 content blocks before overflow.
+    """
+    from bs4 import BeautifulSoup
+    import re
+    import math
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    # ── Find the base content container (4th layer) ──
+    # Pattern: position:absolute + left:60px + right:60px + display:flex
+    base = None
+    for div in soup.find_all("div"):
+        s = _parse_style(div.get("style", ""))
+        if (
+            s.get("position") == "absolute"
+            and s.get("left") == "60px"
+            and s.get("right") == "60px"
+            and "flex" in s.get("display", "")
+        ):
+            base = div
+            break
+
+    if not base:
+        return None  # not a standard content page layout, skip
+
+    # ── Calculate available card height ──
+    top_px = 130
+    bottom_px = 50
+    top_str = _parse_style(base.get("style", "")).get("top", "")
+    bot_str = _parse_style(base.get("style", "")).get("bottom", "")
+    try:
+        top_px = int(top_str.replace("px", ""))
+    except (ValueError, AttributeError):
+        pass
+    try:
+        bottom_px = int(bot_str.replace("px", ""))
+    except (ValueError, AttributeError):
+        pass
+    available_height = 720 - top_px - bottom_px  # typically 540px
+
+    # ── Find card elements (direct flex children of the base container) ──
+    cards = []
+    for child in base.find_all("div", recursive=False):
+        child_style = child.get("style", "")
+        if "flex:" in child_style or "flex " in child_style:
+            cards.append(child)
+
+    if not cards:
+        return None  # no cards found, skip
+
+    # ── Per-card thresholds ──
+    exempt_types = {"cover", "quote", "section", "summary", "closing"}
+    if page_type in exempt_types:
+        return None
+
+    # A card can physically hold ~8 content blocks before overflow
+    # (540px - 56px padding = 484px; ~55px per block → 8.8 blocks)
+    max_blocks_per_card = 8
+
+    overflow: dict = {}
+    for i, card in enumerate(cards):
+        count = _count_content_blocks(card)
+        if count > max_blocks_per_card:
+            overflow[i] = count
+
+    return overflow if overflow else None
+
+
+def _count_content_blocks(card_element) -> int:
+    """Count distinct content blocks within a card element.
+
+    A content block is any visible structural unit that consumes vertical space:
+    icon+text row, step item, metric display, text paragraph, or note box.
+
+    Walks all descendant elements (div, span, p) and counts those that match
+    content-block patterns.  Uses a set of element ids to avoid double-counting
+    a parent container AND its children.
+    """
+    import re
+
+    count = 0
+    counted_ids: set = set()
+
+    for elem in card_element.descendants:
+        if not hasattr(elem, "name"):
+            continue  # NavigableString, skip
+        if elem.name not in ("div", "span", "p"):
+            continue
+
+        style = elem.get("style", "") if hasattr(elem, "get") else ""
+        eid = id(elem)
+
+        # --- Exclusions ---
+        # Absolute-positioned (accent bars, overlays)
+        if "position:absolute" in style or "position: absolute" in style:
+            continue
+        # Accent bar: thin strip
+        if re.search(r'width\s*:\s*4px', style) and re.search(r'(?:top|bottom)\s*:\s*0', style):
+            continue
+        # Invisible or near-invisible
+        if re.search(r'opacity\s*:\s*0(?:\.0)?\b', style):
+            continue
+        # Pure structural dividers (1px height, no text)
+        own = elem.find(string=True, recursive=False)
+        own_text = own.strip() if own else ""
+        if re.search(r'height\s*:\s*1px', style) and len(own_text) == 0:
+            continue
+
+        # --- Content block patterns ---
+        has_svg = elem.find("svg") is not None if hasattr(elem, "find") else False
+
+        # Pattern A: Big number metric (font-size >= 38px)
+        if re.search(r'font-size\s*:\s*(?:3[89]|[4-9]\d)px', style):
+            if eid not in counted_ids:
+                count += 1
+                counted_ids.add(eid)
+            continue
+
+        # Pattern B: Step row — parent div containing a numbered circle
+        # (width:18px; height:18px; border-radius:9px) AND text
+        has_numbered_circle = False
+        for span in elem.find_all("span", recursive=False):
+            s = span.get("style", "") if hasattr(span, "get") else ""
+            if re.search(
+                r'width\s*:\s*1[8-9]px.*?height\s*:\s*1[8-9]px.*?border-radius\s*:\s*(?:9|10|50)px', s
+            ):
+                has_numbered_circle = True
+                break
+        if has_numbered_circle:
+            if eid not in counted_ids:
+                count += 1
+                counted_ids.add(eid)
+            continue
+
+        # Pattern C: Icon+text flex row (SVG icon + span text, display:flex, align-items)
+        if has_svg and elem.find("span") is not None:
+            if "display:flex" in style and "align-items" in style:
+                if eid not in counted_ids:
+                    count += 1
+                    counted_ids.add(eid)
+                continue
+
+        # Pattern D: Standalone paragraph with substantial text (>30 chars)
+        if elem.name == "p" and len(elem.get_text(strip=True)) > 30:
+            if eid not in counted_ids:
+                count += 1
+                counted_ids.add(eid)
+            continue
+
+        # Pattern E: Warning/note box — colored background, padding, substantial text
+        if (
+            "padding" in style
+            and "border-radius" in style
+            and re.search(r'background\s*:\s*#[0-9a-fA-F]{6}', style)
+            and len(elem.get_text(strip=True)) > 25
+        ):
+            if eid not in counted_ids:
+                count += 1
+                counted_ids.add(eid)
+
+    return count
+
+
+def build_slide_prompt(page_type: str, layout: str, has_chart: bool) -> str:
+    """Build tailored system prompt from modular core/ files — no regex, no full-document parse.
+
+    File structure:
+        core/always/     → loaded for every slide
+        core/by_type/    → loaded based on page_type
+        core/by_feature/ → loaded conditionally (charts)
+        core/by_layout/  → per-layout file
+
+    A typical content slide gets ~6-8K chars instead of the full 14K design-system.md.
+    """
+    import re
+
+    _CORE = os.path.join(BASE_DIR, "resources", "prompts", "core")
+
+    def _read(*parts: str) -> str | None:
+        p = os.path.join(_CORE, *parts)
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as f:
+                return f.read()
+        return None
+
+    parts: list[str] = []
+
+    # ── Always (7 files, ~3K chars total) ──
+    for name in ("identity", "iron-laws", "structure", "richness",
+                  "typography", "consistency", "checklist"):
+        text = _read("always", f"{name}.md")
+        if text:
+            parts.append(text)
+
+    # ── By type: card design depth (skip for bookend pages) ──
+    no_card_types = {"cover", "quote", "section", "summary", "closing"}
+    if page_type not in no_card_types:
+        text = _read("by_type", "cards.md")
+        if text:
+            parts.append(text)
+
+    # ── By type: card role directory (multi-card layouts only) ──
+    multi_card = {"two_column", "two_column_asymmetric", "three_column",
+                  "hero_grid", "mixed_grid", "dashboard", "horizontal_split"}
+    if layout in multi_card:
+        text = _read("by_type", "card-roles.md")
+        if text:
+            parts.append(text)
+
+    # ── By type: decoration (extract relevant sub-section) ──
+    deco = _read("by_type", "decoration.md")
+    if deco:
+        is_bookend = page_type in {"cover", "summary", "closing", "section"}
+        deco_kw = "封面/总结页装饰" if is_bookend else "内容页装饰"
+        deco_match = re.search(
+            rf'(### {re.escape(deco_kw)}.*?)(?=### |\Z)',
+            deco, re.DOTALL
+        )
+        if deco_match:
+            parts.append(f"## 五、装饰系统\n{deco_match.group(1)}")
+        else:
+            parts.append(deco)
+
+    # ── By type: illustration ──
+    text = _read("by_type", "illustration.md")
+    if text:
+        parts.append(text)
+
+    # ── By feature: charts ──
+    if has_chart:
+        text = _read("by_feature", "charts.md")
+        if text:
+            parts.append(text)
+
+    # ── By layout: single per-layout file ──
+    text = _read("by_layout", f"{layout}.md")
+    if text:
+        parts.append(f"## 当前布局\n{text}")
+
+    return "\n\n".join(parts)
+
+
+def _build_edit_system_prompt(style_id: str, color_scheme: str = "deep-blue") -> str:
+    """Build edit-slide system prompt — agent with knowledge lookup tool.
+
+    Architecture:
+      1. Agent identity — who it is
+      2. Knowledge index — topics available for lookup
+      3. Working object — the HTML slide
+      4. Workflow — discuss → lookup knowledge → confirm → execute
+    """
+    persona = _load_style_prompt(style_id, color_scheme)
+    if not persona:
+        persona = "你是演示文稿设计艺术总监。"
+
+    return f"""## 角色
+
+{persona}
+
+你的工作对象是用户提供的单页幻灯片 HTML。你的能力：
+- 分析当前设计是否符合设计系统规范
+- 使用工具查阅具体的设计规范
+- 与用户讨论改进方案
+- 在用户确认后输出修改后的 HTML
+
+## 可用工具
+
+你有以下工具可以使用：
+1. **list_knowledge_topics** — 列出所有可查询的设计知识主题
+2. **lookup_knowledge** — 按主题名查询具体的设计规范内容
+
+## 工作流
+
+1. **接收用户消息** → 判断意图：讨论 / 简单明确修改 / 模糊修改需求
+2. **简单明确修改**（如"标题改42px""删第三段"）→ 直接执行，不需要查知识库
+3. **模糊需求/涉及设计规范**（如"颜色感觉不对""这里布局合理吗"）→ 先用工具查相关规范，再分析回复
+4. **用户确认**（如"改""做吧""就按这个"）→ 输出修改后的完整 HTML
+
+## 输出格式
+
+- 讨论/分析 → 纯文本
+- 执行修改 → 完整 slide HTML，用 ```html ... ``` 包裹
+
+## 约束
+
+- 画布: 1280×720px，全部内联样式
+- 内容区基准边距: left:60px; right:60px，禁止修改
+- 顶部 accent 色条、标题短线、页码标记属于页面框架，禁止删除
+- 卡片容器必须包含 overflow:hidden
+- 修改范围不超过用户要求，风格匹配已有元素"""
+
+
+async def _run_edit_agent(provider_id: str, model: str,
+                           system_prompt: str, user_message: str,
+                           temperature: float = 0.3) -> str:
+    """Run the edit agent with knowledge-lookup tools.
+
+    The agent can call list_knowledge_topics and lookup_knowledge to
+    consult design rules before responding.  Supports Anthropic native
+    and OpenAI-compatible APIs.
+    """
+    from services.llm_service import _is_anthropic, _mk_anthropic
+    from openai import AsyncOpenAI
+    from database import get_db
+
+    db = get_db()
+    provider = None
+    try:
+        row = db.execute(
+            "SELECT * FROM llm_providers WHERE id=? AND is_enabled=1",
+            (provider_id,)
+        ).fetchone()
+        if row:
+            provider = dict(row)
+    finally:
+        db.close()
+
+    if not provider:
+        raise ValueError(f"Provider {provider_id} not found or disabled")
+
+    # ── Tool definitions (Anthropic format) ──
+    tools = [
+        {
+            "name": "list_knowledge_topics",
+            "description": "列出所有可用的设计知识主题",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        },
+        {
+            "name": "lookup_knowledge",
+            "description": "按主题名查询具体的设计规范内容",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "知识主题名称，如 cards, colors, typography, structure"
+                    }
+                },
+                "required": ["topic"]
+            }
+        }
+    ]
+
+    # OpenAI format tools
+    openai_tools = [{
+        "type": "function",
+        "function": {
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": t["input_schema"]
+        }
+    } for t in tools]
+
+    def _exec_tool(name: str, args: dict) -> str:
+        if name == "list_knowledge_topics":
+            return _list_knowledge_topics()
+        elif name == "lookup_knowledge":
+            topic = args.get("topic", "")
+            result = _lookup_knowledge(topic)
+            return result if result else f"(未找到知识主题: {topic})"
+        return "(未知工具)"
+
+    max_rounds = 5
+
+    if _is_anthropic(provider):
+        client = _mk_anthropic(provider)
+        messages = [{"role": "user", "content": user_message}]
+
+        for _ in range(max_rounds):
+            response = await client.messages.create(
+                model=model,
+                max_tokens=16384,
+                system=system_prompt,
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+            )
+
+            # Collect text and tool_use blocks
+            text_blocks = []
+            tool_blocks = []
+            for block in response.content:
+                if block.type == "text":
+                    text_blocks.append(block.text)
+                elif block.type == "tool_use":
+                    tool_blocks.append(block)
+
+            if tool_blocks:
+                # Add assistant response to messages
+                messages.append({"role": "assistant", "content": [b.to_dict() for b in response.content]})
+                # Execute tools and add results
+                tool_results = []
+                for tb in tool_blocks:
+                    result = _exec_tool(tb.name, tb.input)
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tb.id,
+                        "content": result,
+                    })
+                messages.append({"role": "user", "content": tool_results})
+            else:
+                return "\n".join(text_blocks).strip()
+
+        return "\n".join(text_blocks).strip() if text_blocks else ""
+
+    else:
+        # ── OpenAI-compatible path ──
+        client = AsyncOpenAI(
+            api_key=provider["api_key"],
+            base_url=provider["base_url"],
+            timeout=120.0,
+        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
+
+        for _ in range(max_rounds):
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=openai_tools,
+                temperature=temperature,
+                max_tokens=16384,
+            )
+            msg = response.choices[0].message
+
+            if msg.tool_calls:
+                tool_calls = msg.tool_calls
+                messages.append({"role": "assistant", "content": msg.content or "", "tool_calls": [tc.to_dict() for tc in tool_calls]})
+                for tc in tool_calls:
+                    args = json.loads(tc.function.arguments)
+                    result = _exec_tool(tc.function.name, args)
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+                    # Some providers (e.g. DeepSeek) require the role name "tool"
+            else:
+                return msg.content.strip() if msg.content else ""
+
+        return msg.content.strip() if msg.content else ""
+
+
+def _list_knowledge_topics() -> str:
+    """Scan the core/ directory and return available knowledge topics."""
+    _CORE = os.path.join(BASE_DIR, "resources", "prompts", "core")
+    if not os.path.isdir(_CORE):
+        return "(知识库目录不存在)"
+    lines: list[str] = []
+    for root, dirs, files in os.walk(_CORE):
+        for f in sorted(files):
+            if f.endswith(".md"):
+                rel = os.path.relpath(os.path.join(root, f), _CORE)
+                path = os.path.join(root, f)
+                try:
+                    with open(path, encoding="utf-8") as fh:
+                        first = fh.readline().strip()
+                        if first.startswith("## "):
+                            desc = first[3:]
+                        elif first.startswith("# "):
+                            desc = first[2:]
+                        else:
+                            desc = ""
+                except Exception:
+                    desc = ""
+                lines.append(f"- `{rel.replace(os.sep, '/').replace('.md', '')}`: {desc}")
+    return "\n".join(lines)
+
+
+def _lookup_knowledge(topic: str) -> str | None:
+    """Read a knowledge file by topic name or path fragment."""
+    _CORE = os.path.join(BASE_DIR, "resources", "prompts", "core")
+    if not os.path.isdir(_CORE):
+        return None
+    q = topic.lower().strip().replace(" ", "-").replace("_", "-")
+    for root, dirs, files in os.walk(_CORE):
+        for f in files:
+            if f.endswith(".md"):
+                name = f.replace(".md", "").lower().replace("_", "-")
+                rel = os.path.relpath(os.path.join(root, f), _CORE).replace(os.sep, "/").lower().replace(".md", "").replace("_", "-")
+                if q == name or q in name or q in rel or name in q:
+                    path = os.path.join(root, f)
+                    with open(path, encoding="utf-8") as fh:
+                        return fh.read()
+    return None
 
 
 def _fix_llm_html_errors(html: str) -> str:
@@ -2072,7 +3032,7 @@ def _fix_llm_html_errors(html: str) -> str:
     # overflow:hidden clips them to the card's rounded corners.
     def _fix_card_container(m):
         tag = m.group(0)
-        if 'position:' not in tag:
+        if 'position:' not in tag and 'background:#1e293b;' in tag:
             tag = tag.replace(
                 'background:#1e293b;',
                 'position:relative;background:#1e293b;'
@@ -2081,7 +3041,7 @@ def _fix_llm_html_errors(html: str) -> str:
             tag = tag.replace('border-radius:', 'overflow:hidden;border-radius:')
         return tag
     html = re.sub(
-        r'<div[^>]*background:\s*#1e293b[^>]*border-radius:\s*\d+px[^>]*>',
+        r'<div[^>]*border-radius:\s*\d+px[^>]*>',
         _fix_card_container,
         html
     )
@@ -2334,7 +3294,8 @@ def _check_svg(svg: str, idx: int) -> list[str]:
 def _stage3_svg(provider_id, model, llm_generate, slide_data,
                  style_id: str = "business", rules: dict = None,
                  batch_size: int = 2, temperature: float = 0.3,
-                 st: dict = None) -> list | None:
+                 st: dict = None, column_id: str = "",
+                 color_scheme: str = "deep-blue") -> list | None:
     """Phase 6 (AI-SVG): AI generates complete SVG XML per slide — PPT-Agent quality.
 
     Unlike the code-rendered path (AI→JSON→Code→SVG), this has AI write SVG directly,
@@ -2365,10 +3326,10 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
     rt_holistic = st.get('holistic', temperature)
     rt_holistic_fix = st.get('holistic_fix', temperature)
 
-    svg_spec, bento_spec = _load_svg_prompt_specs()
-    cognitive_spec = _load_cognitive_spec()
-    reviewer_spec = _load_reviewer_spec()
-    style_yaml = _load_style_yaml_text(style_id)
+    svg_spec, bento_spec = _load_svg_prompt_specs(column_id)
+    cognitive_spec = _load_cognitive_spec(column_id)
+    reviewer_spec = _load_reviewer_spec(column_id)
+    style_yaml = _load_style_yaml_text(style_id, color_scheme)
 
     if not svg_spec:
         _logger.warning("svg-generator.md not found, AI-SVG generation disabled")
@@ -2575,7 +3536,8 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
         result = _review_and_fix_slides(review_pid, review_m, llm_generate, result,
                                         style_yaml, style_id, svg_system,
                                         review_mode=review_mode,
-                                        temp_review=rt_review, temp_fix=rt_fix)
+                                        temp_review=rt_review, temp_fix=rt_fix,
+                                        column_id=column_id)
 
     # ── Phase 6c: Holistic deck review (cross-slide consistency) ──
     if provider_id and model and result and len(result) >= 3:
@@ -2583,7 +3545,8 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
                                   slide_data, style_yaml, style_id, svg_system,
                                   review_mode=review_mode,
                                   temp_holistic=rt_holistic,
-                                  temp_holistic_fix=rt_holistic_fix)
+                                  temp_holistic_fix=rt_holistic_fix,
+                                  column_id=column_id)
 
     return result
 
@@ -2592,7 +3555,8 @@ def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
                            style_id, svg_system, max_rounds=2,
                            review_mode: str = "self_review",
                            temperature: float = 0.3,
-                           temp_review: float = 0, temp_fix: float = 0):
+                           temp_review: float = 0, temp_fix: float = 0,
+                           column_id: str = ""):
     """PPT-Agent review-core equivalent: review each slide, fix if score < 7.
 
     Uses the same LLM (DeepSeek/Moonshot) with PPT-Agent's reviewer.md prompt.
@@ -2600,7 +3564,7 @@ def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
     """
     import re, json
 
-    reviewer_spec = _load_reviewer_spec()
+    reviewer_spec = _load_reviewer_spec(column_id)
     if not reviewer_spec:
         _logger.info("Reviewer spec not available, skipping review loop")
         return slides
@@ -2760,7 +3724,8 @@ def _holistic_review(provider_id, model, llm_generate, slides, slide_data,
                      style_yaml, style_id, svg_system,
                      review_mode: str = "self_review",
                      temperature: float = 0.3,
-                     temp_holistic: float = 0, temp_holistic_fix: float = 0):
+                     temp_holistic: float = 0, temp_holistic_fix: float = 0,
+                     column_id: str = ""):
     """Phase 6c: Holistic deck review — cross-slide consistency evaluation.
 
     PPT-Agent review-core holistic mode (reviewer.md:286-331): reads ALL slide
@@ -2771,7 +3736,7 @@ def _holistic_review(provider_id, model, llm_generate, slides, slide_data,
     """
     import re, json, yaml
 
-    reviewer_spec = _load_reviewer_spec()
+    reviewer_spec = _load_reviewer_spec(column_id)
     if not reviewer_spec:
         _logger.info("Reviewer spec not available, skipping holistic review")
         return slides

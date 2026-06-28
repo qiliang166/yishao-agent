@@ -7,7 +7,7 @@
 ## 布局规则
 
 - **布局**: full_bleed（全屏垂直居中）
-- **背景**: `linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)`（与封面同款 hero_bg 渐变）
+- **背景**: `linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)`（与封面同款 hero_bg 渐变）
 - **装饰**: 与封面同款装饰（光晕、大圆、几何图形），保持一致
 - **文字色**: 全部白色 `#ffffff`
 

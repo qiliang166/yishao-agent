@@ -7,9 +7,9 @@
 ## 布局规则
 
 - **布局**: full_bleed（全屏垂直居中）
-- **背景**: `linear-gradient(135deg, #1a365d 0%, #2a4a7f 100%)`（hero_bg 渐变）
+- **背景**: `linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)`（hero_bg 渐变）
 - **装饰**: 2 个半透明大圆装饰（opacity 0.03-0.08），随机分布不重叠
-- **顶部**: 4px accent 色条 `#e67e22`，横跨画布全宽
+- **顶部**: 4px accent 色条 `{{accent}}`，横跨画布全宽
 - **禁止卡片容器包裹封面内容** — 封面文字直接放在画布上
 
 ## 文字规范
@@ -22,7 +22,7 @@
 
 ## 标题装饰
 
-- 标题下方 accent 短线: 60×4px `#e67e22`
+- 标题下方 accent 短线: 60×4px `{{accent}}`
 
 ## 图层结构（5 层）
 

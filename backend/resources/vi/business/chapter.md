@@ -23,18 +23,18 @@
 ### 章节编号
 - 大号数字（如 "02" / "III"）竖排或左置
 - 字号: 64-96px
-- 颜色: accent `#e67e22` 或 primary `#1a365d`
+- 颜色: accent `{{accent}}` 或 primary `{{primary}}`
 - 字体: DM Sans Bold
 
 ### 章节标题
 - 字号: 32-40px
-- 颜色: primary `#1a365d`
+- 颜色: primary `{{primary}}`
 - 字体: DM Sans Bold
 
 ### 章节概述
 - 1-2 句简短介绍本章内容
 - 字号: 16-18px
-- 颜色: text `#1a202c`
+- 颜色: text `{{text}}`
 
 ---
 

@@ -24,7 +24,7 @@
 ### 章节编号
 - 大号罗马数字或数字编号（如 "III" / "03"）
 - 字号: 18-24px
-- 颜色: accent `#e67e22`，opacity 0.7
+- 颜色: accent `{{accent}}`，opacity 0.7
 - 字体: DM Sans
 
 ### 章节标题
