@@ -1239,9 +1239,24 @@ export default function ProjectPage() {
             }} />
             ⏳ {globalGenLabel} (切换栏目不影响)
             {pptProgress && (
-              <span style={{ fontWeight: 500, marginLeft: 2 }}>
-                — {pptProgress.phase_label}
-                {pptProgress.slides_total ? ` (${pptProgress.slides_done || 0}/${pptProgress.slides_total} 页)` : ''}
+              <span style={{ fontWeight: 500, marginLeft: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+                {pptProgress.phase_label}
+                {pptProgress.slides_total ? (
+                  <span style={{ marginLeft: 6 }}>
+                    <span style={{
+                      display: 'inline-block', width: 120, height: 4, background: 'var(--border)',
+                      borderRadius: 2, verticalAlign: 'middle', marginRight: 6, position: 'relative'
+                    }}>
+                      <span style={{
+                        display: 'inline-block', width: `${Math.round((pptProgress.slides_done || 0) / pptProgress.slides_total * 100)}%`,
+                        height: 4, background: 'var(--primary)', borderRadius: 2,
+                        position: 'absolute', left: 0, top: 0, transition: 'width 0.3s'
+                      }} />
+                    </span>
+                    {pptProgress.slides_done}/{pptProgress.slides_total} 页
+                  </span>
+                ) : ''}
+                {pptProgress.message ? <span style={{ marginLeft: 6 }}>— {pptProgress.message}</span> : ''}
               </span>
             )}
           </span>
