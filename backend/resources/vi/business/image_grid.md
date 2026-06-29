@@ -31,13 +31,13 @@
 - 背景: card_bg `{{card_bg}}`（占位色）
 - 圆角: 8-12px
 - 宽高比: 4:3 或 1:1
-- 边框: 1px `#e2e8f0`
+- 边框: 1px `rgba({{text_rgb}}, 0.12)`
 - 图片下方标注: 13-14px, 居中, text_muted
 
 ### 标注
 - 每张图片下方一行简短标注
 - 字号: 13px
-- 颜色: text_muted `#6b6b6b`
+- 颜色: text_muted `rgba({{text_rgb}}, 0.6)`
 - 可选序号标记
 
 ---

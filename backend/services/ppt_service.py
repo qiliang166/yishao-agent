@@ -3,6 +3,7 @@
 Uses PPT-Agent Bento Grid methodology: style YAML → AI outline → Bento Grid layout → SVG output.
 """
 import os
+import re
 import json
 import asyncio
 import logging
@@ -136,6 +137,18 @@ def _load_style_from_template(template_id: str = None) -> str:
     return "business"
 
 
+_COLUMN_ID_RE = re.compile(r'^[a-zA-Z0-9_-]+$')
+
+def _validate_column_id(column_id: str) -> str:
+    """Validate column_id for use in file paths and DB queries.
+
+    Returns the sanitized column_id if valid (alphanumeric + underscore + hyphen),
+    or empty string if the input is unsafe. Prevents path traversal via '../' etc.
+    """
+    if column_id and _COLUMN_ID_RE.match(column_id):
+        return column_id
+    return ""
+
 
 
 # In-memory status for PPT generation progress polling
@@ -214,6 +227,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
     # Track status for progress polling
     if project_id:
         _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成大纲...", "message": "AI 分析内容中"}
+        _ppt_log[project_id] = []  # clear stale logs from previous run
         _append_log(project_id, "开始生成 PPT，正在进行内容分析...")
 
     # Build human-readable dir name: "{项目名}_{类型}" (e.g. "测试1_道术PPT")
@@ -275,12 +289,12 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                     col_prompt = ""
                     col_skill = ""
                     try:
-                        # Query the specific column_id passed from frontend (col4=道术, col5=研学)
-                        target_col = column_id if column_id in ('col4', 'col5', 'col3', 'col2') else 'col4'
-                        cfg2 = db.execute(
-                            "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
-                            (target_col,)
-                        ).fetchone()
+                        cfg2 = None
+                        if column_id:
+                            cfg2 = db.execute(
+                                "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
+                                (column_id,)
+                            ).fetchone()
                         if cfg2:
                             col_prompt = cfg2["prompt"] or ""
                             col_skill = cfg2["skill"] or ""
@@ -353,7 +367,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             os.makedirs(html_dir, exist_ok=True)
 
             scheme_data = _load_scheme_data(style_id, color_scheme)
-            deck_html = _assemble_html_deck(slide_data, title, style_id, scheme_data)
+            gen_canvas_w, gen_canvas_h = _get_canvas_dimensions(column_id)
+            deck_html = _assemble_html_deck(slide_data, title, style_id, scheme_data, canvas_w=gen_canvas_w, canvas_h=gen_canvas_h)
             if scheme_data:
                 deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
             html_path = os.path.join(html_dir, "index.html")
@@ -363,7 +378,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
 
             # Save unresolved variable version for future color scheme switching
             vars_slide_data = [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_data]
-            deck_vars = _assemble_html_deck(vars_slide_data, title, style_id, scheme_data)
+            deck_vars = _assemble_html_deck(vars_slide_data, title, style_id, scheme_data, canvas_w=gen_canvas_w, canvas_h=gen_canvas_h)
             vars_path = os.path.join(html_dir, "index_vars.html")
             with open(vars_path, "w", encoding="utf-8") as f:
                 f.write(deck_vars)
@@ -652,22 +667,7 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
     if not sop_content or not sop_content.strip():
         return ""
 
-    research_system = (
-        "你是专业的内容研究员。对提供的 SOP 文档进行深度结构化分析。"
-        "\n\n你的任务不是总结内容，而是："
-        "\n1. 识别文档的核心主题、领域背景和行业语境"
-        "\n2. 提取关键概念、术语定义、数据指标、度量值"
-        "\n3. 梳理内容的逻辑结构：主论点、分论点、支撑论据的层级关系"
-        "\n4. 识别可转化为图表的数据点（数字、对比、趋势、比例）"
-        "\n5. 标记最值得在演示文稿中强调的重点（差异化价值、反直觉发现、关键数据）"
-        "\n\n按以下结构输出："
-        "\n## 背景与领域语境"
-        "\n## 核心发现与关键洞察"
-        "\n## 内容逻辑结构（金字塔层级）"
-        "\n## 可提取的数据点与量化指标"
-        "\n## 建议的重点强调方向"
-        "\n## 潜在图表机会"
-    )
+    research_system = _load_research_prompt()
 
     research_user = f"""## SOP 文档（唯一分析对象）
 {sop_content}
@@ -780,6 +780,8 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
         st = {}
 
     if project_id:
+        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成大纲...", "message": "AI 分析内容中"}
+        _ppt_log[project_id] = []  # clear stale logs from previous run
         _append_log(project_id, "开始生成大纲，正在进行内容分析...")
 
     research_context = ""
@@ -790,6 +792,7 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
         if research_context:
             _logger.info(f"Outline-only research done: {len(research_context)} chars")
             if project_id:
+                _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成大纲...", "message": "AI 提取大纲中"}
                 _append_log(project_id, "内容分析完成，进入大纲提取")
     except Exception as e:
         _logger.warning(f"Outline-only research failed (proceeding without): {e}")
@@ -799,10 +802,13 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
                               temp_outline=st.get('outline', temperature),
                               temp_fill=st.get('fill', temperature))
     if not stage1:
+        if project_id:
+            _ppt_status.pop(project_id, None)
         return None, ""
 
     outline_text = _slides_to_human_text(stage1)
     if project_id:
+        _ppt_status[project_id] = {"phase": "done", "phase_label": "大纲生成完成", "message": f"共 {len(stage1)} 页"}
         _append_log(project_id, f"大纲生成完成，共 {len(stage1)} 页")
     return stage1, outline_text
 
@@ -824,6 +830,7 @@ def _slides_to_human_text(slides: list) -> str:
         "troubleshoot": "问题排查",
         "appendix": "附录", "copyright": "版权页",
         "closing": "结尾页", "summary": "总结页",
+        "document": "A4文档",
     }
 
     parts = []
@@ -885,7 +892,9 @@ def _human_text_to_json(provider_id, model, human_text: str, original_json: list
                 existing_types.add(s["page_type"])
     type_list = ", ".join(sorted(existing_types)) if existing_types else "cover, toc, content, summary"
 
-    system = f"""你是数据整理专家。你的唯一任务是将人类编辑的自然文本转回结构化 JSON。
+    t2j_template = _load_text_to_json_prompt()
+    if not t2j_template:
+        t2j_template = """你是数据整理专家。你的唯一任务是将人类编辑的自然文本转回结构化 JSON。
 
 严格规则：
 1. 从原文中提取每一页的序号(seq)、类型(page_type)、标题(heading)、副标题(lead)、正文(body)、关键要点(key_points)、备注(notes)、章节标签(kicker)
@@ -894,6 +903,7 @@ def _human_text_to_json(provider_id, model, human_text: str, original_json: list
 4. 原文中没提到的字段不要编造
 5. key_points 是字符串数组
 6. 输出纯 JSON 数组，不要用 markdown 包裹"""
+    system = t2j_template.format(type_list=type_list)
 
     user = f"""## 原始 JSON 结构参考（字段名和类型以此为基准）
 ```json
@@ -947,17 +957,21 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     if not cognitive_spec_stage1:
         cognitive_spec_stage1 = _load_cognitive_spec(column_id)
 
-    base_system = system_prompt if system_prompt else (
-        f"""{outline_spec}
+    # Always combine column role prompt + VI design rules (never discard either)
+    role_block = system_prompt if system_prompt else ""
+    vi_block = f"""{outline_spec}
 
-    ## 认知设计原则（必须遵守）
-    {cognitive_spec_stage1}
+## 认知设计原则（必须遵守）
+{cognitive_spec_stage1}
+"""
+    pyramid_rules = _load_outline_rules()
+    if not pyramid_rules:
+        pyramid_rules = """重要补充：从提供的 SOP 文章中提取内容，严格按金字塔原理组织大纲。
+核心纪律：大纲中的每个「技法」/「步骤」/「章节」必须独占一页，绝不合并。
+即使 SOP 很短，封面页和总结页也不可省略。
+每页一主题，内容聚焦不堆砌。输出纯 JSON，不要用 markdown 包裹。"""
 
-    重要补充：从提供的 SOP 文章中提取内容，严格按金字塔原理组织大纲。
-    核心纪律：大纲中的每个「技法」/「步骤」/「章节」必须独占一页，绝不合并。
-    即使 SOP 很短，封面页和总结页也不可省略。
-    每页一主题，内容聚焦不堆砌。输出纯 JSON，不要用 markdown 包裹。"""
-    )
+    base_system = "\n\n".join(b for b in [role_block, vi_block, pyramid_rules] if b.strip())
 
     skill_block = ""
     if skill_template:
@@ -1012,14 +1026,16 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
     # ── Phase 2: Fill content per slide in parallel batches ──
     BATCH_SIZE = 4
-    fill_system = (
-        "你是内容编辑专家。根据 SOP 文章和金字塔原理为指定幻灯片填充正文内容。"
-        "遵循结论先行、以上统下、归类分组(MECE)、逻辑递进四大原则。"
-        "从 SOP 中提取归纳对应部分的内容，不编造。输出纯 JSON，不要用 markdown 包裹。"
-        "正文必须分段落：核心结论单独一段，支撑细节分段展开。用 \\n\\n 分隔段落，"
-        "每段不超过 180 字。并列要点用编号列表（1. 2. 3. 换行分隔）。"
-        "禁止把全部内容塞进一个不换行的长段落。"
-    )
+    fill_system = _load_fill_content_prompt()
+    if not fill_system:
+        fill_system = (
+            "你是内容编辑专家。根据 SOP 文章和金字塔原理为指定幻灯片填充正文内容。"
+            "遵循结论先行、以上统下、归类分组(MECE)、逻辑递进四大原则。"
+            "从 SOP 中提取归纳对应部分的内容，不编造。输出纯 JSON，不要用 markdown 包裹。"
+            "正文必须分段落：核心结论单独一段，支撑细节分段展开。用 \\n\\n 分隔段落，"
+            "每段不超过 180 字。并列要点用编号列表（1. 2. 3. 换行分隔）。"
+            "禁止把全部内容塞进一个不换行的长段落。"
+        )
 
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -1093,41 +1109,80 @@ SCENARIO_FILES = [
 ]
 
 
-def _load_scenario_file(filename: str, column_id: str = "") -> str:
+def _load_scenario_file(filename: str, column_id: str = "", canvas_w: int = 0, canvas_h: int = 0) -> str:
     """Load a scenario prompt file with fallback chain.
 
     Priority: scenarios/{column_id}/ → scenarios/_default/ → prompts/ (legacy)
+    If canvas_w/canvas_h are provided, substitute {{canvas_w}} and {{canvas_h}} placeholders.
     """
+    content = ""
     # 1) Per-column custom file
     if column_id:
         p = os.path.join(SCENARIOS_DIR, column_id, filename)
         if os.path.exists(p):
             with open(p, "r", encoding="utf-8") as f:
-                return f.read()
+                content = f.read()
     # 2) Default scenario template
-    p = os.path.join(SCENARIOS_DIR, "_default", filename)
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
+    if not content:
+        p = os.path.join(SCENARIOS_DIR, "_default", filename)
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                content = f.read()
     # 3) Legacy prompts directory
-    p = os.path.join(BASE_DIR, "resources", "prompts", filename)
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+    if not content:
+        p = os.path.join(BASE_DIR, "resources", "prompts", filename)
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                content = f.read()
+    # Substitute canvas dimensions if provided
+    if canvas_w and canvas_h:
+        content = content.replace("{{canvas_w}}", str(canvas_w))
+        content = content.replace("{{canvas_h}}", str(canvas_h))
+    return content
 
 
 def _load_svg_prompt_specs(column_id: str = "") -> tuple[str, str]:
     """Load svg-generator.md and bento-grid-layout.md from scenario files."""
+    cw, ch = _get_canvas_dimensions(column_id)
     return (
-        _load_scenario_file("svg-generator.md", column_id),
-        _load_scenario_file("bento-grid-layout.md", column_id),
+        _load_scenario_file("svg-generator.md", column_id, cw, ch),
+        _load_scenario_file("bento-grid-layout.md", column_id, cw, ch),
     )
 
 
 def _load_outline_spec(column_id: str = "") -> str:
     """Load outline-architect.md from scenario files."""
     return _load_scenario_file("outline-architect.md", column_id)
+
+
+def _get_canvas_dimensions(column_id: str = "") -> tuple[int, int]:
+    """Get canvas dimensions from column_configs.rules JSON.
+
+    Looks for {"canvas": {"width": W, "height": H}} in the column's rules.
+    Falls back to 1280x720 (16:9 presentation default).
+    """
+    default_w, default_h = 1280, 720
+    column_id = _validate_column_id(column_id)
+    if not column_id:
+        return (default_w, default_h)
+    try:
+        db = get_db()
+        row = db.execute(
+            "SELECT rules FROM column_configs WHERE column_id = ?",
+            (column_id,)
+        ).fetchone()
+        db.close()
+        if row and row["rules"]:
+            rules = json.loads(row["rules"])
+            canvas = rules.get("canvas", {})
+            if isinstance(canvas, dict):
+                w = canvas.get("width")
+                h = canvas.get("height")
+                if w and h:
+                    return (int(w), int(h))
+    except Exception:
+        pass
+    return (default_w, default_h)
 
 
 def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
@@ -1753,26 +1808,37 @@ def _load_scheme_data(style_id: str, color_scheme: str = "deep-blue") -> dict:
     return {}
 
 
-def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "deep-blue", resolve_vars: bool = True) -> str:
+def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "deep-blue", resolve_vars: bool = True, column_id: str = "") -> str:
     """Load a specific VI sub-file from data/vi/{style_id}/.
 
     section: 'cover', 'content', 'data', or 'summary'.
     Loads both vi.md (general) and the section-specific file, concatenated.
     Resolves {{color}} variables against the active color_scheme.
     When resolve_vars=False, keeps {{primary}} etc. as placeholders (for LLM prompts).
+    Checks vi/{style_id}/{column_id}/ first for column-specific VI overrides,
+    falls back to vi/{style_id}/.
     """
+    column_id = _validate_column_id(column_id)
     vi_dir = os.path.join(BASE_DIR, "resources", "vi", style_id)
     parts = []
 
     # Section-specific file FIRST — guaranteed included before truncation
     if section != "toc":
+        col_section_file = None
+        if column_id:
+            col_section_file = os.path.join(vi_dir, column_id, f"{section}.md")
         section_file = os.path.join(vi_dir, f"{section}.md")
-        if os.path.exists(section_file):
-            with open(section_file, "r", encoding="utf-8") as f:
+        chosen = col_section_file if (col_section_file and os.path.exists(col_section_file)) else section_file
+        if os.path.exists(chosen):
+            with open(chosen, "r", encoding="utf-8") as f:
                 parts.append(f.read())
 
     # General vi.md second — fills remaining space after section rules
     vi_md_path = os.path.join(vi_dir, "vi.md")
+    if column_id:
+        col_vi = os.path.join(vi_dir, column_id, "vi.md")
+        if os.path.exists(col_vi):
+            vi_md_path = col_vi
     if os.path.exists(vi_md_path):
         with open(vi_md_path, "r", encoding="utf-8") as f:
             parts.append(f.read())
@@ -1790,39 +1856,45 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
     return result
 
 
-# Canonical page type order — follows document writing conventions (cover → content → closing)
-PAGE_TYPE_ORDER = [
-    "cover",           # 1. 封面 — 开场页
-    "toc",             # 2. 目录 — 内容导航
-    "section",         # 3. 章节分隔 — 章节过渡
-    "chapter",         # 4. 章节页 — 章节起始
-    "content",         # 5. 内容页 — 通用内容展示
-    "data",            # 6. 数据页 — 数据可视化
-    "data_hero",       # 7. 数据突出 — 核心指标卡片
-    "technique",       # 8. 技法页 — 方法步骤
-    "principle",       # 9. 原则页 — 核心理念
-    "process_flow",    # 10. 流程图 — 流程展示
-    "process_timeline",# 11. 流程时间线 — 时序流程
-    "timeline",        # 12. 时间线 — 时间轴
-    "comparison",      # 13. 对比页 — 多项对比
-    "duo_compare",     # 14. 双项对比 — 两项对比
-    "table",           # 15. 表格页 — 数据表格
-    "grid_cards",      # 16. 网格卡片 — 多卡片网格
-    "image_grid",      # 17. 图片网格 — 图片展示
-    "quote",           # 18. 引言页 — 引用/引言
-    "image_hero",      # 19. 图片突出 — 大图+文字
-    "troubleshoot",    # 20. 问题排查 — 排查指南
-    "appendix",        # 21. 附录页 — 补充参考资料
-    "copyright",       # 22. 版权页 — 版权信息
-    "closing",         # 23. 结尾页 — 感谢/结束
-    "summary",         # 24. 总结页 — 结尾收束
-]
+# Page type order — lazily built from index.md (single source of truth)
+_page_type_order_cache: dict[str, list[str]] = {}
+
+def _get_page_type_order(style_id: str = "business") -> list[str]:
+    """Get page type names in canonical order from index.md. Cached per style."""
+    if style_id not in _page_type_order_cache:
+        types = _scan_vi_page_types(style_id)
+        _page_type_order_cache[style_id] = [t["type"] for t in types]
+    return _page_type_order_cache[style_id]
 
 def _page_type_sort_key(ptype: str) -> int:
+    """Sort key for VI file listing — mirrors frontend sectionSortKey().
+
+    Order: 总纲 < 设计原则 < 设计元素 < 页面类型 < 文档构建块 < 文档模板 < 列专属覆写
+    """
+    # 总纲
+    if ptype in ('vi', 'prompt', 'tokens', 'index'):
+        return {'vi': -4, 'prompt': -3, 'tokens': -2, 'index': -1}[ptype]
+    # 设计原则
+    if ptype in ('principles', 'consistency', 'richness', 'checklist', 'images', 'data_rules', 'decorations'):
+        return ['principles', 'consistency', 'richness', 'checklist', 'images', 'data_rules', 'decorations'].index(ptype)
+    # 设计元素
+    if ptype in ('colors', 'typography', 'card_styles', 'charts', 'layouts', 'card_roles', 'chart_decision', 'icons'):
+        return ['colors', 'typography', 'card_styles', 'charts', 'layouts', 'card_roles', 'chart_decision', 'icons'].index(ptype) + 10
+    # 页面类型
     try:
-        return PAGE_TYPE_ORDER.index(ptype)
+        return _get_page_type_order().index(ptype) + 100
     except ValueError:
-        return 99  # unknown types sort to end
+        pass
+    # 文档构建块
+    if ptype.startswith('blocks/'):
+        return 200
+    # 文档模板
+    if ptype.startswith('templates/'):
+        return 300
+    # 列专属覆写
+    if ptype.startswith('col3/') or ptype.startswith('col4/') or ptype.startswith('col5/'):
+        return 400
+    return 999
 
 
 def _scan_vi_page_types(style_id: str) -> list[dict]:
@@ -1846,6 +1918,7 @@ def _scan_vi_page_types(style_id: str) -> list[dict]:
     # Parse the "页面类型" markdown table
     types = []
     in_page_type_section = False
+    has_number_col = False  # True if table has 编号 column (new format)
     for line in content.split("\n"):
         line = line.strip()
         if line.startswith("## 页面类型"):
@@ -1853,11 +1926,21 @@ def _scan_vi_page_types(style_id: str) -> list[dict]:
             continue
         if in_page_type_section and line.startswith("## "):
             break  # next section starts
-        if not in_page_type_section or not line.startswith("|") or "---" in line or "类型名" in line:
+        if not in_page_type_section or not line.startswith("|") or "---" in line:
             continue
-        # Parse: | cover | 封面 | 开场页... | cover.md |
+        if "类型名" in line:
+            has_number_col = "编号" in line
+            continue
+        # Parse: | P01 | cover | 封面 | 开场页... | cover.md |  (new)
+        #    or: | cover | 封面 | 开场页... | cover.md |         (old)
         cells = [c.strip() for c in line.split("|")[1:-1]]
-        if len(cells) >= 3:
+        if has_number_col and len(cells) >= 4:
+            types.append({
+                "type": cells[1],   # skip 编号 column
+                "label": cells[2],
+                "purpose": cells[3],
+            })
+        elif not has_number_col and len(cells) >= 3:
             types.append({
                 "type": cells[0],
                 "label": cells[1],
@@ -1898,7 +1981,7 @@ def _build_page_type_prompt(style_id: str) -> str:
         "- **设计参数**（8项）：colors.md / typography.md / card_styles.md / charts.md / layouts.md / card_roles.md / chart_decision.md / icons.md",
         "",
         "## 规则",
-        "1. 只使用上述 26 种类型，不要编造新类型。",
+        f"1. 只使用上述 {len(types)} 种类型，不要编造新类型。",
         "2. 为每页选择最匹配内容特征的 page_type。",
         "3. 需要某类型的详细布局规范时，读取该类型对应的 .md 文件。",
         "4. 需要设计参数（颜色/字号/圆角等）时，读取设计元素对应的 .md 文件。",
@@ -1912,12 +1995,14 @@ def _load_cognitive_spec(column_id: str = "") -> str:
 
 def _load_reviewer_spec(column_id: str = "") -> str:
     """Load reviewer.md from scenario files."""
-    return _load_scenario_file("reviewer.md", column_id)
+    cw, ch = _get_canvas_dimensions(column_id)
+    return _load_scenario_file("reviewer.md", column_id, cw, ch)
 
 
 def _load_design_system(column_id: str = "") -> str:
     """Load design-system.md — the HTML slide design guide for LLM."""
-    return _load_scenario_file("design-system.md", column_id)
+    cw, ch = _get_canvas_dimensions(column_id)
+    return _load_scenario_file("design-system.md", column_id, cw, ch)
 
 
 def _resolve_font_range(style_yaml_text: str) -> dict:
@@ -2027,17 +2112,9 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
     spec_version = rules.get("spec_version", "2.2.1")
 
     # ── System prompt: AI as designer with strict structural rules ──
-    cards_system = f"""你是一位演示文稿设计师。你必须严格按照设计系统为每页幻灯片生成结构化的卡片数据。
-
-{design_system}
-
-## 风格 Token（颜色/字体/阴影/圆角/渐变）
-```yaml
-{style_yaml}
-```
-
-## 认知设计原则
-{cognitive_spec}
+    cards_system_core = _load_cards_system_prompt()
+    if not cards_system_core:
+        cards_system_core = """你是一位演示文稿设计师。你必须严格按照设计系统为每页幻灯片生成结构化的卡片数据。
 
 ## 你的任务
 
@@ -2058,6 +2135,18 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
 - 流程/步骤 → timeline 布局
 
 输出纯 JSON，不要用 markdown 包裹。"""
+
+    cards_system = f"""{cards_system_core}
+
+{design_system}
+
+## 风格 Token（颜色/字体/阴影/圆角/渐变）
+```yaml
+{style_yaml}
+```
+
+## 认知设计原则
+{cognitive_spec}"""
 
     # ── Batch generation with validation loop ──
     BATCH_SIZE = 3
@@ -2298,6 +2387,17 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 {style_vi}
 """
 
+    struct_output = _load_structure_output_prompt()
+    if not struct_output:
+        struct_output = """2. layout: 从第十节布局库中选择
+3. cards: 每张卡指定 role 和 content_hint
+4. has_chart: 有数字/百分比时 = true
+5. chart_hint: big_number/donut/bar/progress_bar/timeline/sparkline
+
+页面数量严格等于大纲给出的页数，不增不减。
+
+输出纯 JSON，不要用 markdown 包裹。"""
+
     system = f"""{persona_block}
 
 {design_system}
@@ -2311,14 +2411,7 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 
 为每页输出结构决策：
 {_build_page_type_prompt(style_id)}
-2. layout: 从第十节布局库中选择
-3. cards: 每张卡指定 role 和 content_hint
-4. has_chart: 有数字/百分比时 = true
-5. chart_hint: big_number/donut/bar/progress_bar/timeline/sparkline
-
-页面数量严格等于大纲给出的页数，不增不减。
-
-输出纯 JSON，不要用 markdown 包裹。"""
+{struct_output}"""
 
     # ── DEBUG: monitor structure prompt for hex ──
     import re as _re_mon3
@@ -2375,7 +2468,8 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
     return _fallback_stage1_structure(stage1_slides)
 
 
-def _fallback_single_slide_html(slide: dict, style_id: str) -> dict:
+def _fallback_single_slide_html(slide: dict, style_id: str,
+                                 canvas_w: int = 1280, canvas_h: int = 720) -> dict:
     """Generate minimal HTML for a single slide when AI generation fails."""
     seq = slide.get("seq", 0)
     stype = slide.get("type", "content")
@@ -2397,7 +2491,7 @@ def _fallback_single_slide_html(slide: dict, style_id: str) -> dict:
     kicker_html = f'<div style="font-size:14px;color:{{{{text}}}};opacity:0.55;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">{kicker}</div>' if kicker else ""
     lead_html = f'<div style="font-size:20px;color:{{{{text}}}};opacity:0.7;margin-bottom:24px">{lead}</div>' if lead else ""
 
-    html = f"""<section style="width:1280px;height:720px;background:{{{{background}}}};position:relative;overflow:hidden;font-family:system-ui,-apple-system,sans-serif">
+    html = f"""<section style="width:{canvas_w}px;height:{canvas_h}px;background:{{{{background}}}};position:relative;overflow:hidden;font-family:system-ui,-apple-system,sans-serif">
 <div style="position:absolute;top:0;left:0;right:0;height:4px;background:{{{{accent}}}}"></div>
 <div style="padding:60px 80px 40px">
 {kicker_html}
@@ -2423,10 +2517,13 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     Each slide gets its own LLM call with the full design-system.md as the design guide.
     Calls run in parallel (default 3 at a time) via ThreadPoolExecutor.
 
-    LLM generates complete inline-styled HTML for a 1280x720 slide section.
+    LLM generates complete inline-styled HTML for a slide section.
+    Canvas dimensions are determined by the column's canvas config (default 1280×720).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import re
+
+    canvas_w, canvas_h = _get_canvas_dimensions(column_id)
 
     # resolve_vars=False: LLM gets {{primary}} placeholders, not hex values
     style_yaml = _load_style_yaml_text(style_id, color_scheme, resolve_vars=False)
@@ -2474,10 +2571,27 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         # Build a tailored system prompt: core rules + slide-type-specific sections
         core_system = build_slide_prompt(stype, layout, has_chart)
         # Append VI section for this slide type (design instruction, not user content)
-        vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False)
+        vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id)
         vi_append = ""
         if vi_section:
             vi_append = f"\n\n## {stype} 类型专属视觉规范\n{vi_section}"
+
+        html_output_inst = _load_html_output_prompt(column_id)
+        if html_output_inst:
+            # Substitute template variables — {{canvas_w}} and {{canvas_h}} are
+            # placeholders in scenarios/_default/html-output.md. Column-specific
+            # overrides use the same variable names so one substitution covers all.
+            html_output_inst = html_output_inst.replace("{{canvas_w}}", str(canvas_w))
+            html_output_inst = html_output_inst.replace("{{canvas_h}}", str(canvas_h))
+        else:
+            html_output_inst = f"""输出一个 HTML 代码块，用 ```html ... ``` 包裹。仅输出 HTML。
+
+样式要求：
+- 尺寸: width:{canvas_w}px; height:{canvas_h}px, position:relative, overflow:hidden
+- 全部内联 inline style，禁止 class/id/<style>/@import/@font-face
+- 全部 CSS 属性必须带单位（px）
+- 禁止输出 <!DOCTYPE html>/<html>/<head>/<body>/<title>/<meta>/<link>
+- 输出只包含一个 div 容器（width:{canvas_w}px;height:{canvas_h}px）及其子元素"""
 
         tailored_system = f"""{persona_block}
 
@@ -2490,30 +2604,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 {font_info}
 {vi_append}
 
-## 颜色变量（必须使用，禁止硬编码 hex）
-所有颜色必须使用以下变量语法，绝对禁止写入任何 hex 色值（如 #1a365d、#ffffff）：
-- 基础色：{{{{primary}}}} {{{{secondary}}}} {{{{accent}}}} {{{{background}}}} {{{{text}}}} {{{{card_bg}}}}
-- 图表色：{{{{chart_0}}}} {{{{chart_1}}}} {{{{chart_2}}}} {{{{chart_3}}}} {{{{chart_4}}}}
-- 语义色：{{{{semantic_positive}}}} {{{{semantic_negative}}}}
-- RGB 形式（用于 rgba 透明度）：{{{{primary_rgb}}}} → rgba({{{{primary_rgb}}}}, 0.5)
-- 单通道（用于 hsla）：{{{{primary_r}}}} {{{{primary_g}}}} {{{{primary_b}}}}
-示例：`color: {{{{text}}}}; background: {{{{card_bg}}}}; border-left: 4px solid {{{{chart_0}}}};`
-
-## 技术约束
-- 尺寸: width:1280px; height:720px, position:relative, overflow:hidden
-- 安全区: 所有内容必须在 (60,60) 到 (1220,660) 范围内
-- 样式: 全部内联 inline style，禁止 class/id/<style>/@import/@font-face
-- 全部 CSS 属性必须带单位（px）
-- 禁止输出 <!DOCTYPE html>/<html>/<head>/<body>/<title>/<meta>/<link>
-- 输出只包含一个 div 容器（width:1280px;height:720px）及其子元素
-
-## ⛔ 容器铁律（违反=废稿）
-禁止: left:180px, width:920px/960px, transform:translateX(-50%), left:30/40/48/80/88px
-必须: 内容页用 left:60px; right:60px 基准容器
-例外: 仅 cover/quote/section/summary/closing 可用居中布局
-每页生成前自检：你的内容卡片用了 left:60px; right:60px 吗？
-
-输出一个 HTML 代码块，用 ```html ... ``` 包裹。仅输出 HTML。"""
+{html_output_inst}"""
 
         content_parts = [
             f"页码: {seq}/{total}",
@@ -2715,7 +2806,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 _logger.warning(f"Slide {seq} HTML attempt {attempt+1} failed: {e}")
 
         _logger.warning(f"Slide {seq}: all attempts failed, using fallback")
-        return _fallback_single_slide_html(slide, style_id)
+        return _fallback_single_slide_html(slide, style_id, canvas_w, canvas_h)
 
     _logger.info(f"Stage 2 HTML: dispatching {total} slides in parallel (workers={parallel})")
     t0 = __import__("time").time()
@@ -3107,6 +3198,98 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool) -> str:
     return "\n\n".join(parts)
 
 
+# ── Core prompt file loaders ──
+
+def _load_research_prompt() -> str:
+    """Load Phase 2 research system prompt from core/research.md."""
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "research.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return "你是专业的内容研究员。对提供的 SOP 文档进行深度结构化分析。"
+
+
+def _load_outline_rules() -> str:
+    """Load outline generation rules from core/outline-rules.md."""
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "outline-rules.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def _load_fill_content_prompt() -> str:
+    """Load Phase 2 fill content system prompt from core/fill-content.md."""
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "fill-content.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return "你是内容编辑专家。根据 SOP 文章和金字塔原理为指定幻灯片填充正文内容。"
+
+
+def _load_text_to_json_prompt() -> str:
+    """Load text-to-JSON conversion prompt template from core/text-to-json.md."""
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "text-to-json.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return "你是数据整理专家。你的唯一任务是将人类编辑的自然文本转回结构化 JSON。"
+
+
+def _load_cards_system_prompt() -> str:
+    """Load cards generation system prompt from core/cards-system.md."""
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "cards-system.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def _load_structure_output_prompt() -> str:
+    """Load structure planning output format from core/structure-output.md."""
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "structure-output.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def _load_html_output_prompt(column_id: str = "") -> str:
+    """Load HTML output format instructions — per-column override supported.
+
+    Resolution order (same pattern as _load_scenario_file):
+    1) scenarios/{column_id}/html-output.md  (per-column override)
+    2) scenarios/_default/html-output.md     (shared default)
+    3) prompts/core/html-output.md           (legacy fallback)
+    """
+    # 1) Per-column custom file
+    if column_id:
+        col_file = os.path.join(SCENARIOS_DIR, column_id, "html-output.md")
+        if os.path.exists(col_file):
+            with open(col_file, "r", encoding="utf-8") as f:
+                return f.read()
+    # 2) Default scenario template
+    default_file = os.path.join(SCENARIOS_DIR, "_default", "html-output.md")
+    if os.path.exists(default_file):
+        with open(default_file, "r", encoding="utf-8") as f:
+            return f.read()
+    # 3) Legacy core prompt (fallback — keep for backward compatibility)
+    core_file = os.path.join(BASE_DIR, "resources", "prompts", "core", "html-output.md")
+    if os.path.exists(core_file):
+        with open(core_file, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
+def _load_edit_agent_prompt() -> str:
+    """Load edit agent system prompt template from core/edit-agent.md."""
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "edit-agent.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
 def _build_edit_system_prompt(style_id: str, color_scheme: str = "deep-blue") -> str:
     """Build edit-slide system prompt — agent with knowledge lookup tool.
 
@@ -3120,7 +3303,9 @@ def _build_edit_system_prompt(style_id: str, color_scheme: str = "deep-blue") ->
     if not persona:
         persona = "你是演示文稿设计艺术总监。"
 
-    return f"""## 角色
+    agent_tmpl = _load_edit_agent_prompt()
+    if not agent_tmpl:
+        return f"""## 角色
 
 {persona}
 
@@ -3155,6 +3340,8 @@ def _build_edit_system_prompt(style_id: str, color_scheme: str = "deep-blue") ->
 - 顶部 accent 色条、标题短线、页码标记属于页面框架，禁止删除
 - 卡片容器必须包含 overflow:hidden
 - 修改范围不超过用户要求，风格匹配已有元素"""
+
+    return agent_tmpl.format(persona=persona)
 
 
 async def _run_edit_agent(provider_id: str, model: str,
@@ -3516,9 +3703,49 @@ def _build_root_vars(scheme_data: dict) -> str:
     return "\n".join(lines)
 
 
+def _extract_outermost_div(html: str) -> str:
+    """Extract the outermost <div> container from LLM-generated HTML.
+
+    The LLM is instructed to output exactly one outer <div> container
+    (width:...;height:...). We find the first <div and trace element
+    depth to locate its matching </div>, returning a self-contained
+    div tree that cannot leak into or out of the slide wrapper.
+
+    This replaces fragile regex-based div counting that could strip
+    closing tags from the wrong position when divs are structurally
+    (not numerically) imbalanced.
+    """
+    first_open = html.find('<div')
+    if first_open < 0:
+        return html
+
+    depth = 0
+    pos = first_open
+    while pos < len(html):
+        next_open = html.find('<div', pos)
+        next_close = html.find('</div>', pos)
+
+        if next_close == -1:
+            break
+
+        if next_open != -1 and next_open < next_close:
+            depth += 1
+            pos = next_open + 4
+        else:
+            depth -= 1
+            if depth == 0:
+                return html[first_open:next_close + 6]
+            pos = next_close + 6
+
+    # Depth never returned to 0 — outermost <div> is unclosed.
+    # Close it ourselves so the slide wrapper stays intact.
+    return html[first_open:] + '</div>'
+
+
 def _assemble_html_deck(slides: list, title: str = "Presentation",
                         style_id: str = "business", scheme_data: dict = None,
-                        total_slides: int = None) -> str:
+                        total_slides: int = None,
+                        canvas_w: int = 1280, canvas_h: int = 720) -> str:
     """Wrap individual slide HTML sections into a complete HTML document.
 
     Also injects unified page numbers and strips AI-generated ones.
@@ -3541,20 +3768,12 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
             '', html, flags=re.DOTALL
         )
 
-        # ═══ Per-slide div balance: prevent cross-slide DOM corruption ═══
-        # An unbalanced div in one slide closes the wrapper (or deck) div
-        # prematurely, causing subsequent slides to render outside / disappear.
-        open_divs = len(re.findall(r'<div\b', html))
-        close_divs = len(re.findall(r'</div>', html))
-        if open_divs > close_divs:
-            html += '</div>' * (open_divs - close_divs)
-        elif close_divs > open_divs:
-            # Strip trailing excess </div> tags — they close the wrapper
-            excess = close_divs - open_divs
-            for _ in range(excess):
-                pos = html.rfind('</div>')
-                if pos >= 0:
-                    html = html[:pos] + html[pos + 6:]
+        # ═══ Extract outermost div: prevents cross-slide DOM corruption ═══
+        # The LLM is told to output exactly one outer <div>. We extract it
+        # by tracing depth from the first <div> to its matching </div>.
+        # This is structural — a slide's internal divs cannot leak into or
+        # close the wrapper, even if the LLM outputs extra or missing tags.
+        html = _extract_outermost_div(html)
 
         # Inject unified page number (skip cover slide)
         if slide_num > 1:
@@ -3638,6 +3857,9 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
 
     root_vars = _build_root_vars(scheme_data) if scheme_data else ""
 
+    is_portrait = canvas_h > canvas_w
+    body_bg = "#ffffff" if is_portrait else "{{{{secondary}}}}"
+
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -3648,7 +3870,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 {root_vars}
   body {{
-    background: {{{{secondary}}}};
+    background: {body_bg};
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -3657,8 +3879,8 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     font-family: system-ui, -apple-system, sans-serif;
   }}
   .slide-wrapper {{
-    width: 1280px;
-    height: 720px;
+    width: {canvas_w}px;
+    height: {canvas_h}px;
     overflow: hidden;
     border-radius: 4px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);

@@ -23,15 +23,15 @@ const STAGES: StageDef[] = [
   { id: 1, label: '素材输入', subs: [{ id: '1a', label: '视频提取' }, { id: '1b', label: '文字输入' }, { id: '1c', label: '文件上传' }] },
   { id: 2, label: '文档生成', subs: [{ id: '2a', label: '标准文档' }, { id: '2b', label: '分析文档' }, { id: '2c', label: '手册文档' }] },
   { id: 3, label: '课件输出', subs: [{ id: '3a', label: '文档课件' }, { id: '3b', label: '分析PPT' }, { id: '3c', label: '综合PPT' }] },
-  { id: 4, label: '语音课件', subs: [{ id: '4a', label: '口播文案' }, { id: '4b', label: '口播语音' }] },
+  { id: 4, label: '演讲课件', subs: [{ id: '4a', label: '演讲文案' }, { id: '4b', label: '演讲口播' }] },
   { id: 5, label: '输出列表', subs: [] },
 ]
 
 const CONFIG: Record<number, { model: string; tmpl: string; tmplInfo: string }> = {
   1: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '—', tmplInfo: '' },
   2: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '—', tmplInfo: '' },
-  3: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: 'SOP标准模板.docx / PPT模板', tmplInfo: '提示词: SOP标准格式 v2.0 · SKILL: SOP表格填充' },
-  4: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '标准口播模板', tmplInfo: '提示词: 口播稿生成 v1.0 · SKILL: 口播风格' },
+  3: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '标准文档模板.docx / PPT模板', tmplInfo: '提示词: 标准文档格式 v2.0 · SKILL: 文档表格填充' },
+  4: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '标准演讲模板', tmplInfo: '提示词: 演讲稿生成 v1.0 · SKILL: 演讲风格' },
   5: { model: '—', tmpl: '—', tmplInfo: '' },
 }
 
@@ -389,6 +389,7 @@ export default function ProjectPage() {
   const [pptEditMode, setPptEditMode] = useState<Record<string, boolean>>({})
   const [daoPptTemplates, setDaoPptTemplates] = useState<TemplateItem[]>([])
   const [yanxiPptTemplates, setYanxiPptTemplates] = useState<TemplateItem[]>([])
+  const [sopTemplates, setSopTemplates] = useState<TemplateItem[]>([])
   const [templatesMap, setTemplatesMap] = useState<Record<string, { prompt: string; skill: string; hasFile: boolean }>>({})
 
   // Stage 4 state
@@ -466,9 +467,11 @@ export default function ProjectPage() {
         if (sopVal) { setS3SopTemp(parseFloat(sopVal) || 0.3) }
       }
       // Restore saved template selections
+      if (map['_tmpl_step3_sop']) setSopSelected(map['_tmpl_step3_sop'])
       if (map['_tmpl_step3_dao_ppt']) setDaoPptSelected(map['_tmpl_step3_dao_ppt'])
       if (map['_tmpl_step3_yan_ppt']) setYanxiPptSelected(map['_tmpl_step3_yan_ppt'])
       // Restore saved color schemes per step
+      if (map['_color_scheme_step3_sop_doc']) setPptColorScheme(prev => ({ ...prev, step3_sop_doc: map['_color_scheme_step3_sop_doc'] }))
       if (map['_color_scheme_step3_dao_ppt']) setPptColorScheme(prev => ({ ...prev, step3_dao_ppt: map['_color_scheme_step3_dao_ppt'] }))
       if (map['_color_scheme_step3_yan_ppt']) setPptColorScheme(prev => ({ ...prev, step3_yan_ppt: map['_color_scheme_step3_yan_ppt'] }))
       // Restore saved PPT slide plans
@@ -484,7 +487,7 @@ export default function ProjectPage() {
         }
       })
       // Restore saved PPT outlines (human-readable text + structured JSON)
-      ;['step3_dao_ppt', 'step3_yan_ppt'].forEach(sk => {
+      ;['step3_sop_doc', 'step3_dao_ppt', 'step3_yan_ppt'].forEach(sk => {
         const textKey = sk
         const jsonKey = `_ppt_outline_json_${sk}`
         const text = map[textKey]
@@ -583,6 +586,14 @@ export default function ProjectPage() {
       if (tmplItems.length > 0) {
         const def = items.find((t: any) => t.isDefault) || items[0]
         setYanxiPptSelected(def.id)
+      }
+      setTemplatesMap(prev => ({ ...prev, ...map }))
+    })
+    loadTemplates('sop').then(({ tmplItems, map, items }) => {
+      setSopTemplates(tmplItems)
+      if (tmplItems.length > 0) {
+        const def = items.find((t: any) => t.isDefault) || items[0]
+        setSopSelected(def.id)
       }
       setTemplatesMap(prev => ({ ...prev, ...map }))
     })
@@ -698,7 +709,7 @@ export default function ProjectPage() {
     const m = previewUrl.match(/\/api\/exports\/(.+?)\/index\.html/)
     const runId = m ? m[1] : ''
     const slideCount = plan?.slides?.length || 0
-    const model = key === 'step3_dao_ppt' ? s3DaoPptModel : s3YanxiPptModel
+    const model = key === 'step3_dao_ppt' ? s3DaoPptModel : key === 'step3_yan_ppt' ? s3YanxiPptModel : s3SopModel
     const [pid, mdl] = model ? model.split(':') : ['', '']
     return { runId, slideCount, providerId: pid, model: mdl, previewUrl }
   }
@@ -753,12 +764,18 @@ export default function ProjectPage() {
   // ── LLM Generate (streaming with progress) ──
   const doGenerate = async (stepKey: string, systemPrompt: string, userMessage: string, providerId?: string, model?: string, temperature: number = 0.3, signal?: AbortSignal) => {
     if (!id) return
-    const labelMap: Record<string, string> = { step2_sop: '标准文档', step2_daoshuyi: '分析文档', step2_yanxi: '手册文档' }
+    const labelMap: Record<string, string> = { step2_sop: '标准文档', step2_daoshuyi: '分析文档', step2_yanxi: '手册文档', step3_sop_doc: '标准课件' }
     const label = labelMap[stepKey] || stepKey
+    const subMap: Record<string, string> = { step2_sop: '2a', step2_daoshuyi: '2b', step2_yanxi: '2c' }
+    const subKey = subMap[stepKey] || ''
     const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false })
     try {
       setDocGenLog(prev => [...prev, { time: now(), message: `开始生成 ${label}...` }])
       setDocGenProgress({ phase_label: `正在生成 ${label}`, message: '准备中...', stepKey })
+      if (subKey) {
+        setS2Logs(prev => ({ ...prev, [subKey]: [{ time: now(), message: `开始生成 ${label}...` }] }))
+        setS2Progress(prev => ({ ...prev, [subKey]: `正在生成 ${label}...` }))
+      }
 
       let fullText = ''
       let lastUpdate = 0
@@ -771,24 +788,30 @@ export default function ProjectPage() {
         signal,
       })) {
         fullText += chunk
-        // Update progress every ~300 chars (throttle to avoid excessive re-renders)
         if (fullText.length - lastUpdate > 300) {
           lastUpdate = fullText.length
           setDocGenProgress({ phase_label: `正在生成 ${label}`, message: `已生成 ${fullText.length} 字符`, stepKey })
+          if (subKey) setS2Progress(prev => ({ ...prev, [subKey]: `正在生成 ${label} — 已生成 ${fullText.length} 字符` }))
         }
       }
 
       setDocGenLog(prev => [...prev, { time: now(), message: `${label} 完成 (${fullText.length} 字符)` }])
       setDocGenProgress({ phase_label: `${label} 已完成`, message: `${fullText.length} 字符`, stepKey })
+      if (subKey) {
+        setS2Logs(prev => ({ ...prev, [subKey]: [...(prev[subKey] || []), { time: now(), message: `${label} 完成 (${fullText.length} 字符)` }] }))
+        setS2Progress(prev => ({ ...prev, [subKey]: '' }))
+      }
       setSteps(prev => ({ ...prev, [stepKey]: fullText }))
       saveStep(stepKey, fullText)
       return fullText
     } catch (e: any) {
       if (e.name !== 'AbortError') {
         setDocGenLog(prev => [...prev, { time: now(), message: `${label} 失败: ${e.message}` }])
+        if (subKey) setS2Logs(prev => ({ ...prev, [subKey]: [...(prev[subKey] || []), { time: now(), message: `${label} 失败: ${e.message}` }] }))
         modal.toast('生成失败: ' + e.message, 'error')
       } else {
         setDocGenLog(prev => [...prev, { time: now(), message: `${label} 已取消` }])
+        if (subKey) setS2Logs(prev => ({ ...prev, [subKey]: [...(prev[subKey] || []), { time: now(), message: `${label} 已取消` }] }))
       }
       return null
     }
@@ -964,6 +987,7 @@ export default function ProjectPage() {
   const getPptModel = (key: string): string => {
     if (key === 'step3_dao_ppt') return s3DaoPptModel
     if (key === 'step3_yan_ppt') return s3YanxiPptModel
+    if (key === 'step3_sop_doc') return s3SopModel
     return ''
   }
   const doGeneratePlan = async (stepKey: string, content: string, tmplId: string, model: string, columnId: string, temperature: number = 0.3, tempOutline?: number, tempGeneration?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) => {
@@ -1013,8 +1037,23 @@ export default function ProjectPage() {
   const doGenerateOutline = async (stepKey: string, content: string, tmplId: string, model: string, columnId: string, temperature: number = 0.3, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) => {
     setPptOutlineLoading(prev => ({...prev, [stepKey]: true}))
     startPptLogPolling()
+    // Clear stale PPT result from previous generation so the outline textarea shows after this completes
+    setPptSlidePlans(prev => { const n = { ...prev }; delete n[stepKey]; return n })
     const ctrl = new AbortController()
     abortRef.current[stepKey] = ctrl
+    let pollFailCount = 0
+    pptPollRef.current = setInterval(() => {
+      api.getPptStatus(id!).then(s => {
+        pollFailCount = 0
+        setPptProgress(s)
+      }).catch(() => {
+        pollFailCount++
+        if (pollFailCount >= 2) {
+          ctrl.abort()
+          modal.toast('后端连接丢失，生成已中断', 'error')
+        }
+      })
+    }, 10000)
     try {
       const [pid, mdl] = model ? model.split(':') : ['', '']
       const result = await api.generateOutline(content, tmplId, pid, mdl, columnId, ctrl.signal, temperature, tempOutline, tempKeyword, tempResearch, tempFill, tempStageOutline, tempStageGeneration, tempStageReview, id)
@@ -1033,7 +1072,7 @@ export default function ProjectPage() {
     } finally {
       delete abortRef.current[stepKey]
       setPptOutlineLoading(prev => ({...prev, [stepKey]: false}))
-      // Final fetch to catch last entries before stopping polling
+      clearPptPolling()
       api.getPptLog(id!).then(logs => {
         if (logs && logs.length > 0) setPptLog(logs)
       }).catch(() => {})
@@ -1205,26 +1244,6 @@ export default function ProjectPage() {
     } catch (e: any) { modal.toast('HTML导出失败: ' + e.message, 'error') }
   }
 
-  const doExportSOP = async (content: string, prompt: string, model: string, branding?: Record<string, string>, temperature: number = 0.3) => {
-    try {
-      // Step 1: AI generation with column prompt
-      let aiContent = content
-      if (model && prompt) {
-        const [pid, mdl] = model.split(':')
-        const result = await doGenerate('step3_sop_doc', prompt, content, pid, mdl, temperature)
-        if (result) aiContent = result
-      }
-      // Step 2: Export as DOCX
-      const result: any = await api.exportSOP(aiContent, branding, id)
-      setGenFiles(prev => [...prev, {
-        name: result.filename, type: 'Word',
-        source: 'SOP课件',
-        url: result.download_url || '/api/download/' + encodeURIComponent(result.filename),
-      }])
-      modal.toast(`SOP 已导出: ${result.filename}`, 'success')
-    } catch (e: any) { modal.toast('SOP导出失败: ' + e.message, 'error') }
-  }
-
   // ── TTS ──
   const doTTS = async () => {
     if (!kouboText.trim()) return
@@ -1239,8 +1258,8 @@ export default function ProjectPage() {
       )
       setTtsAudioUrl(result.audio_url)
       setGenFiles(prev => [...prev, {
-        name: (project?.name || 'output') + '_口播.mp3', type: 'MP3',
-        source: '口播语音',
+        name: (project?.name || 'output') + '_演讲.mp3', type: 'MP3',
+        source: '演讲口播',
         url: result.audio_url || '/api/audio/' + encodeURIComponent(result.filename || ''),
       }])
     } catch (e: any) { modal.toast('TTS失败: ' + e.message, 'error') }
@@ -1273,9 +1292,11 @@ export default function ProjectPage() {
   // Global generation tracking — visible across all stages
   const isAnyS1 = Object.values(step1Generating).some(Boolean)
   const isAnyS2 = Object.values(step2Generating).some(Boolean)
-  const isGlobalGenerating = isAnyS1 || isAnyS2 || Object.keys(pptGenerating).length > 0 || ttsGenerating
+  const isAnyOutlineLoading = Object.values(pptOutlineLoading).some(Boolean)
+  const isGlobalGenerating = isAnyS1 || isAnyS2 || Object.keys(pptGenerating).length > 0 || ttsGenerating || isAnyOutlineLoading
   const globalGenLabel = Object.keys(pptGenerating).length > 0 ? 'PPT 合成中'
     : ttsGenerating ? '语音合成中'
+    : isAnyOutlineLoading ? '大纲生成中'
     : isAnyS2 ? 'AI 生成文档中'
     : isAnyS1 ? '整理文档中'
     : '处理中'
@@ -1708,7 +1729,7 @@ export default function ProjectPage() {
                 <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
                   value={steps[step1Key()] || ''}
                   onChange={e => { setSteps(prev => ({ ...prev, [step1Key()]: e.target.value })) }}
-                  placeholder="点击左侧「生成」按钮，AI 整理后的标准 SOP 文档将显示在此..." />
+                  placeholder="点击左侧「生成」按钮，AI 整理后的标准文档将显示在此..." />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     {mode1 === 'link' ? '来源：视频提取' : mode1 === 'text' ? '来源：文字输入' : '来源：文件上传'}
@@ -1754,7 +1775,7 @@ export default function ProjectPage() {
             <div className="panel-left">
               <div className="card">
                 <div style={{ display: sub === '2a' ? 'contents' : 'none' }}>
-                  <Stage2Controls docType="sop" label="SOP文案"
+                  <Stage2Controls docType="sop" label="标准文档"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['sop'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('sop', v)}
                     generating={!!step2Generating['2a']}
@@ -1828,7 +1849,7 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2a': g })); if (g) { setS2Logs(prev => ({ ...prev, '2a': [] })); setS2Progress(prev => ({ ...prev, '2a': '' })) } }}
                     onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2a': [...(prev['2a'] || []), entry] }))}
-                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2a': p })); setDocGenProgress({ phase_label: '正在生成 SOP文案', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_sop' }) }}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2a': p })); setDocGenProgress({ phase_label: '正在生成 标准文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_sop' }) }}
                     hideControls dataSource={s2DataSources['sop'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -1887,11 +1908,36 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">生成课件</div>
-                <div className="card-hint">选择模板自动关联提示词+SKILL，配置在「项目配置」→ 栏目配置</div>
+                <div className="card-title">📄 生成课件</div>
+                <div className="card-hint">基于标准文档，选择模板生成课件</div>
                 <div className="form-label">选择模板</div>
-                <TemplateSelector items={[]} selectedId={sopSelected}
-                  onSelect={t => setSopSelected(t.id)} previewTarget="prev3" />
+                <TemplateSelector items={sopTemplates} selectedId={sopSelected}
+                  onSelect={t => { setSopSelected(t.id); saveStep('_tmpl_step3_sop', t.id) }} previewTarget="prev3" />
+                {pptColorSchemes.length > 1 && (
+                  <div style={{ marginTop: 8, marginBottom: 8 }}>
+                    <div className="form-label">配色方案</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {pptColorSchemes.map(cs => {
+                        const key = step3Key()
+                        const current = pptColorScheme[key] || 'deep-blue'
+                        return (
+                        <button key={cs.id}
+                          onClick={() => { setPptColorScheme(prev => ({ ...prev, [key]: cs.id })); saveStep(`_color_scheme_${key}`, cs.id) }}
+                          title={cs.label}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            padding: '4px 10px', fontSize: 11,
+                            borderRadius: 6, border: current === cs.id ? '2px solid var(--primary)' : '1px solid var(--border)',
+                            background: current === cs.id ? 'var(--bg-hover)' : 'var(--bg)',
+                            cursor: 'pointer',
+                          }}>
+                          <span style={{ width: 14, height: 14, borderRadius: '50%', background: cs.primary, display: 'inline-block', flexShrink: 0 }} />
+                          {cs.label}
+                        </button>
+                      )})}
+                    </div>
+                  </div>
+                )}
                 <div className="form-label">大模型</div>
                 <select className="form-select" style={{ marginBottom: 8 }} value={s3SopModel} onChange={e => { setS3SopModel(e.target.value); saveStep('_model_step3_sop', e.target.value) }}>
                   <option value="">选择模型...</option>
@@ -1901,56 +1947,274 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <div className="form-label">温度设置</div>
-                <button className="btn btn-ghost btn-sm" onClick={() => setS3SopTempOpen(true)}>⚙ 温度设置 (SOP 生成 + 3 阶段)</button>
-                <div className="form-label" style={{ marginTop: 10 }}>品牌信息</div>
-                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                  {globalBranding.copyright || globalBranding.signature
-                    ? `版权: ${globalBranding.copyright || '—'} · 签名: ${globalBranding.signature || '—'}`
-                    : '未配置，在「全局设置」→ 通用设置 中配置'}
+                <button className="btn btn-ghost btn-sm" onClick={() => setS3SopTempOpen(true)}>⚙温度设置</button>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button className="btn btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={!sopSelected || !(steps.step2_sop || '') || !s3SopModel || pptOutlineLoading['step3_sop_doc']}
+                    onClick={() => doGenerateOutline('step3_sop_doc', steps.step2_sop || '', sopSelected, s3SopModel, 'col3', s3SopTemp, s3SopTemps.outline, s3SopTemps.keyword, s3SopTemps.research, s3SopTemps.fill, s3SopTemps.stageOutline, s3SopTemps.stageGeneration, s3SopTemps.stageReview)}>
+                    {pptOutlineLoading['step3_sop_doc'] ? '⏳ 生成中...' : '📋 生成大纲'}
+                  </button>
+                  {pptOutlineLoading['step3_sop_doc'] && (
+                    <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff', flex: '0 0 auto' }}
+                      onClick={() => handleCancelGenerate('step3_sop_doc')}>取消</button>
+                  )}
+                  <button className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                    disabled={!sopSelected || !(steps.step2_sop || '') || !s3SopModel || pptGenerating['step3_sop_doc']}
+                    onClick={() => doGeneratePPT('step3_sop_doc',
+                      steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '',
+                      sopSelected, '标准课件',
+                      stage3Prompts.sop?.prompt || '请将内容转化为标准文档课件。',
+                      s3SopModel, 'col3', s3SopTemps.sop,
+                      s3SopTemps.keyword, s3SopTemps.research, s3SopTemps.outline, s3SopTemps.fill,
+                      s3SopTemps.cards, s3SopTemps.html, s3SopTemps.svg_batch, s3SopTemps.svg_single,
+                      s3SopTemps.review, s3SopTemps.fix, s3SopTemps.holistic, s3SopTemps.holistic_fix,
+                      s3SopTemps.stageOutline, s3SopTemps.stageGeneration, s3SopTemps.stageReview)}>
+                    {pptGenerating['step3_sop_doc'] ? '⏳ 合成中...' : '📄 合成课件'}
+                  </button>
                 </div>
-                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  disabled={!s3SopModel}
-                  onClick={() => doExportSOP(
-                    steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '',
-                    stage3Prompts.sop?.prompt || '请根据内容编写标准文档。',
-                    s3SopModel,
-                    (globalBranding.copyright || globalBranding.signature) ? globalBranding : undefined,
-                    s3SopTemps.sop
-                  )}>
-                  📄 生成课件
-                </button>
+                {pptGenerating['step3_sop_doc'] && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', flex: 1 }}
+                      onClick={() => handleCancelGenerate('step3_sop_doc')}>取消生成</button>
+                  </div>
+                )}
+                {!sopSelected || !(steps.step2_sop || '') || !s3SopModel ? (
+                  <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
+                    {[
+                      !sopSelected ? '请选择模板' : '',
+                      !(steps.step2_sop || '') ? '请先生成标准文档' : '',
+                      !s3SopModel ? '请选择大模型' : '',
+                    ].filter(Boolean).join(' | ')}
+                  </div>
+                ) : null}
+                {(pptLog.length > 0 || pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']) && (
+                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                    {pptLog.length === 0 ? (
+                      <div style={{ color: '#888' }}>等待日志...</div>
+                    ) : (
+                      pptLog.map((entry, i) => (
+                        <div key={i} style={{ marginBottom: 2 }}>
+                          <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <div className="panel-right">
-              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="card-title">生成 / 编辑</div>
-                <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-                  value={steps[step3Key()] || ''}
-                  onChange={e => setSteps(prev => ({ ...prev, [step3Key()]: e.target.value }))}
-                  placeholder="点击生成按钮，AI生成后在此编辑..." />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>编辑后保存，然后导出为 .docx 文档</span>
-                  <span style={{ display: 'flex', gap: 5 }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => {
-                      setSteps(prev => ({ ...prev, [step3Key()]: '' }))
-                      saveStep(step3Key(), '')
-                    }}>✕ 清空</button>
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', marginBottom: 8, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', gap: 0 }}>
                     <button className="btn btn-ghost btn-sm"
-                      disabled={!steps[step3Key()]}
-                      onClick={async () => {
-                        if (!id) return
-                        try {
-                          const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_SOP文档.txt`, steps[step3Key()] || '')
-                          modal.toast(`已保存到 ${resp.path}`, 'success')
-                        } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
-                      }}>📥 保存到项目</button>
-                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step3Key()] || '', step3Key())}`}
-                      onClick={() => { saveStep(step3Key(), steps[step3Key()] || ''); flashSave() }}>
-                      {getSaveBtnLabel(steps[step3Key()] || '', step3Key())}
-                    </button>
-                  </span>
+                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'ppt' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 600 : 400 }}
+                      onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'ppt'}))}>大纲内容</button>
+                    <button className="btn btn-ghost btn-sm"
+                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'json' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'json' ? 600 : 400 }}
+                      onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'json'}))}>JSON</button>
+                  </div>
                 </div>
+                {((previewTab[step3Key()] || 'ppt') === 'ppt') ? (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    {pptOutlineLoading['step3_sop_doc'] ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
+                          AI 正在分析内容并生成大纲...<br />
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>预计 30-60 秒，请耐心等待</span>
+                        </div>
+                      </div>
+                    ) : pptOutline[step3Key()] ? (
+                      <textarea
+                        style={{
+                          flex: 1, width: '100%', border: 'none', resize: 'none',
+                          fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+                          color: 'var(--text)', background: 'var(--bg)',
+                          outline: 'none', padding: 8, borderRadius: 4,
+                        }}
+                        value={pptOutline[step3Key()].outline_text}
+                        readOnly={!pptEditMode[step3Key()]}
+                        onChange={(e) => {
+                          const md = e.target.value
+                          setPptOutline(prev => ({
+                            ...prev,
+                            [step3Key()]: { ...prev[step3Key()], outline_text: md }
+                          }))
+                        }}
+                        placeholder="大纲内容将显示在这里..."
+                      />
+                    ) : pptGenerating['step3_sop_doc'] ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
+                          AI 正在合成课件...
+                        </div>
+                      </div>
+                    ) : pptSlidePlans[step3Key()] ? (
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>已生成 {pptSlidePlans[step3Key()].slides.length} 页课件</div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button className="btn btn-ghost btn-sm"
+                            disabled={!pptSlidePlans[step3Key()]?.previewUrl}
+                            onClick={() => pptSlidePlans[step3Key()]?.previewUrl && window.open(pptSlidePlans[step3Key()].previewUrl + '?_t=' + Date.now(), '_blank')}>
+                            预览
+                          </button>
+                          {pptSlidePlans[step3Key()].format === 'svg' ? (
+                            <button className="btn btn-ghost btn-sm"
+                              onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
+                              ⬇ SVG ZIP
+                            </button>
+                          ) : (
+                            <>
+                              <button className="btn btn-ghost btn-sm"
+                                onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
+                                ⬇ PPTX
+                              </button>
+                              <button className="btn btn-ghost btn-sm"
+                                onClick={() => handleDownloadHtml(step3Key())}>
+                                ⬇ HTML
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
+                          点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span> 开始分析
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>
+                          生成大纲后可在此编辑精修<br />确认无误后再点击 合成课件
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', gap: 4, marginTop: 8, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          const key = step3Key()
+                          setPptEditMode(prev => ({...prev, [key]: !prev[key]}))
+                        }}>
+                        {pptEditMode[step3Key()] ? '👁 查看' : '✏ 编辑'}
+                      </button>
+                      <button className="btn btn-ghost btn-sm"
+                        disabled={!pptOutline[step3Key()] && !steps[step3Key()]}
+                        onClick={async () => {
+                          if (!id) return
+                          const text = pptOutline[step3Key()]?.outline_text || steps[step3Key()] || ''
+                          try {
+                            const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_标准文档大纲.txt`, text)
+                            modal.toast(`已保存到 ${resp.path}`, 'success')
+                          } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
+                        }}>📥 保存到项目</button>
+                      <button className={`btn btn-primary btn-sm ${getSaveBtnClass(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())} ${pptSavingOutline[step3Key()] ? 'btn-disabled' : ''}`}
+                        disabled={pptSavingOutline[step3Key()]}
+                        onClick={async () => {
+                          const key = step3Key();
+                          const currentText = pptOutline[key]?.outline_text || '';
+                          const savedText = steps[key] || '';
+                          const textChanged = currentText !== savedText;
+                          const model = getPptModel(key);
+
+                          if (textChanged && model) {
+                            setPptSavingOutline(prev => ({...prev, [key]: true}));
+                            try {
+                              const [pid, mdl] = model.split(':');
+                              const result = await api.convertOutlineToJson(currentText, pptOutline[key]?.outline_json || [], pid, mdl);
+                              if (result?.outline_json?.length) {
+                                setPptOutline(prev => ({...prev, [key]: {...prev[key], outline_json: result.outline_json}}));
+                                saveStep(`_ppt_outline_json_${key}`, JSON.stringify(result.outline_json));
+                              }
+                            } catch (e: any) {
+                              modal.toast(`大纲转换失败: ${e?.message || e}`, 'error');
+                            } finally {
+                              setPptSavingOutline(prev => ({...prev, [key]: false}));
+                            }
+                          }
+
+                          saveStep(key, currentText);
+                          flashSave();
+                        }}>
+                        {pptSavingOutline[step3Key()] ? '⏳ 转换中...' : getSaveBtnLabel(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())}
+                      </button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => {
+                        const key = step3Key()
+                        setPptSlidePlans(prev => { const n = { ...prev }; delete n[key]; return n })
+                        setPptOutline(prev => { const n = { ...prev }; delete n[key]; return n })
+                        setPreviewHtml(prev => { const n = { ...prev }; delete n[key]; return n })
+                        setPreviewLoading(prev => { const n = { ...prev }; delete n[key]; return n })
+                        setPptEditMode(prev => { const n = { ...prev }; delete n[key]; return n })
+                      }}>✕ 清空</button>
+                      <span style={{ flex: 1 }} />
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={() => {
+                          const key = step3Key()
+                          setEditPanelOpen(prev => ({ ...prev, [key]: !prev[key] }))
+                        }}
+                        style={{ background: editPanelOpen[step3Key()] ? 'var(--primary)' : undefined, color: editPanelOpen[step3Key()] ? '#fff' : undefined }}>
+                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'HTML编辑'}
+                      </button>
+                      {pptSlidePlans[step3Key()]?.previewUrl && (
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={() => window.open(pptSlidePlans[step3Key()].previewUrl + '?_t=' + Date.now(), '_blank')}>
+                          预览
+                        </button>
+                      )}
+                      {pptSlidePlans[step3Key()]?.format === 'svg' ? (
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
+                          ⬇ SVG ZIP
+                        </button>
+                      ) : pptSlidePlans[step3Key()] ? (
+                        <>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
+                            ⬇ PPTX
+                          </button>
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => handleDownloadHtml(step3Key())}>
+                            ⬇ HTML
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                    <textarea
+                      style={{
+                        flex: 1, width: '100%', border: 'none', resize: 'none',
+                        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+                        color: 'var(--text)', background: 'var(--bg)',
+                        outline: 'none', padding: 8, borderRadius: 4,
+                      }}
+                      value={pptOutline[step3Key()] ? JSON.stringify(pptOutline[step3Key()].outline_json, null, 2) : ''}
+                      readOnly
+                      placeholder="JSON 数据将显示在这里..."
+                    />
+                  </div>
+                )}
+                <SlideEditModal
+                  open={!!(editPanelOpen[step3Key()] && editPanelProps().runId)}
+                  runId={editPanelProps().runId}
+                  previewUrl={editPanelProps().previewUrl}
+                  slideCount={editPanelProps().slideCount}
+                  providerId={editPanelProps().providerId}
+                  model={editPanelProps().model}
+                  columnId="col3"
+                  pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
+                  pptxFilename={pptSlidePlans[step3Key()]?.filename}
+                  downloadFormat={pptSlidePlans[step3Key()]?.format}
+                  projectId={id}
+                  projectName={project?.name}
+                  onDownloadHtml={() => handleDownloadHtml(step3Key())}
+                  onClose={() => {
+                    const key = step3Key()
+                    setEditPanelOpen(prev => ({ ...prev, [key]: false }))
+                  }}
+                />
               </div>
             </div>
           </div>
@@ -1999,8 +2263,7 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <div className="form-label">温度设置</div>
-                <button className="btn btn-ghost btn-sm" onClick={() => setS3DaoTempOpen(true)}>⚙ 温度设置 (SOP 生成 + 3 阶段)</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setS3DaoTempOpen(true)}>⚙温度设置</button>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -2251,6 +2514,7 @@ export default function ProjectPage() {
                   slideCount={editPanelProps().slideCount}
                   providerId={editPanelProps().providerId}
                   model={editPanelProps().model}
+                  columnId="col4"
                   pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
                   pptxFilename={pptSlidePlans[step3Key()]?.filename}
                   downloadFormat={pptSlidePlans[step3Key()]?.format}
@@ -2310,8 +2574,7 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <div className="form-label">温度设置</div>
-                <button className="btn btn-ghost btn-sm" onClick={() => setS3YanxiTempOpen(true)}>⚙ 温度设置 (SOP 生成 + 3 阶段)</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setS3YanxiTempOpen(true)}>⚙温度设置</button>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -2561,6 +2824,7 @@ export default function ProjectPage() {
                   slideCount={editPanelProps().slideCount}
                   providerId={editPanelProps().providerId}
                   model={editPanelProps().model}
+                  columnId="col5"
                   pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
                   pptxFilename={pptSlidePlans[step3Key()]?.filename}
                   downloadFormat={pptSlidePlans[step3Key()]?.format}
@@ -2577,13 +2841,13 @@ export default function ProjectPage() {
           </div>
         )}
 
-        {/* ====== STAGE 4: 语音课件 ====== */}
+        {/* ====== STAGE 4: 演讲课件 ====== */}
         {stage === 4 && sub === '4a' && (
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">口播文案</div>
-                <div className="card-hint">基于文档内容，生成口播稿</div>
+                <div className="card-title">演讲文案</div>
+                <div className="card-hint">基于文档内容，生成演讲稿</div>
                 <div className="form-label">来源</div>
                 <select className="form-select" style={{ marginBottom: 8 }}><option>手册文档</option></select>
                 <div className="form-label">大模型</div>
@@ -2602,7 +2866,7 @@ export default function ProjectPage() {
                     const ctrl = new AbortController(); abortRef.current['step4_koubo'] = ctrl
                     setStep2Generating(prev => ({ ...prev, koubo: true }))
                     try {
-                      let prompt = stage4KouboPrompt || '请根据以下内容生成口播稿，风格亲切自然。'
+                      let prompt = stage4KouboPrompt || '请根据以下内容生成演讲稿，风格亲切自然。'
                       let pid = '', mdl = ''
                       if (s4KouboModel) { [pid, mdl] = s4KouboModel.split(':') }
                       const content = await doGenerate('step4_koubo', prompt,
@@ -2611,7 +2875,7 @@ export default function ProjectPage() {
                       if (content) setKouboText(content)
                     } finally { setStep2Generating(prev => ({ ...prev, koubo: false })); delete abortRef.current['step4_koubo'] }
                   }}>
-                  {step2Generating['koubo'] ? '⏳ 生成中...' : '📢 生成口播稿'}
+                  {step2Generating['koubo'] ? '⏳ 生成中...' : '📢 生成演讲稿'}
                 </button>
                 {step2Generating['koubo'] && (
                   <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
@@ -2622,13 +2886,13 @@ export default function ProjectPage() {
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="tmpl-preview-header">📢 口播稿预览</div>
+                  <div className="tmpl-preview-header">📢 演讲稿预览</div>
                   <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
                     <div className="prev-script">
                       {steps.step4_koubo ? (
                         steps.step4_koubo.split('\n').map((line, i) => <p key={i}>{line || ' '}</p>)
                       ) : (
-                        <p style={{ color: 'var(--text-secondary)' }}>点击「生成口播稿」生成...</p>
+                        <p style={{ color: 'var(--text-secondary)' }}>点击「生成演讲稿」生成...</p>
                       )}
                     </div>
                   </div>
@@ -2645,7 +2909,7 @@ export default function ProjectPage() {
                 <div className="card-title">TTS 语音合成</div>
                 <div className="card-hint">选择提供商、合成模型和音色，生成语音文件</div>
                 <div className="form-label">来源</div>
-                <select className="form-select" style={{ marginBottom: 8 }}><option>口播文案</option></select>
+                <select className="form-select" style={{ marginBottom: 8 }}><option>演讲文案</option></select>
                 <div className="form-label">TTS 提供商</div>
                 <select className="form-select" style={{ marginBottom: 8 }}
                   value={ttsProviderId} onChange={e => {

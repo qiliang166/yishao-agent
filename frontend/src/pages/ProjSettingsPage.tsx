@@ -8,9 +8,9 @@ const COLUMN_GROUPS = [
   { id: 'col1', label: '素材输入', hasTemplate: false, summary: '输入配置' },
   { id: 'col2', label: '文档生成', hasTemplate: false, summary: '文档配置' },
   { id: 'col3', label: '文档导出', hasTemplate: true, summary: '导出配置', tmplFile: '' },
-  { id: 'col4', label: 'PPT 生成 A', hasTemplate: true, summary: 'PPT配置', tmplFile: '' },
-  { id: 'col5', label: 'PPT 生成 B', hasTemplate: true, summary: 'PPT配置', tmplFile: '' },
-  { id: 'col6', label: '口播生成', hasTemplate: false, summary: '口播配置' },
+  { id: 'col4', label: '分析PPT', hasTemplate: true, summary: '分析文档 | PPT配置', tmplFile: '' },
+  { id: 'col5', label: '综合PPT', hasTemplate: true, summary: '手册文档 | PPT配置', tmplFile: '' },
+  { id: 'col6', label: '演讲生成', hasTemplate: false, summary: '演讲配置' },
   { id: 'col7', label: '语音合成', hasTemplate: false, summary: '音色库管理' },
 ]
 

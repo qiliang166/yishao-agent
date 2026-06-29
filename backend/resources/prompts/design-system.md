@@ -287,7 +287,7 @@
 
 ```html
 <!-- ✅ 正确：分段落，有层次 -->
-<div style="font-size:16px;line-height:1.7;color:#333">
+<div style="font-size:16px;line-height:1.7;color:{{text}}">
   <p style="font-weight:600;margin-bottom:12px">核心结论：流程标准化可将整体效率提升 35%。</p>
   <p style="margin-bottom:12px">通过对关键路径进行重新规划，消除冗余环节。具体措施包括：将上下游模块直线对接，取消中间转运步骤，减少等待时间。</p>
   <p style="margin-bottom:12px">实际验证数据表明：平均交付周期从 18 天缩短至 12 天，且返工率下降 8%。</p>
@@ -459,10 +459,10 @@ horizontal_split      → [hero, card_0, card_1, card_2?]
 
 | 颜色 | 色值 | 语义 | 使用场景 |
 |------|------|------|---------|
-| 绿 | `#27ae60` / chart_colors emerald | 正向/增长/优势/达标 | 正面指标、left 卡 border-left |
-| 红 | `#c0392b` / chart_colors red/pink | 负向/下降/风险/警示 | 负面指标、right 卡 border-left |
-| accent | style YAML accent 色 | 强调/装饰/高光 | 页面框架装饰、标题短线 |
-| primary | style YAML primary 色 | 标题/重点 | 标题文字、hero 卡背景 |
+| 绿 | `{{semantic_positive}}` | 正向/增长/优势/达标 | 正面指标、left 卡 border-left |
+| 红 | `{{semantic_negative}}` | 负向/下降/风险/警示 | 负面指标、right 卡 border-left |
+| accent | `{{accent}}` | 强调/装饰/高光 | 页面框架装饰、标题短线 |
+| primary | `{{primary}}` | 标题/重点 | 标题文字、hero 卡背景 |
 | amber/orange | chart_colors amber | 中性/注意/待定 | 中间指标、进度提示 |
 
 ---

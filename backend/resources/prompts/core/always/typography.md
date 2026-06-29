@@ -7,7 +7,7 @@
 | 封面标题 | 58-65px | 封面 h1 |
 | 页标题 | 36-44px | 内容页 h2 |
 | 卡片标题 | 22-24px | 卡片 heading |
-| 正文 | 16-18px | 卡片 body |
+| 正文 | 16-18px | 卡片 body（绝对禁止 15px 及以下） |
 | 标注 | 14px | 页码、来源、脚注、插图标签 |
 
 ### 行距与字距
@@ -15,6 +15,11 @@
 - 正文 line-height: 1.6-1.8
 - 标题 letter-spacing: -0.3~-0.5px（英文）
 - 卡片之间间距 = card_style.gap 值
+
+### 正文最小字号（硬约束）
+
+- **正文、卡片内容、段落文字**：font-size 必须 ≥ 16px，禁止 15px、14px 用于正文
+- **唯一例外**：页码、脚注、来源标注可用 14px
 
 ### 元素最小间距（硬约束）
 - **数字与下方标签**：margin-top ≥ 12px（禁止 4/6/8px）
@@ -39,7 +44,7 @@
 
 ```html
 <!-- ✅ 正确：分段落，有层次 -->
-<div style="font-size:16px;line-height:1.7;color:#333">
+<div style="font-size:16px;line-height:1.7;color:{{text}}">
   <p style="font-weight:600;margin-bottom:12px">核心结论：流程标准化可将整体效率提升 35%。</p>
   <p style="margin-bottom:12px">通过对关键路径进行重新规划，消除冗余环节。具体措施包括：将上下游模块直线对接，取消中间转运步骤，减少等待时间。</p>
   <p style="margin-bottom:12px">实际验证数据表明：平均交付周期从 18 天缩短至 12 天，且返工率下降 8%。</p>

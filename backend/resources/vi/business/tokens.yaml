@@ -123,7 +123,7 @@ typography:
 card_style:
   border_radius: 12
   shadow: "0 2px 8px rgba(0,0,0,0.08)"
-  border: "1px solid #e2e8f0"
+  border: "1px solid rgba({{text_rgb}}, 0.12)"
   gap: 24
   left_stripe_width: 4
 
@@ -164,8 +164,28 @@ slide_type_overrides:
     copyright_size: "11-12px"
     copyright_opacity: 0.4-0.5
   content:
-    background: "#ffffff"
+    background: "{{background}}"
     layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "1px solid rgba({{text_rgb}}, 0.2)"
+    cell_border: "1px solid rgba({{text_rgb}}, 0.1)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.03-0.05"
+    accent_stripe_height: 5
 
 layout_types:
   - id: full_bleed
@@ -332,3 +352,84 @@ visual_richness:
   min_cards: 3
   min_decorations: 2
   min_layers: 5
+
+block_types:
+  header:
+    description: "文档头部（LOGO/编号/日期），全宽合并，可选段落"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba({{text_rgb}}, 0.6)"
+    border_bottom: "1px solid rgba({{text_rgb}}, 0.1)"
+    columns: "2-4"
+  title:
+    description: "文档主标题，hero 渐变背景 + accent 下划线，必有段落"
+    colspan: full
+    background: "linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)"
+    color: "#ffffff"
+    font_size: "20-24px"
+    font_weight: 700
+    letter_spacing: "2-3px"
+    border_bottom: "3px solid {{accent}}"
+  info_block:
+    description: "键值对信息表，标签列 + 值列，可选图片占位区"
+    colspan: auto
+    label_bg: "{{card_bg}}"
+    label_color: "{{primary}}"
+    label_weight: 600
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "1.5px dashed rgba({{accent_rgb}}, 0.35)"
+    image_placeholder_radius: 8
+  table_block:
+    description: "多列数据网格，含表头和交替行数据"
+    colspan: auto
+    header_bg_default: "{{chart_1}}"
+    header_bg_alt_0: "{{chart_0}}"
+    header_bg_alt_2: "{{chart_2}}"
+    header_color: "#ffffff"
+    header_weight: 600
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba({{text_rgb}}, 0.02)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "1px solid rgba({{text_rgb}}, 0.1)"
+    header_border_top: "2px solid rgba({{text_rgb}}, 0.15)"
+    header_rotation: "chart_1 → chart_0 → chart_2"
+  text_block:
+    description: "自由段落文字，全宽合并"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba({{text_rgb}}, 0.1)"
+  list_block:
+    description: "编号或项目符号列表"
+    colspan: full
+    number_color: "{{primary}}"
+    number_weight: 600
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba({{text_rgb}}, 0.1)"
+  closing:
+    description: "文档收束区域（结论/签名/落款），可选段落"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "2px solid rgba({{accent_rgb}}, 0.15)"
+    layouts: ["center", "split"]
+  footer:
+    description: "文档底部声明区（版权/备注）"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba({{text_rgb}}, 0.5)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "2px solid rgba({{accent_rgb}}, 0.2)"
+    align: center

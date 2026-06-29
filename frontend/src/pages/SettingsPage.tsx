@@ -130,7 +130,7 @@ function SettingsPage() {
     setSaveMsg('')
     try {
       await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature })
-      document.title = brandName || 'SOP 智能体'
+      document.title = brandName || '文档智能体'
       setSaveMsg('保存成功')
     } catch (err: any) {
       setSaveMsg('保存失败: ' + err.message)
@@ -258,7 +258,7 @@ function SettingsPage() {
                 onChange={e => setBrandName(e.target.value)} style={{ maxWidth: 300 }} />
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 8px' }}>
-              以下信息将作为页脚嵌入导出的 SOP / PPT 文档中。
+              以下信息将作为页脚嵌入导出的文档 / PPT 中。
             </p>
             <div className="settings-row">
               <label>版权信息</label>

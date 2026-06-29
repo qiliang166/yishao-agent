@@ -488,6 +488,24 @@ def init_db():
         except Exception:
             pass
 
+        # Add canvas dimensions to col3 (A4: 794x1123) for existing rows (2026-06-30)
+        try:
+            row = conn.execute(
+                "SELECT id, rules FROM column_configs WHERE column_id = ? LIMIT 1",
+                ("col3",)
+            ).fetchone()
+            if row and row["rules"]:
+                rules = json.loads(row["rules"])
+                if "canvas" not in rules:
+                    rules["canvas"] = {"width": 794, "height": 1123}
+                    conn.execute(
+                        "UPDATE column_configs SET rules = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                        (json.dumps(rules, ensure_ascii=False), row["id"])
+                    )
+                    conn.commit()
+        except Exception:
+            pass
+
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tts_history (
@@ -578,7 +596,7 @@ def init_db():
             defaults = [
                 ('c1-input', 'col1', '素材输入', '请根据用户提供的内容，整理为标准文档格式。', '', 0, '{}', 0),
                 ('c2-text', 'col2', '文档生成', '请根据素材内容生成一份完整的文档。', '', 0, '{}', 1),
-                ('c3-ppt', 'col3', 'PPT 生成', '请根据文档内容生成一份演示文稿。', '', 1, '{}', 2),
+                ('c3-ppt', 'col3', 'PPT 生成', '请根据文档内容生成一份演示文稿。', '', 1, '{"canvas": {"width": 794, "height": 1123}}', 2),
             ]
             for d in defaults:
                 conn.execute(

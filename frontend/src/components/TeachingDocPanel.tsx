@@ -21,7 +21,7 @@ export interface TeachingDocPanelProps {
 }
 
 const DOC_LABELS: Record<string, string> = {
-  sop: '文档', dao: '分析', yanxi: '手册',
+  sop: '标准文档', dao: '分析文档', yanxi: '手册文档',
 }
 const DOC_COLORS: Record<string, string> = {
   sop: 'var(--success)', dao: 'var(--purple)', yanxi: 'var(--warning)',
@@ -71,8 +71,6 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   const setDataSource = onDataSourceChange || _setDataSource
   const [generating, setGenerating] = useState(false)
   const generatingRef = useRef(false)
-  const [genLog, setGenLog] = useState<{ time: string; message: string }[]>([])
-  const [genProgress, setGenProgress] = useState('')
   const [savedFlash, setSavedFlash] = useState(0)
 
   const stepKey = STEP_KEYS[docType]
@@ -131,8 +129,6 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     const ctrl = new AbortController(); abortRef.current = ctrl
     generatingRef.current = true
     setGenerating(true)
-    setGenLog([])
-    setGenProgress('')
     onGeneratingChange?.(true)
     const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false })
     const label = DOC_LABELS[docType]
@@ -143,8 +139,6 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         ? `请将以下内容按指定格式整理：\n\n${sourceText}\n\n输出格式要求：\n${skill}`
         : sourceText
 
-      setGenLog(prev => [...prev, { time: now(), message: `开始生成 ${label}...` }])
-      setGenProgress(`正在生成 ${label}...`)
       onLogEntry?.({ time: now(), message: `开始生成 ${label}...` })
       onProgressChange?.(`正在生成 ${label}...`)
 
@@ -158,14 +152,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         fullText += chunk
         if (fullText.length - lastUpdate > 300) {
           lastUpdate = fullText.length
-          setGenProgress(`正在生成 ${label} — 已生成 ${fullText.length} 字符`)
           onProgressChange?.(`正在生成 ${label} — 已生成 ${fullText.length} 字符`)
         }
       }
 
       if (!mountedRef.current) return
-      setGenLog(prev => [...prev, { time: now(), message: `${label} 完成 (${fullText.length} 字符)` }])
-      setGenProgress('')
       onLogEntry?.({ time: now(), message: `${label} 完成 (${fullText.length} 字符)` })
       onProgressChange?.('')
       if (fullText) {
@@ -177,11 +168,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     } catch (e: any) {
       if (!mountedRef.current) return
       if (e.name !== 'AbortError') {
-        setGenLog(prev => [...prev, { time: now(), message: `生成失败: ${e.message}` }])
         onLogEntry?.({ time: now(), message: `生成失败: ${e.message}` })
         modal.toast(`生成失败: ${e.message}`, 'error')
       } else {
-        setGenLog(prev => [...prev, { time: now(), message: '已取消' }])
         onLogEntry?.({ time: now(), message: '已取消' })
       }
     } finally {
@@ -301,21 +290,6 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     </>
   )
 
-  const logBox = genLog.length > 0 ? (
-    <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
-      {genProgress && (
-        <div style={{ marginBottom: 4, color: 'var(--primary)', fontWeight: 500 }}>
-          ⏳ {genProgress}
-        </div>
-      )}
-      {genLog.slice(-6).map((entry, i) => (
-        <div key={i} style={{ marginBottom: 2 }}>
-          <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
-        </div>
-      ))}
-    </div>
-  ) : null
-
   const editor = (
     <>
       <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
@@ -330,9 +304,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-          {docType === 'sop' ? '编辑完成后即可供「标准SOP」栏目引用'
+          {docType === 'sop' ? '编辑完成后可供文档课件使用'
             : docType === 'dao' ? '编辑完成后即可供「合成PPT」栏目引用'
-              : '编辑完成后即可供「合成PPT」「口播文案」栏目引用'}
+              : '编辑完成后即可供「合成PPT」「演讲文案」栏目引用'}
         </span>
         <span style={{ display: 'flex', gap: 5 }}>
           <button className="btn btn-ghost btn-sm" onClick={handleClear}
@@ -347,8 +321,8 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     </>
   )
 
-  if (hideControls) return <>{logBox}{editor}</>
-  return <>{controls}{logBox}{editor}</>
+  if (hideControls) return editor
+  return <>{controls}{editor}</>
 })
 
 export default TeachingDocPanel

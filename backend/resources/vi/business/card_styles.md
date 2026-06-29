@@ -10,7 +10,7 @@
 |------|-----|
 | border_radius | 12px |
 | shadow | `0 2px 8px rgba(0,0,0,0.08)` |
-| border | `1px solid #e2e8f0` |
+| border | `1px solid rgba({{text_rgb}}, 0.12)` |
 | gap | 24px |
 
 ## 渐变
@@ -18,7 +18,7 @@
 | 名称 | 值 |
 |------|-----|
 | hero_bg | `linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)` |
-| card_highlight | `linear-gradient(180deg, {{card_bg}} 0%, #ffffff 100%)` |
+| card_highlight | `linear-gradient(180deg, {{card_bg}} 0%, {{background}} 100%)` |
 
 ## 阴影层级
 

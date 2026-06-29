@@ -46,8 +46,8 @@ Read additional tokens from the active style YAML:
 ```xml
 <defs>
   <linearGradient id="hero-bg" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0%" stop-color="#6366f1" />
-    <stop offset="100%" stop-color="#818cf8" />
+    <stop offset="0%" stop-color="${primary}" />
+    <stop offset="100%" stop-color="${secondary}" />
   </linearGradient>
 </defs>
 <rect width="1280" height="720" fill="url(#hero-bg)" />
@@ -178,7 +178,7 @@ When wrapping CJK text into `<tspan>` elements, check line boundaries against th
 ### Text Wrapping
 SVG does not natively wrap text. Use multiple `<text>` or `<tspan>` elements:
 ```xml
-<text x="24" y="80" font-family="Inter" font-size="18" fill="#333">
+<text x="24" y="80" font-family="Inter" font-size="18" fill="${text}">
   <tspan x="24" dy="0">First line of text content here</tspan>
   <tspan x="24" dy="24">Second line continues the paragraph</tspan>
   <tspan x="24" dy="24">Third line wraps as needed</tspan>
@@ -187,7 +187,7 @@ SVG does not natively wrap text. Use multiple `<text>` or `<tspan>` elements:
 
 ### Bullet Points
 ```xml
-<text font-family="Inter" font-size="16" fill="#333">
+<text font-family="Inter" font-size="16" fill="${text}">
   <tspan x="24" dy="0">• First point</tspan>
   <tspan x="24" dy="28">• Second point</tspan>
   <tspan x="24" dy="28">• Third point</tspan>
@@ -222,7 +222,7 @@ SVG does not natively wrap text. Use multiple `<text>` or `<tspan>` elements:
 <g transform="translate(24, 40)">
   <text font-size="56" font-weight="bold" fill="${accent}">2,847</text>
   <text x="0" y="30" font-size="16" fill="${text}" opacity="0.6">Total Units Sold</text>
-  <text x="180" y="-20" font-size="18" fill="#22c55e">▲ +12.3%</text>
+  <text x="180" y="-20" font-size="18" fill="${semantic_positive}">▲ +12.3%</text>
 </g>
 ```
 
@@ -309,7 +309,7 @@ SVG does not natively wrap text. Use multiple `<text>` or `<tspan>` elements:
     <rect width="240" height="140" rx="${border_radius}" fill="${card_bg}" filter="url(#card-shadow)" />
     <text x="24" y="50" font-size="14" fill="${text}" opacity="0.6">Revenue</text>
     <text x="24" y="95" font-size="40" font-weight="bold" fill="${chart_colors[0]}">$2.4M</text>
-    <text x="24" y="120" font-size="14" fill="#22c55e">▲ +18%</text>
+    <text x="24" y="120" font-size="14" fill="${semantic_positive}">▲ +18%</text>
   </g>
   <!-- Card 2 at translate(260, 0), Card 3 at translate(0, 160), Card 4 at translate(260, 160) -->
 </g>

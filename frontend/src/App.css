@@ -705,7 +705,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  z-index: 10001;
 }
 .dialog-box {
   background: var(--card);
@@ -718,6 +718,34 @@
 }
 .dialog-box.wide {
   width: 520px;
+}
+/* ═══ Save File Dialog ═══ */
+.save-file-dialog {
+  width: 480px;
+}
+.folder-browser {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  margin-top: 4px;
+}
+.folder-item {
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.folder-item:last-child {
+  border-bottom: none;
+}
+.folder-item:hover {
+  background: var(--bg-secondary, #f1f5f9);
 }
 .dialog-box.video-checker {
   width: 90vw;
@@ -1015,7 +1043,7 @@
   position: fixed;
   top: 16px;
   right: 16px;
-  z-index: 200;
+  z-index: 10000;
   display: flex;
   flex-direction: column;
   gap: 8px;

@@ -6,8 +6,8 @@ Bento Grid (便当网格) is a flexible card-based layout system inspired by Jap
 
 ## Canvas
 
-- **Viewport**: 1280 × 720 (16:9 aspect ratio)
-- **Safe Area**: 60px padding on all sides → usable area: 1160 × 600
+- **Viewport**: {{canvas_w}} × {{canvas_h}}
+- **Safe Area**: 60px padding on all sides → usable area: ({{canvas_w}}-120) × ({{canvas_h}}-120)
 - **Grid Base**: 12-column grid within safe area
 - **Minimum Card Gap**: 20px
 
@@ -146,8 +146,8 @@ Bento Grid (便当网格) is a flexible card-based layout system inspired by Jap
 
 - For asymmetric layouts, prefer golden ratio (62:38) over arbitrary splits
 - Place the most important element at rule-of-thirds intersection points:
-  - Horizontal: x ≈ 427 (1/3) or x ≈ 853 (2/3)
-  - Vertical: y ≈ 240 (1/3) or y ≈ 480 (2/3)
+  - Horizontal: x ≈ {{canvas_w}}*1/3 or x ≈ {{canvas_w}}*2/3
+  - Vertical: y ≈ {{canvas_h}}*1/3 or y ≈ {{canvas_h}}*2/3
 - The visual "anchor" of each slide should land near one of these 4 intersection points
 
 ## Card Anatomy
@@ -207,4 +207,4 @@ When choosing between chart and text:
 - Shadows via `<filter>` with `<feDropShadow>` or `<feGaussianBlur>`.
 - Text via `<text>` elements with proper `font-family`, `font-size`, `fill`.
 - Use `<g transform="translate(x,y)">` to position card groups.
-- All coordinates relative to `viewBox="0 0 1280 720"`.
+- All coordinates relative to `viewBox="0 0 {{canvas_w}} {{canvas_h}}"`.

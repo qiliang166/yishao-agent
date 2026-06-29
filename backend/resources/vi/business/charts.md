@@ -34,7 +34,7 @@
 - 终端实心点强调最新值
 
 ## Timeline（时间线）
-- 竖线 `#e2e8f0` 2px + 节点圆 10px chart_color[n] 轮换
+- 竖线 `rgba({{text_rgb}}, 0.12)` 2px + 节点圆 10px chart_color[n] 轮换
 - 时间标题 + 描述
 
 ## 对比条（正负向）

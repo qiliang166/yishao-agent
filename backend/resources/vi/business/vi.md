@@ -9,7 +9,7 @@
 三条设计原则：
 
 1. **清晰的层级** — 通过严格的字体大小、字重和间距，建立一目了然的信息架构。标题 DM Sans 粗体、正文 Inter 常规，层级分明。
-2. **克制的色彩** — 深海蓝 `#1A365D` 奠定权威基调，黄铜色 `#E67E22` 仅用于关键强调（≤8%），大面积白色背景确保干净锐利。
+2. **克制的色彩** — 深海蓝 `{{primary}}` 奠定权威基调，黄铜色 `{{accent}}` 仅用于关键强调（≤8%），大面积白色背景确保干净锐利。
 3. **一致的图形** — 所有图标、图表、装饰元素遵循统一的描线风格（1.5px 圆角端点）。每页至少 3 个 SVG 元素，无冗余装饰。
 
 适用场景：企业演示、商业提案、投资者汇报。
@@ -27,7 +27,7 @@
 | primary | `{{primary}}` | 标题文字、hero 卡背景 |
 | secondary | `{{secondary}}` | 辅助色、渐变终点 |
 | accent | `{{accent}}` | 页面级装饰（顶部色条、标题短线） |
-| background | `#ffffff` | 页面底色 |
+| background | `{{background}}` | 页面底色 |
 | text | `{{text}}` | 正文 |
 | card_bg | `{{card_bg}}` | 卡片背景 |
 
@@ -59,7 +59,7 @@
 | chart_colors[0..4] | 卡片色条轮换 + 图表色序列 + 图标颜色 | 每卡用不同色 |
 | primary `{{primary}}` | 内容页标题色 + 卡片标题色 | 标题文字专用 |
 | accent `{{accent}}` | 页面级装饰线（顶部色条 + 标题短线） | ≤8% |
-| background `#ffffff` | 页面底色 | 全画布 |
+| background `{{background}}` | 页面底色 | 全画布 |
 | text `{{text}}` | 正文 | 全页 |
 | card_bg `{{card_bg}}` | 卡片背景 | 卡片区域 |
 
@@ -107,7 +107,7 @@
 |------|-----|
 | border_radius | 12px |
 | shadow | `0 2px 8px rgba(0,0,0,0.08)` |
-| border | `1px solid #e2e8f0` |
+| border | `1px solid rgba({{text_rgb}}, 0.12)` |
 | gap | 24px |
 
 ### 渐变
@@ -115,7 +115,7 @@
 | 名称 | 值 |
 |------|-----|
 | hero_bg | `linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)` |
-| card_highlight | `linear-gradient(180deg, {{card_bg}} 0%, #ffffff 100%)` |
+| card_highlight | `linear-gradient(180deg, {{card_bg}} 0%, {{background}} 100%)` |
 
 ### 阴影层级
 
@@ -130,9 +130,9 @@
 ## V. 装饰系统 · 5 层结构
 
 每页固定装饰元素：
-- **顶部色条**: 5px, accent `#E67E22`, 横跨画布全宽
-- **标题短线**: 48×4px, accent `#E67E22`
-- **页码标记**: dot (6px `#E67E22`) + 当前页/总页数
+- **顶部色条**: 5px, accent `{{accent}}`, 横跨画布全宽
+- **标题短线**: 48×4px, accent `{{accent}}`
+- **页码标记**: dot (6px `{{accent}}`) + 当前页/总页数
 
 ### 层结构（从底到顶）
 
@@ -184,7 +184,7 @@
 - 终端实心点强调最新值
 
 ### Timeline（时间线）
-- 竖线 `#e2e8f0` 2px + 节点圆 10px chart_color[n] 轮换
+- 竖线 `rgba({{text_rgb}}, 0.12)` 2px + 节点圆 10px chart_color[n] 轮换
 - 时间标题 + 描述
 
 ### 对比条（正负向）
@@ -342,38 +342,39 @@
 
 ---
 
-## XIII. 页面类型覆盖（26 种）
+## XIII. 页面类型覆盖
 
 > 每种类型有独立的 `.md` 规范文件，继承本文件的通用规则并叠加专属 Override。
 
 | # | 类型 | 标签 | 背景 | 文字色 | 默认布局 | 特殊规则 |
 |---|------|------|------|--------|---------|---------|
-| 1 | cover | 封面 | hero_bg 渐变 | #fff | full_bleed | 禁止卡片容器 · heading_scale:1.3 |
-| 2 | toc | 目录 | #fff | — | single_focus | 编号圆形 + 章节名列表 |
-| 3 | section | 章节分隔 | hero_bg 渐变 | #fff | full_bleed | 居中章节标题 · 无页码 |
-| 4 | chapter | 章节页 | #fff | — | mixed_grid | 大号章节编号 + 标题 + 要点预览 |
-| 5 | content | 内容页 | #fff | — | 按决策树 | 5 层结构完整 · 默认类型 |
-| 6 | data | 数据页 | #fff | — | dashboard | heading_scale:0.9 · 强制图表化 |
-| 7 | data_hero | 数据突出 | #fff | — | full_bleed | 超大数字居中 + 辅助指标卡 |
-| 8 | technique | 技法页 | #fff | — | single_focus | 编号步骤卡 · icon+step+desc |
-| 9 | principle | 原则页 | #fff | — | two_column_asymmetric | 编号原则 + 理由说明 |
-| 10 | process_flow | 流程图 | #fff | — | timeline | 步骤节点 + flow-arrow 连接 |
-| 11 | process_timeline | 流程时间线 | #fff | — | mixed_grid | 时间节点 + 阶段交付物 |
-| 12 | timeline | 时间线 | #fff | — | timeline | 水平时间轴 + 里程碑节点 |
-| 13 | comparison | 对比页 | #fff | — | two_column | 多维对比表 · 推荐行高亮 |
-| 14 | duo_compare | 双项对比 | #fff | — | two_column | A vs B 深度对比 · 中间分隔线 |
-| 15 | table | 表格页 | #fff | — | single_focus | 经典表格 · 条件格式 |
-| 16 | grid_cards | 网格卡片 | #fff | — | hero_grid | 等宽等高网格 · 色条轮换 |
-| 17 | image_grid | 图片网格 | #fff | — | grid_cards | 图片 + 标注 · 4:3 比例 |
-| 18 | quote | 引言页 | {{primary}} | #fff | single_focus | 斜体引文 · 大号引号装饰 |
-| 19 | image_hero | 图片突出 | 深色渐变 | #fff | full_bleed | 大图 + 文字叠加层 |
-| 20 | food_archive | 美食档案 | #fff | — | hero_grid | hero 大卡 + 特征标签 + 参数卡 |
-| 21 | skill_card | 技能卡片 | #fff | — | grid_cards | 技能名 + 星级 + 年限 |
-| 22 | troubleshoot | 问题排查 | #fff | — | grid_cards | 问题-原因-方案三栏 |
-| 23 | appendix | 附录页 | #fff | — | single_focus | 参考列表 + 术语表 |
-| 24 | copyright | 版权页 | hero_bg 渐变 | #fff | full_bleed | 版权声明 · 致谢 · 无页码 |
-| 25 | closing | 结尾页 | hero_bg 渐变 | #fff | full_bleed | 感谢 + 联系方式 + 版权 |
-| 26 | summary | 总结页 | hero_bg 渐变 | #fff | full_bleed | 核心要点回顾 · 呼应封面书挡 |
+| 1 | cover | 封面 | hero_bg 渐变 | #ffffff | full_bleed | 禁止卡片容器 · heading_scale:1.3 |
+| 2 | toc | 目录 | {{background}} | — | single_focus | 编号圆形 + 章节名列表 |
+| 3 | section | 章节分隔 | hero_bg 渐变 | #ffffff | full_bleed | 居中章节标题 · 无页码 |
+| 4 | chapter | 章节页 | {{background}} | — | mixed_grid | 大号章节编号 + 标题 + 要点预览 |
+| 5 | content | 内容页 | {{background}} | — | 按决策树 | 5 层结构完整 · 默认类型 |
+| 6 | data | 数据页 | {{background}} | — | dashboard | heading_scale:0.9 · 强制图表化 |
+| 7 | data_hero | 数据突出 | {{background}} | — | full_bleed | 超大数字居中 + 辅助指标卡 |
+| 8 | technique | 技法页 | {{background}} | — | single_focus | 编号步骤卡 · icon+step+desc |
+| 9 | principle | 原则页 | {{background}} | — | two_column_asymmetric | 编号原则 + 理由说明 |
+| 10 | process_flow | 流程图 | {{background}} | — | timeline | 步骤节点 + flow-arrow 连接 |
+| 11 | process_timeline | 流程时间线 | {{background}} | — | mixed_grid | 时间节点 + 阶段交付物 |
+| 12 | timeline | 时间线 | {{background}} | — | timeline | 水平时间轴 + 里程碑节点 |
+| 13 | comparison | 对比页 | {{background}} | — | two_column | 多维对比表 · 推荐行高亮 |
+| 14 | duo_compare | 双项对比 | {{background}} | — | two_column | A vs B 深度对比 · 中间分隔线 |
+| 15 | table | 表格页 | {{background}} | — | single_focus | 经典表格 · 条件格式 |
+| 16 | grid_cards | 网格卡片 | {{background}} | — | hero_grid | 等宽等高网格 · 色条轮换 |
+| 17 | image_grid | 图片网格 | {{background}} | — | grid_cards | 图片 + 标注 · 4:3 比例 |
+| 18 | quote | 引言页 | {{primary}} | #ffffff | single_focus | 斜体引文 · 大号引号装饰 |
+| 19 | image_hero | 图片突出 | 深色渐变 | #ffffff | full_bleed | 大图 + 文字叠加层 |
+| 20 | food_archive | 美食档案 | {{background}} | — | hero_grid | hero 大卡 + 特征标签 + 参数卡 |
+| 21 | skill_card | 技能卡片 | {{background}} | — | grid_cards | 技能名 + 星级 + 年限 |
+| 22 | troubleshoot | 问题排查 | {{background}} | — | grid_cards | 问题-原因-方案三栏 |
+| 23 | appendix | 附录页 | {{background}} | — | single_focus | 参考列表 + 术语表 |
+| 24 | copyright | 版权页 | hero_bg 渐变 | #ffffff | full_bleed | 版权声明 · 致谢 · 无页码 |
+| 25 | closing | 结尾页 | hero_bg 渐变 | #ffffff | full_bleed | 感谢 + 联系方式 + 版权 |
+| 26 | summary | 总结页 | hero_bg 渐变 | #ffffff | full_bleed | 核心要点回顾 · 呼应封面书挡 |
+| 27 | document | A4文档 | {{background}} | — | single_focus | 统一表格布局，段落拼装架构 |
 
 > 每种类型的详细规则见对应的 `.md` 文件。通用规则（色彩/排版/卡片/装饰/图表）继承本文件。
 

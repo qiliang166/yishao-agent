@@ -26,7 +26,7 @@
 - 首列可选 sticky 左对齐
 
 ### 数据行
-- 交替行色: `#ffffff` / `#f7fafc`
+- 交替行色: `{{background}}` / `rgba({{text_rgb}}, 0.03)`
 - 悬停高亮: `rgba({{accent_rgb}},0.06)`
 - 内边距: 10px 16px
 - 字体: 14-16px Inter
@@ -38,9 +38,9 @@
 - 长文本: 最大宽度 200px, 超出省略号
 
 ### 边框
-- 外边框: 1px `#e2e8f0`, 圆角 8px
-- 内分隔线: 1px `#edf2f7`
-- 表头与表体: 2px `#cbd5e0`
+- 外边框: 1px `rgba({{text_rgb}}, 0.12)`, 圆角 8px
+- 内分隔线: 1px `rgba({{text_rgb}}, 0.06)`
+- 表头与表体: 2px `rgba({{text_rgb}}, 0.12)`
 
 ### 条件格式
 - 高值: 钢蓝 `{{chart_2}}`

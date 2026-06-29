@@ -11,7 +11,7 @@
 | primary | `{{primary}}` | 标题文字、hero 卡背景 |
 | secondary | `{{secondary}}` | 辅助色、渐变终点 |
 | accent | `{{accent}}` | 页面级装饰（顶部色条、标题短线） |
-| background | `#ffffff` | 页面底色 |
+| background | `{{background}}` | 页面底色 |
 | text | `{{text}}` | 正文 |
 | card_bg | `{{card_bg}}` | 卡片背景 |
 
@@ -43,7 +43,7 @@
 | chart_colors[0..4] | 卡片色条轮换 + 图表色序列 + 图标颜色 | 每卡用不同色 |
 | primary `{{primary}}` | 内容页标题色 + 卡片标题色 | 标题文字专用 |
 | accent `{{accent}}` | 页面级装饰线（顶部色条 + 标题短线） | ≤8% |
-| background `#ffffff` | 页面底色 | 全画布 |
+| background `{{background}}` | 页面底色 | 全画布 |
 | text `{{text}}` | 正文 | 全页 |
 | card_bg `{{card_bg}}` | 卡片背景 | 卡片区域 |
 

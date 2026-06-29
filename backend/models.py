@@ -106,8 +106,16 @@ class PPTSlideSourceRequest(BaseModel):
     html: str
 
 
+class PPTRegenerateSlideRequest(BaseModel):
+    run_id: str
+    slide_seqs: list[int]
+    provider_id: str = ""
+    model: str = ""
+    column_id: str = ""
+
+
 class PPTGenerateRequest(BaseModel):
-    content: str
+    content: str = ""
     template_id: str = ""
     branding: Optional[dict] = None
     project_id: Optional[str] = None
@@ -144,6 +152,7 @@ class PPTPlanRequest(BaseModel):
     provider_id: str = ""
     model: str = ""
     column_id: str = ""
+    project_id: Optional[str] = None
     slide_plan: list = []  # original JSON reference for outline conversion
     temperature: float = 0.3  # base fallback
     # Tab 1: 生成大纲

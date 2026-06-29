@@ -1,10 +1,11 @@
-## ⛔ 四条铁律 — 违反任意一条 = 废稿
+## ⛔ 五条铁律 — 违反任意一条 = 废稿
 
 1. **容器铁律**：所有内容页（除封面/金句/章节页外）的内容区必须使用 `left:60px; right:60px` 基准容器。**绝对禁止** `left:180px; width:920px`、`transform:translateX(-50%)`、以及任何非 60px 的 left/right 值。
 2. **标题铁律**：页面标题必须是画布的直接子元素（第 3 层绝对定位），**禁止**嵌套在内容卡片内部。
 3. **五层铁律**：每页必须包含全部 5 层（背景→装饰→结构→内容→标识），缺层 = 未完成。
-4. **颜色变量铁律**：所有颜色值必须使用 `{{primary}}` `{{secondary}}` `{{accent}}` `{{background}}` `{{text}}` `{{card_bg}}` `{{chart_0}}`~`{{chart_4}}` `{{semantic_positive}}` `{{semantic_negative}}` 变量语法。**绝对禁止**硬编码 hex 色值（如 `#1a365d`、`#ffffff`）。不透明度通过 `rgba({{primary_rgb}}, 0.5)` 表达。
+4. **颜色变量铁律**：所有颜色值必须使用 `{{primary}}` `{{secondary}}` `{{accent}}` `{{background}}` `{{text}}` `{{card_bg}}` `{{chart_0}}`~`{{chart_4}}` `{{semantic_positive}}` `{{semantic_negative}}` 变量语法。**绝对禁止**硬编码 hex 色值（如直接写 `#ff0000`、`#00ff00` 等裸 hex 值）。不透明度通过 `rgba({{primary_rgb}}, 0.5)` 表达。
+5. **封面对比度铁律**：封面/章节分隔/总结页的背景必须使用 `{{background}}` 色（不是 `{{primary}}`）。文字色遵循：若 `{{background}}` 为暗色 → 文字用白色 `#ffffff`；若 `{{background}}` 为亮色 → 标题用 `{{text}}`、副标题用 `{{text}}` opacity 0.85。**绝对禁止** `{{primary}}` 色背景上使用 `{{text}}` 色文字（同色系低对比度，不可读）。
 
-上述四条铁律在后续章节中有详细说明和 HTML 示例。铁律优先于所有其他设计考量——即使它"看起来更好看"，违反就是错的。
+上述五条铁律在后续章节中有详细说明和 HTML 示例。铁律优先于所有其他设计考量——即使它"看起来更好看"，违反就是错的。
 
 ---

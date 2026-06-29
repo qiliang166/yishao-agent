@@ -2290,7 +2290,7 @@ def serve_thumbnail(filename: str):
 
 @app.get("/api/templates/for-stage/{stage_type}")
 def list_templates_for_stage(stage_type: str):
-    type_map = {"sop": "sop", "daoPpt": "ppt", "yanxiPpt": "ppt"}
+    type_map = {"sop": "ppt", "daoPpt": "ppt", "yanxiPpt": "ppt"}
     db_type = type_map.get(stage_type, "ppt")
     db = get_db()
     try:
@@ -2759,6 +2759,7 @@ def api_generate_ppt(req: PPTGenerateRequest):
                 "style_id": _load_style_from_template(req.template_id),
                 "format": "svg",
                 "color_scheme": cs,
+                "column_id": req.column_id,
                 "generated_at": _dt.datetime.now().isoformat(),
             }
             try:
@@ -3066,7 +3067,7 @@ def api_ppt_recolor_slide(
         slides_raw = re.findall(r'(<section[\s\S]*?</section>)', full_html, re.IGNORECASE)
         if not slides_raw:
             inner_pattern = re.compile(
-                r'<div\s+class="slide-wrapper"\s*>\s*(<div\s[^>]*width\s*:\s*1280px[^>]*>)',
+                r'<div\s+class="slide-wrapper"\s*>\s*(<div\s[^>]*width\s*:\s*\d+px[^>]*>)',
                 re.IGNORECASE
             )
             for m in inner_pattern.finditer(full_html):
@@ -3315,6 +3316,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
         _stage2_html_per_slide, _assemble_html_deck,
         _resolve_color_vars, _load_scheme_data,
         _auto_fix_hardcoded_hex, _auto_fix_font_size,
+        _get_canvas_dimensions,
     )
     import datetime as _dt
 
@@ -3341,6 +3343,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
     rj_path = os.path.join(run_dir, "result.json")
     style_id = "business"
     color_scheme = "deep-blue"
+    column_id = ""
     if os.path.exists(rj_path):
         _log("读取 result.json...")
         with open(rj_path, encoding="utf-8") as _f:
@@ -3348,6 +3351,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
         slide_plan = result_meta.get("slide_plan", [])
         style_id = result_meta.get("style_id") or style_id
         color_scheme = result_meta.get("color_scheme") or color_scheme
+        column_id = result_meta.get("column_id", "") or req.column_id
         _log(f"已加载 {len(slide_plan)} 页幻灯片结构，色系: {color_scheme}")
     else:
         _log("result.json 不存在，从 index.html 解析...")
@@ -3518,14 +3522,17 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
 
     _log("正在组装完整 HTML...")
 
+    # Get canvas dimensions for the column (defaults to 1280x720 if unknown)
+    regen_canvas_w, regen_canvas_h = _get_canvas_dimensions(column_id)
+
     # Rebuild both decks
     title = slide_plan[0].get("heading", "") if slide_plan else "Presentation"
-    deck_html = _assemble_html_deck(resolved_slides, title, style_id, scheme_data)
+    deck_html = _assemble_html_deck(resolved_slides, title, style_id, scheme_data, canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
     if scheme_data:
         deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
     deck_vars = _assemble_html_deck(
         [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_plan],
-        title, style_id, scheme_data
+        title, style_id, scheme_data, canvas_w=regen_canvas_w, canvas_h=regen_canvas_h
     )
 
     _log(f"正在写入文件（{len(deck_html)} 字节）...")
@@ -3540,7 +3547,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
 
     # Build partial mini-deck with only the regenerated slides
     regen_resolved = [s for s in resolved_slides if s.get("seq") in set(seqs)]
-    partial_html = _assemble_html_deck(regen_resolved, title, style_id, scheme_data, total_slides=len(slide_plan))
+    partial_html = _assemble_html_deck(regen_resolved, title, style_id, scheme_data, total_slides=len(slide_plan), canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
     if scheme_data:
         partial_html = _resolve_color_vars(partial_html, scheme_data, css_vars=True)
     regen_partial_path = os.path.join(run_dir, "index_regenerated_partial.html")
@@ -3862,27 +3869,47 @@ def _style_dir(style_id: str) -> str:
 
 
 def _vi_section_path(style_id: str, section: str) -> str:
-    """Get path for a VI sub-file. sections: vi, cover, content, data, summary, prompt"""
+    """Get path for a VI sub-file. Supports subdirectories e.g. blocks/header, templates/homework_manual."""
     ext = ".yaml" if section == "tokens" else ".md"
     return os.path.join(_style_dir(style_id), f"{section}{ext}")
 
 
+def _validate_vi_path(style_id: str, section: str, for_write: bool = False) -> str:
+    """Resolve and validate a VI path stays within the style directory. Returns the safe path."""
+    p = _vi_section_path(style_id, section)
+    base = os.path.realpath(_style_dir(style_id))
+    # Use normpath to collapse ../ sequences, then verify the result is under base
+    normalized = os.path.normpath(os.path.abspath(p))
+    if not normalized.startswith(os.path.normpath(base) + os.sep):
+        raise HTTPException(status_code=403, detail="Path traversal denied")
+    # For read paths that exist, additionally resolve symlinks via realpath
+    if not for_write and os.path.exists(p):
+        real_p = os.path.realpath(p)
+        if not real_p.startswith(base + os.sep):
+            raise HTTPException(status_code=403, detail="Path traversal denied")
+    return p
+
+
 @app.get("/api/ppt/styles/{style_id}/vi/files")
 def api_list_style_vi_files(style_id: str):
-    """List all VI sub-files in the style directory."""
+    """List all VI sub-files in the style directory (recursive into subdirectories)."""
     d = _style_dir(style_id)
     if not os.path.isdir(d):
         return {"files": [], "exists": False}
     files = []
     from services.ppt_service import _page_type_sort_key
-    for f in sorted(os.listdir(d), key=lambda x: _page_type_sort_key(x.rsplit(".", 1)[0])):
-        if f.endswith((".md", ".yaml")):
-            p = os.path.join(d, f)
-            files.append({
-                "name": f,
-                "size": os.path.getsize(p),
-                "section": f.rsplit(".", 1)[0]  # e.g. "vi", "cover", "prompt", "tokens"
-            })
+    for root, _dirs, filenames in os.walk(d):
+        for f in filenames:
+            if f.endswith((".md", ".yaml")):
+                p = os.path.join(root, f)
+                rel = os.path.relpath(p, d).replace("\\", "/")
+                section = rel.rsplit(".", 1)[0]  # e.g. "blocks/header", "cover"
+                files.append({
+                    "name": rel,
+                    "size": os.path.getsize(p),
+                    "section": section,
+                })
+    files.sort(key=lambda x: _page_type_sort_key(x["section"]))
     return {"files": files, "exists": True, "dir": d}
 
 
@@ -3891,9 +3918,12 @@ def api_get_page_types(style_id: str):
     """Return available page_types for a style — scanned from VI directory.
     Each .md file (except vi.md, prompt.md) = one page_type.
     """
-    from services.ppt_service import _scan_vi_page_types
-    types = _scan_vi_page_types(style_id)
-    return {"page_types": types}
+    from services.ppt_service import _scan_vi_page_types, _fallback_page_types
+    try:
+        types = _scan_vi_page_types(style_id)
+        return {"page_types": types}
+    except Exception:
+        return {"page_types": _fallback_page_types()}
 
 
 @app.get("/api/ppt/styles/{style_id}/color-schemes")
@@ -3904,12 +3934,12 @@ def api_list_color_schemes(style_id: str):
     return {"color_schemes": schemes, "exists": len(schemes) > 0}
 
 
-@app.get("/api/ppt/styles/{style_id}/vi/{section}")
+@app.get("/api/ppt/styles/{style_id}/vi/{section:path}")
 def api_get_style_vi_section(style_id: str, section: str, color_scheme: str = ""):
     """Load a specific VI sub-file. Resolves {{color}} variables when color_scheme is provided."""
     from services.ppt_service import _load_scheme_data, _resolve_color_vars
 
-    p = _vi_section_path(style_id, section)
+    p = _validate_vi_path(style_id, section)
     if not os.path.exists(p):
         return {"content": "", "exists": False, "section": section}
     with open(p, "r", encoding="utf-8") as f:
@@ -3921,12 +3951,13 @@ def api_get_style_vi_section(style_id: str, section: str, color_scheme: str = ""
     return {"content": content, "exists": True, "section": section}
 
 
-@app.put("/api/ppt/styles/{style_id}/vi/{section}")
+@app.put("/api/ppt/styles/{style_id}/vi/{section:path}")
 def api_save_style_vi_section(style_id: str, section: str, body: VIFileUpdate):
-    """Save a specific VI sub-file."""
+    """Save a specific VI sub-file. Supports subdirectory sections."""
     d = _style_dir(style_id)
     os.makedirs(d, exist_ok=True)
-    p = _vi_section_path(style_id, section)
+    p = _validate_vi_path(style_id, section, for_write=True)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as f:
         f.write(body.content)
     return {"ok": True, "path": p, "section": section}
@@ -4140,7 +4171,7 @@ async def api_save_slide_images(run_id: str):
 
             slides = page.query_selector_all(".slide-wrapper, section")
             if not slides:
-                slides = page.query_selector_all('[style*="1280px"]')
+                slides = page.query_selector_all('[style*="width"]')
 
             for i, slide in enumerate(slides):
                 png_path = os.path.join(run_dir, f"slide_{i+1:02d}.png")

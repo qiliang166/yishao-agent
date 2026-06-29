@@ -21,14 +21,14 @@
 
 ### 表格式对比（3+ 项）
 - 表头行: primary `{{primary}}` 背景 + 白色文字
-- 数据行: 交替 `#ffffff` / `#f7fafc`
+- 数据行: 交替 `{{background}}` / `rgba({{text_rgb}}, 0.03)`
 - 首列（项目名）: font-weight:600
 - 单元格: 14-16px, padding: 10px 16px
 - 圆角: 8px
-- 边框: `1px solid #e2e8f0`
+- 边框: `1px solid rgba({{text_rgb}}, 0.12)`
 
 ### 双项对比（左右分栏）
-- 左右各占 50%，中间分隔线 1px `#e2e8f0`
+- 左右各占 50%，中间分隔线 1px `rgba({{text_rgb}}, 0.12)`
 - 每栏顶部: chart_color 色条
 - 选项名: 24px, font-weight:700
 - 优劣列表: 图标 + 文字
@@ -45,7 +45,7 @@
 
 - 优势/正向: 钢蓝 `{{chart_2}}`
 - 劣势/负向: 铜陶 `{{chart_3}}`
-- 中性: `#718096`
+- 中性: `rgba({{text_rgb}}, 0.55)`
 - 推荐标记: accent `{{accent}}`
 
 ---

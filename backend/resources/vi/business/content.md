@@ -6,7 +6,7 @@
 
 ## 布局规则
 
-- **背景**: `#ffffff`
+- **背景**: `{{background}}`
 - **布局**: 按布局选择决策树（10 种布局）
 - **顶部**: 4px accent 色条 `{{accent}}`，横跨画布全宽
 - **标题**: 36-44px, primary `{{primary}}`, DM Sans, font-weight:700
@@ -16,7 +16,7 @@
 
 ## 图层结构（5 层）
 
-1. **背景层**: `#ffffff` 铺满 + 半透明几何装饰
+1. **背景层**: `{{background}}` 铺满 + 半透明几何装饰
 2. **装饰层**: 几何图形（圆/椭圆/方形，opacity 0.03-0.12），3 种类型：
    - **Type A** · 圆形点缀: 右上角半透明圆（最常用）
    - **Type B** · 双几何: 左上圆 + 右下旋转方形，对角线平衡
@@ -42,7 +42,7 @@
 | 背景 | `{{card_bg}}` |
 | 圆角 | 12px |
 | 阴影 | `0 4px 12px rgba(0,0,0,0.08)` (md) |
-| 边框 | `1px solid #e2e8f0` |
+| 边框 | `1px solid rgba({{text_rgb}}, 0.12)` |
 | 卡片间距 | 24px |
 | 左色条 | 4px, chart_colors 轮换（每卡不同色） |
 | 标题字号 | 22-24px, primary `{{primary}}`, DM Sans, font-weight:600 |

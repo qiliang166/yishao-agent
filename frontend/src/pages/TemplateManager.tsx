@@ -3,49 +3,108 @@ import { api, StyleItem } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
 const VI_LABELS: Record<string, string> = {
-  vi: '通用规范', prompt: '提示词', tokens: 'Token',
-  principles: '设计原则', colors: '色彩系统', typography: '排版层级',
-  card_styles: '卡片样式', decorations: '装饰系统', layouts: '布局库',
-  charts: '图表语言', card_roles: '卡片角色', chart_decision: '图表决策',
-  data_rules: '数据规则', richness: '丰富度', consistency: '跨页一致',
-  icons: '图标规范', images: '配图规范', checklist: '自检清单',
-  cover: '封面', toc: '目录', section: '章节分隔', chapter: '章节页',
-  content: '内容页', data: '数据页', data_hero: '数据突出',
-  technique: '技法页', principle: '原则页', process_flow: '流程图',
-  process_timeline: '流程时间线', timeline: '时间线',
-  comparison: '对比页', duo_compare: '双项对比',
-  table: '表格页', grid_cards: '网格卡片', image_grid: '图片网格',
-  quote: '引言页', image_hero: '图片突出',
-  troubleshoot: '问题排查', appendix: '附录页', copyright: '版权页',
-  closing: '结尾页', summary: '总结',
+  // 总纲
+  vi: '通用规范', prompt: '提示词', tokens: '配色令牌', index: 'VI索引',
+  // 设计原则（7 项）
+  principles: '设计指导思想', decorations: '装饰系统', consistency: '跨页一致性',
+  richness: '视觉丰富度', checklist: '自检清单', images: '配图规范', data_rules: '数据转化规则',
+  // 设计元素（8 项）
+  colors: '色彩系统', typography: '排版层级', card_styles: '卡片样式',
+  charts: '图表语言', layouts: '布局库', card_roles: '卡片角色',
+  chart_decision: '图表决策树', icons: '图标规范',
+  // 文档构建块（8 项）
+  'blocks/header': '页头', 'blocks/title': '标题', 'blocks/info_block': '基本信息块',
+  'blocks/table_block': '表格块', 'blocks/text_block': '文字块', 'blocks/list_block': '列表块',
+  'blocks/closing': '结尾块', 'blocks/footer': '页脚',
+  // 文档模板（1 项）
+  'templates/homework_manual': '作业手册',
+  // 列专属覆写 — col3（2 项）
+  'col3/cover': 'A4封面', 'col3/closing': 'A4结尾页',
 }
 
-// Canonical page type order — follows document writing conventions (cover → content → closing)
-const PAGE_TYPE_ORDER = [
-  'cover', 'toc', 'section', 'chapter',
-  'content', 'data', 'data_hero',
-  'technique', 'principle', 'process_flow', 'process_timeline', 'timeline',
-  'comparison', 'duo_compare', 'table', 'grid_cards', 'image_grid',
-  'quote', 'image_hero',
-  'troubleshoot', 'appendix', 'copyright',
-  'closing', 'summary',
-]
+// ── VI 手册编号（与 index.md 完全对应）──
+const VI_NUMBER: Record<string, string> = {
+  // 总纲
+  vi: 'I01', prompt: 'I02', tokens: 'I03', index: 'I04',
+  // 设计原则
+  principles: 'D01', consistency: 'D02', richness: 'D03', checklist: 'D04',
+  images: 'D05', data_rules: 'D06', decorations: 'D07',
+  // 设计元素
+  colors: 'E01', typography: 'E02', card_styles: 'E03', charts: 'E04',
+  layouts: 'E05', card_roles: 'E06', chart_decision: 'E07', icons: 'E08',
+  // 文档构建块
+  'blocks/header': 'B01', 'blocks/title': 'B02', 'blocks/info_block': 'B03',
+  'blocks/table_block': 'B04', 'blocks/text_block': 'B05', 'blocks/list_block': 'B06',
+  'blocks/closing': 'B07', 'blocks/footer': 'B08',
+  // 文档模板
+  'templates/homework_manual': 'T01',
+  // 列专属覆写
+  'col3/cover': 'C01', 'col3/closing': 'C02',
+}
 
-// Meta files sort first, then foundation chapters, then page types
-const META_ORDER = ['vi', 'prompt', 'tokens']
+/** Return display label with VI manual number, e.g. "P01 封面" */
+function sectionLabel(s: string): string {
+  const label = VI_LABELS[s] || _pageTypeLabels[s] || s
+  const num = VI_NUMBER[s]
+  if (num) return `${num} ${label}`
+  // Page types: derive P-number from position in _pageTypeOrder
+  const pi = _pageTypeOrder.indexOf(s)
+  if (pi >= 0) return `P${String(pi + 1).padStart(2, '0')} ${label}`
+  return label
+}
+
+// ── TAB 类别分组（与 VI 手册 index.md 章节一一对应）──
+const CATEGORY_META = ['vi', 'prompt', 'tokens', 'index']
+const CATEGORY_PRINCIPLES = ['principles', 'consistency', 'richness', 'checklist', 'images', 'data_rules', 'decorations']
+const CATEGORY_ELEMENTS = ['colors', 'typography', 'card_styles', 'charts', 'layouts', 'card_roles', 'chart_decision', 'icons']
+
+function sectionCategory(s: string): string {
+  if (CATEGORY_META.includes(s)) return '总纲'
+  if (CATEGORY_PRINCIPLES.includes(s)) return '设计原则'
+  if (CATEGORY_ELEMENTS.includes(s)) return '设计元素'
+  if (s.startsWith('blocks/')) return '文档构建块'
+  if (s.startsWith('templates/')) return '文档模板'
+  if (s.startsWith('col3/') || s.startsWith('col4/') || s.startsWith('col5/')) return '列专属覆写'
+  return '页面类型'
+}
+
+// Dynamic page type data — populated from API (index.md is the single source of truth)
+let _pageTypeOrder: string[] = []
+let _pageTypeLabels: Record<string, string> = {}
+export function setPageTypeData(order: string[], labels: Record<string, string>) {
+  _pageTypeOrder = order
+  _pageTypeLabels = labels
+}
+
+// Meta files sort first, then foundation chapters, then page types (from API)
+const META_ORDER = ['vi', 'prompt', 'tokens', 'index']
 const FOUNDATION_ORDER = [
   'principles', 'colors', 'typography', 'card_styles',
   'charts', 'decorations', 'layouts', 'card_roles',
   'chart_decision', 'data_rules', 'richness', 'consistency',
   'icons', 'images', 'checklist',
 ]
-function pageTypeSortKey(section: string): number {
+function sectionSortKey(section: string): number {
+  // 总纲: -3, -2, -1
   const mi = META_ORDER.indexOf(section)
-  if (mi >= 0) return mi - META_ORDER.length  // -3, -2, -1
-  const fi = FOUNDATION_ORDER.indexOf(section)
-  if (fi >= 0) return fi  // 0..14
-  const pi = PAGE_TYPE_ORDER.indexOf(section)
-  if (pi >= 0) return pi + 100  // 100..125 (after foundation)
+  if (mi >= 0) return mi - META_ORDER.length
+  // 设计原则: 0..6
+  const dpi = CATEGORY_PRINCIPLES.indexOf(section)
+  if (dpi >= 0) return dpi
+  // 设计元素: 10..17
+  const dei = CATEGORY_ELEMENTS.indexOf(section)
+  if (dei >= 0) return dei + 10
+  // 页面类型: 100..N
+  const pi = _pageTypeOrder.indexOf(section)
+  if (pi >= 0) return pi + 100
+  // 文档构建块: 200..N
+  if (section.startsWith('blocks/')) return 200 + (section > 'blocks/' ? section.length : 0)
+  // 文档模板: 300..N
+  if (section.startsWith('templates/')) return 300
+  // 列专属覆写: 400..N
+  if (section.startsWith('col3/')) return 400
+  if (section.startsWith('col4/')) return 401
+  if (section.startsWith('col5/')) return 402
   return 999
 }
 
@@ -217,7 +276,7 @@ function makeColors(scheme: SchemeColors | null) {
 
 function genSlidePreview(section: string, styleName: string, schemeColors?: SchemeColors | null): string {
   const C = makeColors(schemeColors || null)
-  const label = VI_LABELS[section] || section
+  const label = sectionLabel(section)
   const shell = (body: string, cls='') =>
     `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${label} · ${styleName}</title><style>
     :root{
@@ -791,6 +850,108 @@ function genSlidePreview(section: string, styleName: string, schemeColors?: Sche
       </div>
     `)
 
+    // ── document: A4 document preview ──
+    case 'document': return shell(`
+      <div class="top-bar"></div>
+      <div style="position:relative;z-index:1;padding:28px 36px;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 12px;background:rgba(0,0,0,0.03);border-radius:6px;font-size:10px;color:var(--m)">
+          <span style="font-weight:600">LOGO</span>
+          <span>DOC-2026-001</span>
+          <span>2026-06-29</span>
+        </div>
+        <div style="background:${C.hero};color:#fff;padding:14px 18px;border-radius:8px;font:700 16px/1.3 var(--fh);letter-spacing:1px">
+          A4 文档标题示例
+          <div style="width:36px;height:2px;background:var(--a);border-radius:1px;margin-top:6px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:10px;padding:10px;background:var(--cb);border-radius:6px;border:1px solid var(--b)">
+            <span style="color:var(--p);font-weight:600">项目名称</span><span style="color:var(--t)">示例项目</span>
+            <span style="color:var(--p);font-weight:600">负责人</span><span style="color:var(--t)">张三</span>
+            <span style="color:var(--p);font-weight:600">日期</span><span style="color:var(--t)">2026-06-29</span>
+          </div>
+          <div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:10px;padding:10px;background:var(--cb);border-radius:6px;border:1px solid var(--b)">
+            <span style="color:var(--p);font-weight:600">版本</span><span style="color:var(--t)">v1.0</span>
+            <span style="color:var(--p);font-weight:600">部门</span><span style="color:var(--t)">技术部</span>
+            <span style="color:var(--p);font-weight:600">密级</span><span style="color:var(--t)">内部</span>
+          </div>
+        </div>
+        <div style="border:1px solid var(--b);border-radius:6px;overflow:hidden">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;font-size:9px;font-weight:600;color:#fff;text-align:center">
+            <div style="padding:6px 4px;background:${C.cc[1]}">项目指标</div>
+            <div style="padding:6px 4px;background:${C.cc[0]}">Q1</div>
+            <div style="padding:6px 4px;background:${C.cc[2]}">Q2</div>
+            <div style="padding:6px 4px;background:${C.cc[3]}">Q3</div>
+          </div>
+          ${[['营收（万元）','245','312','398'],['用户数（万）','18.5','24.2','31.8'],['满意度','4.2','4.5','4.8']].map((r,i)=>`
+            <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;font-size:9px;text-align:center;background:${i%2?'var(--cb)':'var(--bg)'};border-top:1px solid var(--b)">
+              <span style="padding:5px 4px;color:var(--p);font-weight:600;text-align:left">${r[0]}</span>
+              <span style="padding:5px 4px;color:var(--t)">${r[1]}</span>
+              <span style="padding:5px 4px;color:var(--t)">${r[2]}</span>
+              <span style="padding:5px 4px;color:var(--t)">${r[3]}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div style="font-size:9px;color:var(--m);text-align:center;padding:6px 0;border-top:1px solid rgba(230,126,34,0.15);opacity:0.6">
+          &copy; 2026 Company Name. All rights reserved. | 机密文件 · 请勿外传
+        </div>
+      </div>
+      ${pageNum(20, 26)}
+    `)
+
+    // ── food_archive ──
+    case 'food_archive': return shell(`
+      <div class="top-bar"></div>
+      <div class="deco-circle" style="top:-8%;right:-3%;width:22%;height:45%;background:rgba(230,126,34,0.04)"></div>
+      <div style="position:relative;z-index:1;padding:40px 56px">
+        <h2>美食档案</h2><div class="short-line"></div>
+        <div class="flex-row" style="gap:24px">
+          <div style="width:200px;height:200px;background:linear-gradient(135deg,${C.cb},${C.bg});border-radius:12px;border:2px dashed rgba(230,126,34,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="${C.a}" stroke-width="1.2" opacity="0.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          </div>
+          <div class="flex-col" style="flex:1;gap:10px">
+            <div style="font:700 22px/1.3 'DM Sans',sans-serif;color:${C.p}">菜品名称</div>
+            <div class="flex-row" style="gap:6px;flex-wrap:wrap">
+              ${['川菜','麻辣','主菜','30min'].map(t=>`<span class="tag accent">${t}</span>`).join('')}
+            </div>
+            <div class="card" style="padding:14px 16px">
+              <div class="flex-row" style="gap:20px;font-size:12px">
+                <div><span style="color:var(--m)">温度</span><br/><span style="font:600 16px 'DM Sans',sans-serif;color:${C.p}">180°C</span></div>
+                <div><span style="color:var(--m)">时长</span><br/><span style="font:600 16px 'DM Sans',sans-serif;color:${C.cc[1]}">45min</span></div>
+                <div><span style="color:var(--m)">难度</span><br/><span style="font:600 16px 'DM Sans',sans-serif;color:${C.cc[2]}">★★★</span></div>
+              </div>
+            </div>
+            <p style="font-size:13px;color:var(--ts);line-height:1.7">详细描述文字，包含食材特征、风味特点、工艺要点等关键信息。支持多行展示，信息层级清晰。</p>
+          </div>
+        </div>
+      </div>
+      ${pageNum(20, 26)}
+    `)
+
+    // ── skill_card ──
+    case 'skill_card': return shell(`
+      <div class="top-bar"></div>
+      <div class="deco-circle" style="top:-8%;right:-3%;width:22%;height:45%;background:rgba(230,126,34,0.04)"></div>
+      <div style="position:relative;z-index:1;padding:44px 56px">
+        <h2>技能卡片</h2><div class="short-line"></div>
+        <div class="grid-3" style="margin-top:12px">
+          ${[
+            {t:'React',l:'精通',p:'95%',c:0,d:'前端框架，组件化开发，状态管理'},
+            {t:'Python',l:'熟练',p:'85%',c:1,d:'数据分析，机器学习，自动化脚本'},
+            {t:'Docker',l:'掌握',p:'75%',c:2,d:'容器化部署，CI/CD 流水线'},
+          ].map(sk=>`
+            <div class="card" style="text-align:center;padding:24px 16px">
+              <div class="card-bar" style="width:40px;height:3px;top:0;left:50%;transform:translateX(-50%);border-radius:2px;background:${C.cc[sk.c]}"></div>
+              <div style="font:700 28px/1.2 'DM Sans',sans-serif;color:${C.cc[sk.c]};margin:8px 0 2px">${sk.p}</div>
+              <div style="font:600 16px/1.3 var(--fh);color:${C.p};margin-bottom:2px">${sk.t}</div>
+              <span class="tag accent">${sk.l}</span>
+              <p style="font-size:11px;color:var(--ts);margin-top:8px;line-height:1.5">${sk.d}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      ${pageNum(21, 26)}
+    `)
+
     // ── default: generic content page ──
     default: return shell(`
       <div class="top-bar"></div>
@@ -834,7 +995,7 @@ function genFoundationHTML(type: string, schemeColors?: SchemeColors | null): st
   switch (type) {
     // ── I. 核心设计原则 ──
     case 'principles':
-      return hd('核心设计原则','商业幻灯片的三大设计支柱，贯穿全部 26 种页面类型。') + g(3,18,[
+      return hd('核心设计原则',`商业幻灯片的三大设计支柱，贯穿全部 ${_pageTypeOrder.length || 27} 种页面类型。`) + g(3,18,[
         {t:'一致性',d:'全 Deck 统一颜色、字体、间距、装饰元素。相同的 accent 色条、标题位置、页码标记，确保品牌识别连贯。',c:cc[0],i:'grid'},
         {t:'层次感',d:'5 层结构（背景→装饰→结构→内容→标识），每层职责明确。卡片系统承载核心信息，装饰层提供视觉节奏。',c:cc[1],i:'target'},
         {t:'呼吸感',d:'充足留白、适度 16px 卡片间距、克制装饰密度 ≤3 个大圆。避免信息过载，让每页聚焦一个核心信息。',c:cc[2],i:'zap'},
@@ -1090,14 +1251,17 @@ function genFoundationHTML(type: string, schemeColors?: SchemeColors | null): st
 
 function genFullManual(styleName: string, schemeColors?: SchemeColors | null): string {
   const C = makeColors(schemeColors || null)
-  const items = PAGE_TYPE_ORDER.map(t => {
-    const label = VI_LABELS[t] || t
+  const ptCount = _pageTypeOrder.length || 27
+  const fdCount = FOUNDATION_ORDER.length
+  const totalTypes = ptCount + fdCount
+  const items = _pageTypeOrder.map(t => {
+    const label = _pageTypeLabels[t] || t
     const preview = genSlidePreview(t, styleName, schemeColors)
     return { type: t, label, html: encodeHtmlAttr(preview) }
   })
   const FDN = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV']
   const fdItems = FOUNDATION_ORDER.map((t, i) => {
-    const label = VI_LABELS[t] || t
+    const label = sectionLabel(t)
     return { type: t, label, html: genFoundationHTML(t, schemeColors), isFd: true as const, roman: FDN[i] }
   })
   const allItems = [...fdItems, ...items.map(it=>({...it,isFd:false as const}))]
@@ -1128,15 +1292,15 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
 </style></head><body>
 <header class="hero">
   <h1>幻灯片视觉识别系统</h1>
-  <p>${styleName} · Business Professional · 26 种页面类型 + 15 设计基础章节</p>
+  <p>${styleName} · Business Professional · ${ptCount} 种页面类型 + ${fdCount} 设计基础章节</p>
   <button onclick="downloadVI()" style="margin-top:16px;padding:8px 20px;background:rgba(255,255,255,0.12);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:6px;font:600 13px 'Inter','PingFang SC',sans-serif;cursor:pointer;transition:all .2s" onmouseover="this.style.background='rgba(255,255,255,0.22)'" onmouseout="this.style.background='rgba(255,255,255,0.12)'">下载 HTML</button>
 </header>
 <div class="container">
-<div class="toc">${allItems.map((it,i)=>`<a href="#${it.type}">${it.isFd ? it.roman : i - 15 + 1}. ${it.label}</a>`).join('')}</div>
+<div class="toc">${allItems.map((it,i)=>`<a href="#${it.type}">${it.isFd ? it.roman : i - fdCount + 1}. ${it.label}</a>`).join('')}</div>
 ${allItems.map((it,i)=>`
 <div class="section" id="${it.type}">
   <div class="section-header">
-    <span class="num"${it.isFd ? ' style="width:auto;padding:0 8px;border-radius:16px;font-size:12px;letter-spacing:0.5px"' : ''}>${it.isFd ? it.roman : i - 15 + 1}</span>
+    <span class="num"${it.isFd ? ' style="width:auto;padding:0 8px;border-radius:16px;font-size:12px;letter-spacing:0.5px"' : ''}>${it.isFd ? it.roman : i - fdCount + 1}</span>
     <h2>${it.label}</h2>
     <span class="type-tag">${it.isFd ? 'design_foundation' : 'page_type: ' + it.type}</span>
   </div>
@@ -1145,7 +1309,7 @@ ${allItems.map((it,i)=>`
 `).join('')}
 <div class="footer">
   <div style="font:700 20px 'DM Sans',sans-serif">VIS 视觉识别手册</div>
-  <p>${styleName} · 26 种页面类型 + 15 设计基础章节 · &copy; 2026</p>
+  <p>${styleName} · ${ptCount} 种页面类型 + ${fdCount} 设计基础章节 · &copy; 2026</p>
 </div>
 </div>
 <script>function downloadVI(){var h='<!DOCTYPE html>\\n'+document.documentElement.outerHTML;var b=new Blob([h],{type:'text/html;charset=utf-8'});var u=URL.createObjectURL(b);var a=document.createElement('a');a.href=u;a.download='VIS_Style_Manual.html';a.click();URL.revokeObjectURL(u)}</script></body></html>`
@@ -1175,9 +1339,16 @@ function TemplateManager() {
   const [editorStyleName, setEditorStyleName] = useState('')
   const [editorTabs, setEditorTabs] = useState<Record<string, string>>({})
   const [editorActiveSection, setEditorActiveSection] = useState<string>('vi')
+  const [editorActiveCat, setEditorActiveCat] = useState<string>('')
   const [editorSaving, setEditorSaving] = useState(false)
   const [editorLoading, setEditorLoading] = useState(false)
   const [editorMsg, setEditorMsg] = useState('')
+
+  // ── 弹窗拖拽 + 缩放 ──
+  const [editorPos, setEditorPos] = useState<{x: number; y: number} | null>(null)
+  const [editorSize, setEditorSize] = useState<{w: number; h: number} | null>(null)
+  const [dragInfo, setDragInfo] = useState<{startX: number; startY: number; origX: number; origY: number} | null>(null)
+  const [resizeInfo, setResizeInfo] = useState<{startX: number; startY: number; origW: number; origH: number; dir: string} | null>(null)
 
   // Color scheme management state
   const [schemeData, setSchemeData] = useState<Record<string, any>>({})
@@ -1431,6 +1602,43 @@ function TemplateManager() {
 
   useEffect(() => { loadStyles() }, [loadStyles])
 
+  // ── 弹窗拖拽/缩放全局鼠标事件 ──
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (dragInfo) {
+        setEditorPos({ x: dragInfo.origX + (e.clientX - dragInfo.startX), y: dragInfo.origY + (e.clientY - dragInfo.startY) })
+      }
+      if (resizeInfo) {
+        const dx = e.clientX - resizeInfo.startX, dy = e.clientY - resizeInfo.startY
+        let nw = resizeInfo.origW, nh = resizeInfo.origH
+        if (resizeInfo.dir.includes('e')) nw = Math.max(400, resizeInfo.origW + dx)
+        if (resizeInfo.dir.includes('s')) nh = Math.max(300, resizeInfo.origH + dy)
+        setEditorSize({ w: nw, h: nh })
+      }
+    }
+    const onUp = () => { setDragInfo(null); setResizeInfo(null) }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+  }, [dragInfo, resizeInfo])
+
+  // Load page type order from API — index.md is the single source of truth
+  useEffect(() => {
+    api.getPageTypes('business').then(types => {
+      if (types && types.length > 0) {
+        setPageTypeData(
+          types.map(t => t.type),
+          Object.fromEntries(types.map(t => [t.type, t.label]))
+        )
+      }
+    }).catch(() => {
+      setPageTypeData(
+        ['cover','toc','section','chapter','content','data','data_hero','technique','principle','process_flow','process_timeline','timeline','comparison','duo_compare','table','grid_cards','image_grid','quote','image_hero','food_archive','skill_card','troubleshoot','appendix','copyright','closing','summary','document'],
+        {cover:'封面',toc:'目录',section:'章节分隔',chapter:'章节页',content:'内容页',data:'数据页',data_hero:'数据突出',technique:'技法页',principle:'原则页',process_flow:'流程图',process_timeline:'流程时间线',timeline:'时间线',comparison:'对比页',duo_compare:'双项对比',table:'表格页',grid_cards:'网格卡片',image_grid:'图片网格',quote:'引言页',image_hero:'图片突出',food_archive:'美食档案',skill_card:'技能卡片',troubleshoot:'问题排查',appendix:'附录页',copyright:'版权页',closing:'结尾页',summary:'总结页',document:'A4文档'}
+      )
+    })
+  }, [])
+
   const handleToggleEnabled = async (styleId: string) => {
     const templateId = `style-${styleId}`
     const isEnabled = enabledMap[templateId]
@@ -1502,7 +1710,7 @@ function TemplateManager() {
     setEditorSaving(true)
     setEditorMsg('')
     try {
-      const sections = Object.keys(editorTabs).sort((a,b) => pageTypeSortKey(a) - pageTypeSortKey(b))
+      const sections = Object.keys(editorTabs).sort((a,b) => sectionSortKey(a) - sectionSortKey(b))
       for (const s of sections) {
         const content = editorTabs[s]
         if (s === 'prompt') {
@@ -1521,9 +1729,9 @@ function TemplateManager() {
 
   const copyContent = async () => {
     // Copy ALL tabs combined with section headers as comments
-    const sections = Object.keys(editorTabs).sort((a,b) => pageTypeSortKey(a) - pageTypeSortKey(b))
+    const sections = Object.keys(editorTabs).sort((a,b) => sectionSortKey(a) - sectionSortKey(b))
     const parts = sections.map(s => {
-      const label = VI_LABELS[s] || s
+      const label = sectionLabel(s)
       return `<!-- ====== ${label} (${s}) ====== -->\n\n${editorTabs[s] || ''}`
     })
     const combined = parts.join('\n\n')
@@ -1537,9 +1745,9 @@ function TemplateManager() {
 
   const downloadContent = () => {
     // Download ALL tabs combined as one TXT
-    const sections = Object.keys(editorTabs).sort((a,b) => pageTypeSortKey(a) - pageTypeSortKey(b))
+    const sections = Object.keys(editorTabs).sort((a,b) => sectionSortKey(a) - sectionSortKey(b))
     const parts = sections.map(s => {
-      const label = VI_LABELS[s] || s
+      const label = sectionLabel(s)
       return `# ${label} (${s})\n\n${editorTabs[s] || ''}`
     })
     const combined = parts.join('\n\n' + '='.repeat(60) + '\n\n')
@@ -1556,18 +1764,23 @@ function TemplateManager() {
   const runPreview = () => {
     const section = editorActiveSection
     const raw = editorTabs[section] || ''
-    const isMeta = section === 'vi' || section === 'prompt' || section === 'tokens'
+    const isMeta = section === 'vi' || section === 'prompt' || section === 'tokens' || section === 'index'
+    const isBlock = section.startsWith('blocks/')
+    const isTemplate = section.startsWith('templates/')
     const isFoundation = FOUNDATION_ORDER.indexOf(section) >= 0
     const scheme = previewSchemeId ? schemeData[previewSchemeId] : null
     const C = makeColors(scheme)
     let html: string
-    if (isMeta) {
-      // meta tabs: render content as HTML (or convert md)
+    if (isMeta || isBlock) {
+      // meta / doc-block tabs: render raw content as HTML (or convert md)
       const isHtml = /<html|<body|<div|<table|<svg|<!DOCTYPE/i.test(raw.trim().slice(0, 200))
       html = isHtml ? resolveColorVarsInText(raw, scheme, C.p) : mdToHtml(raw, `${editorStyleName} · ${section}`, scheme)
+    } else if (isTemplate) {
+      // template tabs: render as A4 document visual preview (same as P27 document)
+      html = genSlidePreview('document', editorStyleName, scheme)
     } else if (isFoundation) {
       // foundation tabs: render genFoundationHTML wrapped in a full document
-      const label = VI_LABELS[section] || section
+      const label = sectionLabel(section)
       const body = genFoundationHTML(section, scheme)
       html = `<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${label} · ${editorStyleName}</title><style>
 :root{--p:${C.p};--s:${C.s};--a:${C.a};--bg:${C.bg};--cb:${C.cb};--t:${C.tp};--m:${C.tm};--b:${C.b}}
@@ -1577,8 +1790,10 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
 .foundation-wrap h4{margin-top:0}
 </style></head><body><div class="foundation-wrap">${body}</div></body></html>`
     } else {
-      // type tabs: generate visual slide preview
-      html = genSlidePreview(section, editorStyleName, scheme)
+      // page-type / col-override tabs: generate visual slide preview
+      // Strip colN/ prefix so col3/cover → cover, matching genSlidePreview cases
+      const baseSection = section.replace(/^col\d+\//, '')
+      html = genSlidePreview(baseSection, editorStyleName, scheme)
     }
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
     window.open(URL.createObjectURL(blob), '_blank')
@@ -1884,25 +2099,39 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
         )}
       </div>
 
-      {/* Editor Modal */}
+      {/* Editor Modal — draggable + resizable */}
       {editorOpen && (() => {
-        const sections = Object.keys(editorTabs).sort((a,b) => pageTypeSortKey(a) - pageTypeSortKey(b))
+        const sections = Object.keys(editorTabs).sort((a,b) => sectionSortKey(a) - sectionSortKey(b))
+        const pos = editorPos || { x: 0, y: 0 }
+        const sz = editorSize || { w: 0, h: 0 }
         return (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
           background: 'rgba(0,0,0,0.35)',
         }} onClick={() => setEditorOpen(false)}>
           <div style={{
+            position: 'absolute',
+            left: editorPos ? `${pos.x}px` : '50%',
+            top: editorPos ? `${pos.y}px` : '50%',
+            transform: editorPos ? 'none' : 'translate(-50%, -50%)',
             background: 'var(--bg-card, #fff)', borderRadius: 12,
-            width: '90vw', maxWidth: 900, maxHeight: '85vh',
+            width: sz.w ? `${sz.w}px` : '90vw',
+            maxWidth: sz.w ? 'none' : 900,
+            height: sz.h ? `${sz.h}px` : 'auto',
+            maxHeight: sz.h ? 'none' : '85vh',
             display: 'flex', flexDirection: 'column',
             boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
           }} onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
+            {/* Header — draggable */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               padding: '12px 20px', borderBottom: '1px solid var(--border)',
+              cursor: 'move', userSelect: 'none',
+            }} onMouseDown={(e) => {
+              const mx = editorPos?.x ?? (window.innerWidth * 0.05)
+              const my = editorPos?.y ?? (window.innerHeight * 0.075)
+              setDragInfo({ startX: e.clientX, startY: e.clientY, origX: mx, origY: my })
+              if (!editorPos) setEditorPos({ x: mx, y: my })
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
@@ -1915,31 +2144,80 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                   {editorMode === 'vi' ? 'VIS 视觉识别规则' : '模版提示词'}
                 </span>
               </div>
-              <button className="btn" style={{ fontSize: 12, padding: '4px 12px' }}
-                onClick={() => setEditorOpen(false)}>关闭</button>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="btn" style={{ fontSize: 12, padding: '4px 12px' }}
+                  onClick={() => { setEditorOpen(false); setEditorPos(null); setEditorSize(null) }}>关闭</button>
+              </div>
             </div>
 
-            {/* Tabs */}
-            {sections.length > 1 && (
-              <div style={{
-                display: 'flex', borderBottom: '1px solid var(--border)',
-                padding: '0 12px', gap: 2, overflowX: 'auto',
-              }}>
-                {sections.map(s => (
-                  <button key={s}
-                    onClick={() => setEditorActiveSection(s)}
-                    style={{
-                      padding: '8px 12px', fontSize: 11, border: 'none',
-                      background: editorActiveSection === s ? 'var(--bg)' : 'transparent',
-                      color: editorActiveSection === s ? 'var(--text)' : 'var(--text-muted)',
-                      borderBottom: editorActiveSection === s ? '2px solid var(--primary, #1a365d)' : '2px solid transparent',
-                      cursor: 'pointer', fontWeight: editorActiveSection === s ? 600 : 400,
-                      whiteSpace: 'nowrap',
-                    }}
-                  >{VI_LABELS[s] || s}</button>
-                ))}
-              </div>
-            )}
+            {/* Two-level tabs: category → sections */}
+            {sections.length > 1 && (() => {
+              // Build category → sections map (preserving sort order)
+              const CAT_ORDER = ['总纲', '设计原则', '设计元素', '页面类型', '文档构建块', '文档模板', '列专属覆写']
+              const catSections: Record<string, string[]> = {}
+              for (const s of sections) {
+                const cat = sectionCategory(s)
+                if (!catSections[cat]) catSections[cat] = []
+                catSections[cat].push(s)
+              }
+              const visibleCats = CAT_ORDER.filter(c => catSections[c] && catSections[c].length > 0)
+              // Default active category
+              const activeCat = editorActiveCat && visibleCats.includes(editorActiveCat) ? editorActiveCat : visibleCats[0] || ''
+              const activeSections = catSections[activeCat] || []
+              // If active section not in current category, auto-select first in category
+              if (activeSections.length > 0 && !activeSections.includes(editorActiveSection)) {
+                // Defer state update — just use first for rendering
+              }
+              return (
+                <>
+                  {/* Level 1: Category selector */}
+                  <div style={{
+                    display: 'flex', borderBottom: '1px solid var(--border)',
+                    padding: '4px 12px 0', gap: 4, overflowX: 'auto',
+                  }}>
+                    {visibleCats.map(cat => (
+                      <button key={cat}
+                        onClick={() => {
+                          setEditorActiveCat(cat)
+                          const first = catSections[cat]?.[0]
+                          if (first) setEditorActiveSection(first)
+                        }}
+                        style={{
+                          padding: '6px 14px', fontSize: 12, border: 'none',
+                          background: activeCat === cat ? 'var(--primary, #1a365d)' : 'transparent',
+                          color: activeCat === cat ? '#ffffff' : 'var(--text-muted)',
+                          borderRadius: '6px 6px 0 0',
+                          cursor: 'pointer', fontWeight: activeCat === cat ? 600 : 400,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >{cat}<span style={{
+                        marginLeft: 4, fontSize: 9, opacity: 0.6,
+                      }}>{catSections[cat]?.length || 0}</span></button>
+                    ))}
+                  </div>
+                  {/* Level 2: Section tabs (current category) */}
+                  <div style={{
+                    display: 'flex', borderBottom: '1px solid var(--border)',
+                    padding: '0 12px', gap: 2, overflowX: 'auto',
+                    background: 'var(--bg)',
+                  }}>
+                    {activeSections.map(s => (
+                      <button key={s}
+                        onClick={() => setEditorActiveSection(s)}
+                        style={{
+                          padding: '8px 14px', fontSize: 11, border: 'none',
+                          background: editorActiveSection === s ? 'var(--bg-card, #fff)' : 'transparent',
+                          color: editorActiveSection === s ? 'var(--text)' : 'var(--text-muted)',
+                          borderBottom: editorActiveSection === s ? '2px solid var(--primary, #1a365d)' : '2px solid transparent',
+                          cursor: 'pointer', fontWeight: editorActiveSection === s ? 600 : 400,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >{sectionLabel(s)}</button>
+                    ))}
+                  </div>
+                </>
+              )
+            })()}
 
             {/* Body */}
             <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
@@ -1998,6 +2276,41 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                 </button>
               </div>
             </div>
+            {/* Resize handle — bottom-right corner */}
+            <div style={{
+              position: 'absolute', right: 0, bottom: 0,
+              width: 20, height: 20, cursor: 'nwse-resize',
+              background: 'linear-gradient(135deg, transparent 50%, var(--border) 50%)',
+              borderRadius: '0 0 12px 0',
+            }} onMouseDown={(e) => {
+              e.stopPropagation()
+              const cw = editorSize?.w || (window.innerWidth * 0.9 > 900 ? 900 : window.innerWidth * 0.9)
+              const ch = editorSize?.h || (window.innerHeight * 0.85)
+              setResizeInfo({ startX: e.clientX, startY: e.clientY, origW: cw, origH: ch, dir: 'se' })
+              if (!editorSize) setEditorSize({ w: cw, h: ch })
+            }} />
+            {/* Resize handle — right edge */}
+            <div style={{
+              position: 'absolute', right: 0, top: 0, bottom: 20,
+              width: 6, cursor: 'ew-resize',
+            }} onMouseDown={(e) => {
+              e.stopPropagation()
+              const cw = editorSize?.w || (window.innerWidth * 0.9 > 900 ? 900 : window.innerWidth * 0.9)
+              const ch = editorSize?.h || (window.innerHeight * 0.85)
+              setResizeInfo({ startX: e.clientX, startY: e.clientY, origW: cw, origH: ch, dir: 'e' })
+              if (!editorSize) setEditorSize({ w: cw, h: ch })
+            }} />
+            {/* Resize handle — bottom edge */}
+            <div style={{
+              position: 'absolute', left: 0, right: 20, bottom: 0,
+              height: 6, cursor: 'ns-resize',
+            }} onMouseDown={(e) => {
+              e.stopPropagation()
+              const cw = editorSize?.w || (window.innerWidth * 0.9 > 900 ? 900 : window.innerWidth * 0.9)
+              const ch = editorSize?.h || (window.innerHeight * 0.85)
+              setResizeInfo({ startX: e.clientX, startY: e.clientY, origW: cw, origH: ch, dir: 's' })
+              if (!editorSize) setEditorSize({ w: cw, h: ch })
+            }} />
           </div>
         </div>
       )})()}
