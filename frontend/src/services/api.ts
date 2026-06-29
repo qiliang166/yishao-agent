@@ -175,10 +175,21 @@ export const api = {
     }),
 
   // File save to project
-  saveFileToProject: (projectId: string, filename: string, content: string) =>
+  saveFileToProject: (projectId: string, filename: string, content: string, encoding?: string, subdir?: string, targetDir?: string) =>
     request(`/api/projects/${projectId}/save-file`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ filename, content }),
+      body: JSON.stringify({ filename, content, ...(encoding ? { encoding } : {}), ...(subdir ? { subdir } : {}), ...(targetDir ? { target_dir: targetDir } : {}) }),
+    }),
+  listProjectDirs: (projectId: string, subdir?: string) =>
+    request(`/api/projects/${projectId}/directories${subdir ? `?subdir=${encodeURIComponent(subdir)}` : ''}`),
+
+  // Filesystem browser (unscoped, for save dialog)
+  listFsDirs: (path?: string) =>
+    request(`/api/fs/dirs${path ? `?path=${encodeURIComponent(path)}` : ''}`),
+  createFsDir: (parent: string, name: string) =>
+    request('/api/fs/mkdir', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ parent, name }),
     }),
 
   // Video
@@ -271,16 +282,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
       signal: data.signal,
+      timeoutMs: 0, // LLM generation has no fixed timeout — the LLM takes as long as it takes
     }),
   // LLM streaming generate (SSE)
   llmGenerateStream: async function* (data: {
     provider_id: string; model: string; system_prompt: string;
-    user_message: string; temperature?: number
+    user_message: string; temperature?: number; signal?: AbortSignal
   }): AsyncGenerator<string, void, unknown> {
     const res = await fetch('/api/llm/generate-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
+      signal: data.signal,
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
@@ -429,8 +442,8 @@ export const api = {
     request(`/api/projects/${projectId}/files`),
 
   // PPT
-  generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
-    request('/api/ppt/outline', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', temperature: temperature ?? 0.3, temp_outline: tempOutline || 0, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_fill: tempFill || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal })
+  generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, projectId?: string) =>
+    request('/api/ppt/outline', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', project_id: projectId || null, temperature: temperature ?? 0.3, temp_outline: tempOutline || 0, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_fill: tempFill || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal })
       .then(d => d as { outline_json: any[]; outline_text: string }),
 
   convertOutlineToJson: (text: string, originalJson: any[], providerId: string, model: string) =>
@@ -505,28 +518,32 @@ export const api = {
     style?: string
     color_scheme?: string
     signal?: AbortSignal
-  }) =>
-    request('/api/ppt/edit-slide', {
+    timeoutMs?: number
+  }) => {
+    const { signal, timeoutMs, ...body } = data
+    return request('/api/ppt/edit-slide', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-      signal: data.signal,
-    }).then(d => d as { ok: boolean; slide_seq: number; html?: string; error?: string; detail?: string; violation?: string }),
+      body: JSON.stringify(body),
+      signal,
+      timeoutMs,
+    }).then(d => d as { ok: boolean; slide_seq: number; html?: string; error?: string; detail?: string; violation?: string })
+  },
 
   // Save slide images to project directory
   saveSlideImages: (runId: string) =>
     request(`/api/ppt/save-images/${encodeURIComponent(runId)}`, { method: 'POST' })
       .then(d => d as { ok: boolean; saved: number; files: string[]; dir: string; detail?: string }),
 
-  // Commit edit preview to real index.html
+  // No-op placeholder (edits now write directly to index.html)
   saveEdit: (runId: string) =>
     request(`/api/ppt/save-edit/${encodeURIComponent(runId)}`, { method: 'POST' })
       .then(d => d as { ok: boolean; saved: boolean }),
 
-  // Discard edit preview
-  discardEdit: (runId: string) =>
+  // Restore index.html from index_backup.html
+  restoreFromBackup: (runId: string) =>
     request(`/api/ppt/discard-edit/${encodeURIComponent(runId)}`, { method: 'POST' })
-      .then(d => d as { ok: boolean; discarded: boolean }),
+      .then(d => d as { ok: boolean; restored: boolean }),
 
   // Direct source edit — write full HTML document to preview
   editSlideSource: (runId: string, html: string) =>
@@ -536,6 +553,41 @@ export const api = {
       body: JSON.stringify({ html }),
     }).then(d => d as { ok: boolean; saved: boolean }),
 
+  // Regenerate selected slides through the standard HTML pipeline.
+  // Writes to index_regenerated.html (never overwrites index.html).
+  regenerateSlide: (data: {
+    run_id: string
+    slide_seqs: number[]
+    provider_id?: string
+    model?: string
+  }) =>
+    request('/api/ppt/regenerate-slide', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      timeoutMs: 300000,
+    }).then(d => d as { ok: boolean; slide_seqs: number[]; preview_url: string; partial_url: string; slides: {seq:number;html:string}[]; html: string }),
+
+  // Splice regenerated slides into existing draft (targeted replacement)
+  spliceSlides: (runId: string, slides: {seq:number;html:string}[]) =>
+    request(`/api/ppt/splice-slides/${encodeURIComponent(runId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slides }),
+    }).then(d => d as { ok: boolean; replaced: number; total: number }),
+
+  // Poll regenerate progress log
+  getRegenerateLog: (runId: string) =>
+    request(`/api/ppt/regenerate-log/${encodeURIComponent(runId)}`).then(d => d as { log: string; done: boolean }),
+
+  // Persist/restore regenerate-tab state (survives modal close/reopen)
+  getRegenerateState: (runId: string) =>
+    request(`/api/ppt/regenerate-state/${encodeURIComponent(runId)}`).then(d => d as { state: { page_input?: string; new_page_url?: string; new_page_partial_url?: string; regenerated_slides?: {seq:number;html:string}[] } | null }),
+  saveRegenerateState: (runId: string, state: { page_input?: string; new_page_url?: string; new_page_partial_url?: string; regenerated_slides?: {seq:number;html:string}[] }) =>
+    request(`/api/ppt/regenerate-state/${encodeURIComponent(runId)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(state) }).then(d => d as { ok: boolean }),
+  clearRegenerateState: (runId: string) =>
+    request(`/api/ppt/regenerate-state/${encodeURIComponent(runId)}`, { method: 'DELETE' }).then(d => d as { ok: boolean }),
+
   // Load existing PPT results for a project (survives page reload / timeout)
   listPptResults: (projectId: string) =>
     request(`/api/projects/${encodeURIComponent(projectId)}/ppt-results`).then(d => d.results as any[]),
@@ -543,6 +595,9 @@ export const api = {
   // PPT generation progress polling
   getPptStatus: (projectId: string) =>
     request(`/api/projects/${encodeURIComponent(projectId)}/ppt-status`),
+
+  getPptLog: (projectId: string) =>
+    request(`/api/projects/${encodeURIComponent(projectId)}/ppt-log`).then(d => (d as any).logs || []),
 
   // SOP Export
   exportSOP: (content: string, branding?: Record<string, string>, projectId?: string) =>

@@ -35,17 +35,6 @@ const CONFIG: Record<number, { model: string; tmpl: string; tmplInfo: string }> 
   5: { model: '—', tmpl: '—', tmplInfo: '' },
 }
 
-// ── Download Helper ──
-async function downloadFile(url: string, filename: string) {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`HTTP ${res.status}`)
-  const blob = await res.blob()
-  const objUrl = URL.createObjectURL(blob)
-  const a = document.createElement('a'); a.href = objUrl; a.download = filename
-  document.body.appendChild(a); a.click(); document.body.removeChild(a)
-  URL.revokeObjectURL(objUrl)
-}
-
 // ── Template Selector Component ──
 function TemplateSelector({ items, selectedId, onSelect, previewTarget }: {
   items: TemplateItem[]; selectedId: string; onSelect: (item: TemplateItem) => void; previewTarget: string
@@ -251,6 +240,17 @@ export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
 
+  async function downloadFile(url: string, filename: string) {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const objUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = objUrl; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(objUrl)
+    modal.toast('已开始下载: ' + filename, 'success')
+  }
+
   const [project, setProject] = useState<Project | null>(null)
   const styleColorMap = useRef<Record<string, any>>({})
   const [stage, setStage] = useState<StageId>(1)
@@ -345,13 +345,18 @@ export default function ProjectPage() {
   const [globalBranding, setGlobalBranding] = useState<{ copyright: string; signature: string }>({ copyright: '', signature: '' })
   const [pptGenerating, setPptGenerating] = useState<Record<string, boolean>>({})
   const [pptProgress, setPptProgress] = useState<{ phase_label: string; message: string; slides_done?: number; slides_total?: number; preview_url?: string } | null>(null)
+  const [pptLog, setPptLog] = useState<{ time: string; message: string }[]>([])
+  const [docGenLog, setDocGenLog] = useState<{ time: string; message: string }[]>([])
+  const [docGenProgress, setDocGenProgress] = useState<{ phase_label: string; message: string; stepKey?: string } | null>(null)
   const [progressivePreviewUrl, setProgressivePreviewUrl] = useState<Record<string, string>>({})
   const pptPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pptLogPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pptLogContainerRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<Record<string, AbortController>>({})
   const [pptSlidePlans, setPptSlidePlans] = useState<Record<string, { slides: any[]; filename: string; downloadUrl: string; templateId: string; previewUrl?: string; zipUrl?: string; format?: string }>>({})
   const [pptOutline, setPptOutline] = useState<Record<string, { outline_json: any[]; outline_text: string }>>({})
   const [pptOutlineLoading, setPptOutlineLoading] = useState<Record<string, boolean>>({})
-  const [pptColorScheme, setPptColorScheme] = useState('deep-blue')
+  const [pptColorScheme, setPptColorScheme] = useState<Record<string, string>>({})
   const [pptColorSchemes, setPptColorSchemes] = useState<{id:string;label:string;primary:string;accent:string;background:string;text:string;card_bg:string}[]>([])
   const [pptSavingOutline, setPptSavingOutline] = useState<Record<string, boolean>>({})
   const [previewHtml, setPreviewHtml] = useState<Record<string, string>>({})
@@ -440,8 +445,9 @@ export default function ProjectPage() {
       // Restore saved template selections
       if (map['_tmpl_step3_dao_ppt']) setDaoPptSelected(map['_tmpl_step3_dao_ppt'])
       if (map['_tmpl_step3_yan_ppt']) setYanxiPptSelected(map['_tmpl_step3_yan_ppt'])
-      // Restore saved color scheme
-      if (map['_color_scheme_ppt']) setPptColorScheme(map['_color_scheme_ppt'])
+      // Restore saved color schemes per step
+      if (map['_color_scheme_step3_dao_ppt']) setPptColorScheme(prev => ({ ...prev, step3_dao_ppt: map['_color_scheme_step3_dao_ppt'] }))
+      if (map['_color_scheme_step3_yan_ppt']) setPptColorScheme(prev => ({ ...prev, step3_yan_ppt: map['_color_scheme_step3_yan_ppt'] }))
       // Restore saved PPT slide plans
       ;['step3_sop_doc', 'step3_dao_ppt', 'step3_yan_ppt'].forEach(sk => {
         const key = `_ppt_plan_${sk}`
@@ -721,19 +727,48 @@ export default function ProjectPage() {
     }
     poll()
   }
-  // ── LLM Generate ──
+  // ── LLM Generate (streaming with progress) ──
   const doGenerate = async (stepKey: string, systemPrompt: string, userMessage: string, providerId?: string, model?: string, temperature: number = 0.3, signal?: AbortSignal) => {
     if (!id) return
+    const labelMap: Record<string, string> = { step2_sop: '标准文档', step2_daoshuyi: '分析文档', step2_yanxi: '手册文档' }
+    const label = labelMap[stepKey] || stepKey
+    const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false })
     try {
-      const result: any = await api.llmGenerate({
-        provider_id: providerId || 'default', model: model || 'deepseek-v4-pro',
-        system_prompt: systemPrompt, user_message: userMessage, temperature, signal,
-      })
-      const content = result.content
-      setSteps(prev => ({ ...prev, [stepKey]: content }))
-      saveStep(stepKey, content)
-      return content
-    } catch (e: any) { modal.toast('生成失败: ' + e.message, 'error'); return null }
+      setDocGenLog(prev => [...prev, { time: now(), message: `开始生成 ${label}...` }])
+      setDocGenProgress({ phase_label: `正在生成 ${label}`, message: '准备中...', stepKey })
+
+      let fullText = ''
+      let lastUpdate = 0
+      for await (const chunk of api.llmGenerateStream({
+        provider_id: providerId || 'default',
+        model: model || 'deepseek-v4-pro',
+        system_prompt: systemPrompt,
+        user_message: userMessage,
+        temperature,
+        signal,
+      })) {
+        fullText += chunk
+        // Update progress every ~300 chars (throttle to avoid excessive re-renders)
+        if (fullText.length - lastUpdate > 300) {
+          lastUpdate = fullText.length
+          setDocGenProgress({ phase_label: `正在生成 ${label}`, message: `已生成 ${fullText.length} 字符`, stepKey })
+        }
+      }
+
+      setDocGenLog(prev => [...prev, { time: now(), message: `${label} 完成 (${fullText.length} 字符)` }])
+      setDocGenProgress({ phase_label: `${label} 已完成`, message: `${fullText.length} 字符`, stepKey })
+      setSteps(prev => ({ ...prev, [stepKey]: fullText }))
+      saveStep(stepKey, fullText)
+      return fullText
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        setDocGenLog(prev => [...prev, { time: now(), message: `${label} 失败: ${e.message}` }])
+        modal.toast('生成失败: ' + e.message, 'error')
+      } else {
+        setDocGenLog(prev => [...prev, { time: now(), message: `${label} 已取消` }])
+      }
+      return null
+    }
   }
 
   // ── Stage 1 Generate ──
@@ -841,6 +876,7 @@ export default function ProjectPage() {
       if (e.name !== 'AbortError') modal.toast('批量生成失败: ' + e.message, 'error')
     } finally {
       delete abortRef.current['step2_batch']
+      setDocGenProgress(null)
       try {
         const s = await api.getSteps(id!)
         const map: Record<string, string> = {}
@@ -928,13 +964,37 @@ export default function ProjectPage() {
     setProgressivePreviewUrl({})
   }
 
+  const clearPptLogPolling = () => {
+    if (pptLogPollRef.current) { clearInterval(pptLogPollRef.current); pptLogPollRef.current = null }
+  }
+
+  const startPptLogPolling = () => {
+    clearPptLogPolling()
+    setPptLog([])
+    const poll = () => {
+      api.getPptLog(id!).then(logs => {
+        if (logs && logs.length > 0) setPptLog(logs)
+      }).catch(() => {})
+    }
+    poll() // immediate first fetch
+    pptLogPollRef.current = setInterval(poll, 10000)
+  }
+
+  // Auto-scroll log container to bottom when new entries arrive
+  useEffect(() => {
+    if (pptLogContainerRef.current) {
+      pptLogContainerRef.current.scrollTop = pptLogContainerRef.current.scrollHeight
+    }
+  }, [pptLog])
+
   const doGenerateOutline = async (stepKey: string, content: string, tmplId: string, model: string, columnId: string, temperature: number = 0.3, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) => {
     setPptOutlineLoading(prev => ({...prev, [stepKey]: true}))
+    startPptLogPolling()
     const ctrl = new AbortController()
     abortRef.current[stepKey] = ctrl
     try {
       const [pid, mdl] = model ? model.split(':') : ['', '']
-      const result = await api.generateOutline(content, tmplId, pid, mdl, columnId, ctrl.signal, temperature, tempOutline, tempKeyword, tempResearch, tempFill, tempStageOutline, tempStageGeneration, tempStageReview)
+      const result = await api.generateOutline(content, tmplId, pid, mdl, columnId, ctrl.signal, temperature, tempOutline, tempKeyword, tempResearch, tempFill, tempStageOutline, tempStageGeneration, tempStageReview, id)
       if (result && result.outline_json?.length > 0) {
         setPptOutline(prev => ({...prev, [stepKey]: result}))
         setPreviewTab(prev => ({...prev, [stepKey]: 'ppt'}))
@@ -950,12 +1010,22 @@ export default function ProjectPage() {
     } finally {
       delete abortRef.current[stepKey]
       setPptOutlineLoading(prev => ({...prev, [stepKey]: false}))
+      // Final fetch to catch last entries before stopping polling
+      api.getPptLog(id!).then(logs => {
+        if (logs && logs.length > 0) setPptLog(logs)
+      }).catch(() => {})
+      clearPptLogPolling()
     }
   }
 
   const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, _prompt: string, model: string, columnId: string, temperature: number = 0.3, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) => {
     setPptGenerating(prev => ({...prev, [stepKey]: true}))
     clearPptPolling()
+    startPptLogPolling()
+    // Clear stale preview/edit data from previous generation so buttons don't show old results
+    setPptSlidePlans(prev => { const n = { ...prev }; delete n[stepKey]; return n })
+    setPreviewHtml(prev => { const n = { ...prev }; delete n[stepKey]; return n })
+    setPreviewTab(prev => ({...prev, [stepKey]: 'ppt'}))
     const ctrl = new AbortController(); abortRef.current[stepKey] = ctrl
     let pollFailCount = 0
     pptPollRef.current = setInterval(() => {
@@ -976,7 +1046,7 @@ export default function ProjectPage() {
       const [pid, mdl] = model ? model.split(':') : ['', '']
       const outlineJson = pptOutline[stepKey]?.outline_json
       const validOutlinePlan = outlineJson?.length ? outlineJson : undefined
-      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl, validOutlinePlan, ctrl.signal, columnId, pptColorScheme, temperature, tempKeyword, tempResearch, tempOutline, tempFill, tempCards, tempHtml, tempSvgBatch, tempSvgSingle, tempReview, tempFix, tempHolistic, tempHolisticFix, tempStageOutline, tempStageGeneration, tempStageReview)
+      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl, validOutlinePlan, ctrl.signal, columnId, pptColorScheme[stepKey] || 'deep-blue', temperature, tempKeyword, tempResearch, tempOutline, tempFill, tempCards, tempHtml, tempSvgBatch, tempSvgSingle, tempReview, tempFix, tempHolistic, tempHolisticFix, tempStageOutline, tempStageGeneration, tempStageReview)
 
       if (result.format === 'svg') {
         // SVG output — PPT-Agent Bento Grid
@@ -1026,7 +1096,7 @@ export default function ProjectPage() {
         const msg = e?.message || String(e) || '未知错误'
         modal.toast('PPT 生成失败: ' + msg, 'error')
       }
-    } finally { setPptGenerating(prev => { const n = {...prev}; delete n[stepKey]; return n }); delete abortRef.current[stepKey]; clearPptPolling() }
+    } finally { setPptGenerating(prev => { const n = {...prev}; delete n[stepKey]; return n }); delete abortRef.current[stepKey]; clearPptPolling(); api.getPptLog(id!).then(logs => { if (logs && logs.length > 0) setPptLog(logs) }).catch(() => {}); clearPptLogPolling() }
   }
 
   const handleCancelGenerate = (stepKey: string) => {
@@ -1086,29 +1156,29 @@ export default function ProjectPage() {
 
   const handleDownloadHtml = async (stepKey: string) => {
     const plan = pptSlidePlans[stepKey]
-    if (!plan) return
-    try {
-      if (plan.previewUrl) {
-        const resp = await fetch(plan.previewUrl)
-        if (!resp.ok) {
-          modal.toast(`HTML导出失败: 服务器返回 ${resp.status}`, 'error')
-          return
-        }
-        const html = await resp.text()
-        // Strip scaling <script> (old cached files) so download is full-size 1280x720.
-        // Slides never contain <script> tags, so removing all of them is safe.
-        const clean = html.replace(/<script>[\s\S]*?<\/script>/gi, '')
-        const blob = new Blob([clean], { type: 'text/html;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a'); a.href = url
-        a.download = (plan.filename || 'slides').replace(/\.pptx$/, '') + '.html'
-        document.body.appendChild(a); a.click(); document.body.removeChild(a)
-        URL.revokeObjectURL(url)
-      } else if (plan.format === 'svg' && plan.zipUrl) {
+    if (!plan?.previewUrl) {
+      if (plan?.format === 'svg' && plan.zipUrl) {
         modal.toast('SVG 格式请使用「⬇ SVG ZIP」下载完整包', 'error')
       } else {
         modal.toast('此 PPT 暂无 HTML 预览（仅 SVG 格式支持 HTML 预览）', 'error')
       }
+      return
+    }
+    try {
+      const resp = await fetch(plan.previewUrl)
+      if (!resp.ok) {
+        modal.toast(`HTML导出失败: 服务器返回 ${resp.status}`, 'error')
+        return
+      }
+      let html = await resp.text()
+      html = html.replace(/<script>[\s\S]*?<\/script>/gi, '')
+      const blob = new Blob([html], { type: 'text/html' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = (plan.filename || 'slides').replace(/\.pptx$/i, '') + '.html'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      modal.toast('已开始下载: ' + ((plan.filename || 'slides').replace(/\.pptx$/i, '') + '.html'), 'success')
     } catch (e: any) { modal.toast('HTML导出失败: ' + e.message, 'error') }
   }
 
@@ -1229,7 +1299,7 @@ export default function ProjectPage() {
         </button>
         {isGlobalGenerating && (
           <span style={{
-            marginLeft: 12, fontSize: 12, color: 'var(--primary)',
+            marginLeft: 12, fontSize: 11, color: 'var(--primary)',
             display: 'inline-flex', alignItems: 'center', gap: 6,
             animation: 'pulse 1.5s infinite',
           }}>
@@ -1239,7 +1309,7 @@ export default function ProjectPage() {
             }} />
             ⏳ {globalGenLabel} (切换栏目不影响)
             {pptProgress && (
-              <span style={{ fontWeight: 500, marginLeft: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+              <span style={{ fontWeight: 500, marginLeft: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
                 {pptProgress.phase_label}
                 {pptProgress.slides_total ? (
                   <span style={{ marginLeft: 6 }}>
@@ -1257,6 +1327,12 @@ export default function ProjectPage() {
                   </span>
                 ) : ''}
                 {pptProgress.message ? <span style={{ marginLeft: 6 }}>— {pptProgress.message}</span> : ''}
+              </span>
+            )}
+            {docGenProgress && !pptProgress && (
+              <span style={{ fontWeight: 500, marginLeft: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
+                {docGenProgress.phase_label}
+                {docGenProgress.message ? <span style={{ marginLeft: 6 }}>— {docGenProgress.message}</span> : ''}
               </span>
             )}
           </span>
@@ -1590,6 +1666,17 @@ export default function ProjectPage() {
                   </div>
                 </div>
               </>}
+
+              {/* Document generation log — same style as PPT log */}
+              {docGenLog.length > 0 && (
+                <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                  {docGenLog.slice(-6).map((entry, i) => (
+                    <div key={i} style={{ marginBottom: 2 }}>
+                      <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="panel-right">
@@ -1765,7 +1852,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">SOP 生成 + 导出</div>
+                <div className="card-title">生成课件</div>
                 <div className="card-hint">选择模板自动关联提示词+SKILL，配置在「项目配置」→ 栏目配置</div>
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={[]} selectedId={sopSelected}
@@ -1796,7 +1883,7 @@ export default function ProjectPage() {
                     (globalBranding.copyright || globalBranding.signature) ? globalBranding : undefined,
                     s3SopTemps.sop
                   )}>
-                  📄 AI 生成 + 导出 .docx
+                  📄 生成课件
                 </button>
               </div>
             </div>
@@ -1847,21 +1934,24 @@ export default function ProjectPage() {
                   <div style={{ marginTop: 8, marginBottom: 8 }}>
                     <div className="form-label">配色方案</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {pptColorSchemes.map(cs => (
+                      {pptColorSchemes.map(cs => {
+                        const key = step3Key()
+                        const current = pptColorScheme[key] || 'deep-blue'
+                        return (
                         <button key={cs.id}
-                          onClick={() => { setPptColorScheme(cs.id); saveStep('_color_scheme_ppt', cs.id) }}
+                          onClick={() => { setPptColorScheme(prev => ({ ...prev, [key]: cs.id })); saveStep(`_color_scheme_${key}`, cs.id) }}
                           title={cs.label}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 4,
                             padding: '4px 10px', fontSize: 11,
-                            borderRadius: 6, border: pptColorScheme === cs.id ? '2px solid var(--primary)' : '1px solid var(--border)',
-                            background: pptColorScheme === cs.id ? 'var(--bg-hover)' : 'var(--bg)',
+                            borderRadius: 6, border: current === cs.id ? '2px solid var(--primary)' : '1px solid var(--border)',
+                            background: current === cs.id ? 'var(--bg-hover)' : 'var(--bg)',
                             cursor: 'pointer',
                           }}>
                           <span style={{ width: 14, height: 14, borderRadius: '50%', background: cs.primary, display: 'inline-block', flexShrink: 0 }} />
                           {cs.label}
                         </button>
-                      ))}
+                      )})}
                     </div>
                   </div>
                 )}
@@ -1911,6 +2001,19 @@ export default function ProjectPage() {
                     ].filter(Boolean).join(' | ')}
                   </div>
                 ) : null}
+                {(pptLog.length > 0 || pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']) && (
+                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                    {pptLog.length === 0 ? (
+                      <div style={{ color: '#888' }}>等待日志...</div>
+                    ) : (
+                      pptLog.map((entry, i) => (
+                        <div key={i} style={{ marginBottom: 2 }}>
+                          <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <div className="panel-right">
@@ -1972,7 +2075,7 @@ export default function ProjectPage() {
                           </button>
                           {pptSlidePlans[step3Key()].format === 'svg' ? (
                             <button className="btn btn-ghost btn-sm"
-                              onClick={() => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
+                              onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
                               ⬇ SVG ZIP
                             </button>
                           ) : (
@@ -2064,7 +2167,7 @@ export default function ProjectPage() {
                           setEditPanelOpen(prev => ({ ...prev, [key]: !prev[key] }))
                         }}
                         style={{ background: editPanelOpen[step3Key()] ? 'var(--primary)' : undefined, color: editPanelOpen[step3Key()] ? '#fff' : undefined }}>
-                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'AI编辑'}
+                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'HTML编辑'}
                       </button>
                       {pptSlidePlans[step3Key()]?.previewUrl && (
                         <button className="btn btn-ghost btn-sm"
@@ -2074,7 +2177,7 @@ export default function ProjectPage() {
                       )}
                       {pptSlidePlans[step3Key()]?.format === 'svg' ? (
                         <button className="btn btn-ghost btn-sm"
-                          onClick={() => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
+                          onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
                           ⬇ SVG ZIP
                         </button>
                       ) : pptSlidePlans[step3Key()] ? (
@@ -2116,6 +2219,8 @@ export default function ProjectPage() {
                   pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
                   pptxFilename={pptSlidePlans[step3Key()]?.filename}
                   downloadFormat={pptSlidePlans[step3Key()]?.format}
+                  projectId={id}
+                  projectName={project?.name}
                   onDownloadHtml={() => handleDownloadHtml(step3Key())}
                   onClose={() => {
                     const key = step3Key()
@@ -2140,21 +2245,24 @@ export default function ProjectPage() {
                   <div style={{ marginTop: 8, marginBottom: 8 }}>
                     <div className="form-label">配色方案</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {pptColorSchemes.map(cs => (
+                      {pptColorSchemes.map(cs => {
+                        const key = step3Key()
+                        const current = pptColorScheme[key] || 'deep-blue'
+                        return (
                         <button key={cs.id}
-                          onClick={() => { setPptColorScheme(cs.id); saveStep('_color_scheme_ppt', cs.id) }}
+                          onClick={() => { setPptColorScheme(prev => ({ ...prev, [key]: cs.id })); saveStep(`_color_scheme_${key}`, cs.id) }}
                           title={cs.label}
                           style={{
                             display: 'flex', alignItems: 'center', gap: 4,
                             padding: '4px 10px', fontSize: 11,
-                            borderRadius: 6, border: pptColorScheme === cs.id ? '2px solid var(--primary)' : '1px solid var(--border)',
-                            background: pptColorScheme === cs.id ? 'var(--bg-hover)' : 'var(--bg)',
+                            borderRadius: 6, border: current === cs.id ? '2px solid var(--primary)' : '1px solid var(--border)',
+                            background: current === cs.id ? 'var(--bg-hover)' : 'var(--bg)',
                             cursor: 'pointer',
                           }}>
                           <span style={{ width: 14, height: 14, borderRadius: '50%', background: cs.primary, display: 'inline-block', flexShrink: 0 }} />
                           {cs.label}
                         </button>
-                      ))}
+                      )})}
                     </div>
                   </div>
                 )}
@@ -2204,6 +2312,19 @@ export default function ProjectPage() {
                     ].filter(Boolean).join(' | ')}
                   </div>
                 ) : null}
+                {(pptLog.length > 0 || pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']) && (
+                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                    {pptLog.length === 0 ? (
+                      <div style={{ color: '#888' }}>等待日志...</div>
+                    ) : (
+                      pptLog.map((entry, i) => (
+                        <div key={i} style={{ marginBottom: 2 }}>
+                          <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
             </div>
             <div className="panel-right">
@@ -2265,7 +2386,7 @@ export default function ProjectPage() {
                           </button>
                           {pptSlidePlans[step3Key()].format === 'svg' ? (
                             <button className="btn btn-ghost btn-sm"
-                              onClick={() => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
+                              onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
                               ⬇ SVG ZIP
                             </button>
                           ) : (
@@ -2356,7 +2477,7 @@ export default function ProjectPage() {
                           setEditPanelOpen(prev => ({ ...prev, [key]: !prev[key] }))
                         }}
                         style={{ background: editPanelOpen[step3Key()] ? 'var(--primary)' : undefined, color: editPanelOpen[step3Key()] ? '#fff' : undefined }}>
-                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'AI编辑'}
+                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'HTML编辑'}
                       </button>
                       {pptSlidePlans[step3Key()]?.previewUrl && (
                         <button className="btn btn-ghost btn-sm"
@@ -2366,7 +2487,7 @@ export default function ProjectPage() {
                       )}
                       {pptSlidePlans[step3Key()]?.format === 'svg' ? (
                         <button className="btn btn-ghost btn-sm"
-                          onClick={() => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
+                          onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
                           ⬇ SVG ZIP
                         </button>
                       ) : pptSlidePlans[step3Key()] ? (
@@ -2408,6 +2529,8 @@ export default function ProjectPage() {
                   pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
                   pptxFilename={pptSlidePlans[step3Key()]?.filename}
                   downloadFormat={pptSlidePlans[step3Key()]?.format}
+                  projectId={id}
+                  projectName={project?.name}
                   onDownloadHtml={() => handleDownloadHtml(step3Key())}
                   onClose={() => {
                     const key = step3Key()
