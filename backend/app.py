@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from database import init_db, get_db
 from models import (ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest,
     LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest, PPTEditSlideRequest,
-    PPTSlideSourceRequest,
+    PPTSlideSourceRequest, PPTRegenerateSlideRequest,
     ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
     ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave)
 from typing import Optional
@@ -318,25 +318,135 @@ def update_project(project_id: str, req: ProjectUpdate):
         db.close()
 
 
+@app.get("/api/fs/dirs")
+def api_list_fs_dirs(path: str = ""):
+    """List subdirectories at any filesystem path. Empty path returns drive letters on Windows."""
+    import platform
+    # Empty path on Windows: return drive letters
+    if not path:
+        if platform.system() == "Windows":
+            import string
+            drives = []
+            for letter in string.ascii_uppercase:
+                p = f"{letter}:\\"
+                if os.path.exists(p):
+                    drives.append(p)
+            return {"ok": True, "dirs": sorted(drives), "path": "", "parent": None}
+        else:
+            path = "/"
+    target = os.path.normpath(path)
+    if not os.path.exists(target):
+        return {"ok": True, "dirs": [], "path": path, "parent": None}
+    if not os.path.isdir(target):
+        raise HTTPException(400, "Path is not a directory")
+    try:
+        entries = os.listdir(target)
+    except PermissionError:
+        return {"ok": True, "dirs": [], "path": path, "parent": os.path.normpath(os.path.join(target, '..')) if path else None}
+    dirs = sorted([
+        e for e in entries
+        if os.path.isdir(os.path.join(target, e)) and not e.startswith('.')
+    ])
+    # Parent: full path of parent, or null if at root
+    parent_dir = os.path.dirname(target)
+    if parent_dir == target:
+        parent = None  # At filesystem root
+    else:
+        parent = parent_dir
+    return {"ok": True, "dirs": dirs, "path": path, "parent": parent}
+
+
+@app.post("/api/fs/mkdir")
+async def api_create_fs_dir(request: Request):
+    """Create a new directory at the given parent path."""
+    req = await request.json()
+    parent = req.get("parent", "")
+    name = req.get("name", "").strip()
+    if not parent or not name:
+        raise HTTPException(400, "parent and name are required")
+    # Reject names that contain path separators or traversal
+    if '/' in name or '\\' in name or name in ('.', '..'):
+        raise HTTPException(400, "Invalid directory name")
+    if not os.path.exists(parent) or not os.path.isdir(parent):
+        raise HTTPException(400, "Parent directory does not exist")
+    target = os.path.join(parent, name)
+    if os.path.exists(target):
+        raise HTTPException(409, "Directory already exists")
+    os.makedirs(target)
+    return {"ok": True, "path": target}
+
+
+@app.get("/api/projects/{project_id}/directories")
+def api_list_project_directories(project_id: str, subdir: str = ""):
+    """List subdirectories under the project storage path (or a subdirectory thereof)."""
+    base = resolve_project_storage(project_id, auto_create=False)
+    if not os.path.exists(base):
+        return {"ok": True, "dirs": [], "base": base, "subdir": subdir}
+    target = os.path.normpath(os.path.join(base, subdir))
+    # Prevent path traversal
+    if os.path.commonpath([os.path.abspath(target), os.path.abspath(base)]) != os.path.abspath(base):
+        raise HTTPException(403, "Path traversal denied")
+    try:
+        entries = os.listdir(target)
+    except FileNotFoundError:
+        return {"ok": True, "dirs": [], "base": base, "subdir": subdir}
+    dirs = sorted([
+        e for e in entries
+        if os.path.isdir(os.path.join(target, e)) and not e.startswith('.')
+    ])
+    parent = None
+    if subdir:
+        parent = os.path.normpath(os.path.join(subdir, '..'))
+        if parent == '.':
+            parent = ''
+    return {"ok": True, "dirs": dirs, "base": base, "subdir": subdir, "parent": parent}
+
+
 @app.post("/api/projects/{project_id}/save-file")
 def api_save_file_to_project(project_id: str, req: dict):
-    """Save text content to a file in the project's storage directory."""
+    """Save content to a file. If target_dir is provided (absolute path), use it directly.
+    Otherwise resolve relative to the project's storage directory."""
     filename = req.get("filename", "document.txt")
     content = req.get("content", "")
-    path = resolve_project_storage(project_id)
-    os.makedirs(path, exist_ok=True)
-    filepath = os.path.join(path, filename)
+    encoding = req.get("encoding", "text")
+    target_dir = req.get("target_dir", "")
+    subdir = req.get("subdir", "")
+
+    if target_dir and os.path.isabs(target_dir):
+        # Use the absolute path directly (from filesystem browser)
+        if not os.path.exists(target_dir):
+            raise HTTPException(400, f"Target directory does not exist: {target_dir}")
+        if not os.path.isdir(target_dir):
+            raise HTTPException(400, f"Target path is not a directory: {target_dir}")
+        os.makedirs(target_dir, exist_ok=True)
+    elif subdir:
+        path = resolve_project_storage(project_id)
+        os.makedirs(path, exist_ok=True)
+        target_dir = os.path.normpath(os.path.join(path, subdir))
+        if os.path.commonpath([os.path.abspath(target_dir), os.path.abspath(path)]) != os.path.abspath(path):
+            raise HTTPException(403, "Path traversal denied")
+        os.makedirs(target_dir, exist_ok=True)
+    else:
+        target_dir = resolve_project_storage(project_id)
+        os.makedirs(target_dir, exist_ok=True)
+
+    filepath = os.path.join(target_dir, filename)
     # Avoid overwriting: append (1), (2), etc. if file exists
     if os.path.exists(filepath):
-        base, ext = os.path.splitext(filename)
+        base_name, ext = os.path.splitext(filename)
         n = 1
-        while os.path.exists(os.path.join(path, f"{base}({n}){ext}")):
+        while os.path.exists(os.path.join(target_dir, f"{base_name}({n}){ext}")):
             n += 1
-        filename = f"{base}({n}){ext}"
-        filepath = os.path.join(path, filename)
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(content)
-    return {"ok": True, "path": filepath, "filename": filename}
+        filename = f"{base_name}({n}){ext}"
+        filepath = os.path.join(target_dir, filename)
+    import base64
+    if encoding == "base64":
+        with open(filepath, "wb") as f:
+            f.write(base64.b64decode(content))
+    else:
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(content)
+    return {"ok": True, "path": filepath, "filename": filename, "target_dir": target_dir}
 
 
 def _delete_project_files(project_id: str, db):
@@ -2576,6 +2686,14 @@ def api_ppt_status(project_id: str):
     return status
 
 
+@app.get("/api/projects/{project_id}/ppt-log")
+def api_ppt_log(project_id: str):
+    """Polled by frontend every 60s during PPT/outline generation.
+    Returns timestamped log entries."""
+    from services.ppt_service import get_ppt_log
+    return {"logs": get_ppt_log(project_id)}
+
+
 @app.post("/api/ppt/generate")
 def api_generate_ppt(req: PPTGenerateRequest):
     import time, sys, datetime as _dt
@@ -2654,24 +2772,27 @@ def api_generate_ppt(req: PPTGenerateRequest):
             preview_url = f"/api/exports/{run_id}/index.html"
             zip_url = f"/api/ppt/export-zip/{run_id}"
             # Persist result metadata so page reload can restore without re-generating
+            from services.ppt_service import _load_style_from_template
+            result_meta = {
+                "run_id": run_id,
+                "preview_url": preview_url,
+                "zip_url": zip_url,
+                "slide_plan": slide_plan,
+                "slide_count": len(generated_slides) if generated_slides else 0,
+                "template_id": req.template_id,
+                "style_id": _load_style_from_template(req.template_id),
+                "format": "svg",
+                "color_scheme": cs,
+                "generated_at": _dt.datetime.now().isoformat(),
+            }
+            try:
+                with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as _rf:
+                    json.dump(result_meta, _rf, ensure_ascii=False, indent=2)
+            except Exception as _e:
+                print(f"[PPT] Failed to persist result.json: {_e}", flush=True)
+            # Persist to DB for frontend auto-load on page refresh (optional)
             if req.project_id:
                 try:
-                    result_meta = {
-                        "run_id": run_id,
-                        "preview_url": preview_url,
-                        "zip_url": zip_url,
-                        "slide_plan": slide_plan,
-                        "slide_count": len(generated_slides) if generated_slides else 0,
-                        "template_id": req.template_id,
-                        "format": "svg",
-                        "color_scheme": cs,
-                        "generated_at": _dt.datetime.now().isoformat(),
-                    }
-                    with open(os.path.join(run_dir, "result.json"), "w", encoding="utf-8") as _rf:
-                        json.dump(result_meta, _rf, ensure_ascii=False, indent=2)
-                    # Persist result metadata for frontend auto-load on page refresh.
-                    # _ppt_result_{run_id} is the single source of truth — slide_plan,
-                    # preview_url, run_id, and all metadata are stored here.
                     save_step_meta(req.project_id, f"_ppt_result_{run_id}",
                                    json.dumps(result_meta, ensure_ascii=False))
                 except Exception as _e:
@@ -2760,8 +2881,7 @@ def api_ppt_outline(req: PPTPlanRequest):
         outline_json, outline_text = _generate_outline_only(
             req.provider_id, req.model, rules, req.content,
             column_prompt, column_skill, temperature=req.temperature,
-            st=st
-        )
+            st=st, project_id=req.project_id or "")
         return {"outline_json": outline_json or [], "outline_text": outline_text or ""}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -2848,6 +2968,77 @@ def api_ppt_plan(req: PPTPlanRequest):
         db.close()
 
 
+def _fix_per_slide_divs(html: str) -> str:
+    """Repair each slide-wrapper's internal div balance so no slide
+    can corrupt the DOM of adjacent slides.  Fixes the root cause of
+    "pages 6-7 disappeared / page 5 layout wrong" bugs.
+
+    Uses the interval between consecutive wrapper tags to define slide
+    boundaries, then balances <div>/</div> counts per-interval by adding
+    or removing closing tags at the tail of each interval."""
+    tag = '<div class="slide-wrapper">'
+
+    # Find all wrapper positions
+    positions = []
+    p = 0
+    while True:
+        idx = html.find(tag, p)
+        if idx == -1:
+            break
+        positions.append(idx)
+        p = idx + 1
+
+    if not positions:
+        return html
+
+    result = []
+    result.append(html[:positions[0]])  # preamble before first slide
+
+    for i, start in enumerate(positions):
+        end = positions[i + 1] if i + 1 < len(positions) else html.find('</body>', start)
+        if end == -1:
+            end = len(html)
+
+        chunk = html[start:end]
+        opens = chunk.count('<div')
+        closes = chunk.count('</div>')
+        diff = opens - closes
+
+        if diff > 0:
+            # Missing closing tags — append before the boundary
+            chunk += '</div>' * diff
+        elif diff < 0:
+            # Excess closing tags — remove from the tail
+            excess = -diff
+            for _ in range(excess):
+                p = chunk.rfind('</div>')
+                if p >= 0:
+                    chunk = chunk[:p] + chunk[p + 6:]
+
+        result.append(chunk)
+
+    # Append everything after the last wrapper's range
+    last_end = positions[-1]
+    body_end = html.find('</body>', last_end)
+    if body_end == -1:
+        body_end = len(html)
+    # The last chunk already goes to </body> or end, so append the rest
+    body_close_pos = html.find('</body>', positions[-1])
+    if body_close_pos != -1:
+        result.append(html[body_close_pos:])
+
+    return ''.join(result)
+
+
+def _ensure_backup(run_dir: str):
+    """Create index_backup.html from index.html if no backup exists yet.
+    Preserves the original generated version for restore."""
+    index_path = os.path.join(run_dir, "index.html")
+    backup_path = os.path.join(run_dir, "index_backup.html")
+    if os.path.exists(index_path) and not os.path.exists(backup_path):
+        shutil.copy2(index_path, backup_path)
+
+
 @app.post("/api/ppt/recolor-slide")
 def api_ppt_recolor_slide(
     run_id: str = Body(...),
@@ -2857,93 +3048,109 @@ def api_ppt_recolor_slide(
 ):
     """Recolor all slides to a new color scheme.
 
-    Prefers index_vars.html ({{primary}} variable format from new generation pipeline)
-    and resolves variables with the new scheme. Falls back to legacy hex-replacement
-    for old-format slides.
+    New format (CSS variables): replace :root block — O(1) operation.
+    Legacy format (hardcoded hex): per-slide hex replacement fallback.
     """
-    from services.ppt_service import _resolve_color_vars, _recolor_slide_html, _load_scheme_data
+    from services.ppt_service import _recolor_slide_html, _build_root_vars, _load_scheme_data
 
-    run_dir = _run_dirs.get(run_id)
-    if not run_dir or not os.path.isdir(run_dir):
+    run_dir = _find_run_dir(run_id)
+    if not run_dir:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    # Prefer the edit preview file if it exists
-    preview_path = os.path.join(run_dir, "index_preview.html")
-    vars_path = os.path.join(run_dir, "index_vars.html")
     html_path = os.path.join(run_dir, "index.html")
 
     sid = style or "business"
     cs = color_scheme or "deep-blue"
 
-    # ── New path: variable-format HTML, just re-resolve ──
-    if os.path.exists(vars_path):
-        new_scheme = _load_scheme_data(sid, cs)
-        if new_scheme:
-            with open(vars_path, encoding="utf-8") as f:
-                vars_html = f.read()
-            # Re-resolve with new scheme
-            resolved = _resolve_color_vars(vars_html, new_scheme)
-            # Also update color_scheme metadata
-            cs_path = os.path.join(run_dir, "color_scheme.txt")
-            with open(cs_path, "w", encoding="utf-8") as _csf:
-                _csf.write(cs)
-            # Write resolved HTML
-            target = preview_path if os.path.exists(preview_path) else html_path
-            with open(target, "w", encoding="utf-8") as f:
-                f.write(resolved)
-            return {"ok": True, "changed": True, "method": "resolve_vars"}
-
-    # ── Legacy fallback: hex-to-hex replacement ──
     if not os.path.exists(html_path):
-        if os.path.exists(preview_path):
-            html_path = preview_path
-        else:
-            raise HTTPException(status_code=404, detail="index.html not found")
+        raise HTTPException(status_code=404, detail="index.html not found")
 
     with open(html_path, encoding="utf-8") as f:
         full_html = f.read()
 
+    # ── Detect format: CSS variables (has :root block) vs legacy hex ──
     import re
-    slides_raw = re.findall(r'(<section[\s\S]*?</section>)', full_html, re.IGNORECASE)
-    if not slides_raw:
-        slides_raw = re.findall(
-            r'<div\s+class="slide-wrapper"\s*>\s*(<div\s[^>]*width\s*:\s*1280px[\s\S]*?</div>)\s*</div>',
-            full_html, re.IGNORECASE
-        )
+    if ":root {" in full_html:
+        # ── New format: replace :root block ──
+        new_scheme_data = _load_scheme_data(sid, cs)
+        if not new_scheme_data:
+            raise HTTPException(status_code=400, detail=f"Unknown color scheme: {cs}")
+        new_root = _build_root_vars(new_scheme_data)
 
-    if not slides_raw:
-        raise HTTPException(status_code=400, detail="No slides found in HTML")
+        # Replace :root { ... } block (first occurrence, up to matching })
+        root_pattern = re.compile(r':root\s*\{[^}]*\}', re.DOTALL)
+        new_html, count = root_pattern.subn(new_root, full_html, count=1)
+        if count == 0:
+            raise HTTPException(status_code=400, detail=":root block not found in HTML")
 
-    # Read source color_scheme metadata
-    source_scheme = None
-    cs_path = os.path.join(run_dir, "color_scheme.txt")
-    if os.path.exists(cs_path):
-        with open(cs_path, encoding="utf-8") as _csf:
-            source_scheme = _csf.read().strip()
-    if not source_scheme:
+        full_html = new_html
+        changed_count = 1
+    else:
+        # ── Legacy format: per-slide hex replacement ──
+        slides_raw = re.findall(r'(<section[\s\S]*?</section>)', full_html, re.IGNORECASE)
+        if not slides_raw:
+            inner_pattern = re.compile(
+                r'<div\s+class="slide-wrapper"\s*>\s*(<div\s[^>]*width\s*:\s*1280px[^>]*>)',
+                re.IGNORECASE
+            )
+            for m in inner_pattern.finditer(full_html):
+                pos = m.end(1)
+                depth = 1
+                while pos < len(full_html) and depth > 0:
+                    next_open = full_html.find('<div', pos)
+                    next_close = full_html.find('</div>', pos)
+                    if next_close == -1:
+                        break
+                    if next_open != -1 and next_open < next_close:
+                        depth += 1
+                        pos = next_open + 4
+                    else:
+                        depth -= 1
+                        if depth == 0:
+                            slides_raw.append(m.group(1) + full_html[m.end(1):next_close + 6])
+                            break
+                        pos = next_close + 6
+
+        if not slides_raw:
+            raise HTTPException(status_code=400, detail="No slides found in HTML")
+
+        source_scheme = "deep-blue"
         rj_path = os.path.join(run_dir, "result.json")
         if os.path.exists(rj_path):
             try:
-                with open(rj_path, encoding="utf-8") as _rjf:
-                    rj = json.loads(_rjf.read())
-                    source_scheme = rj.get("color_scheme") or ""
+                rj_meta = json.loads(open(rj_path, "r", encoding="utf-8").read())
+                source_scheme = rj_meta.get("color_scheme") or source_scheme
             except Exception:
                 pass
 
-    changed_count = 0
-    for i, old_slide in enumerate(slides_raw):
-        new_slide = _recolor_slide_html(sid, old_slide, cs, source_scheme)
-        if new_slide != old_slide:
-            full_html = full_html.replace(old_slide, new_slide)
-            changed_count += 1
+        changed_count = 0
+        for i, old_slide in enumerate(slides_raw):
+            new_slide = _recolor_slide_html(sid, old_slide, cs, source_scheme)
+            if new_slide != old_slide:
+                full_html = full_html.replace(old_slide, new_slide)
+                changed_count += 1
 
-    if changed_count == 0:
-        return {"ok": True, "changed": False, "message": "颜色无变化（可能已使用该色系）"}
+        if changed_count == 0:
+            return {"ok": True, "changed": False, "message": "颜色无变化（可能已使用该色系）"}
 
+    full_html = _fix_per_slide_divs(full_html)
+    _ensure_backup(run_dir)
     with open(html_path, "w", encoding="utf-8") as f:
         f.write(full_html)
+    # Update color scheme tracking
+    with open(os.path.join(run_dir, "color_scheme.txt"), "w", encoding="utf-8") as _csf:
+        _csf.write(cs)
+    # Sync color_scheme to result.json so regenerate picks it up
+    rj_path = os.path.join(run_dir, "result.json")
+    if os.path.exists(rj_path):
+        with open(rj_path, "r+", encoding="utf-8") as _rjf:
+            _rj_meta = json.loads(_rjf.read())
+            _rj_meta["color_scheme"] = cs
+            _rjf.seek(0)
+            _rjf.truncate()
+            json.dump(_rj_meta, _rjf, ensure_ascii=False, indent=2)
 
-    return {"ok": True, "changed": True, "method": "hex_replace"}
+    return {"ok": True, "changed": True, "method": "css_vars" if ":root {" in full_html else "hex_replace"}
 
 
 @app.post("/api/ppt/edit-slide")
@@ -2959,15 +3166,12 @@ def api_ppt_edit_slide(req: PPTEditSlideRequest):
       6. If violation → return error with details
     """
     import re
-    from bs4 import BeautifulSoup
     from services.ppt_service import (
-        _detect_container_violation,
-        _detect_content_overflow,
-        _detect_fullscreen_mask,
+        _safe_run_async, _build_edit_system_prompt, _run_edit_agent,
     )
 
-    run_dir = _run_dirs.get(req.run_id)
-    if not run_dir or not os.path.isdir(run_dir):
+    run_dir = _find_run_dir(req.run_id)
+    if not run_dir:
         raise HTTPException(status_code=404, detail="Run not found")
 
     html_path = os.path.join(run_dir, "index.html")
@@ -2977,54 +3181,28 @@ def api_ppt_edit_slide(req: PPTEditSlideRequest):
     with open(html_path, encoding="utf-8") as f:
         full_html = f.read()
 
-    # Extract slides from raw HTML (use regex to preserve original formatting)
-    slides_raw = []
-
-    # Try <section> tags first (legacy format)
-    section_matches = re.findall(r'(<section[\s\S]*?</section>)', full_html, re.IGNORECASE)
-    if section_matches:
-        slides_raw = section_matches
-    else:
-        # Match <div class="slide-wrapper">...inner 1280x720 div...</div></div>
-        wrapper_matches = re.findall(
-            r'<div\s+class="slide-wrapper"\s*>\s*(<div\s[^>]*width\s*:\s*1280px[\s\S]*?</div>)\s*</div>',
-            full_html, re.IGNORECASE
-        )
-        slides_raw = wrapper_matches
-
-    if not slides_raw:
-        raise HTTPException(status_code=400, detail="No slides found in HTML")
-
     seq = req.slide_seq
-    if seq < 1 or seq > len(slides_raw):
-        raise HTTPException(status_code=400, detail=f"Slide {seq} out of range (1–{len(slides_raw)})")
 
-    slide_html = slides_raw[seq - 1]
+    # Count total slides (just for the prompt)
+    slide_count = len(re.findall(r'<div\s+class="slide-wrapper"', full_html, re.IGNORECASE))
+    if slide_count == 0:
+        slide_count = len(re.findall(r'<section[\s>]', full_html, re.IGNORECASE))
+    if seq < 1 or seq > max(slide_count, 1):
+        raise HTTPException(status_code=400, detail=f"Slide {seq} out of range (1–{max(slide_count, 1)})")
 
-    # Extract page_type and layout from the slide element for code checks
-    page_type = ""
-    layout = ""
-    type_m = re.search(r'data-type\s*=\s*"(\w+)"', slide_html)
-    layout_m = re.search(r'data-layout\s*=\s*"(\w+)"', slide_html)
-    if type_m:
-        page_type = type_m.group(1)
-    if layout_m:
-        layout = layout_m.group(1)
-
-    # Build the edit system prompt — persona from template, knowledge from global core/
-    from services.ppt_service import _safe_run_async, _build_edit_system_prompt, _run_edit_agent
-
+    # Build the edit system prompt
     edit_system = _build_edit_system_prompt(req.style or "business", req.color_scheme or "deep-blue")
 
     edit_user = (
-        f"当前幻灯片 HTML：\n\n```html\n{slide_html}\n```\n\n"
-        f"修改要求：{req.instruction}"
+        f"以下是完整的 PPT HTML 文件（共 {slide_count} 页），每页是一个 slide-wrapper。\n\n"
+        f"```html\n{full_html}\n```\n\n"
+        f"修改要求：只修改第 {seq} 页，{req.instruction}\n\n"
+        f"输出要求：返回修改后的完整 HTML 文件（所有页），用 ```html ``` 包裹。不要省略任何页。"
     )
 
     p_id = req.provider_id
     model = req.model
     if not p_id or not model:
-        # Fallback to first enabled provider
         db = get_db()
         try:
             row = db.execute(
@@ -3045,116 +3223,67 @@ def api_ppt_edit_slide(req: PPTEditSlideRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Agent 调用失败: {e}")
 
-    # Extract edited HTML
-    edited = ""
+    # Extract the modified HTML from the response
+    edited_html = ""
     m = re.search(r'```html\s*\n(.*?)\n```', raw, re.DOTALL)
     if m:
-        edited = m.group(1).strip()
+        edited_html = m.group(1).strip()
     else:
-        # Try matching a full slide div (div-based or section-based)
-        m = re.search(r'(<section[\s\S]*?</section>)', raw, re.IGNORECASE)
-        if not m:
-            m = re.search(r'(<div\s[^>]*width:1280px[^>]*>[\s\S]*?</div>\s*</div>)', raw, re.IGNORECASE)
-        if not m:
-            m = re.search(r'(<div\s[^>]*width:\s*1280px[^>]*>[\s\S]*?</div>)', raw, re.IGNORECASE)
+        # Fallback: try to find a complete HTML document
+        m = re.search(r'(<!DOCTYPE html>[\s\S]*?</html>)', raw, re.IGNORECASE)
         if m:
-            edited = m.group(1).strip()
-        else:
-            edited = raw.strip()
+            edited_html = m.group(1).strip()
 
-    if not edited or len(edited) < 200:
-        # No valid HTML found in response — return as a chat message
-        text_answer = raw.strip()
-        if text_answer:
-            return {
-                "ok": False,
-                "slide_seq": seq,
-                "error": "chat_reply",
-                "detail": text_answer,
-            }
-
-    # Run code checks
-    violation = _detect_container_violation(edited, page_type)
-    if violation:
+    # Verify we got a valid HTML document
+    if not edited_html or len(edited_html) < len(full_html) * 0.5:
         return {
             "ok": False,
             "slide_seq": seq,
-            "error": "container_violation",
-            "violation": violation,
-            "detail": f"容器违规: {violation}。请换一种描述重试。",
+            "error": "chat_reply",
+            "detail": raw.strip() or "AI 未返回有效的完整 HTML，请换一种描述重试",
         }
 
-    overflow = _detect_content_overflow(edited, page_type, layout)
-    if overflow:
-        cards_str = ", ".join(f"卡片{i}有{c}个内容块" for i, c in overflow.items())
+    # Verify slide count is preserved
+    new_slide_count = len(re.findall(r'<div\s+class="slide-wrapper"', edited_html, re.IGNORECASE))
+    if new_slide_count == 0:
+        new_slide_count = len(re.findall(r'<section[\s>]', edited_html, re.IGNORECASE))
+    if new_slide_count != slide_count:
         return {
             "ok": False,
             "slide_seq": seq,
-            "error": "content_overflow",
-            "violation": cards_str,
-            "detail": f"内容溢出: {cards_str}（每张卡片最多 8 个信息单元）。请减少内容或指定多卡片布局重试。",
+            "error": "chat_reply",
+            "detail": f"AI 返回的页数不对（期望 {slide_count}，实际 {new_slide_count}），请重试",
         }
 
-    mask = _detect_fullscreen_mask(edited)
-    if mask:
+    # Quick div balance check
+    divs_open = len(re.findall(r'<div\s', edited_html)) + len(re.findall(r'<div>', edited_html))
+    divs_close = len(re.findall(r'</div>', edited_html))
+    if abs(divs_open - divs_close) > 3:
         return {
             "ok": False,
             "slide_seq": seq,
-            "error": "fullscreen_mask",
-            "violation": mask,
-            "detail": f"全屏遮罩: {mask}。请删除不透明覆盖层重试。",
+            "error": "chat_reply",
+            "detail": f"AI 返回的 HTML 标签不平衡（div: {divs_open}开/{divs_close}闭），请重试",
         }
 
-    # Check that the edit actually changed something
-    if edited == slide_html:
-        return {
-            "ok": False,
-            "slide_seq": seq,
-            "error": "no_change",
-            "detail": "编辑后内容未变化，请更具体地描述修改要求。",
-        }
+    # Write to index.html directly (auto-backup preserves original)
+    _ensure_backup(run_dir)
+    with open(html_path, "w", encoding="utf-8") as f:
+        f.write(edited_html)
 
-    # Write to preview file (not the real index.html)
-    old_slide = slides_raw[seq - 1]
-    new_html = full_html.replace(old_slide, edited, 1)
-
-    preview_path = os.path.join(run_dir, "index_preview.html")
-    with open(preview_path, "w", encoding="utf-8") as f:
-        f.write(new_html)
-
-    return {"ok": True, "slide_seq": seq, "html": edited,
-            "preview": True, "saved": False}
+    return {"ok": True, "slide_seq": seq,
+            "preview": True, "saved": True}
 
 
 @app.post("/api/ppt/save-edit/{run_id}")
 def api_save_edit(run_id: str):
-    """Commit the preview file to the real index.html."""
-    run_dir = _run_dirs.get(run_id)
-    if not run_dir:
-        candidate = os.path.join(EXPORT_DIR, run_id)
-        if os.path.isdir(candidate):
-            run_dir = candidate
-    if not run_dir:
-        raise HTTPException(status_code=404, detail="Export not found")
-
-    preview_path = os.path.join(run_dir, "index_preview.html")
-    if not os.path.exists(preview_path):
-        raise HTTPException(status_code=400, detail="No preview to save")
-
-    import shutil
-    real_path = os.path.join(run_dir, "index.html")
-    # Backup original
-    backup_path = os.path.join(run_dir, "index_backup.html")
-    if os.path.exists(real_path):
-        shutil.copy2(real_path, backup_path)
-    shutil.copy2(preview_path, real_path)
-    os.remove(preview_path)
+    """No-op: edits now write directly to index.html."""
     return {"ok": True, "saved": True}
 
 
 @app.post("/api/ppt/discard-edit/{run_id}")
 def api_discard_edit(run_id: str):
-    """Discard the preview file, keeping the original index.html unchanged."""
+    """Restore index.html from index_backup.html."""
     run_dir = _run_dirs.get(run_id)
     if not run_dir:
         candidate = os.path.join(EXPORT_DIR, run_id)
@@ -3163,18 +3292,21 @@ def api_discard_edit(run_id: str):
     if not run_dir:
         raise HTTPException(status_code=404, detail="Export not found")
 
-    preview_path = os.path.join(run_dir, "index_preview.html")
-    if os.path.exists(preview_path):
-        os.remove(preview_path)
-    return {"ok": True, "discarded": True}
+    backup_path = os.path.join(run_dir, "index_backup.html")
+    if not os.path.exists(backup_path):
+        raise HTTPException(status_code=400, detail="No backup to restore from")
+
+    real_path = os.path.join(run_dir, "index.html")
+    shutil.copy2(backup_path, real_path)
+    return {"ok": True, "restored": True}
 
 
 @app.put("/api/ppt/slide-source/{run_id}")
 def api_slide_source(run_id: str, req: PPTSlideSourceRequest):
-    """Write the full HTML document directly to the preview file.
+    """Write the full HTML document directly to index.html.
 
     Used by the source-code editor tab — the user edits the complete
-    HTML document and applies it.  Same draft/preview workflow as AI editing.
+    HTML document and applies it.
     """
     run_dir = _run_dirs.get(run_id)
     if not run_dir:
@@ -3184,11 +3316,535 @@ def api_slide_source(run_id: str, req: PPTSlideSourceRequest):
     if not run_dir or not os.path.isdir(run_dir):
         raise HTTPException(status_code=404, detail="Run not found")
 
-    preview_path = os.path.join(run_dir, "index_preview.html")
-    with open(preview_path, "w", encoding="utf-8") as f:
+    _ensure_backup(run_dir)
+    index_path = os.path.join(run_dir, "index.html")
+    with open(index_path, "w", encoding="utf-8") as f:
         f.write(req.html)
 
     return {"ok": True, "saved": True}
+
+
+@app.post("/api/ppt/regenerate-slide")
+def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
+    """Regenerate selected slides via the standard two-phase HTML pipeline.
+
+    Reads existing slide structures from result.json, runs
+    _stage2_html_per_slide() for the target slides, splices the
+    results back into the full HTML deck, and writes to a separate
+    index_regenerated.html file (never overwrites index.html).
+
+    Writes progress to _regenerate_log.txt so the frontend can poll.
+    """
+    from services.ppt_service import (
+        _stage2_html_per_slide, _assemble_html_deck,
+        _resolve_color_vars, _load_scheme_data,
+        _auto_fix_hardcoded_hex, _auto_fix_font_size,
+    )
+    import datetime as _dt
+
+    run_dir = _find_run_dir(req.run_id)
+    if not run_dir or not os.path.isdir(run_dir):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    log_path = os.path.join(run_dir, "_regenerate_log.txt")
+    # Truncate old log so each regeneration starts fresh
+    with open(log_path, "w", encoding="utf-8") as _lf:
+        _lf.write("")
+    def _log(msg: str):
+        ts = _dt.datetime.now().strftime("%H:%M:%S")
+        line = f"[{ts}] {msg}\n"
+        with open(log_path, "a", encoding="utf-8") as _lf:
+            _lf.write(line)
+            _lf.flush()
+
+    _log("开始重新生成...")
+
+    import re as _re
+
+    # ── Build slide_plan: prefer result.json, fallback to parsing index.html ──
+    rj_path = os.path.join(run_dir, "result.json")
+    style_id = "business"
+    color_scheme = "deep-blue"
+    if os.path.exists(rj_path):
+        _log("读取 result.json...")
+        with open(rj_path, encoding="utf-8") as _f:
+            result_meta = json.loads(_f.read())
+        slide_plan = result_meta.get("slide_plan", [])
+        style_id = result_meta.get("style_id") or style_id
+        color_scheme = result_meta.get("color_scheme") or color_scheme
+        _log(f"已加载 {len(slide_plan)} 页幻灯片结构，色系: {color_scheme}")
+    else:
+        _log("result.json 不存在，从 index.html 解析...")
+        # Fallback: parse slides from index.html (old-format runs)
+        html_path = os.path.join(run_dir, "index.html")
+        if not os.path.exists(html_path):
+            _log("错误: index.html 不存在")
+            raise HTTPException(status_code=404, detail="index.html not found")
+        with open(html_path, encoding="utf-8") as _f:
+            full_html = _f.read()
+        sections = _re.findall(
+            r'<section\s+class="slide"\s+data-seq="(\d+)"\s+data-type="([^"]*)"[^>]*>(.*?)</section>',
+            full_html, _re.DOTALL
+        )
+        if not sections:
+            _log("错误: index.html 中未找到幻灯片")
+            raise HTTPException(status_code=400, detail="No slides found in index.html")
+        slide_plan = []
+        for seq_str, stype, raw in sections:
+            seq = int(seq_str)
+            h = _re.search(r'<h[12][^>]*>(.*?)</h[12]>', raw[:3000], _re.DOTALL)
+            heading = _re.sub(r'<[^>]+>', '', h.group(1).strip()) if h else ""
+            body_text = _re.sub(r'<[^>]+>', ' ', raw[:5000]).strip()
+            body_text = _re.sub(r'\s+', ' ', body_text)[:1000]
+            has_chart = bool(_re.search(r'<(svg|canvas|path|circle|rect|line)', raw[:3000]))
+            chart_hint = ""
+            if has_chart:
+                chart_hint = _re.search(r'data-chart-hint="([^"]*)"', raw[:1000])
+                if chart_hint:
+                    chart_hint = chart_hint.group(1)
+            slide_plan.append({
+                "seq": seq, "type": stype, "layout": "hero_grid",
+                "heading": heading, "body": body_text,
+                "key_points": [], "kicker": "", "lead": "",
+                "cards": [], "has_chart": has_chart, "chart_hint": chart_hint,
+                "notes": "", "html": raw, "html_vars": raw,
+            })
+        slide_plan.sort(key=lambda s: s["seq"])
+        # Fallback color_scheme for old runs: read from color_scheme.txt
+        cs_path = os.path.join(run_dir, "color_scheme.txt")
+        if os.path.exists(cs_path):
+            with open(cs_path, encoding="utf-8") as _csf:
+                color_scheme = _csf.read().strip() or color_scheme
+        _log(f"已解析 {len(slide_plan)} 页幻灯片，色系(fallback): {color_scheme}")
+    if not slide_plan:
+        raise HTTPException(status_code=400, detail="No slides found")
+
+    total = len(slide_plan)
+    seqs = req.slide_seqs
+    for seq in seqs:
+        if seq < 1 or seq > total:
+            raise HTTPException(status_code=400, detail=f"Slide {seq} out of range (1–{total})")
+
+    _log(f"选中 {len(seqs)} 页待重新生成: {', '.join(str(s) for s in seqs)}")
+
+    # Get provider/model (from request or fallback to default)
+    p_id = req.provider_id
+    model_str = req.model
+    if not p_id or not model_str:
+        db = get_db()
+        try:
+            row = db.execute(
+                "SELECT id, models FROM llm_providers WHERE is_enabled=1 LIMIT 1"
+            ).fetchone()
+            if row:
+                p_id = row["id"]
+                models = json.loads(row["models"]) if row["models"] else []
+                model_str = models[0] if models else ""
+        finally:
+            db.close()
+    if not p_id or not model_str:
+        raise HTTPException(status_code=400, detail="没有可用的 LLM 提供商")
+
+    _log(f"使用模型: {model_str}")
+
+    # Build structure list for selected slides
+    redo_structure = []
+    for seq in seqs:
+        t = slide_plan[seq - 1]
+        redo_structure.append({
+            "seq": t.get("seq", seq),
+            "type": t.get("type", "content"),
+            "layout": t.get("layout", "hero_grid"),
+            "heading": t.get("heading", ""),
+            "body": t.get("body", ""),
+            "key_points": t.get("key_points", []),
+            "kicker": t.get("kicker", ""),
+            "lead": t.get("lead", ""),
+            "cards": t.get("cards", []),
+            "has_chart": t.get("has_chart", False),
+            "chart_hint": t.get("chart_hint", ""),
+            "notes": t.get("notes", ""),
+        })
+
+    _log(f"正在调用 AI 生成 HTML（{len(redo_structure)} 页，并行 {min(len(redo_structure), 3)} 页）...")
+
+    # Regenerate selected slides through the standard HTML pipeline
+    html_slides = _stage2_html_per_slide(
+        p_id, model_str, generate, redo_structure,
+        style_id=style_id, color_scheme=color_scheme,
+        parallel=min(len(redo_structure), 3), temperature=0.3,
+    )
+
+    if not html_slides:
+        _log("错误: LLM 未返回 HTML")
+        raise HTTPException(status_code=500, detail="Slide regeneration failed — LLM returned no HTML")
+
+    _log(f"AI 生成完成，收到 {len(html_slides)} 页 HTML")
+
+    # ── Apply auto-fixers (hex→var, font-size) BEFORE variable resolution ──
+    scheme_data = _load_scheme_data(style_id, color_scheme)
+    import re as _re_count
+    for slide in html_slides:
+        seq = slide.get("seq", 0)
+        html_before = slide.get("html", "")
+        hex_before = len(_re_count.findall(r'#[0-9a-fA-F]{3,6}\b', html_before))
+        if scheme_data:
+            slide["html"] = _auto_fix_hardcoded_hex(slide.get("html", ""), scheme_data, seq)
+            slide["html_vars"] = _auto_fix_hardcoded_hex(slide.get("html_vars", slide.get("html", "")), scheme_data, seq)
+        slide["html"] = _auto_fix_font_size(slide.get("html", ""), seq)
+        slide["html_vars"] = _auto_fix_font_size(slide.get("html_vars", slide.get("html", "")), seq)
+        hex_after = len(_re_count.findall(r'#[0-9a-fA-F]{3,6}\b', slide.get("html", "")))
+        var_count = len(_re_count.findall(r'\{\{[a-z_0-9]+\}\}', slide.get("html", "")))
+        _log(f"Slide {seq} 自动修正: {hex_before}→{hex_after} hex, {var_count} vars")
+
+    # Splice regenerated slides back into the plan
+    for slide in html_slides:
+        seq = slide.get("seq", 0)
+        idx = seq - 1
+        if 0 <= idx < len(slide_plan):
+            slide_plan[idx]["html"] = slide.get("html", "")
+            slide_plan[idx]["html_vars"] = slide.get("html_vars", slide.get("html", ""))
+
+    _log("正在解析颜色变量...")
+
+    # Resolve color variables for resolved HTML deck
+    resolved_slides = []
+    for s in slide_plan:
+        # Use html_vars (with {{primary}} placeholders) when available so
+        # color re-resolution works. Fall back to plain html.
+        html_v = s.get("html_vars", "") or s.get("html", "")
+        if html_v and scheme_data:
+            html_v = _resolve_color_vars(html_v, scheme_data, css_vars=True)
+        resolved_slides.append({**s, "html": html_v})
+
+    # Fix cover slide: if background is primary (dark), text must be light
+    # otherwise title text is invisible (e.g. deep-blue: text=#1a202c on bg=#1a365d)
+    if resolved_slides and scheme_data:
+        cover = resolved_slides[0]
+        primary = scheme_data.get("primary", "")
+        secondary = scheme_data.get("secondary", "")
+        text_color = scheme_data.get("text", "")
+        if primary and text_color:
+            cover_html = cover.get("html", "")
+            # Search entire HTML for dark background (primary or secondary as bg)
+            has_dark_bg = (f"background:{primary}" in cover_html
+                          or f"background:{secondary}" in cover_html
+                          or f"background: {primary}" in cover_html
+                          or f"background: {secondary}" in cover_html)
+            if has_dark_bg:
+                # Replace text color with #ffffff (legal hardcoded white per VI spec)
+                cover_html = cover_html.replace(f"color:{text_color}", "color:#ffffff")
+                cover_html = cover_html.replace(f"color:{text_color};", "color:#ffffff;")
+                cover_html = cover_html.replace(f"color: {text_color}", "color: #ffffff")
+                cover_html = cover_html.replace(f"color: {text_color};", "color: #ffffff;")
+                resolved_slides[0] = {**cover, "html": cover_html}
+                _log("封面页修复：深色背景 → 白色文字")
+
+    _log("正在组装完整 HTML...")
+
+    # Rebuild both decks
+    title = slide_plan[0].get("heading", "") if slide_plan else "Presentation"
+    deck_html = _assemble_html_deck(resolved_slides, title, style_id, scheme_data)
+    if scheme_data:
+        deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
+    deck_vars = _assemble_html_deck(
+        [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_plan],
+        title, style_id, scheme_data
+    )
+
+    _log(f"正在写入文件（{len(deck_html)} 字节）...")
+
+    # Write to regenerated file (NEVER overwrite index.html)
+    regen_html_path = os.path.join(run_dir, "index_regenerated.html")
+    with open(regen_html_path, "w", encoding="utf-8") as f:
+        f.write(deck_html)
+    regen_vars_path = os.path.join(run_dir, "index_regenerated_vars.html")
+    with open(regen_vars_path, "w", encoding="utf-8") as f:
+        f.write(deck_vars)
+
+    # Build partial mini-deck with only the regenerated slides
+    regen_resolved = [s for s in resolved_slides if s.get("seq") in set(seqs)]
+    partial_html = _assemble_html_deck(regen_resolved, title, style_id, scheme_data, total_slides=len(slide_plan))
+    if scheme_data:
+        partial_html = _resolve_color_vars(partial_html, scheme_data, css_vars=True)
+    regen_partial_path = os.path.join(run_dir, "index_regenerated_partial.html")
+    with open(regen_partial_path, "w", encoding="utf-8") as f:
+        f.write(partial_html)
+
+    preview_url = f"/api/exports/{req.run_id}/index_regenerated.html"
+    partial_url = f"/api/exports/{req.run_id}/index_regenerated_partial.html"
+
+    # Per-slide resolved HTML for targeted splice (not full-deck overwrite)
+    regen_slides = [{"seq": s["seq"], "html": s["html"]} for s in regen_resolved]
+
+    _log("DONE")
+
+    return {"ok": True, "slide_seqs": seqs,
+            "preview_url": preview_url, "partial_url": partial_url,
+            "slides": regen_slides, "html": deck_html}
+
+
+@app.put("/api/ppt/splice-slides/{run_id}")
+def api_ppt_splice_slides(run_id: str, req: dict):
+    """Replace specific slides in index.html with new HTML.
+
+    Used by the regenerate flow: only the regenerated slides are spliced in,
+    leaving other pages untouched.
+    """
+    import re as _re
+
+    run_dir = _find_run_dir(run_id)
+    if not run_dir or not os.path.isdir(run_dir):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    slides_data = req.get("slides", [])
+    if not slides_data:
+        raise HTTPException(status_code=400, detail="slides is required")
+
+    log_path_splice = os.path.join(run_dir, "_splice_log.txt")
+    def _log_splice(msg: str):
+        import datetime as _dt_sp
+        ts = _dt_sp.datetime.now().strftime("%H:%M:%S")
+        line = f"[{ts}] {msg}\n"
+        with open(log_path_splice, "a", encoding="utf-8") as _lf:
+            _lf.write(line)
+            _lf.flush()
+
+    index_path = os.path.join(run_dir, "index.html")
+    if not os.path.exists(index_path):
+        raise HTTPException(status_code=404, detail="index.html not found")
+
+    with open(index_path, "r", encoding="utf-8") as _f:
+        html = _f.read()
+
+    has_wrapper = '<div class="slide-wrapper"' in html[:5000]
+    _log_splice(f"DEBUG has_wrapper={has_wrapper}, html_len={len(html)}, slides={len(slides_data)}, first_section={'<section' in html[:5000]}")
+
+    replaced = 0
+    for slide in slides_data:
+        seq = slide["seq"]
+        new_html = slide["html"]
+        _log_splice(f"DEBUG slide seq={seq}, html_len={len(new_html)}")
+        if has_wrapper:
+            # Find the nth <div class="slide-wrapper" by counting wrappers,
+            # then find its matching </div> by balancing div depth.
+            wrapper_tag = f'<div class="slide-wrapper" data-seq="{seq}">'
+            pos = html.find(wrapper_tag)
+            if pos == -1:
+                # Fallback: count nth wrapper by position (old format without data-seq)
+                nth = seq - 1
+                pos = 0
+                for _ in range(nth + 1):
+                    pos = html.find('<div class="slide-wrapper"', pos)
+                    if pos == -1:
+                        break
+                    if _ < nth:
+                        pos += len('<div class="slide-wrapper"')
+            else:
+                # Found by data-seq; use this position
+                pass
+
+            if pos == -1:
+                # Last resort: try matching by seq within the slide content
+                # (search for data-seq attribute anywhere inside a wrapper)
+                tag_pat = _re.compile(
+                    r'<div\s+class="slide-wrapper"[^>]*>',
+                    _re.DOTALL
+                )
+                all_wrappers = list(tag_pat.finditer(html))
+                if 0 <= seq - 1 < len(all_wrappers):
+                    pos = all_wrappers[seq - 1].start()
+
+            if pos != -1:
+                # Find the wrapper opener end (>)
+                tag_end = html.find('>', pos) + 1
+                # Balance divs to find matching closer
+                depth = 1
+                i = tag_end
+                while i < len(html) and depth > 0:
+                    next_open = html.find('<div', i)
+                    next_close = html.find('</div>', i)
+                    if next_close == -1:
+                        break
+                    if next_open != -1 and next_open < next_close:
+                        depth += 1
+                        i = next_open + 4
+                    else:
+                        depth -= 1
+                        if depth == 0:
+                            close_end = next_close + 6  # after </div>
+                            replacement = f'<div class="slide-wrapper" data-seq="{seq}">{new_html}</div>'
+                            html = html[:pos] + replacement + html[close_end:]
+                            replaced += 1
+                            break
+                        i = next_close + 6
+        else:
+            # Old format (<section> based) — primary path for section-based files
+            pat = _re.compile(
+                r'<section[^>]*\s+data-seq="' + str(seq)
+                + r'"[^>]*>.*?</section>',
+                _re.DOTALL
+            )
+            new_html_text, count = pat.subn(new_html, html, count=1)
+            _log_splice(f"DEBUG else-branch seq={seq}, count={count}, pat_ok={pat.search(html) is not None}")
+            if count > 0:
+                html = new_html_text
+                replaced += count
+
+    # Write back to index.html (auto-backup preserves original)
+    _ensure_backup(run_dir)
+
+    # ── Post-splice auto-fix: clean font sizes & hex colors in ALL slides ──
+    from services.ppt_service import _auto_fix_font_size, _auto_fix_hardcoded_hex, _load_scheme_data, _resolve_color_vars
+    rj_path = os.path.join(run_dir, "result.json")
+    style_id = "business"
+    color_scheme = "deep-blue"
+    if os.path.exists(rj_path):
+        try:
+            rj_meta = json.loads(open(rj_path, "r", encoding="utf-8").read())
+            style_id = rj_meta.get("style_id") or style_id
+            color_scheme = rj_meta.get("color_scheme") or color_scheme
+        except Exception:
+            pass
+    _log_splice(f"色系(from result.json): {color_scheme}")
+    scheme_data = _load_scheme_data(style_id, color_scheme)
+    if scheme_data:
+        hex_before = len(_re.findall(r'#[0-9a-fA-F]{3,6}\b', html))
+        html = _auto_fix_hardcoded_hex(html, scheme_data, 0)
+        html = _resolve_color_vars(html, scheme_data, css_vars=True)
+        hex_after = len(_re.findall(r'#[0-9a-fA-F]{3,6}\b', html))
+        _log_splice(f"Post-splice hex fix: {hex_before}→{hex_after}")
+        # Transitional: if splice produced var(--*) refs but no :root block exists
+        # (old-format index.html with new-format regenerated slides), inject :root
+        if "var(--" in html and ":root {" not in html:
+            from services.ppt_service import _build_root_vars
+            root_block = _build_root_vars(scheme_data)
+            style_close = html.find('</style>')
+            if style_close > 0:
+                html = html[:style_close] + '\n' + root_block + '\n' + html[style_close:]
+                _log_splice("Transitional fix: injected :root block for CSS var compatibility")
+        # Cover fix: dark bg → white text
+        primary = scheme_data.get("primary", "")
+        secondary = scheme_data.get("secondary", "")
+        if primary:
+            cover_start = html.find('<div class="slide-wrapper" data-seq="1">')
+            if cover_start == -1:
+                cover_start = html.find('<section class="slide" data-seq="1"')
+            if cover_start != -1:
+                cover_end = html.find('</div>', cover_start)
+                if cover_end == -1:
+                    cover_end = html.find('</section>', cover_start)
+                if cover_end != -1:
+                    cover_html = html[cover_start:cover_end]
+                    has_dark_bg = (f"background:{primary}" in cover_html
+                                  or f"background:{secondary}" in cover_html
+                                  or f"background: {primary}" in cover_html
+                                  or f"background: {secondary}" in cover_html)
+                    if has_dark_bg:
+                        text_color = scheme_data.get("text", "")
+                        if text_color and text_color != "#ffffff":
+                            cover_html_fixed = cover_html
+                            for pat in [f"color:{text_color}", f"color: {text_color}", f"color:{text_color};", f"color: {text_color};"]:
+                                cover_html_fixed = cover_html_fixed.replace(pat, "color:#ffffff" if ";" not in pat else "color:#ffffff;")
+                            html = html[:cover_start] + cover_html_fixed + html[cover_end:]
+                            _log_splice("Cover fix: dark background → white text")
+    font_before_13 = len(_re.findall(r'font-size:\s*1[0-3]px', html))
+    font_before_15 = len(_re.findall(r'font-size:\s*15px', html))
+    html = _auto_fix_font_size(html, 0)
+    font_after_13 = len(_re.findall(r'font-size:\s*1[0-3]px', html))
+    font_after_15 = len(_re.findall(r'font-size:\s*15px', html))
+    _log_splice(f"Post-splice font fix: 13px {font_before_13}→{font_after_13}, 15px {font_before_15}→{font_after_15}")
+
+    with open(index_path, "w", encoding="utf-8") as _f:
+        _f.write(html)
+
+    return {"ok": True, "replaced": replaced, "total": len(slides_data)}
+
+
+def _find_run_dir(run_id: str):
+    """Resolve run directory with 3-tier fallback: memory → EXPORT_DIR → scan."""
+    if '..' in run_id or '/' in run_id or '\\' in run_id:
+        return None
+    run_dir = _run_dirs.get(run_id)
+    if run_dir and os.path.isdir(run_dir):
+        return run_dir
+    candidate = os.path.join(EXPORT_DIR, run_id)
+    if os.path.isdir(candidate):
+        _run_dirs[run_id] = candidate
+        return candidate
+    for base in [EXPORT_DIR] + _scan_output_bases():
+        candidate = os.path.join(base, run_id)
+        if os.path.isdir(candidate):
+            _run_dirs[run_id] = candidate
+            _save_run_dirs(_run_dirs)
+            return candidate
+    return None
+
+
+@app.get("/api/ppt/regenerate-state/{run_id}")
+def api_ppt_get_regenerate_state(run_id: str):
+    """Load persisted regenerate-tab state so it survives modal close/reopen."""
+    run_dir = _find_run_dir(run_id)
+    if not run_dir:
+        return {"state": None}
+    state_path = os.path.join(run_dir, "_regenerate_state.json")
+    if not os.path.exists(state_path):
+        return {"state": None}
+    try:
+        with open(state_path, encoding="utf-8") as _f:
+            return {"state": json.loads(_f.read())}
+    except Exception:
+        return {"state": None}
+
+
+@app.post("/api/ppt/regenerate-state/{run_id}")
+def api_ppt_save_regenerate_state(run_id: str, req: dict):
+    """Persist regenerate-tab state to disk so it survives modal close/reopen."""
+    run_dir = _find_run_dir(run_id)
+    if not run_dir:
+        raise HTTPException(status_code=404, detail="Run not found")
+    state_path = os.path.join(run_dir, "_regenerate_state.json")
+    with open(state_path, "w", encoding="utf-8") as _f:
+        json.dump(req, _f, ensure_ascii=False)
+    return {"ok": True}
+
+
+@app.delete("/api/ppt/regenerate-state/{run_id}")
+def api_ppt_clear_regenerate_state(run_id: str):
+    """Clear persisted regenerate-tab state (user clicked discard)."""
+    run_dir = _find_run_dir(run_id)
+    if not run_dir:
+        return {"ok": True}
+    state_path = os.path.join(run_dir, "_regenerate_state.json")
+    if os.path.exists(state_path):
+        try:
+            os.remove(state_path)
+        except Exception:
+            pass
+    return {"ok": True}
+
+
+@app.get("/api/ppt/regenerate-log/{run_id}")
+def api_ppt_regenerate_log(run_id: str):
+    """Poll the regenerate progress log. Returns the full log text.
+    Frontend polls this every 10 seconds during regeneration."""
+    run_dir = _run_dirs.get(run_id)
+    if not run_dir:
+        candidate = os.path.join(EXPORT_DIR, run_id)
+        if os.path.isdir(candidate):
+            run_dir = candidate
+    if not run_dir or not os.path.isdir(run_dir):
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    log_path = os.path.join(run_dir, "_regenerate_log.txt")
+    if not os.path.exists(log_path):
+        return {"log": "", "done": False}
+
+    with open(log_path, encoding="utf-8") as f:
+        text = f.read()
+
+    done = text.rstrip().endswith("DONE")
+    return {"log": text, "done": done}
 
 
 # ── PPT Styles (17 PPT-Agent YAML styles) ──
@@ -3483,11 +4139,9 @@ def api_export_svg_zip(run_id: str):
 @app.post("/api/ppt/save-images/{run_id}")
 async def api_save_slide_images(run_id: str):
     """Render each slide as a 1280x720 PNG and save to the export directory."""
-    run_dir = _run_dirs.get(run_id)
-    if not run_dir:
-        candidate = os.path.join(EXPORT_DIR, run_id)
-        if os.path.isdir(candidate):
-            run_dir = candidate
+    import asyncio
+
+    run_dir = _find_run_dir(run_id)
     if not run_dir:
         raise HTTPException(status_code=404, detail="Export not found")
 
@@ -3495,31 +4149,43 @@ async def api_save_slide_images(run_id: str):
     if not os.path.exists(html_path):
         raise HTTPException(status_code=404, detail="index.html not found")
 
-    try:
-        from playwright.async_api import async_playwright
-    except ImportError:
-        raise HTTPException(status_code=500, detail="playwright not installed")
+    def _capture():
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            raise HTTPException(status_code=500, detail="playwright not installed")
 
-    saved = []
-    async with async_playwright() as pw:
-        browser = await pw.chromium.launch()
-        page = await browser.new_page(viewport={"width": 1280, "height": 720})
-        await page.goto("file:///" + html_path.replace("\\", "/"))
-        await page.wait_for_timeout(500)
+        saved = []
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch()
+            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            page.goto("file:///" + html_path.replace("\\", "/"))
+            page.wait_for_timeout(500)
 
-        slides = await page.query_selector_all(".slide-wrapper, section")
-        if not slides:
-            slides = await page.query_selector_all('[style*="1280px"]')
+            slides = page.query_selector_all(".slide-wrapper, section")
+            if not slides:
+                slides = page.query_selector_all('[style*="1280px"]')
 
-        for i, slide in enumerate(slides):
-            png_path = os.path.join(run_dir, f"slide_{i+1:02d}.png")
-            await slide.screenshot(path=png_path)
-            saved.append(png_path)
+            for i, slide in enumerate(slides):
+                png_path = os.path.join(run_dir, f"slide_{i+1:02d}.png")
+                slide.screenshot(path=png_path)
+                saved.append(png_path)
 
-        await browser.close()
+            browser.close()
+        return saved
 
+    saved = await asyncio.to_thread(_capture)
     return {"ok": True, "saved": len(saved), "files": [os.path.basename(f) for f in saved],
             "dir": run_dir}
+
+
+@app.post("/api/open-folder")
+async def api_open_folder(req: dict):
+    path = req.get("path", "")
+    if not path or not os.path.isdir(path):
+        raise HTTPException(status_code=400, detail="Path not found")
+    os.startfile(path)
+    return {"ok": True}
 
 
 # ── SOP Export ──

@@ -146,6 +146,24 @@ def get_ppt_status(project_id: str) -> dict | None:
     return _ppt_status.get(project_id)
 
 
+# In-memory log for PPT generation progress display
+_ppt_log: dict[str, list[dict]] = {}
+
+def get_ppt_log(project_id: str) -> list:
+    """Return current PPT generation log for a project."""
+    return _ppt_log.get(project_id, [])
+
+def _append_log(project_id: str, message: str):
+    """Append a timestamped log entry for a project."""
+    if not project_id:
+        return
+    import datetime as _dt
+    entry = {"time": _dt.datetime.now().strftime("%H:%M:%S"), "message": message}
+    if project_id not in _ppt_log:
+        _ppt_log[project_id] = []
+    _ppt_log[project_id].append(entry)
+
+
 def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                  output_dir: str = None, provider_id: str = "",
                  model: str = "", slide_plan: list = None, format: str = "svg",
@@ -196,6 +214,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
     # Track status for progress polling
     if project_id:
         _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成大纲...", "message": "AI 分析内容中"}
+        _append_log(project_id, "开始生成 PPT，正在进行内容分析...")
 
     # Build human-readable dir name: "{项目名}_{类型}" (e.g. "测试1_道术PPT")
     safe_proj = "".join(c for c in project_name if c.isalnum() or c in "._- ()（）").strip() if project_name else ""
@@ -298,6 +317,9 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
         if isinstance(first, dict) and "html" not in first and "heading" in first and provider_id and model:
             # Outline format — need to run Phase 5a (Structure) + Phase 5b (HTML)
             print(f"[PPT-DBG] Outline input detected: {len(slide_data)} slides, running Structure+HTML", flush=True)
+            if project_id:
+                _append_log(project_id, f"大纲已有 {len(slide_data)} 页，跳过分析，直接规划布局...")
+                _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在规划布局...", "message": f"大纲已有 {len(slide_data)} 页，进入布局规划"}
             from services.llm_service import generate as llm_generate
             structure = _stage2_structure(provider_id, model, llm_generate,
                                            slide_data, style_id=style_id,
@@ -305,6 +327,9 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                            column_id=column_id,
                                            color_scheme=color_scheme)
             if structure:
+                if project_id:
+                    _append_log(project_id, f"布局规划完成，共 {len(structure)} 页，开始并行生成 HTML")
+                    _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"{len(structure)} 页布局已规划，并行生成 HTML 中", "slides_done": 0, "slides_total": len(structure)}
                 html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
                                                       structure, style_id=style_id,
                                                       temperature=st['html'],
@@ -314,6 +339,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                 if html_slides:
                     slide_data = html_slides
                     first = slide_data[0] if slide_data else {}
+                    if project_id:
+                        _append_log(project_id, f"PPT 生成完成，共 {len(html_slides)} 页")
         if isinstance(first, dict) and "html" in first:
             # New HTML pipeline — slides already have complete HTML, just assemble
             print(f"[PPT-DBG] HTML pipeline: {len(slide_data)} slides with inline HTML", flush=True)
@@ -325,7 +352,10 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                 html_dir = os.path.join(html_dir, dir_name)
             os.makedirs(html_dir, exist_ok=True)
 
-            deck_html = _assemble_html_deck(slide_data, title, style_id)
+            scheme_data = _load_scheme_data(style_id, color_scheme)
+            deck_html = _assemble_html_deck(slide_data, title, style_id, scheme_data)
+            if scheme_data:
+                deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
             html_path = os.path.join(html_dir, "index.html")
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(deck_html)
@@ -333,7 +363,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
 
             # Save unresolved variable version for future color scheme switching
             vars_slide_data = [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_data]
-            deck_vars = _assemble_html_deck(vars_slide_data, title, style_id)
+            deck_vars = _assemble_html_deck(vars_slide_data, title, style_id, scheme_data)
             vars_path = os.path.join(html_dir, "index_vars.html")
             with open(vars_path, "w", encoding="utf-8") as f:
                 f.write(deck_vars)
@@ -673,6 +703,9 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     if st is None:
         st = {}
 
+    if project_id:
+        _append_log(project_id, "进入分阶段生成，开始深度分析内容...")
+
     # ── Phase 2: Research (SOP deep analysis → research-context) ──
     research_context = ""
     try:
@@ -683,6 +716,7 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
             _logger.info(f"Phase 2 research done: {len(research_context)} chars")
             if project_id:
                 _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在分析内容...", "message": "研究完成，进入大纲规划"}
+                _append_log(project_id, "内容分析完成，进入大纲规划")
     except Exception as e:
         _logger.warning(f"Phase 2 research failed (proceeding without): {e}")
 
@@ -697,6 +731,7 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
     if project_id:
         _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在规划布局...", "message": f"已提取 {len(stage1)} 页大纲"}
+        _append_log(project_id, f"大纲提取完成，共 {len(stage1)} 页")
 
     # ── Two-Phase HTML Pipeline ──
     style_id = rules.get("style_id", "business")
@@ -711,7 +746,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
         return None
     _logger.info(f"Phase 1 structure: {len(structure)} slides planned")
     if project_id:
-        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"16 页布局已规划，并行生成 HTML 中", "slides_done": 0, "slides_total": len(structure)}
+        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"{len(structure)} 页布局已规划，并行生成 HTML 中", "slides_done": 0, "slides_total": len(structure)}
+        _append_log(project_id, f"布局规划完成，共 {len(structure)} 页，开始并行生成 HTML")
 
     # Phase 2: Per-slide HTML generation (parallel, design-system.md guided)
     html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
@@ -725,13 +761,15 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
         html_slides = _fallback_stage1_to_html_slides(stage1, style_id)
 
     _logger.info(f"Phase 2 HTML: {len(html_slides)} slides generated")
+    if project_id:
+        _append_log(project_id, f"PPT 生成完成，共 {len(html_slides)} 页")
     return html_slides
 
 
 def _generate_outline_only(provider_id, model, rules, sop_content,
                            system_prompt="", skill_template="",
                            temperature: float = 0.3,
-                           st: dict = None) -> tuple:
+                           st: dict = None, project_id: str = "") -> tuple:
     """Run only Phase 2 (Research) + Phase 4 (Outline+Content Fill).
 
     Returns (outline_json, outline_text) — outline_json is the structured
@@ -741,6 +779,9 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
     if st is None:
         st = {}
 
+    if project_id:
+        _append_log(project_id, "开始生成大纲，正在进行内容分析...")
+
     research_context = ""
     try:
         research_context = _phase2_research(provider_id, model, llm_generate, sop_content,
@@ -748,6 +789,8 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
                                             temp_research=st.get('research', temperature))
         if research_context:
             _logger.info(f"Outline-only research done: {len(research_context)} chars")
+            if project_id:
+                _append_log(project_id, "内容分析完成，进入大纲提取")
     except Exception as e:
         _logger.warning(f"Outline-only research failed (proceeding without): {e}")
 
@@ -759,6 +802,8 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
         return None, ""
 
     outline_text = _slides_to_human_text(stage1)
+    if project_id:
+        _append_log(project_id, f"大纲生成完成，共 {len(stage1)} 页")
     return stage1, outline_text
 
 
@@ -1095,15 +1140,307 @@ def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return (0, 0, 0)
 
 
-def _resolve_color_vars(text: str, scheme: dict) -> str:
-    """Replace {{primary}}, {{accent_rgb}}, {{chart_0}}, etc. with scheme values.
+def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
+    """Scan LLM-generated HTML for hardcoded hex values and replace with {{placeholder}} vars.
+
+    THREE-PASS strategy:
+    1. Exact match: hex in active scheme → its {{placeholder}}
+    2. Semantic match: hex NOT in scheme → map by hue/saturation to the semantically
+       correct scheme variable (red→semantic_negative, green→semantic_positive, etc.)
+    3. Fallback: if no semantic category matches, use RGB Euclidean distance
+    #ffffff is intentionally excluded — white text on dark backgrounds is correct
+    per iron law #5 (封面对比度铁律).
+
+    Returns the fixed HTML with ALL hardcoded hex replaced by placeholders.
+    """
+    if not scheme or not html:
+        return html
+
+    import re as _re_hex
+    import math
+
+    # ── Build hex → (placeholder_name, (r,g,b,h,s,l)) lookup for all scheme colors ──
+    all_scheme_colors: list[tuple[str, str, tuple[int, int, int], tuple[float, float, float]]] = []
+
+    def _rgb_to_hsl(r: int, g: int, b: int) -> tuple[float, float, float]:
+        """Convert RGB (0-255) to HSL (h:0-360, s:0-1, l:0-1)."""
+        rn, gn, bn = r / 255.0, g / 255.0, b / 255.0
+        mx, mn = max(rn, gn, bn), min(rn, gn, bn)
+        l = (mx + mn) / 2.0
+        if mx == mn:
+            return (0.0, 0.0, l)
+        d = mx - mn
+        s = d / (2.0 - mx - mn) if l > 0.5 else d / (mx + mn)
+        if mx == rn:
+            h = ((gn - bn) / d) % 6.0
+        elif mx == gn:
+            h = (bn - rn) / d + 2.0
+        else:
+            h = (rn - gn) / d + 4.0
+        return (h * 60.0, s, l)
+
+    def _add_scheme_entry(key: str, hex_val: str):
+        if hex_val and hex_val.startswith("#") and len(hex_val) == 7:
+            r, g, b = int(hex_val[1:3], 16), int(hex_val[3:5], 16), int(hex_val[5:7], 16)
+            h, s, l = _rgb_to_hsl(r, g, b)
+            all_scheme_colors.append((hex_val.lower(), key, (r, g, b), (h, s, l)))
+
+    base_keys = ["primary", "secondary", "accent", "background", "text", "card_bg"]
+    for key in base_keys:
+        _add_scheme_entry(key, scheme.get(key, ""))
+
+    chart_colors = scheme.get("chart_colors", [])
+    if isinstance(chart_colors, list):
+        for i, c in enumerate(chart_colors):
+            _add_scheme_entry(f"chart_{i}", c)
+
+    semantic = scheme.get("semantic", {})
+    if isinstance(semantic, dict):
+        for k, v in semantic.items():
+            _add_scheme_entry(f"semantic_{k}", v)
+
+    if not all_scheme_colors:
+        return html
+
+    # Build reverse lookup for exact match (exclude #ffffff)
+    reverse: dict[str, str] = {}
+    scheme_rgb: dict[str, tuple[int, int, int]] = {}
+    scheme_hsl: dict[str, tuple[float, float, float]] = {}
+    for hex_lower, var_name, rgb, hsl in all_scheme_colors:
+        if hex_lower != "#ffffff":
+            if hex_lower not in reverse:
+                reverse[hex_lower] = var_name
+            scheme_rgb[var_name] = rgb
+            scheme_hsl[var_name] = hsl
+
+    # ── Build semantic categories from scheme colors ──
+    def _hue_category(h: float) -> str:
+        """Classify hue angle (0-360) into semantic category."""
+        if h < 20 or h >= 340:
+            return "red"
+        if h < 45:
+            return "orange"
+        if h < 65:
+            return "yellow"
+        if h < 170:
+            return "green"
+        if h < 270:
+            return "blue"
+        return "purple"
+
+    # Map scheme vars to semantic roles
+    semantic_red_vars: list[str] = []      # primary, semantic_negative, red chart colors
+    semantic_warm_vars: list[str] = []     # accent, orange/yellow chart colors
+    semantic_green_vars: list[str] = []    # semantic_positive, green chart colors
+    semantic_cool_vars: list[str] = []     # blue chart colors
+    semantic_purple_vars: list[str] = []   # purple chart colors, secondary
+    semantic_neutral_dark: list[str] = []  # text
+    semantic_neutral_light: list[str] = [] # background, card_bg
+
+    for hex_lower, var_name, rgb, (h, s, l) in all_scheme_colors:
+        if hex_lower == "#ffffff":
+            continue
+        cat = _hue_category(h)
+        # Low saturation → neutral
+        if s < 0.12:
+            if l < 0.5:
+                if var_name not in semantic_neutral_dark:
+                    semantic_neutral_dark.append(var_name)
+            else:
+                if var_name not in semantic_neutral_light:
+                    semantic_neutral_light.append(var_name)
+            continue
+        # Semantic color roles
+        if var_name == "semantic_negative" or (var_name == "primary" and cat == "red"):
+            if var_name not in semantic_red_vars:
+                semantic_red_vars.append(var_name)
+        elif var_name == "semantic_positive":
+            if var_name not in semantic_green_vars:
+                semantic_green_vars.append(var_name)
+        # Categorize by hue
+        if cat in ("red",):
+            if var_name not in semantic_red_vars:
+                semantic_red_vars.append(var_name)
+        elif cat in ("orange", "yellow"):
+            if var_name not in semantic_warm_vars:
+                semantic_warm_vars.append(var_name)
+        elif cat in ("green",):
+            if var_name not in semantic_green_vars:
+                semantic_green_vars.append(var_name)
+        elif cat in ("blue",):
+            if var_name not in semantic_cool_vars:
+                semantic_cool_vars.append(var_name)
+        elif cat in ("purple",):
+            if var_name not in semantic_purple_vars:
+                semantic_purple_vars.append(var_name)
+
+    # Fallback: if a category is empty, use all vars
+    all_var_names = [n for _, n, _, _ in all_scheme_colors if _ != "#ffffff"]
+
+    def _best_in_category(hex_expanded: str, candidates: list[str]) -> str | None:
+        """Pick the closest color by RGB distance within the given candidate list."""
+        if not candidates:
+            return None
+        r = int(hex_expanded[1:3], 16)
+        g = int(hex_expanded[3:5], 16)
+        b = int(hex_expanded[5:7], 16)
+        best_name = None
+        best_dist = float('inf')
+        for var_name in candidates:
+            sr, sg, sb = scheme_rgb[var_name]
+            dist = (r - sr) ** 2 + (g - sg) ** 2 + (b - sb) ** 2
+            if dist < best_dist:
+                best_dist = dist
+                best_name = var_name
+        return best_name
+
+    # ── Find all unique hex values in HTML (excluding #ffffff/#fff) ──
+    def _expand_hex(h: str) -> str:
+        """Expand 3-digit hex to 6-digit: #abc → #aabbcc"""
+        h = h.lower()
+        if len(h) == 4 and h[0] == '#':  # #abc
+            return '#' + h[1]*2 + h[2]*2 + h[3]*2
+        return h
+
+    all_hex_raw = set(h.lower() for h in _re_hex.findall(r'#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?', html))
+    all_hex_expanded = {_expand_hex(h) for h in all_hex_raw}
+    all_hex_expanded.discard("#ffffff")
+
+    if not all_hex_expanded:
+        return html
+
+    # ── Build a map from original hex → expanded hex (for 3-digit lookup) ──
+    hex_originals: dict[str, str] = {}  # expanded → first original form seen
+    for raw_h in all_hex_raw:
+        exp = _expand_hex(raw_h)
+        if exp not in hex_originals:
+            hex_originals[exp] = raw_h
+
+    # ── For each hex, find its replacement ──
+    replacement_map: dict[str, str] = {}
+    exact_count = 0
+    semantic_count = 0
+    fallback_count = 0
+    semantic_details: list[tuple[str, str, str]] = []  # (hex, matched_var, reason)
+
+    for hex_expanded in all_hex_expanded:
+        original_form = hex_originals.get(hex_expanded, hex_expanded)
+        if hex_expanded in reverse:
+            replacement_map[original_form] = reverse[hex_expanded]
+            exact_count += 1
+            continue
+
+        # ── Semantic-aware matching ──
+        r = int(hex_expanded[1:3], 16)
+        g = int(hex_expanded[3:5], 16)
+        b = int(hex_expanded[5:7], 16)
+        h, s, l = _rgb_to_hsl(r, g, b)
+        cat = _hue_category(h)
+
+        best_name = None
+        reason = ""
+
+        # 1) Neutral (low saturation): use lightness to pick text vs background
+        if s < 0.12:
+            if l < 0.5:
+                best_name = _best_in_category(hex_expanded, semantic_neutral_dark or ["text"])
+                reason = f"neutral-dark (sat={s:.2f} l={l:.2f})"
+            else:
+                best_name = _best_in_category(hex_expanded, semantic_neutral_light or ["background"])
+                reason = f"neutral-light (sat={s:.2f} l={l:.2f})"
+        # 2) Warm red → semantic_negative, primary, secondary
+        elif cat == "red":
+            best_name = _best_in_category(hex_expanded, semantic_red_vars or all_var_names)
+            reason = f"red-hue ({h:.0f}deg)"
+        # 3) Orange/yellow → accent, warm chart colors
+        elif cat in ("orange", "yellow"):
+            best_name = _best_in_category(hex_expanded, semantic_warm_vars or all_var_names)
+            reason = f"{cat}-hue ({h:.0f}deg)"
+        # 4) Green → semantic_positive, green chart colors
+        elif cat == "green":
+            best_name = _best_in_category(hex_expanded, semantic_green_vars or all_var_names)
+            reason = f"green-hue ({h:.0f}deg)"
+        # 5) Blue → cool chart colors
+        elif cat == "blue":
+            best_name = _best_in_category(hex_expanded, semantic_cool_vars or all_var_names)
+            reason = f"blue-hue ({h:.0f}deg)"
+        # 6) Purple → purple chart colors
+        elif cat == "purple":
+            best_name = _best_in_category(hex_expanded, semantic_purple_vars or all_var_names)
+            reason = f"purple-hue ({h:.0f}deg)"
+
+        if best_name:
+            replacement_map[original_form] = best_name
+            semantic_count += 1
+            if len(semantic_details) < 8:
+                semantic_details.append((original_form, best_name, reason))
+        else:
+            # ═══ Pure RGB fallback (should rarely be reached) ═══
+            best_name = _best_in_category(hex_expanded, all_var_names)
+            if best_name:
+                replacement_map[original_form] = best_name
+                fallback_count += 1
+
+    # ── Replace all hex values with {{placeholder}} vars ──
+    for hex_original, var_name in replacement_map.items():
+        hex_pattern = '(?i)' + hex_original
+        placeholder = '{{' + var_name + '}}'
+        html = _re_hex.sub(hex_pattern, placeholder, html)
+
+    if exact_count > 0:
+        _logger.info(
+            f"[HEX-FIX] Slide {slide_seq}: exact-matched {exact_count} hex → {{{{placeholder}}}} vars"
+        )
+    if semantic_count > 0:
+        _logger.info(
+            f"[HEX-FIX] Slide {slide_seq}: semantic-matched {semantic_count} hex: {semantic_details}"
+        )
+    if fallback_count > 0:
+        _logger.info(
+            f"[HEX-FIX] Slide {slide_seq}: fallback RGB-matched {fallback_count} hex"
+        )
+
+    return html
+
+
+def _auto_fix_font_size(html: str, slide_seq: int) -> str:
+    """Enforce VI typography minimums per spec.
+
+    Valid sizes: 14px (captions), 16-18px (body), 22-24px (card titles),
+    36-44px (page titles), 58-65px (cover titles).
+    10-13px: below minimum → bump to 14px.
+    15px: dead zone → bump to 16px.
+    """
+    import re as _re_fs
+    total_fixes = 0
+    # 10-13px → 14px (below absolute minimum)
+    for sz in ['10', '11', '12', '13']:
+        before = len(_re_fs.findall(rf'font-size:\s*{sz}px', html))
+        html = html.replace(f'font-size:{sz}px', 'font-size:14px')
+        html = html.replace(f'font-size: {sz}px', 'font-size: 14px')
+        total_fixes += before
+    # 15px → 16px (invalid gap between caption and body)
+    before15 = len(_re_fs.findall(r'font-size:\s*15px', html))
+    html = html.replace('font-size:15px', 'font-size:16px')
+    html = html.replace('font-size: 15px', 'font-size: 16px')
+    total_fixes += before15
+    if total_fixes > 0:
+        _logger.info(f"[FONT-FIX] Slide {slide_seq}: {total_fixes} instances fixed")
+    return html
+
+
+def _resolve_color_vars(text: str, scheme: dict, css_vars: bool = False) -> str:
+    """Replace {{primary}}, {{accent_rgb}}, {{chart_0}}, etc. with values.
+
+    When css_vars=False (default): resolves to hex/rgb values for LLM prompts.
+    When css_vars=True: resolves to CSS var() references for final HTML output.
 
     Supported variable forms for each color key:
-      {{key}}          → hex value (#1a365d)
-      {{key_r}}        → red component (26)
-      {{key_g}}        → green component (54)
-      {{key_b}}        → blue component (93)
-      {{key_rgb}}      → rgb tuple (26, 54, 93)
+      {{key}}          → hex (#1a365d) or var(--key)
+      {{key_r}}        → red int (26) or var(--key-r)
+      {{key_g}}        → green int (54) or var(--key-g)
+      {{key_b}}        → blue int (93) or var(--key-b)
+      {{key_rgb}}      → rgb string (26, 54, 93) or var(--key-rgb)
     """
     import re as _re
 
@@ -1114,30 +1451,45 @@ def _resolve_color_vars(text: str, scheme: dict) -> str:
     for key in color_keys:
         val = scheme.get(key, "")
         if val and val.startswith("#"):
-            vars_map[key] = val
-            r, g, b = _hex_to_rgb(val)
-            vars_map[f"{key}_r"] = str(r)
-            vars_map[f"{key}_g"] = str(g)
-            vars_map[f"{key}_b"] = str(b)
-            vars_map[f"{key}_rgb"] = f"{r}, {g}, {b}"
+            if css_vars:
+                vars_map[key] = f"var(--{key})"
+                vars_map[f"{key}_r"] = f"var(--{key}-r)"
+                vars_map[f"{key}_g"] = f"var(--{key}-g)"
+                vars_map[f"{key}_b"] = f"var(--{key}-b)"
+                vars_map[f"{key}_rgb"] = f"var(--{key}-rgb)"
+            else:
+                vars_map[key] = val
+                r, g, b = _hex_to_rgb(val)
+                vars_map[f"{key}_r"] = str(r)
+                vars_map[f"{key}_g"] = str(g)
+                vars_map[f"{key}_b"] = str(b)
+                vars_map[f"{key}_rgb"] = f"{r}, {g}, {b}"
 
     # Chart colors
     chart_colors = scheme.get("chart_colors", [])
     if isinstance(chart_colors, list):
         for i, c in enumerate(chart_colors):
             if c and c.startswith("#"):
-                vars_map[f"chart_{i}"] = c
-                r, g, b = _hex_to_rgb(c)
-                vars_map[f"chart_{i}_rgb"] = f"{r}, {g}, {b}"
+                if css_vars:
+                    vars_map[f"chart_{i}"] = f"var(--chart-{i})"
+                    vars_map[f"chart_{i}_rgb"] = f"var(--chart-{i}-rgb)"
+                else:
+                    vars_map[f"chart_{i}"] = c
+                    r, g, b = _hex_to_rgb(c)
+                    vars_map[f"chart_{i}_rgb"] = f"{r}, {g}, {b}"
 
     # Semantic colors
     semantic = scheme.get("semantic", {})
     if isinstance(semantic, dict):
         for k, v in semantic.items():
             if v and v.startswith("#"):
-                vars_map[f"semantic_{k}"] = v
-                r, g, b = _hex_to_rgb(v)
-                vars_map[f"semantic_{k}_rgb"] = f"{r}, {g}, {b}"
+                if css_vars:
+                    vars_map[f"semantic_{k}"] = f"var(--semantic-{k})"
+                    vars_map[f"semantic_{k}_rgb"] = f"var(--semantic-{k}-rgb)"
+                else:
+                    vars_map[f"semantic_{k}"] = v
+                    r, g, b = _hex_to_rgb(v)
+                    vars_map[f"semantic_{k}_rgb"] = f"{r}, {g}, {b}"
 
     # Replace all {{var}} placeholders
     def _replacer(m):
@@ -1284,10 +1636,10 @@ def _list_color_schemes(style_id: str) -> list:
         return []
 
 
-def _recolor_slide_html(style_id: str, slide_html: str, new_color_scheme: str, source_scheme: str | None = None) -> str:
+def _recolor_slide_html(style_id: str, slide_html: str, new_color_scheme: str, source_scheme: str) -> str:
     """Direct color replacement: map old scheme colors → new scheme colors.
 
-    1. Detect which scheme the slide currently uses (most color matches)
+    1. Use source_scheme as the authoritative current scheme (caller reads from result.json)
     2. Build a role-for-role mapping from old scheme to new scheme
     3. Apply all replacements in a single pass
     No AI involved — pure deterministic string replacement.
@@ -1307,64 +1659,13 @@ def _recolor_slide_html(style_id: str, slide_html: str, new_color_scheme: str, s
         return slide_html
 
     target = schemes[new_color_scheme]
-    lower_html = slide_html.lower()
     base_keys = ["primary", "secondary", "accent", "background", "text", "card_bg"]
 
-    # Step 1: Determine which scheme the slide currently uses
-    # If caller provides source_scheme metadata (saved during generation), use it directly.
-    # Otherwise fall back to weighted color-match detection.
-    if source_scheme and source_scheme in schemes:
-        best_scheme = source_scheme
-    else:
-        def _all_colors(scheme_data: dict) -> set:
-            cs2: set = set()
-            for k in base_keys:
-                v = scheme_data.get(k, "")
-                if v and len(v) >= 4:
-                    cs2.add(v.lower())
-            for c in (scheme_data.get("chart_colors") or []):
-                if c and len(c) >= 4:
-                    cs2.add(c.lower())
-            for v in (scheme_data.get("semantic") or {}).values():
-                if v and len(v) >= 4:
-                    cs2.add(v.lower())
-            return cs2
+    # source_scheme is authoritative — caller reads it from result.json
+    if source_scheme not in schemes:
+        return slide_html
 
-        # Build per-color specificity: how many schemes share each color
-        all_colors: dict[str, list[str]] = {}
-        for sname, sdata in schemes.items():
-            if not isinstance(sdata, dict):
-                continue
-            for c in _all_colors(sdata):
-                all_colors.setdefault(c, []).append(sname)
-
-        # Weighted scoring: unique colors → weight 1.0, shared colors → 1/N
-        # Tiebreaker: if scores are equal, prefer the scheme with more matching colors
-        best_scheme = None
-        best_score = 0.0
-        best_match_count = 0
-        for sname, sdata in schemes.items():
-            if not isinstance(sdata, dict):
-                continue
-            colors = _all_colors(sdata)
-            if not colors:
-                continue
-            score = 0.0
-            match_count = 0
-            for c in colors:
-                if c in lower_html:
-                    n_shared = len(all_colors.get(c, [1]))
-                    score += 1.0 / n_shared
-                    match_count += 1
-            if score > best_score or (score == best_score and match_count > best_match_count):
-                best_score = score
-                best_scheme = sname
-                best_match_count = match_count
-
-        # Fallback: if detection finds nothing, use "deep-blue" (the PPTGenerateRequest default)
-        if best_score == 0:
-            best_scheme = "deep-blue"
-
+    best_scheme = source_scheme
     old = schemes[best_scheme]
     if best_scheme == new_color_scheme:
         return slide_html  # Already using this scheme
@@ -1463,18 +1764,18 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
     vi_dir = os.path.join(BASE_DIR, "resources", "vi", style_id)
     parts = []
 
-    # Always include general vi.md first
-    vi_md_path = os.path.join(vi_dir, "vi.md")
-    if os.path.exists(vi_md_path):
-        with open(vi_md_path, "r", encoding="utf-8") as f:
-            parts.append(f.read())
-
-    # Section-specific file — dynamic lookup
+    # Section-specific file FIRST — guaranteed included before truncation
     if section != "toc":
         section_file = os.path.join(vi_dir, f"{section}.md")
         if os.path.exists(section_file):
             with open(section_file, "r", encoding="utf-8") as f:
                 parts.append(f.read())
+
+    # General vi.md second — fills remaining space after section rules
+    vi_md_path = os.path.join(vi_dir, "vi.md")
+    if os.path.exists(vi_md_path):
+        with open(vi_md_path, "r", encoding="utf-8") as f:
+            parts.append(f.read())
 
     if not parts:
         return _load_style_vi(style_id, color_scheme, resolve_vars=resolve_vars)
@@ -2087,31 +2388,31 @@ def _fallback_single_slide_html(slide: dict, style_id: str) -> dict:
 
     body_html = ""
     if body:
-        body_html = f'<p style="font-size:18px;line-height:1.7;color:#444;margin:0 0 16px">{body[:500]}</p>'
+        body_html = f'<p style="font-size:18px;line-height:1.7;color:{{{{text}}}};margin:0 0 16px">{body[:500]}</p>'
     if key_points:
         pts = "".join(f'<li style="font-size:16px;line-height:1.6;margin-bottom:6px">{kp}</li>'
                       for kp in key_points[:5] if isinstance(kp, str))
         body_html += f'<ul style="padding-left:20px;margin:0">{pts}</ul>'
 
-    kicker_html = f'<div style="font-size:14px;color:#888;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">{kicker}</div>' if kicker else ""
-    lead_html = f'<div style="font-size:20px;color:#666;margin-bottom:24px">{lead}</div>' if lead else ""
+    kicker_html = f'<div style="font-size:14px;color:{{{{text}}}};opacity:0.55;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">{kicker}</div>' if kicker else ""
+    lead_html = f'<div style="font-size:20px;color:{{{{text}}}};opacity:0.7;margin-bottom:24px">{lead}</div>' if lead else ""
 
-    html = f"""<section style="width:1280px;height:720px;background:#fff;position:relative;overflow:hidden;font-family:system-ui,-apple-system,sans-serif">
-<div style="position:absolute;top:0;left:0;right:0;height:4px;background:#2563eb"></div>
+    html = f"""<section style="width:1280px;height:720px;background:{{{{background}}}};position:relative;overflow:hidden;font-family:system-ui,-apple-system,sans-serif">
+<div style="position:absolute;top:0;left:0;right:0;height:4px;background:{{{{accent}}}}"></div>
 <div style="padding:60px 80px 40px">
 {kicker_html}
-<h1 style="font-size:38px;font-weight:700;color:#1e293b;margin:0 0 8px;letter-spacing:-0.3px">{heading}</h1>
-<div style="width:40px;height:3px;background:#2563eb;border-radius:2px;margin-bottom:32px"></div>
+<h1 style="font-size:38px;font-weight:700;color:{{{{primary}}}};margin:0 0 8px;letter-spacing:-0.3px">{heading}</h1>
+<div style="width:40px;height:3px;background:{{{{accent}}}};border-radius:2px;margin-bottom:32px"></div>
 {lead_html}
 {body_html}
 </div>
-<div style="position:absolute;bottom:28px;right:48px;display:flex;align-items:center;gap:8px;font-size:13px;color:#94a3b8">
-<span style="width:6px;height:6px;border-radius:50%;background:#2563eb"></span>
+<div style="position:absolute;bottom:28px;right:48px;display:flex;align-items:center;gap:8px;font-size:13px;color:{{{{text}}}};opacity:0.35">
+<span style="width:6px;height:6px;border-radius:50%;background:{{{{accent}}}}"></span>
 {seq}
 </div>
 </section>"""
 
-    return {"seq": seq, "type": stype, "layout": layout, "html": html, "html_vars": html}
+    return {**slide, "html": html, "html_vars": html}
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
                            temperature: float = 0.3, column_id: str = "",
@@ -2176,7 +2477,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False)
         vi_append = ""
         if vi_section:
-            vi_append = f"\n\n## {stype} 类型专属视觉规范\n{vi_section[:4000]}"
+            vi_append = f"\n\n## {stype} 类型专属视觉规范\n{vi_section}"
 
         tailored_system = f"""{persona_block}
 
@@ -2184,7 +2485,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
 ## 风格 Token（仅排版，无颜色 hex）
 ```yaml
-{style_yaml[:4000]}
+{style_yaml}
 ```
 {font_info}
 {vi_append}
@@ -2244,7 +2545,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         if idx == 0:
             import re as _re_monitor
             hex_count = len(_re_monitor.findall(r'#[0-9a-fA-F]{6}', tailored_system))
-            has_colors_md = "四、色彩使用原则" in tailored_system
+            has_colors_md = "四、色彩系统" in tailored_system
             has_semantics_md = "十四、色彩语义" in tailored_system
             has_var_law = "颜色变量铁律" in tailored_system
             _logger.info(f"[MONITOR] Slide {seq} system prompt: {len(tailored_system)} chars, "
@@ -2287,17 +2588,77 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
                     # Post-process: fix common LLM HTML errors
                     html = _fix_llm_html_errors(html)
+                    # Post-process: scan & replace hardcoded hex with {{placeholder}} vars
+                    html = _auto_fix_hardcoded_hex(html, active_scheme, seq)
+                    # Post-process: enforce VI typography minimums (15px → 16px)
+                    html = _auto_fix_font_size(html, seq)
                     # Save unresolved HTML for later recolor (before hex resolution)
                     html_vars = html
                     # Resolve {{primary}} etc. → actual hex from active color scheme
                     if active_scheme:
-                        html = _resolve_color_vars(html, active_scheme)
+                        html = _resolve_color_vars(html, active_scheme, css_vars=True)
                     # Check for truncation: HTML must end with a properly closed tag
                     stripped = html.rstrip()
                     if not stripped.endswith('>'):
                         _logger.warning(f"Slide {seq} attempt {attempt+1}: "
                                         f"truncated (ends with '{stripped[-50:]}')")
                         continue  # retry
+
+                    # Check div balance: unbalanced divs collapse browser rendering.
+                    # Both missing AND extra </div> are dangerous — extra </div> prematurely
+                    # closes the slide-wrapper, corrupting the NEXT slide's DOM nesting.
+                    open_divs = len(re.findall(r'<div\b', html))
+                    close_divs = len(re.findall(r'</div>', html))
+                    if open_divs != close_divs:
+                        delta = open_divs - close_divs
+                        if attempt < 1:
+                            _logger.warning(f"Slide {seq} attempt {attempt+1}: "
+                                            f"unbalanced divs ({open_divs} open vs {close_divs} close, "
+                                            f"delta={delta}), retrying")
+                            continue
+                        elif delta > 0:
+                            _logger.warning(f"Slide {seq}: unbalanced divs ({open_divs} open vs "
+                                            f"{close_divs} close), auto-fixing by appending {delta} </div>")
+                            html += '</div>' * delta
+                            html_vars += '</div>' * delta
+                        elif delta < 0:
+                            _logger.warning(f"Slide {seq}: extra </div> ({open_divs} open vs "
+                                            f"{close_divs} close, surplus {abs(delta)}), "
+                                            f"stripping excess closing tags")
+                            for _ in range(abs(delta)):
+                                last_close = html.rfind('</div>')
+                                if last_close > 0:
+                                    html = html[:last_close] + html[last_close + 6:]
+                                    vc = html_vars.rfind('</div>')
+                                    if vc > 0:
+                                        html_vars = html_vars[:vc] + html_vars[vc + 6:]
+
+                    # Check SVG balance: unclosed <svg> corrupts DOM parsing just like unclosed <div>
+                    open_svgs = len(re.findall(r'<svg\b', html))
+                    close_svgs = len(re.findall(r'</svg>', html))
+                    if open_svgs != close_svgs:
+                        delta = open_svgs - close_svgs
+                        if attempt < 1:
+                            _logger.warning(f"Slide {seq} attempt {attempt+1}: "
+                                            f"unbalanced SVG tags ({open_svgs} open vs {close_svgs} close, "
+                                            f"delta={delta}), retrying")
+                            continue
+                        elif delta > 0:
+                            _logger.warning(f"Slide {seq}: {delta} unclosed SVG(s), "
+                                            f"appending </svg> at end of slide HTML")
+                            html += '</svg>' * delta
+                            html_vars += '</svg>' * delta
+                        elif delta < 0:
+                            _logger.warning(f"Slide {seq}: extra </svg> ({open_svgs} open vs "
+                                            f"{close_svgs} close, surplus {abs(delta)}), stripping")
+                            for _ in range(abs(delta)):
+                                last_svg = html.rfind('</svg>')
+                                if last_svg > 0:
+                                    html = html[:last_svg] + html[last_svg + 6:]
+                                    vs = html_vars.rfind('</svg>')
+                                    if vs > 0:
+                                        html_vars = html_vars[:vs] + html_vars[vs + 6:]
+
                     # --- Code-based structural checks (not LLM self-review) ---
                     retry_msg = ""
 
@@ -2345,7 +2706,9 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         with _done_lock:
                             _done_count[0] += 1
                             _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"已完成 {_done_count[0]}/{total} 页", "slides_done": _done_count[0], "slides_total": total}
-                    return {"seq": seq, "type": stype, "layout": layout, "html": html, "html_vars": html_vars}
+                            if _done_count[0] % 3 == 0 or _done_count[0] == total:
+                                _append_log(project_id, f"HTML 生成进度: {_done_count[0]}/{total} 页")
+                    return {**slide, "html": html, "html_vars": html_vars}
                 else:
                     _logger.warning(f"Slide {seq} attempt {attempt+1}: HTML too short ({len(html)} chars)")
             except Exception as e:
@@ -2690,8 +3053,8 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool) -> str:
     parts: list[str] = []
 
     # ── Always (7 files, ~3K chars total) ──
-    for name in ("identity", "iron-laws", "structure", "richness",
-                  "typography", "consistency", "checklist"):
+    for name in ("identity", "iron-laws", "colors", "color-semantics", "structure",
+                  "richness", "typography", "consistency", "checklist"):
         text = _read("always", f"{name}.md")
         if text:
             parts.append(text)
@@ -3118,8 +3481,44 @@ def _fix_llm_html_errors(html: str) -> str:
     return html
 
 
+def _build_root_vars(scheme_data: dict) -> str:
+    """Build :root CSS block defining all color variables with actual hex/rgb values."""
+    lines = [":root {"]
+
+    color_keys = ["primary", "secondary", "accent", "background", "text", "card_bg"]
+    for key in color_keys:
+        val = scheme_data.get(key, "")
+        if val and val.startswith("#"):
+            lines.append(f"  --{key}: {val};")
+            r, g, b = _hex_to_rgb(val)
+            lines.append(f"  --{key}-r: {r};")
+            lines.append(f"  --{key}-g: {g};")
+            lines.append(f"  --{key}-b: {b};")
+            lines.append(f"  --{key}-rgb: {r}, {g}, {b};")
+
+    chart_colors = scheme_data.get("chart_colors", [])
+    if isinstance(chart_colors, list):
+        for i, c in enumerate(chart_colors):
+            if c and c.startswith("#"):
+                lines.append(f"  --chart-{i}: {c};")
+                r, g, b = _hex_to_rgb(c)
+                lines.append(f"  --chart-{i}-rgb: {r}, {g}, {b};")
+
+    semantic = scheme_data.get("semantic", {})
+    if isinstance(semantic, dict):
+        for k, v in semantic.items():
+            if v and v.startswith("#"):
+                lines.append(f"  --semantic-{k}: {v};")
+                r, g, b = _hex_to_rgb(v)
+                lines.append(f"  --semantic-{k}-rgb: {r}, {g}, {b};")
+
+    lines.append("}")
+    return "\n".join(lines)
+
+
 def _assemble_html_deck(slides: list, title: str = "Presentation",
-                        style_id: str = "business") -> str:
+                        style_id: str = "business", scheme_data: dict = None,
+                        total_slides: int = None) -> str:
     """Wrap individual slide HTML sections into a complete HTML document.
 
     Also injects unified page numbers and strips AI-generated ones.
@@ -3127,14 +3526,14 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     import re
 
     valid_slides = [s for s in slides if s.get("html")]
-    total = len(valid_slides)
+    total = total_slides or max((s.get("seq", 0) for s in valid_slides), default=len(valid_slides))
 
     wrapped_parts = []
     for i, s in enumerate(slides):
         html = s.get("html", "")
         if not html:
             continue
-        slide_num = i + 1
+        slide_num = s.get("seq", i + 1)
 
         # Strip AI-generated page number divs (position:absolute + bottom: + right: + XX/YY)
         html = re.sub(
@@ -3142,13 +3541,29 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
             '', html, flags=re.DOTALL
         )
 
+        # ═══ Per-slide div balance: prevent cross-slide DOM corruption ═══
+        # An unbalanced div in one slide closes the wrapper (or deck) div
+        # prematurely, causing subsequent slides to render outside / disappear.
+        open_divs = len(re.findall(r'<div\b', html))
+        close_divs = len(re.findall(r'</div>', html))
+        if open_divs > close_divs:
+            html += '</div>' * (open_divs - close_divs)
+        elif close_divs > open_divs:
+            # Strip trailing excess </div> tags — they close the wrapper
+            excess = close_divs - open_divs
+            for _ in range(excess):
+                pos = html.rfind('</div>')
+                if pos >= 0:
+                    html = html[:pos] + html[pos + 6:]
+
         # Inject unified page number (skip cover slide)
         if slide_num > 1:
             pn_tag = (
                 f'<div style="position:absolute;bottom:16px;right:48px;'
-                f'background:#0f172a;padding:5px 14px;'
-                f'border-radius:16px;z-index:50;box-shadow:0 0 0 2px rgba(15,23,42,0.6);">'
-                f'<span style="font-size:14px;color:#94a3b8;font-weight:500;letter-spacing:0.3px;">'
+                f'background:{{{{primary}}}};padding:5px 14px;'
+                f'border-radius:16px;z-index:50;box-shadow:0 0 0 2px rgba(0,0,0,0.3);">'
+                f'<span style="font-size:14px;color:{{{{background}}}};'
+                f'font-weight:500;letter-spacing:0.3px;">'
                 f'{slide_num:02d} / {total:02d}</span>'
                 f'</div>'
             )
@@ -3185,9 +3600,43 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
                 else:
                     html = html + '\n' + pn_tag
 
-        wrapped_parts.append(f'<div class="slide-wrapper">{html}</div>')
+        # Cover slide: if background is primary/secondary (dark), text must be light
+        # otherwise title text is invisible on dark cover backgrounds.
+        if slide_num == 1 and scheme_data:
+            primary = scheme_data.get("primary", "")
+            secondary = scheme_data.get("secondary", "")
+            text_color = scheme_data.get("text", "")
+            if primary and text_color:
+                has_dark_bg = (f"background:{primary}" in html
+                              or f"background:{secondary}" in html
+                              or f"background: {primary}" in html
+                              or f"background: {secondary}" in html)
+                if has_dark_bg:
+                    html = html.replace(f"color:{text_color}", "color:#ffffff")
+                    html = html.replace(f"color:{text_color};", "color:#ffffff;")
+                    html = html.replace(f"color: {text_color}", "color: #ffffff")
+                    html = html.replace(f"color: {text_color};", "color: #ffffff;")
+
+        wrapped_parts.append(f'<div class="slide-wrapper" data-seq="{slide_num}">{html}</div>')
 
     wrapped = "\n".join(wrapped_parts)
+
+    # Global div balance safety check — catches cross-slide leakage
+    total_open = len(re.findall(r'<div\b', wrapped))
+    total_close = len(re.findall(r'</div>', wrapped))
+    if total_open != total_close:
+        delta = total_open - total_close
+        _logger.warning(f"_assemble_html_deck: global div imbalance ({total_open} open vs "
+                        f"{total_close} close, delta={delta}), applying emergency fix")
+        if delta > 0:
+            wrapped += '</div>' * delta
+        elif delta < 0:
+            for _ in range(abs(delta)):
+                last_close = wrapped.rfind('</div>')
+                if last_close > 0:
+                    wrapped = wrapped[:last_close] + wrapped[last_close + 6:]
+
+    root_vars = _build_root_vars(scheme_data) if scheme_data else ""
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -3197,8 +3646,9 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
 <title>{title}</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+{root_vars}
   body {{
-    background: #0f172a;
+    background: {{{{secondary}}}};
     display: flex;
     flex-direction: column;
     align-items: center;
