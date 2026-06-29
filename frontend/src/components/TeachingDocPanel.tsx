@@ -15,6 +15,7 @@ export interface TeachingDocPanelProps {
   dataSource?: string
   onDataSourceChange?: (val: string) => void
   temperature?: number
+  onGeneratingChange?: (generating: boolean) => void
 }
 
 const DOC_LABELS: Record<string, string> = {
@@ -41,6 +42,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
   docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
   hideControls, dataSource: dataSourceProp, onDataSourceChange, temperature = 0.3,
+  onGeneratingChange,
 }, ref) => {
   const modal = useModal()
 
@@ -67,6 +69,8 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   const setDataSource = onDataSourceChange || _setDataSource
   const [generating, setGenerating] = useState(false)
   const generatingRef = useRef(false)
+  const [genLog, setGenLog] = useState<{ time: string; message: string }[]>([])
+  const [genProgress, setGenProgress] = useState('')
   const [savedFlash, setSavedFlash] = useState(0)
 
   const stepKey = STEP_KEYS[docType]
@@ -110,10 +114,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     }
   }
 
-  // ── Generate ──
+  // ── Generate (streaming with progress) ──
   const handleGenerate = useCallback(async () => {
     const sourceText = getSourceText(dataSource)
-    console.log('[TeachingDocPanel] handleGenerate called', { docType, dataSource, sourceText: sourceText?.slice(0, 50), model, stepKey, generating })
     if (!sourceText) {
       modal.toast(`数据来源「${dataSource}」没有内容，请先在 Stage 1 导入素材`, 'error')
       return
@@ -122,44 +125,63 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       modal.toast('请先选择大模型', 'error')
       return
     }
-    if (generatingRef.current) {
-      console.log('[TeachingDocPanel] already generating (ref), skipping')
-      return
-    }
+    if (generatingRef.current) return
     const ctrl = new AbortController(); abortRef.current = ctrl
     generatingRef.current = true
     setGenerating(true)
+    setGenLog([])
+    setGenProgress('')
+    onGeneratingChange?.(true)
+    const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    const label = DOC_LABELS[docType]
     try {
       const [pid, mdl] = model.split(':')
       const systemPrompt = prompt || DEFAULT_PROMPTS[docType]
       const userMessage = skill
         ? `请将以下内容按指定格式整理：\n\n${sourceText}\n\n输出格式要求：\n${skill}`
         : sourceText
-      console.log('[TeachingDocPanel] calling llmGenerate...', { pid, mdl, temperature: resolvedTemperature })
-      const result: any = await api.llmGenerate({
+
+      setGenLog(prev => [...prev, { time: now(), message: `开始生成 ${label}...` }])
+      setGenProgress(`正在生成 ${label}...`)
+
+      let fullText = ''
+      let lastUpdate = 0
+      for await (const chunk of api.llmGenerateStream({
         provider_id: pid, model: mdl,
-        system_prompt: systemPrompt, user_message: userMessage, temperature: resolvedTemperature,
-        signal: ctrl.signal,
-      })
-      console.log('[TeachingDocPanel] llmGenerate result', { hasContent: !!result?.content, contentLen: result?.content?.length, mounted: mountedRef.current })
+        system_prompt: systemPrompt, user_message: userMessage,
+        temperature: resolvedTemperature, signal: ctrl.signal,
+      })) {
+        fullText += chunk
+        if (fullText.length - lastUpdate > 300) {
+          lastUpdate = fullText.length
+          setGenProgress(`正在生成 ${label} — 已生成 ${fullText.length} 字符`)
+        }
+      }
+
       if (!mountedRef.current) return
-      if (result?.content) {
-        await api.saveStep(projectId, stepKey, result.content)
-        console.log('[TeachingDocPanel] saveStep done, calling onRefresh')
+      setGenLog(prev => [...prev, { time: now(), message: `${label} 完成 (${fullText.length} 字符)` }])
+      setGenProgress('')
+      if (fullText) {
+        await api.saveStep(projectId, stepKey, fullText)
         await onRefresh()
-        console.log('[TeachingDocPanel] onRefresh done')
       } else {
         modal.toast('生成失败: 模型未返回内容', 'error')
       }
     } catch (e: any) {
-      console.error('[TeachingDocPanel] generate error', e)
-      if (e.name !== 'AbortError' && mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
+      if (!mountedRef.current) return
+      if (e.name !== 'AbortError') {
+        setGenLog(prev => [...prev, { time: now(), message: `生成失败: ${e.message}` }])
+        modal.toast(`生成失败: ${e.message}`, 'error')
+      } else {
+        setGenLog(prev => [...prev, { time: now(), message: '已取消' }])
+      }
     } finally {
       generatingRef.current = false
       if (mountedRef.current) setGenerating(false)
       abortRef.current = null
+      onGeneratingChange?.(false)
     }
-  }, [dataSource, model, prompt, skill, docType, projectId, stepKey, onRefresh])
+  }, [dataSource, model, prompt, skill, docType, projectId, stepKey, onRefresh, resolvedTemperature, onGeneratingChange])
 
   // ── Save ──
   const handleSave = useCallback(async () => {
@@ -263,6 +285,24 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         onClick={handleGenerate}>
         {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
       </button>
+      {generating && (
+        <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
+          onClick={() => { abortRef.current?.abort(); setGenerating(false); generatingRef.current = false }}>取消</button>
+      )}
+      {genLog.length > 0 && (
+        <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+          {genProgress && (
+            <div style={{ marginBottom: 4, color: 'var(--primary)', fontWeight: 500 }}>
+              ⏳ {genProgress}
+            </div>
+          )}
+          {genLog.slice(-6).map((entry, i) => (
+            <div key={i} style={{ marginBottom: 2 }}>
+              <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
+            </div>
+          ))}
+        </div>
+      )}
     </>
   )
 

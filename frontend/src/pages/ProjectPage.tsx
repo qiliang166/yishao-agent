@@ -1797,7 +1797,7 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
                     llmProviders={llmProviders}
-                   
+                    onGeneratingChange={(g) => setStep2Generating(prev => ({ ...prev, '2a': g }))}
                     hideControls dataSource={s2DataSources['sop'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -1814,7 +1814,7 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
                     llmProviders={llmProviders}
-                   
+                    onGeneratingChange={(g) => setStep2Generating(prev => ({ ...prev, '2b': g }))}
                     hideControls dataSource={s2DataSources['dao'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -1831,7 +1831,7 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
                     llmProviders={llmProviders}
-                   
+                    onGeneratingChange={(g) => setStep2Generating(prev => ({ ...prev, '2c': g }))}
                     hideControls dataSource={s2DataSources['yanxi'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
