@@ -3356,6 +3356,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
     else:
         _log("result.json 不存在，从 index.html 解析...")
         # Fallback: parse slides from index.html (old-format runs)
+        column_id = req.column_id
         html_path = os.path.join(run_dir, "index.html")
         if not os.path.exists(html_path):
             _log("错误: index.html 不存在")
@@ -3453,6 +3454,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
         p_id, model_str, generate, redo_structure,
         style_id=style_id, color_scheme=color_scheme,
         parallel=min(len(redo_structure), 3), temperature=0.3,
+        column_id=column_id,
     )
 
     if not html_slides:
