@@ -3703,6 +3703,280 @@ def _build_root_vars(scheme_data: dict) -> str:
     return "\n".join(lines)
 
 
+# ═══════════════════════════════════════════════════════════════════
+# A4 overflow pagination engine
+# ═══════════════════════════════════════════════════════════════════
+
+
+def _estimate_block_height(block_html: str) -> int:
+    """Estimate vertical pixel height of an HTML content block."""
+    import re as _re
+    h = 0
+
+    # Explicit heights
+    for hm in _re.findall(r'height:\s*(\d+)px', block_html):
+        h += int(hm)
+
+    # Table rows
+    rows = len(_re.findall(r'<tr\b', block_html))
+    if rows > 0:
+        pad = 14
+        pm = _re.search(r'padding(?:-top|-bottom)?:\s*(\d+)px', block_html)
+        if pm:
+            pad = int(pm.group(1))
+        h = max(h, rows * (pad * 2 + 16))
+
+    # Text content (rough)
+    text = _re.sub(r'<[^>]+>', '', block_html).strip()
+    if text:
+        line_h = 24
+        lines = max(1, len(text) / 40)
+        h = max(h, int(lines * line_h))
+
+    # Margins
+    for m in _re.findall(r'margin-(?:top|bottom):\s*(\d+)px', block_html):
+        h += int(m)
+    for p in _re.findall(r'padding(?:-top|-bottom)?:\s*(\d+)px', block_html):
+        h += int(p)
+
+    return max(h, 40)
+
+
+def _extract_content_blocks(inner_html: str) -> list[str]:
+    """Extract top-level content blocks (tables, divs, etc.) from HTML.
+
+    Uses unified depth-aware parsing: finds the next opening tag, determines
+    its tag name, then traces <tagname / </tagname> depth until the matching
+    closing tag is found. Handles nested elements of the same type correctly.
+    """
+    blocks = []
+    pos = 0
+    n = len(inner_html)
+
+    # Void/self-closing elements that never have children
+    _void_tags = {'br', 'hr', 'img', 'input', 'meta', 'link', 'area',
+                  'base', 'col', 'embed', 'source', 'track', 'wbr'}
+
+    while pos < n:
+        # Skip whitespace
+        while pos < n and inner_html[pos] in ' \t\n\r':
+            pos += 1
+        if pos >= n:
+            break
+
+        if inner_html[pos] != '<':
+            # Text node — collect until next <
+            end = inner_html.find('<', pos)
+            if end < 0:
+                blocks.append(inner_html[pos:])
+                break
+            blocks.append(inner_html[pos:end])
+            pos = end
+            continue
+
+        # Extract tag name: letters/digits/hyphens after <
+        j = pos + 1
+        while j < n and (inner_html[j].isalnum() or inner_html[j] == '-'):
+            j += 1
+        if j == pos + 1:
+            # Not a regular tag (e.g. <!--, <!doctype)
+            pos += 1
+            continue
+        tag_name = inner_html[pos + 1:j].lower()
+
+        # Void elements — extract self-closing block
+        if tag_name in _void_tags:
+            gt = inner_html.find('>', pos)
+            if gt > 0:
+                blocks.append(inner_html[pos:gt + 1])
+                pos = gt + 1
+            else:
+                pos += 1
+            continue
+
+        # Container element — depth-aware extraction
+        start = pos
+        depth = 0
+        open_pat = f'<{tag_name}'
+        close_pat = f'</{tag_name}>'
+
+        while pos < n:
+            next_open = inner_html.find(open_pat, pos)
+            next_close = inner_html.find(close_pat, pos)
+
+            if next_close == -1:
+                pos = n
+                break
+
+            if next_open != -1 and next_open < next_close:
+                depth += 1
+                pos = next_open + len(tag_name) + 1
+            else:
+                depth -= 1
+                if depth == 0:
+                    pos = next_close + len(close_pat)
+                    blocks.append(inner_html[start:pos])
+                    break
+                pos = next_close + len(close_pat)
+
+        if depth != 0 and pos >= n:
+            # Unclosed container — include rest as one block
+            blocks.append(inner_html[start:])
+            break
+
+    return blocks
+
+
+def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
+    """Split an A4 page that overflows its content area into multiple pages.
+
+    Finds the main content container (position:absolute div with overflow-y),
+    splits its child blocks across pages, and rebuilds the HTML structure
+    for each page. Returns list of complete page HTML strings.
+    """
+    import re as _re
+
+    # Remove overflow scrolling
+    html = _re.sub(r'overflow(?:-y)?:\s*(?:auto|scroll)\s*;?', '', html)
+
+    # Find the content container — a positioned div that holds the bulk of content
+    # Pattern: position:absolute with top: + bottom: or overflow-y that we just removed
+    content_re = _re.compile(
+        r'(<div[^>]*position:\s*absolute[^>]*'
+        r'(?:top:\s*\d+px[^>]*(?:bottom|right)[^>]*|'
+        r'bottom:\s*\d+px[^>]*top:\s*\d+px[^>]*)'
+        r'[^>]*>)'
+    )
+    matches = list(content_re.finditer(html))
+
+    if not matches:
+        return [html]
+
+    # Use the last matching div (deepest content area, typically largest)
+    content_match = matches[-1]
+    content_tag_start = content_match.start()
+    content_inner_start = content_match.end()
+
+    # Find where this specific div closes
+    depth = 0
+    pos = content_match.start()
+    content_end = -1
+    while pos < len(html):
+        no = html.find('<div', pos)
+        nc = html.find('</div>', pos)
+        if nc == -1:
+            break
+        if no != -1 and no < nc:
+            depth += 1
+            pos = no + 4
+        else:
+            depth -= 1
+            if depth == 0:
+                content_end = nc
+                break
+            pos = nc + 6
+
+    if content_end < 0:
+        return [html]
+
+    inner = html[content_inner_start:content_end]
+    blocks = _extract_content_blocks(inner)
+
+    # Detect single oversized block (common: large <table> with many rows)
+    _table_open = ""
+    if len(blocks) <= 1:
+        if blocks and blocks[0].strip().startswith('<table'):
+            solo = blocks[0]
+            rows = _re.findall(r'<tr[^>]*>.*?</tr>', solo, _re.DOTALL)
+            if len(rows) > 1:
+                table_open_m = _re.match(r'<table[^>]*>', solo)
+                _table_open = table_open_m.group(0) if table_open_m else '<table>'
+                blocks = rows  # Split into row-level blocks
+            else:
+                return [html]
+        else:
+            return [html]
+
+    # Estimate heights and group into pages
+    heights = [_estimate_block_height(b) for b in blocks]
+    total_est = sum(heights)
+    if total_est <= content_max_h * 1.1:
+        return [html]
+
+    pages = []
+    current_blocks = []
+    current_h = 0
+
+    for block, h in zip(blocks, heights):
+        if current_h + h > content_max_h and current_blocks:
+            pages.append(current_blocks)
+            current_blocks = [block]
+            current_h = h
+        else:
+            current_blocks.append(block)
+            current_h += h
+
+    if current_blocks:
+        pages.append(current_blocks)
+
+    if len(pages) <= 1:
+        return [html]
+
+    before = html[:content_inner_start]
+    after = html[content_end:]
+
+    result = []
+    for page_blocks in pages:
+        page_inner = '\n'.join(page_blocks)
+        if _table_open:
+            page_inner = _table_open + '\n' + page_inner + '\n</table>'
+        result.append(before + page_inner + after)
+
+    return result
+
+
+def _preprocess_a4_slides(slides: list, canvas_w: int, canvas_h: int) -> list:
+    """Pre-process slides for A4/portrait mode: split overflow pages.
+
+    Scans non-cover slides for content overflow, splits overflowing pages
+    at block boundaries, and re-numbers all slides. Returns a new list
+    with overflow continuations inserted.
+
+    This runs BEFORE header/footer injection — only content splitting.
+    """
+    if canvas_h <= canvas_w:
+        return slides
+
+    content_max_h = canvas_h - 80  # header + footer
+
+    result = []
+    for s in slides:
+        html = s.get("html", "")
+        if not html:
+            result.append(s)
+            continue
+
+        seq = s.get("seq", 1)
+        if seq == 1:
+            result.append(s)
+            continue
+
+        has_overflow = bool(re.search(r'overflow(?:-y)?:\s*(?:auto|scroll)', html, re.IGNORECASE))
+        if not has_overflow:
+            result.append(s)
+            continue
+
+        pages = _split_a4_html_content(html, content_max_h)
+        for j, page_html in enumerate(pages):
+            result.append({**s, "html": page_html, "_overflow_split": j > 0})
+
+    # Re-number sequentially
+    for i, s in enumerate(result):
+        s["seq"] = i + 1
+
+    return result
+
+
 def _extract_outermost_div(html: str) -> str:
     """Extract the outermost <div> container from LLM-generated HTML.
 
@@ -3752,6 +4026,9 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     """
     import re
 
+    # Pre-process A4/portrait slides: split overflow pages before assembly
+    slides = _preprocess_a4_slides(slides, canvas_w, canvas_h)
+
     valid_slides = [s for s in slides if s.get("html")]
     total = total_slides or max((s.get("seq", 0) for s in valid_slides), default=len(valid_slides))
 
@@ -3775,8 +4052,9 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
         # close the wrapper, even if the LLM outputs extra or missing tags.
         html = _extract_outermost_div(html)
 
-        # Inject unified page number (skip cover slide)
-        if slide_num > 1:
+        # Inject unified page number (skip cover slide; only for landscape/PPT:
+        # portrait/A4 documents use header/footer page numbers defined in VI)
+        if slide_num > 1 and canvas_w >= canvas_h:
             pn_tag = (
                 f'<div style="position:absolute;bottom:16px;right:48px;'
                 f'background:{{{{primary}}}};padding:5px 14px;'
@@ -3818,6 +4096,59 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
                         html = html.rstrip() + '\n' + pn_tag + '\n</div>'
                 else:
                     html = html + '\n' + pn_tag
+
+        # ── A4 portrait: inject standard header & footer (code-enforced, not LLM) ──
+        if slide_num > 1 and canvas_h > canvas_w:
+            # Build A4 header (3-column flex: doc title / version+date / page X/Y)
+            import html as _html_escape
+            from datetime import date as _date
+            _today = _date.today().strftime("%Y-%m-%d")
+            _doc_name = _html_escape.escape(title) if title else "文档"
+            _a4_header = (
+                f'<div style="display:flex;justify-content:space-between;align-items:center;'
+                f'padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,0.08);'
+                f'font-size:14px;color:rgba(0,0,0,0.45);">'
+                f'<span>出品标准文档 &middot; {_doc_name}</span>'
+                f'<span>版本 2.0 / {_today}</span>'
+                f'<span>{slide_num} / {total}</span>'
+                f'</div>'
+            )
+            # Build A4 footer (3-column flex: copyright / department / 第X页)
+            _a4_footer = (
+                f'<div style="margin-top:auto;padding-top:14px;'
+                f'border-top:1px solid rgba(0,0,0,0.08);display:flex;'
+                f'justify-content:space-between;font-size:14px;color:rgba(0,0,0,0.4);">'
+                f'<span>&copy; 2024 美食研究所 &middot; 保密文档</span>'
+                f'<span>商务部监制</span>'
+                f'<span>第 {slide_num} 页</span>'
+                f'</div>'
+            )
+
+            # Detect if LLM already generated a header (specific: flex + space-between + bottom border)
+            _has_header = bool(re.search(
+                r'<div[^>]*justify-content:\s*space-between[^>]*border-bottom:\s*1px solid rgba\(0,0,0,0\.08\)[^>]*>',
+                html
+            ))
+            # Detect if LLM already generated a footer (specific: margin-top:auto + top border in same tag + 第X页)
+            _has_footer = bool(re.search(
+                r'<div[^>]*margin-top:\s*auto[^>]*border-top:\s*1px solid rgba\(0,0,0,0\.08\)[^>]*>.*?第\s*\d+\s*页.*?</div>',
+                html, flags=re.DOTALL
+            ))
+
+            # Find the first <div> opening (outermost container)
+            _first_div = html.find('<div')
+            if _first_div >= 0:
+                _first_gt = html.find('>', _first_div)
+                if _first_gt >= 0:
+                    if not _has_header:
+                        # Inject header right after outermost div opening
+                        html = html[:_first_gt + 1] + '\n' + _a4_header + '\n' + html[_first_gt + 1:]
+
+                    if not _has_footer:
+                        # Inject footer before outermost </div> closing
+                        _outer_close = html.rfind('</div>')
+                        if _outer_close >= 0:
+                            html = html[:_outer_close] + '\n' + _a4_footer + '\n' + html[_outer_close:]
 
         # Cover slide: if background is primary/secondary (dark), text must be light
         # otherwise title text is invisible on dark cover backgrounds.
