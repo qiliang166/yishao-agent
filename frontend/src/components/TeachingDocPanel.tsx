@@ -289,22 +289,23 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
           onClick={() => { abortRef.current?.abort(); setGenerating(false); generatingRef.current = false }}>取消</button>
       )}
-      {genLog.length > 0 && (
-        <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
-          {genProgress && (
-            <div style={{ marginBottom: 4, color: 'var(--primary)', fontWeight: 500 }}>
-              ⏳ {genProgress}
-            </div>
-          )}
-          {genLog.slice(-6).map((entry, i) => (
-            <div key={i} style={{ marginBottom: 2 }}>
-              <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
-            </div>
-          ))}
-        </div>
-      )}
     </>
   )
+
+  const logBox = genLog.length > 0 ? (
+    <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+      {genProgress && (
+        <div style={{ marginBottom: 4, color: 'var(--primary)', fontWeight: 500 }}>
+          ⏳ {genProgress}
+        </div>
+      )}
+      {genLog.slice(-6).map((entry, i) => (
+        <div key={i} style={{ marginBottom: 2 }}>
+          <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
+        </div>
+      ))}
+    </div>
+  ) : null
 
   const editor = (
     <>
@@ -337,8 +338,8 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     </>
   )
 
-  if (hideControls) return editor
-  return <>{controls}{editor}</>
+  if (hideControls) return <>{logBox}{editor}</>
+  return <>{controls}{logBox}{editor}</>
 })
 
 export default TeachingDocPanel
