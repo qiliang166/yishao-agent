@@ -1367,40 +1367,16 @@ async def llm_generate(req: LLMGenerateRequest):
 
 
 @app.post("/api/llm/generate-stream")
-def llm_generate_stream(req: LLMGenerateRequest):
-    """Streaming LLM generate via SSE. Sync generator — Starlette offloads to threadpool."""
-    def event_stream():
+async def llm_generate_stream(req: LLMGenerateRequest):
+    """Streaming LLM generate via SSE — provider-aware routing."""
+    async def event_stream():
         try:
-            db = get_db()
-            row = db.execute(
-                "SELECT * FROM llm_providers WHERE id = ? AND is_enabled = 1",
-                (req.provider_id,)
-            ).fetchone()
-            db.close()
-            if not row:
-                yield f"data: {json.dumps({'error': 'Provider not found'})}\n\n"
-                return
-            provider = dict(row)
-
-            from openai import OpenAI
-            client = OpenAI(
-                api_key=provider["api_key"],
-                base_url=provider["base_url"],
-                timeout=120.0,
-            )
-            messages = []
-            if req.system_prompt:
-                messages.append({"role": "system", "content": req.system_prompt})
-            messages.append({"role": "user", "content": req.user_message})
-
-            stream = client.chat.completions.create(
-                model=req.model, messages=messages,
-                temperature=req.temperature, stream=True,
-            )
-            for chunk in stream:
-                delta = chunk.choices[0].delta
-                if delta.content:
-                    yield f"data: {json.dumps({'content': delta.content}, ensure_ascii=False)}\n\n"
+            async for text in generate_stream(
+                req.provider_id, req.model,
+                req.system_prompt, req.user_message,
+                req.temperature,
+            ):
+                yield f"data: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
