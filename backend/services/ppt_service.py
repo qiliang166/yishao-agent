@@ -3852,29 +3852,61 @@ def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
     if not matches:
         return [html]
 
-    # Use the last matching div (deepest content area, typically largest)
-    content_match = matches[-1]
+    # Pick the content container with the most inner content, not the
+    # last regex match (which might be a decorative accent bar).
+    content_match = matches[0]
+    content_match_end = -1
+    best_size = -1
+    for m in matches:
+        m_inner_start = m.end()
+        m_depth = 0
+        m_pos = m.start()
+        m_end = -1
+        while m_pos < len(html):
+            no = html.find('<div', m_pos)
+            nc = html.find('</div>', m_pos)
+            if nc == -1:
+                break
+            if no != -1 and no < nc:
+                m_depth += 1
+                m_pos = no + 4
+            else:
+                m_depth -= 1
+                if m_depth == 0:
+                    m_end = nc
+                    break
+                m_pos = nc + 6
+        if m_end > 0:
+            inner_size = m_end - m_inner_start
+            if inner_size > best_size:
+                best_size = inner_size
+                content_match = m
+                content_match_end = m_end
+
     content_tag_start = content_match.start()
     content_inner_start = content_match.end()
 
-    # Find where this specific div closes
-    depth = 0
-    pos = content_match.start()
-    content_end = -1
-    while pos < len(html):
-        no = html.find('<div', pos)
-        nc = html.find('</div>', pos)
-        if nc == -1:
-            break
-        if no != -1 and no < nc:
-            depth += 1
-            pos = no + 4
-        else:
-            depth -= 1
-            if depth == 0:
-                content_end = nc
+    # Use the pre-computed end from the best-match scan above, or find it now
+    if content_match_end > 0:
+        content_end = content_match_end
+    else:
+        depth = 0
+        pos = content_match.start()
+        content_end = -1
+        while pos < len(html):
+            no = html.find('<div', pos)
+            nc = html.find('</div>', pos)
+            if nc == -1:
                 break
-            pos = nc + 6
+            if no != -1 and no < nc:
+                depth += 1
+                pos = no + 4
+            else:
+                depth -= 1
+                if depth == 0:
+                    content_end = nc
+                    break
+                pos = nc + 6
 
     if content_end < 0:
         return [html]
