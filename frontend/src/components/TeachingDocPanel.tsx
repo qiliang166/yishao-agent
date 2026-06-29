@@ -16,6 +16,8 @@ export interface TeachingDocPanelProps {
   onDataSourceChange?: (val: string) => void
   temperature?: number
   onGeneratingChange?: (generating: boolean) => void
+  onLogEntry?: (entry: { time: string; message: string }) => void
+  onProgressChange?: (progress: string) => void
 }
 
 const DOC_LABELS: Record<string, string> = {
@@ -42,7 +44,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
   docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
   hideControls, dataSource: dataSourceProp, onDataSourceChange, temperature = 0.3,
-  onGeneratingChange,
+  onGeneratingChange, onLogEntry, onProgressChange,
 }, ref) => {
   const modal = useModal()
 
@@ -143,6 +145,8 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
       setGenLog(prev => [...prev, { time: now(), message: `开始生成 ${label}...` }])
       setGenProgress(`正在生成 ${label}...`)
+      onLogEntry?.({ time: now(), message: `开始生成 ${label}...` })
+      onProgressChange?.(`正在生成 ${label}...`)
 
       let fullText = ''
       let lastUpdate = 0
@@ -155,12 +159,15 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
         if (fullText.length - lastUpdate > 300) {
           lastUpdate = fullText.length
           setGenProgress(`正在生成 ${label} — 已生成 ${fullText.length} 字符`)
+          onProgressChange?.(`正在生成 ${label} — 已生成 ${fullText.length} 字符`)
         }
       }
 
       if (!mountedRef.current) return
       setGenLog(prev => [...prev, { time: now(), message: `${label} 完成 (${fullText.length} 字符)` }])
       setGenProgress('')
+      onLogEntry?.({ time: now(), message: `${label} 完成 (${fullText.length} 字符)` })
+      onProgressChange?.('')
       if (fullText) {
         await api.saveStep(projectId, stepKey, fullText)
         await onRefresh()
@@ -171,9 +178,11 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       if (!mountedRef.current) return
       if (e.name !== 'AbortError') {
         setGenLog(prev => [...prev, { time: now(), message: `生成失败: ${e.message}` }])
+        onLogEntry?.({ time: now(), message: `生成失败: ${e.message}` })
         modal.toast(`生成失败: ${e.message}`, 'error')
       } else {
         setGenLog(prev => [...prev, { time: now(), message: '已取消' }])
+        onLogEntry?.({ time: now(), message: '已取消' })
       }
     } finally {
       generatingRef.current = false
@@ -181,7 +190,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       abortRef.current = null
       onGeneratingChange?.(false)
     }
-  }, [dataSource, model, prompt, skill, docType, projectId, stepKey, onRefresh, resolvedTemperature, onGeneratingChange])
+  }, [dataSource, model, prompt, skill, docType, projectId, stepKey, onRefresh, resolvedTemperature, onGeneratingChange, onLogEntry, onProgressChange])
 
   // ── Save ──
   const handleSave = useCallback(async () => {

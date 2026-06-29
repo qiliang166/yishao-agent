@@ -108,6 +108,7 @@ function Stage2Controls({
   dataSource, onDataSourceChange,
   generating, prompt, skill, projectId,
   panelRef, setGenerating, onRefresh,
+  logEntries, progress,
 }: {
   docType: string; label: string
   steps: Record<string, string>
@@ -118,6 +119,8 @@ function Stage2Controls({
   panelRef: React.RefObject<{ triggerGenerate: () => Promise<void>; cancel: () => void } | null>
   setGenerating: (v: boolean) => void
   onRefresh: () => Promise<void>
+  logEntries?: { time: string; message: string }[]
+  progress?: string
 }) {
   const tempKey = `_temp_s2_${docType}`
   const modal = useModal()
@@ -229,6 +232,24 @@ function Stage2Controls({
       {generating && (
         <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
           onClick={() => { panelRef.current?.cancel(); modal.toast('生成已取消', 'success') }}>取消</button>
+      )}
+      {((logEntries && logEntries.length > 0) || generating) && (
+        <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+          {progress && (
+            <div style={{ marginBottom: 4, color: 'var(--primary)', fontWeight: 500 }}>
+              ⏳ {progress}
+            </div>
+          )}
+          {(!logEntries || logEntries.length === 0) ? (
+            <div style={{ color: '#888' }}>等待日志...</div>
+          ) : (
+            logEntries.slice(-6).map((entry, i) => (
+              <div key={i} style={{ marginBottom: 2 }}>
+                <span style={{ color: '#888' }}>[{entry.time}]</span> {entry.message}
+              </div>
+            ))
+          )}
+        </div>
       )}
     </>
   )
@@ -348,6 +369,8 @@ export default function ProjectPage() {
   const [pptLog, setPptLog] = useState<{ time: string; message: string }[]>([])
   const [docGenLog, setDocGenLog] = useState<{ time: string; message: string }[]>([])
   const [docGenProgress, setDocGenProgress] = useState<{ phase_label: string; message: string; stepKey?: string } | null>(null)
+  const [s2Logs, setS2Logs] = useState<Record<string, { time: string; message: string }[]>>({})
+  const [s2Progress, setS2Progress] = useState<Record<string, string>>({})
   const [progressivePreviewUrl, setProgressivePreviewUrl] = useState<Record<string, string>>({})
   const pptPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pptLogPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -1740,6 +1763,8 @@ export default function ProjectPage() {
                     projectId={id!}
                     panelRef={sopRef}
                     setGenerating={(v) => setStep2Generating(prev => ({ ...prev, '2a': v }))}
+                    logEntries={s2Logs['2a'] || []}
+                    progress={s2Progress['2a'] || ''}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1759,6 +1784,8 @@ export default function ProjectPage() {
                     projectId={id!}
                     panelRef={daoRef}
                     setGenerating={(v) => setStep2Generating(prev => ({ ...prev, '2b': v }))}
+                    logEntries={s2Logs['2b'] || []}
+                    progress={s2Progress['2b'] || ''}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1778,6 +1805,8 @@ export default function ProjectPage() {
                     projectId={id!}
                     panelRef={yanxiRef}
                     setGenerating={(v) => setStep2Generating(prev => ({ ...prev, '2c': v }))}
+                    logEntries={s2Logs['2c'] || []}
+                    progress={s2Progress['2c'] || ''}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
                         const map: Record<string, string> = {}
@@ -1797,7 +1826,9 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
                     llmProviders={llmProviders}
-                    onGeneratingChange={(g) => setStep2Generating(prev => ({ ...prev, '2a': g }))}
+                    onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2a': g })); if (g) { setS2Logs(prev => ({ ...prev, '2a': [] })); setS2Progress(prev => ({ ...prev, '2a': '' })) } }}
+                    onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2a': [...(prev['2a'] || []), entry] }))}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2a': p })); setDocGenProgress({ phase_label: '正在生成 SOP文案', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_sop' }) }}
                     hideControls dataSource={s2DataSources['sop'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -1814,7 +1845,9 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
                     llmProviders={llmProviders}
-                    onGeneratingChange={(g) => setStep2Generating(prev => ({ ...prev, '2b': g }))}
+                    onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2b': g })); if (g) { setS2Logs(prev => ({ ...prev, '2b': [] })); setS2Progress(prev => ({ ...prev, '2b': '' })) } }}
+                    onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2b': [...(prev['2b'] || []), entry] }))}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2b': p })); setDocGenProgress({ phase_label: '正在生成 分析文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_daoshuyi' }) }}
                     hideControls dataSource={s2DataSources['dao'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -1831,7 +1864,9 @@ export default function ProjectPage() {
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
                     llmProviders={llmProviders}
-                    onGeneratingChange={(g) => setStep2Generating(prev => ({ ...prev, '2c': g }))}
+                    onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2c': g })); if (g) { setS2Logs(prev => ({ ...prev, '2c': [] })); setS2Progress(prev => ({ ...prev, '2c': '' })) } }}
+                    onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2c': [...(prev['2c'] || []), entry] }))}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2c': p })); setDocGenProgress({ phase_label: '正在生成 手册文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_yanxi' }) }}
                     hideControls dataSource={s2DataSources['yanxi'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
