@@ -1865,9 +1865,18 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
         # Also check blocks/ and templates/ subdirectories (document blocks/templates)
         blocks_file = os.path.join(vi_dir, "blocks", f"{section}.md")
         templates_file = os.path.join(vi_dir, "templates", f"{section}.md")
-        # Priority: column override > style top-level > blocks/ > templates/
+        # Priority depends on column type:
+        # - A4/portrait (col3): column > blocks/ > templates/ ONLY
+        #   (NEVER load PPT page type files like content.md/data.md for A4)
+        # - PPT/landscape (col4/col5): column > style top-level > blocks/ > templates/
+        cw_prio, ch_prio = _get_canvas_dimensions(column_id) if column_id else (1280, 720)
+        is_a4_prio = ch_prio > cw_prio
+        if is_a4_prio:
+            candidates = (col_section_file, blocks_file, templates_file)
+        else:
+            candidates = (col_section_file, section_file, blocks_file, templates_file)
         chosen = None
-        for candidate in (col_section_file, section_file, blocks_file, templates_file):
+        for candidate in candidates:
             if candidate and os.path.exists(candidate):
                 chosen = candidate
                 break
