@@ -736,18 +736,38 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     # ── Two-Phase HTML Pipeline ──
     style_id = rules.get("style_id", "business")
 
+    cw, ch = _get_canvas_dimensions(column_id)
+    is_a4 = ch > cw
+
     # Phase 1: Structure planning (lightweight, one LLM call for all slides)
-    structure = _stage2_structure(provider_id, model, llm_generate,
-                                  stage1, style_id=style_id,
-                                  temperature=st.get('cards', temperature),
-                                  column_id=column_id,
-                                  color_scheme=color_scheme)
-    if not structure:
-        return None
-    _logger.info(f"Phase 1 structure: {len(structure)} slides planned")
+    # ── col3/A4: skip structure planning — template defines fixed 6-part structure ──
+    if is_a4:
+        structure = stage1  # Use stage1 directly, no layout/card planning needed
+        # Normalize stage1 format for _stage2_html_per_slide compatibility
+        for s in structure:
+            if 'type' not in s:
+                s['type'] = s.get('page_type', 'content')
+            s.setdefault('layout', '')
+            s.setdefault('cards', [])
+            s.setdefault('has_chart', False)
+            s.setdefault('chart_hint', '')
+        _logger.info(f"A4 document mode: {len(structure)} slides, skipping structure planning")
+    else:
+        structure = _stage2_structure(provider_id, model, llm_generate,
+                                      stage1, style_id=style_id,
+                                      temperature=st.get('cards', temperature),
+                                      column_id=column_id,
+                                      color_scheme=color_scheme)
+        if not structure:
+            return None
+        _logger.info(f"Phase 1 structure: {len(structure)} slides planned")
     if project_id:
-        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"{len(structure)} 页布局已规划，并行生成 HTML 中", "slides_done": 0, "slides_total": len(structure)}
-        _append_log(project_id, f"布局规划完成，共 {len(structure)} 页，开始并行生成 HTML")
+        if is_a4:
+            _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成文档...", "message": f"{len(structure)} 页文档，并行生成 HTML 中", "slides_done": 0, "slides_total": len(structure)}
+            _append_log(project_id, f"A4 文档模式，共 {len(structure)} 页，开始并行生成 HTML")
+        else:
+            _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"{len(structure)} 页布局已规划，并行生成 HTML 中", "slides_done": 0, "slides_total": len(structure)}
+            _append_log(project_id, f"布局规划完成，共 {len(structure)} 页，开始并行生成 HTML")
 
     # Phase 2: Per-slide HTML generation (parallel, design-system.md guided)
     html_slides = _stage2_html_per_slide(provider_id, model, llm_generate,
@@ -762,14 +782,15 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
 
     _logger.info(f"Phase 2 HTML: {len(html_slides)} slides generated")
     if project_id:
-        _append_log(project_id, f"PPT 生成完成，共 {len(html_slides)} 页")
+        _append_log(project_id, f"{'A4 文档' if is_a4 else 'PPT'} 生成完成，共 {len(html_slides)} 页")
     return html_slides
 
 
 def _generate_outline_only(provider_id, model, rules, sop_content,
                            system_prompt="", skill_template="",
                            temperature: float = 0.3,
-                           st: dict = None, project_id: str = "") -> tuple:
+                           st: dict = None, project_id: str = "",
+                           column_id: str = "") -> tuple:
     """Run only Phase 2 (Research) + Phase 4 (Outline+Content Fill).
 
     Returns (outline_json, outline_text) — outline_json is the structured
@@ -800,7 +821,8 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
     stage1 = _stage1_content(provider_id, model, llm_generate, rules, sop_content,
                               system_prompt, skill_template, research_context=research_context,
                               temp_outline=st.get('outline', temperature),
-                              temp_fill=st.get('fill', temperature))
+                              temp_fill=st.get('fill', temperature),
+                              column_id=column_id)
     if not stage1:
         if project_id:
             _ppt_status.pop(project_id, None)
@@ -992,18 +1014,30 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
     # ── Phase 1: Generate outline (headings + page types + layout hints, lightweight) ──
     style_id = rules.get("style_id", "business")
-    page_type_prompt = _build_page_type_prompt(style_id)
-    outline_user = f"""{research_block}{skill_block}## SOP 文章（唯一内容来源）
-{sop_content}
+    page_type_prompt = _build_page_type_prompt(style_id, column_id)
 
-{page_type_prompt}
-
-## 输出要求
+    # Column-aware output requirements
+    cw_stage1, ch_stage1 = _get_canvas_dimensions(column_id) if column_id else (1280, 720)
+    is_a4_stage1 = ch_stage1 > cw_stage1
+    if is_a4_stage1:
+        output_reqs = """## 输出要求
+- 严格遵循上方「文档结构模板」的栏目章节结构和 JSON 格式
+- 栏目结构、构建块类型、硬约束均以模板为准，不得自行增删章节
+- 仅输出 JSON，不输出其他文字"""
+    else:
+        output_reqs = """## 输出要求
 - 严格遵循上方「幻灯片结构模板」的栏目章节结构和 JSON 格式
 - 栏目结构、页面类型、硬约束均以模板为准，不得自行增删章节
 - layout_hint 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
 - visual_weight 从以下选择: low, medium, high
 - 仅输出 JSON，不输出其他文字"""
+
+    outline_user = f"""{research_block}{skill_block}## SOP 文章（唯一内容来源）
+{sop_content}
+
+{page_type_prompt}
+
+{output_reqs}"""
 
     outline = None
     for attempt in range(2):
@@ -1828,8 +1862,16 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
         if column_id:
             col_section_file = os.path.join(vi_dir, column_id, f"{section}.md")
         section_file = os.path.join(vi_dir, f"{section}.md")
-        chosen = col_section_file if (col_section_file and os.path.exists(col_section_file)) else section_file
-        if os.path.exists(chosen):
+        # Also check blocks/ and templates/ subdirectories (document blocks/templates)
+        blocks_file = os.path.join(vi_dir, "blocks", f"{section}.md")
+        templates_file = os.path.join(vi_dir, "templates", f"{section}.md")
+        # Priority: column override > style top-level > blocks/ > templates/
+        chosen = None
+        for candidate in (col_section_file, section_file, blocks_file, templates_file):
+            if candidate and os.path.exists(candidate):
+                chosen = candidate
+                break
+        if chosen:
             with open(chosen, "r", encoding="utf-8") as f:
                 parts.append(f.read())
 
@@ -1962,30 +2004,131 @@ def _fallback_page_types() -> list[dict]:
     ]
 
 
-def _build_page_type_prompt(style_id: str) -> str:
-    """Generate the page_type selection prompt block from VI index.md."""
-    types = _scan_vi_page_types(style_id)
-    lines = [
-        "## 可用页面类型（来源：VI 索引 index.md）",
-        f"当前模板: {style_id}，共 {len(types)} 种页面类型：",
-        "",
+def _scan_vi_document_blocks(style_id: str) -> list[dict]:
+    """Read VI index.md to get document building blocks + templates.
+
+    Parses "文档构建块" (B01-B08) and "文档模板" (T01) tables from index.md.
+    Used for A4 document columns (col3) instead of PPT page types.
+    """
+    vi_dir = os.path.join(BASE_DIR, "resources", "vi")
+    index_path = os.path.join(vi_dir, style_id, "index.md")
+
+    if not os.path.exists(index_path):
+        return _fallback_document_blocks()
+
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception:
+        return _fallback_document_blocks()
+
+    blocks = []
+    current_section = None
+
+    for line in content.split("\n"):
+        line = line.strip()
+        if line.startswith("## 文档构建块"):
+            current_section = "blocks"
+            continue
+        if line.startswith("## 文档模板"):
+            current_section = "templates"
+            continue
+        if current_section and line.startswith("## "):
+            break  # next major section
+        if not current_section or not line.startswith("|") or "---" in line:
+            continue
+        cells = [c.strip() for c in line.split("|")[1:-1]]
+        if len(cells) >= 2 and cells[1] in ("块名", "模板名"):
+            continue  # header row
+
+        if len(cells) >= 4:
+            blocks.append({
+                "type": cells[1],   # block name (header, title, etc.)
+                "label": cells[2],  # 中文名
+                "purpose": cells[3],  # 用途
+                "section": current_section,  # "blocks" or "templates"
+            })
+
+    if not blocks:
+        return _fallback_document_blocks()
+    return blocks
+
+
+def _fallback_document_blocks() -> list[dict]:
+    """Minimal document blocks when VI directory doesn't exist."""
+    return [
+        {"type": "header", "label": "页头", "purpose": "文档页头区域"},
+        {"type": "title", "label": "标题", "purpose": "主标题行"},
+        {"type": "info_block", "label": "基本信息块", "purpose": "标签-值对+图片占位"},
+        {"type": "table_block", "label": "表格块", "purpose": "多列数据网格"},
+        {"type": "text_block", "label": "文字块", "purpose": "自由段落文字"},
+        {"type": "list_block", "label": "列表块", "purpose": "编号或项目符号列表"},
+        {"type": "closing", "label": "结尾块", "purpose": "文档结尾区"},
+        {"type": "footer", "label": "页脚", "purpose": "文档页脚"},
     ]
-    for t in types:
-        lines.append(f"- **{t['type']}**（{t['label']}）：{t['purpose']}")
-    lines.extend([
-        "",
-        "## 设计规范来源",
-        "所有设计规范均从 VI 索引文件（index.md）获取：",
-        "- **页面类型详细规范**：读取对应的页面类型 .md 文件（如 cover.md、content.md 等）",
-        "- **设计原则**（7项）：principles.md / consistency.md / richness.md / checklist.md / images.md / data_rules.md / decorations.md",
-        "- **设计参数**（8项）：colors.md / typography.md / card_styles.md / charts.md / layouts.md / card_roles.md / chart_decision.md / icons.md",
-        "",
-        "## 规则",
-        f"1. 只使用上述 {len(types)} 种类型，不要编造新类型。",
-        "2. 为每页选择最匹配内容特征的 page_type。",
-        "3. 需要某类型的详细布局规范时，读取该类型对应的 .md 文件。",
-        "4. 需要设计参数（颜色/字号/圆角等）时，读取设计元素对应的 .md 文件。",
-    ])
+
+
+def _build_page_type_prompt(style_id: str, column_id: str = "") -> str:
+    """Generate the page_type selection prompt block from VI index.md.
+
+    For A4/portrait columns (col3): returns document building blocks (B01-B08)
+    and document templates (T01). PPT page types are explicitly forbidden.
+    For PPT/landscape columns (col4, col5): returns PPT page types (P01-P26).
+    """
+    cw, ch = _get_canvas_dimensions(column_id) if column_id else (1280, 720)
+    is_a4 = ch > cw
+
+    if is_a4:
+        blocks = _scan_vi_document_blocks(style_id)
+        lines = [
+            "## 可用文档构建块（来源：VI 索引 index.md）",
+            f"当前模板: {style_id}，A4 文档模式，共 {len(blocks)} 种构建块：",
+            "",
+        ]
+        for b in blocks:
+            section_label = "模板" if b.get("section") == "templates" else "构建块"
+            lines.append(f"- **{b['type']}**（{b['label']}）[{section_label}]：{b['purpose']}")
+        lines.extend([
+            "",
+            "## 设计规范来源",
+            "所有设计规范均从 VI 索引文件（index.md）获取：",
+            "- **文档构建块详细规范**：读取对应的 blocks/ 目录下的 .md 文件（如 blocks/header.md、blocks/table_block.md 等）",
+            "- **文档模板**：读取 templates/ 目录下的 .md 文件",
+            "- **设计原则**（7项）：principles.md / consistency.md / richness.md / checklist.md / images.md / data_rules.md / decorations.md",
+            "- **设计参数**（8项）：colors.md / typography.md / card_styles.md / charts.md / layouts.md / card_roles.md / chart_decision.md / icons.md",
+            "",
+            "## 规则",
+            f"1. 只使用上述 {len(blocks)} 种构建块类型，不要编造新类型。",
+            "2. 为每页选择最匹配内容特征的构建块类型。",
+            "3. 需要某类型的详细规范时，读取该类型对应的 .md 文件。",
+            "4. 需要设计参数（颜色/字号/圆角等）时，读取设计元素对应的 .md 文件。",
+            "5. ⛔ 禁止使用 PPT 页面类型（cover/toc/section/content/data/summary/closing 等），A4 文档只能使用上述文档构建块。",
+        ])
+    else:
+        types = _scan_vi_page_types(style_id)
+        # Exclude P27 "document" (A4文档) for PPT columns
+        types = [t for t in types if t.get("type") != "document"]
+        lines = [
+            "## 可用页面类型（来源：VI 索引 index.md）",
+            f"当前模板: {style_id}，共 {len(types)} 种页面类型：",
+            "",
+        ]
+        for t in types:
+            lines.append(f"- **{t['type']}**（{t['label']}）：{t['purpose']}")
+        lines.extend([
+            "",
+            "## 设计规范来源",
+            "所有设计规范均从 VI 索引文件（index.md）获取：",
+            "- **页面类型详细规范**：读取对应的页面类型 .md 文件（如 cover.md、content.md 等）",
+            "- **设计原则**（7项）：principles.md / consistency.md / richness.md / checklist.md / images.md / data_rules.md / decorations.md",
+            "- **设计参数**（8项）：colors.md / typography.md / card_styles.md / charts.md / layouts.md / card_roles.md / chart_decision.md / icons.md",
+            "",
+            "## 规则",
+            f"1. 只使用上述 {len(types)} 种类型，不要编造新类型。",
+            "2. 为每页选择最匹配内容特征的 page_type。",
+            "3. 需要某类型的详细布局规范时，读取该类型对应的 .md 文件。",
+            "4. 需要设计参数（颜色/字号/圆角等）时，读取设计元素对应的 .md 文件。",
+        ])
     return "\n".join(lines)
 
 def _load_cognitive_spec(column_id: str = "") -> str:
@@ -2182,7 +2325,7 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
 
 铁律：
 - 只输出此批次的幻灯片，按 seq 顺序
-{_build_page_type_prompt(style_id)}
+{_build_page_type_prompt(style_id, column_id)}
 - layout 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
 - ⛔ layout=single_focus 仅限 cover/quote/section 页使用。summary/closing/content/data/comparison/process/timeline 等所有其余类型一律禁止 single_focus
 - 每卡必有 role (hero/metric/card_0/card_1/left/right/cell_0_0 等)
@@ -2410,7 +2553,7 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 ## 输出格式要求
 
 为每页输出结构决策：
-{_build_page_type_prompt(style_id)}
+{_build_page_type_prompt(style_id, column_id)}
 {struct_output}"""
 
     # ── DEBUG: monitor structure prompt for hex ──
@@ -2542,12 +2685,23 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         font_info = "\n".join(f"- {k}: {v}" for k, v in font_range.items())
         font_info = f"\n## 字号参考（从 style YAML 提取）\n{font_info}"
 
-    if style_prompt:
+    if canvas_h > canvas_w:
+        persona_block = "你是文档排版师。你必须严格按照《A4 文档排版系统》为每一页生成完整的 HTML。使用 8 列统一表格网格，禁止卡片布局和绝对定位。"
+    elif style_prompt:
         persona_block = style_prompt
     else:
         persona_block = "你是演示文稿设计艺术总监。你必须严格按照《幻灯片 HTML 设计系统 v2》为每一页生成完整的 HTML。"
 
     total = len(structure_slides)
+    is_a4 = canvas_h > canvas_w
+
+    # For A4 documents: load design system explicitly (normally loaded in _stage2_structure,
+    # but that stage is skipped for col3)
+    doc_design_system = ""
+    if is_a4:
+        doc_design_system = _load_design_system(column_id)
+        if doc_design_system:
+            doc_design_system = f"\n{doc_design_system}\n"
 
     import threading as _threading
     _done_lock = _threading.Lock()
@@ -2569,7 +2723,12 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
-        core_system = build_slide_prompt(stype, layout, has_chart)
+        if is_a4:
+            # A4 document: core system comes from design-system.md (loaded via _load_design_system)
+            # Skip build_slide_prompt — PPT card/layout rules don't apply to documents
+            core_system = ""
+        else:
+            core_system = build_slide_prompt(stype, layout, has_chart)
         # Append VI section for this slide type (design instruction, not user content)
         vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id)
         vi_append = ""
@@ -2596,7 +2755,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         tailored_system = f"""{persona_block}
 
 {core_system}
-
+{doc_design_system}
 ## 风格 Token（仅排版，无颜色 hex）
 ```yaml
 {style_yaml}
@@ -2609,9 +2768,10 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         content_parts = [
             f"页码: {seq}/{total}",
             f"类型: {stype}",
-            f"布局: {layout}",
-            f"标题: {heading}",
         ]
+        if not is_a4:
+            content_parts.append(f"布局: {layout}")
+        content_parts.append(f"标题: {heading}")
         if kicker:
             content_parts.append(f"章节标签: {kicker}")
         if lead:
@@ -2620,13 +2780,13 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             content_parts.append(f"正文内容: {body[:1000]}")
         if key_points:
             content_parts.append(f"关键点: {'; '.join(str(kp) for kp in key_points[:5])}")
-        if cards:
+        if not is_a4 and cards:
             cards_desc = "; ".join(
                 f"[{c.get('role','card')}] {c.get('content_hint','')}" for c in cards)
             content_parts.append(f"卡片分配: {cards_desc}")
         if notes:
             content_parts.append(f"备注: {notes[:300]}")
-        if has_chart:
+        if not is_a4 and has_chart:
             content_parts.append(
                 f"需要数据图表: {chart_hint or '根据内容中的数据选择合适的图表类型(big_number/donut/bar/progress_bar)'}")
 

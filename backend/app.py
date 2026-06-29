@@ -2858,7 +2858,8 @@ def api_ppt_outline(req: PPTPlanRequest):
         outline_json, outline_text = _generate_outline_only(
             req.provider_id, req.model, rules, req.content,
             column_prompt, column_skill, temperature=req.temperature,
-            st=st, project_id=req.project_id or "")
+            st=st, project_id=req.project_id or "",
+            column_id=req.column_id or "")
         return {"outline_json": outline_json or [], "outline_text": outline_text or ""}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
