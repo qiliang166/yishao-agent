@@ -10,7 +10,7 @@
   <!-- ═══ 页头区 45px ═══ -->
   <div style="flex-shrink:0;height:45px;display:flex;align-items:center;font-size:10px;color:rgba(var(--text-rgb),0.45);border-bottom:1px solid rgba(var(--text-rgb),0.08);">
     <div style="flex:1;text-align:center;padding-left:60px;">出品标准文档 &middot; {{TITLE}}</div>
-    <div style="flex:1;text-align:center;">版本 2.0 / {{DATE}}</div>
+    <div style="flex:1;text-align:center;">{{VERSION_NOTE}} / {{DATE}}</div>
     <div style="flex:1;text-align:center;">第{{PAGE_NUM}}页/共{{TOTAL_PAGES}}页</div>
   </div>
 
@@ -74,7 +74,7 @@
   <div style="flex-shrink:0;height:45px;display:flex;align-items:center;font-size:10px;color:rgba(var(--text-rgb),0.4);border-top:1px solid rgba(var(--text-rgb),0.08);">
     <div style="flex:1;text-align:center;padding-left:60px;">{{BRAND_COPYRIGHT}}</div>
     <div style="flex:1;text-align:center;">{{BRAND_SIGNATURE}}</div>
-    <div style="flex:1;text-align:center;">第 {{PAGE_NUM}} 页</div>
+    <div style="flex:1;text-align:center;">第{{PAGE_NUM}}页/共{{TOTAL_PAGES}}页</div>
   </div>
 
 </div>
@@ -86,6 +86,7 @@
 |------|------|------|
 | `{{TITLE}}` | 菜品名称 | heading |
 | `{{DATE}}` | 编写日期 | key_points[0] |
+| `{{VERSION_NOTE}}` | 版本说明 | key_points[4] |
 | `{{PAGE_NUM}}` | 当前页码 | 系统 |
 | `{{TOTAL_PAGES}}` | 总页数 | 系统 |
 | `{{PRODUCT_NAME}}` | 正式名称 | body 提取 |
