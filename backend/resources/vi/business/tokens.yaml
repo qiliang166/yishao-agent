@@ -3,7 +3,14 @@
 # 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
 
 # 当前激活的色系（兼容字段）
-color_scheme: deep-blue
+color_scheme: chinese-red
+
+# 文档模板映射 — 从 chart_colors 引用，避免破坏13色码结构
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "44,24,16"
+  white: "#ffffff"
 
 color_schemes:
   deep-blue:

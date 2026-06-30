@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>封面 — 占位符模板</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #1a365d;
+    --primary-rgb: 26, 54, 93;
+    --accent: #e67e22;
+    --accent-rgb: 230, 126, 34;
+    --background: #ffffff;
+    --background-rgb: 255, 255, 255;
+    --text: #1a202c;
+    --text-rgb: 26, 32, 44;
+    --card_bg: #f0f4f8;
+    --card_bg-rgb: 240, 244, 248;
+  }
+  body {
+    background: #e8ecf1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="slide-wrapper">
+
+<div style="width:794px;height:1123px;display:flex;flex-direction:column;background:var(--primary);font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;">
+
+  <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="80" cy="850" r="180" fill="none" stroke="#ffffff" stroke-width="2.5" opacity="0.3"/>
+  </svg>
+
+  <!-- ═══ Top Gold Line 10px ═══ -->
+  <div style="flex-shrink:0;height:10px;background:var(--accent);"></div>
+
+  <!-- ═══ Section 1: Title 480px ═══ -->
+  <div style="flex-shrink:0;height:480px;display:flex;flex-direction:column;justify-content:flex-end;text-align:center;">
+    <div style="font-size:56px;font-weight:700;color:#ffffff;letter-spacing:3px;padding:0 60px;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;">鲍鱼一品煲</div>
+    <div style="width:48px;height:4px;background:var(--accent);margin:20px auto 0 auto;"></div>
+    <div style="margin-top:16px;font-size:18px;font-weight:700;color:rgba(255,255,255,0.65);padding-bottom:8px;">鲍鱼弹韧 · 花胶滑润 · 凤爪软糯 — 一煲三境</div>
+  </div>
+
+  <!-- ═══ Section 2: Info Table ═══ -->
+  <div style="flex-shrink:0;padding:48px 0 0 0;text-align:center;">
+    <table style="margin:0 auto;border-collapse:collapse;">
+      <tr>
+        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:0 12px 12px 0;text-align:right;white-space:nowrap;">编写日期</td>
+        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:0 0 12px 12px;text-align:left;">2026-06-30</td>
+      </tr>
+      <tr>
+        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">内容分类</td>
+        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 12px 12px;text-align:left;">粤式热菜砂锅煲</td>
+      </tr>
+      <tr>
+        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">核心食材</td>
+        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 12px 12px;text-align:left;">鲍鱼 · 花胶 · 凤爪 · 花菇</td>
+      </tr>
+      <tr>
+        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">工艺特征</td>
+        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 12px 12px;text-align:left;">蒸醒温浸 · 分层炖煮 · 鱼粉增鲜</td>
+      </tr>
+      <tr>
+        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 0 0;text-align:right;white-space:nowrap;">版本说明</td>
+        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 0 12px;text-align:left;">V2.0 / 内部培训</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- ═══ Section 3: Description (flex:1) ═══ -->
+  <div style="flex:1;display:flex;align-items:flex-end;padding:0 100px 48px 100px;">
+    <div style="max-width:594px;margin:0 auto;font-size:13px;color:rgba(255,255,255,0.5);line-height:1.8;text-align:center;">一道经典粤式砂锅热菜，本文档为2025年4月8日优化版标准作业程序，旨在规范干货涨发、炸制、炖煮及复合调味等关键工艺。</div>
+  </div>
+
+</div>
+
+</div>
+</body>
+</html>

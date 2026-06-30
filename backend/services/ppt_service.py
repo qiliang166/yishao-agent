@@ -116,6 +116,28 @@ EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
 
+def _load_branding() -> tuple:
+    """Load copyright and signature from DB settings. Returns (copyright_str, signature_str)."""
+    try:
+        db = get_db()
+        rows = db.execute(
+            "SELECT key, value FROM settings WHERE key IN ('branding_copyright', 'branding_signature')"
+        ).fetchall()
+        db.close()
+        copyright_str = ""
+        sig_str = ""
+        for r in rows:
+            if r["key"] == "branding_copyright" and r["value"]:
+                copyright_str = r["value"].strip()
+            elif r["key"] == "branding_signature" and r["value"]:
+                sig_str = r["value"].strip()
+        if not copyright_str and not sig_str:
+            return ("&copy; 2024 美食研究所 &middot; 保密文档", "商务部监制")
+        return (copyright_str, sig_str)
+    except Exception:
+        return ("&copy; 2024 美食研究所 &middot; 保密文档", "商务部监制")
+
+
 def _load_style_from_template(template_id: str = None) -> str:
     """Extract style_id from template rules. Defaults to 'business'."""
     if not template_id:
@@ -996,7 +1018,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     base_system = "\n\n".join(b for b in [role_block, vi_block, pyramid_rules] if b.strip())
 
     skill_block = ""
-    if skill_template:
+    if skill_template and not skill_template.strip().startswith('|'):
         skill_block = f"""## 幻灯片结构模板（必须严格遵循的页面结构和字段）
 {skill_template}
 
@@ -1376,6 +1398,8 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
         best_name = None
         best_dist = float('inf')
         for var_name in candidates:
+            if var_name not in scheme_rgb:
+                continue
             sr, sg, sb = scheme_rgb[var_name]
             dist = (r - sr) ** 2 + (g - sg) ** 2 + (b - sb) ** 2
             if dist < best_dist:
@@ -1492,22 +1516,30 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
     return html
 
 
-def _auto_fix_font_size(html: str, slide_seq: int) -> str:
+def _auto_fix_font_size(html: str, slide_seq: int, is_a4: bool = False) -> str:
     """Enforce VI typography minimums per spec.
 
     Valid sizes: 14px (captions), 16-18px (body), 22-24px (card titles),
     36-44px (page titles), 58-65px (cover titles).
-    10-13px: below minimum → bump to 14px.
+    10-13px: below minimum → bump to 14px (PPT) or keep 10px/12px (A4).
     15px: dead zone → bump to 16px.
     """
     import re as _re_fs
     total_fixes = 0
-    # 10-13px → 14px (below absolute minimum)
-    for sz in ['10', '11', '12', '13']:
-        before = len(_re_fs.findall(rf'font-size:\s*{sz}px', html))
-        html = html.replace(f'font-size:{sz}px', 'font-size:14px')
-        html = html.replace(f'font-size: {sz}px', 'font-size: 14px')
-        total_fixes += before
+    if is_a4:
+        # A4: 10px = header/footer (keep), 11px → 12px, 12px = body (keep), 13px → 14px
+        for sz in ['11', '13']:
+            before = len(_re_fs.findall(rf'font-size:\s*{sz}px', html))
+            html = html.replace(f'font-size:{sz}px', f'font-size:{"12" if sz == "11" else "14"}px')
+            html = html.replace(f'font-size: {sz}px', f'font-size: {"12" if sz == "11" else "14"}px')
+            total_fixes += before
+    else:
+        # PPT: 10-13px → 14px (below absolute minimum)
+        for sz in ['10', '11', '12', '13']:
+            before = len(_re_fs.findall(rf'font-size:\s*{sz}px', html))
+            html = html.replace(f'font-size:{sz}px', 'font-size:14px')
+            html = html.replace(f'font-size: {sz}px', 'font-size: 14px')
+            total_fixes += before
     # 15px → 16px (invalid gap between caption and body)
     before15 = len(_re_fs.findall(r'font-size:\s*15px', html))
     html = html.replace('font-size:15px', 'font-size:16px')
@@ -1905,8 +1937,6 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
             result = _resolve_color_vars(result, scheme)
 
     return result
-
-
 # Page type order — lazily built from index.md (single source of truth)
 _page_type_order_cache: dict[str, list[str]] = {}
 
@@ -2659,6 +2689,8 @@ def _fallback_single_slide_html(slide: dict, style_id: str,
 </section>"""
 
     return {**slide, "html": html, "html_vars": html}
+
+
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
                            temperature: float = 0.3, column_id: str = "",
@@ -2847,11 +2879,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                             _df2.write(html)
 
                     # Post-process: fix common LLM HTML errors
-                    html = _fix_llm_html_errors(html)
+                    html = _fix_llm_html_errors(html, is_a4=is_a4)
                     # Post-process: scan & replace hardcoded hex with {{placeholder}} vars
                     html = _auto_fix_hardcoded_hex(html, active_scheme, seq)
                     # Post-process: enforce VI typography minimums (15px → 16px)
-                    html = _auto_fix_font_size(html, seq)
+                    html = _auto_fix_font_size(html, seq, is_a4=is_a4)
                     # Save unresolved HTML for later recolor (before hex resolution)
                     html_vars = html
                     # Resolve {{primary}} etc. → actual hex from active color scheme
@@ -2972,7 +3004,9 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 else:
                     _logger.warning(f"Slide {seq} attempt {attempt+1}: HTML too short ({len(html)} chars)")
             except Exception as e:
+                import traceback as _tb
                 _logger.warning(f"Slide {seq} HTML attempt {attempt+1} failed: {e}")
+                _logger.warning(f"Slide {seq} traceback: {_tb.format_exc()[-500:]}")
 
         _logger.warning(f"Slide {seq}: all attempts failed, using fallback")
         return _fallback_single_slide_html(slide, style_id, canvas_w, canvas_h)
@@ -3710,7 +3744,7 @@ def _lookup_knowledge(topic: str) -> str | None:
     return None
 
 
-def _fix_llm_html_errors(html: str) -> str:
+def _fix_llm_html_errors(html: str, is_a4: bool = False) -> str:
     """Fix common LLM HTML generation mistakes.
 
     1. Missing px units on CSS position/size properties (e.g., top:28 → top:28px)
@@ -3789,11 +3823,14 @@ def _fix_llm_html_errors(html: str) -> str:
         html
     )
 
-    # ── 6. Enforce minimum font-size 14px ──
+    # ── 6. Enforce minimum font-size ──
+    # PPT (1280x720): minimum 14px — anything smaller is unreadable
+    # A4 (794x1123): minimum 12px — VI template uses 12px for body, 10px for header/footer
+    _min_fs = 12 if is_a4 else 14
     def _bump_font_size(m):
         sz = int(m.group(1))
-        if sz < 14:
-            return f'font-size:14px'
+        if sz < _min_fs:
+            return f'font-size:{_min_fs}px'
         return m.group(0)
     html = re.sub(r'font-size:(\d+)px', _bump_font_size, html)
 
@@ -3816,9 +3853,10 @@ def _fix_llm_html_errors(html: str) -> str:
         html
     )
 
-    # ── 8. Enforce minimum margin-top: 4px and 6px are always too small at 1280x720 ──
-    html = re.sub(r'margin-top:\s*4px', 'margin-top:12px', html)
-    html = re.sub(r'margin-top:\s*6px', 'margin-top:12px', html)
+    # ── 8. Enforce minimum margin-top (PPT only: 1280x720 canvas needs larger spacing) ──
+    if not is_a4:
+        html = re.sub(r'margin-top:\s*4px', 'margin-top:12px', html)
+        html = re.sub(r'margin-top:\s*6px', 'margin-top:12px', html)
 
     # ── 9. Fix SVG icon margin-bottom too small ──
     # Icons before numbers need ≥20px gap
@@ -4298,61 +4336,15 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
                 else:
                     html = html + '\n' + pn_tag
 
-        # ── A4 portrait: inject standard header & footer (code-enforced, not LLM) ──
-        if slide_num > 1 and canvas_h > canvas_w:
-            # Build A4 header (3-column flex: doc title / version+date / page X/Y)
-            import html as _html_escape
-            from datetime import date as _date
-            _today = _date.today().strftime("%Y-%m-%d")
-            _doc_name = _html_escape.escape(title) if title else "文档"
-            _a4_header = (
-                f'<div style="display:flex;justify-content:space-between;align-items:center;'
-                f'padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,0.08);'
-                f'font-size:14px;color:rgba(0,0,0,0.45);">'
-                f'<span>出品标准文档 &middot; {_doc_name}</span>'
-                f'<span>版本 2.0 / {_today}</span>'
-                f'<span>{slide_num} / {total}</span>'
-                f'</div>'
-            )
-            # Build A4 footer (3-column flex: copyright / department / 第X页)
-            _a4_footer = (
-                f'<div style="margin-top:auto;padding-top:14px;'
-                f'border-top:1px solid rgba(0,0,0,0.08);display:flex;'
-                f'justify-content:space-between;font-size:14px;color:rgba(0,0,0,0.4);">'
-                f'<span>&copy; 2024 美食研究所 &middot; 保密文档</span>'
-                f'<span>商务部监制</span>'
-                f'<span>第 {slide_num} 页</span>'
-                f'</div>'
-            )
-
-            # Detect if LLM already generated a header (specific: flex + space-between + bottom border)
-            _has_header = bool(re.search(
-                r'<div[^>]*justify-content:\s*space-between[^>]*border-bottom:\s*1px solid rgba\(0,0,0,0\.08\)[^>]*>',
-                html
-            ))
-            # Detect if LLM already generated a footer (specific: margin-top:auto + top border in same tag + 第X页)
-            _has_footer = bool(re.search(
-                r'<div[^>]*margin-top:\s*auto[^>]*border-top:\s*1px solid rgba\(0,0,0,0\.08\)[^>]*>.*?第\s*\d+\s*页.*?</div>',
-                html, flags=re.DOTALL
-            ))
-
-            # Find the first <div> opening (outermost container)
-            _first_div = html.find('<div')
-            if _first_div >= 0:
-                _first_gt = html.find('>', _first_div)
-                if _first_gt >= 0:
-                    if not _has_header:
-                        # Inject header right after outermost div opening
-                        html = html[:_first_gt + 1] + '\n' + _a4_header + '\n' + html[_first_gt + 1:]
-
-                    if not _has_footer:
-                        # Inject footer before outermost </div> closing
-                        _outer_close = html.rfind('</div>')
-                        if _outer_close >= 0:
-                            html = html[:_outer_close] + '\n' + _a4_footer + '\n' + html[_outer_close:]
+        # ── Branding variable substitution (ALL slides, code-enforced) ──
+        # VI templates use {{BRAND_COPYRIGHT}} / {{BRAND_SIGNATURE}} placeholders.
+        # Code replaces them with DB values — no structural injection needed.
+        _copyright_str, _sig_str = _load_branding()
+        import html as _html_escape
+        html = html.replace('{{BRAND_COPYRIGHT}}', _html_escape.escape(_copyright_str))
+        html = html.replace('{{BRAND_SIGNATURE}}', _html_escape.escape(_sig_str))
 
         # Cover slide: if background is primary/secondary (dark), text must be light
-        # otherwise title text is invisible on dark cover backgrounds.
         if slide_num == 1 and scheme_data:
             primary = scheme_data.get("primary", "")
             secondary = scheme_data.get("secondary", "")
@@ -4367,6 +4359,20 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
                     html = html.replace(f"color:{text_color};", "color:#ffffff;")
                     html = html.replace(f"color: {text_color}", "color: #ffffff")
                     html = html.replace(f"color: {text_color};", "color: #ffffff;")
+            # Cover font-size: upscale subtitle/metadata 12px→14px in content area
+            # (above bottom branding div)
+            _btm = html.rfind("position:absolute;bottom:")
+            if _btm > 0:
+                _content_area = html[:_btm]
+                _branding_area = html[_btm:]
+                import re as _re_cv
+                _content_area = _re_cv.sub(
+                    r'<(?:td|div)\b[^>]*font-size\s*:\s*12px[^>]*>',
+                    lambda m: m.group(0).replace('font-size:12px', 'font-size:14px')
+                              .replace('font-size: 12px', 'font-size: 14px'),
+                    _content_area
+                )
+                html = _content_area + _branding_area
 
         wrapped_parts.append(f'<div class="slide-wrapper" data-seq="{slide_num}">{html}</div>')
 

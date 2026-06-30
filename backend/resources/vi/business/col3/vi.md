@@ -1,115 +1,45 @@
-# A4 文档视觉识别系统 | Business Professional
+# A4 文档视觉识别系统 | Business Professional (col3)
 
-> 结构化、清晰、专业。以统一的 8 列表格网格承载信息。
-
----
+> 模板驱动，照抄结构，只替换内容占位符。
 
 ## I. 核心设计原则
 
-三条设计原则：
-
-1. **网格优先** — 所有内容填入 8 列统一表格网格（总宽 592px，居中），列宽固定不可变。
-2. **克制配色** — {{primary}} 用于标题和表头，{{accent}} 仅用于标题底线（≤5%），大面积白色背景确保干净锐利。
-3. **文档流排版** — 内容从上到下顺序排列（页头→标题→信息块→表格块→页尾），禁止绝对定位（封面页除外）。
-
-设计铁律：表格边框、交替行背景、标题底线即为全部视觉元素。不装饰、不炫技。
-
----
+1. **模板即法律** — 每个模块的 HTML 模板定义在 col3/*.md 或 blocks/*.md 中。必须严格照抄 HTML 结构，只替换 `{{VARIABLE}}` 占位符。
+2. **CSS 变量着色** — 所有颜色通过 `var(--primary)` / `var(--accent)` 等 CSS 变量使用，严禁硬编码 hex 色值（唯一例外：`#ffffff`）。
+3. **结构不可变** — 禁止修改模板中的 width/height/font-size/padding/margin/position 等任何数值。
 
 ## II. 色彩系统
 
-| 角色 | 色值 | 用途 |
-|------|------|------|
-| primary | {{primary}} | 标题文字、标题渐变背景起点、表头色 |
-| secondary | {{secondary}} | 标题渐变背景终点 |
-| accent | {{accent}} | 标题底线（3px solid） |
-| background | {{background}} | 页面底色 |
-| text | {{text}} | 正文 |
-| card_bg | {{card_bg}} | 信息块标签列背景 |
-| chart_0 | {{chart_0}} | 第2个表格表头色（深铜） |
-| chart_1 | {{secondary}} | 第1个表格表头色（中蓝） |
+| 变量 | 用途 |
+|------|------|
+| `var(--primary)` | 封面背景、标签列文字色 |
+| `var(--accent)` | 顶部色条、标题底线 |
+| `var(--background)` | 内部页面底色 |
+| `var(--text)` | 正文文字 |
+| `var(--card_bg)` | 标签列背景 |
+| `var(--chart-0)` | materials_table 表头、quality_control 危害控制表头 |
+| `var(--chart-1)` | steps_table 表头、quality_control 关键技术表头 |
+| `rgba(var(--text-rgb), N)` | 半透明文字/边框 |
+| `rgba(var(--accent-rgb), N)` | 半透明 accent |
+| `#ffffff` | 暗色背景上的文字（仅此例外） |
 
----
+## III. 5 模块结构
 
-## III. 排版层级
+| 模块 | type | 背景 | 页头 | 页尾 |
+|------|------|------|------|------|
+| 封面 | cover | `var(--primary)` | 禁止 | 禁止 |
+| 成品定义 | product_definition | `var(--background)` | 有 | 有 |
+| 食材清单 | materials_table | `var(--background)` | 有 | 有 |
+| 操作步骤 | steps_table | `var(--background)` | 有 | 有 |
+| 出品标准 | quality_control | `var(--background)` | 有 | 有 |
 
-### 字体
+## IV. 禁止事项
 
-| 角色 | 字体栈 |
-|------|--------|
-| 标题 | `DM Sans, Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif` |
-| 正文 | `Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif` |
-
-### 字号层级
-
-| 层级 | 字号 | 字重 | 使用场景 |
-|------|------|------|---------|
-| 封面标题 | 36-48px | 700 | 封面 h1 |
-| 页面标题 | 22px | 700 | 标题渐变背景行 |
-| 表头 | 12-13px | 600 | table thead th |
-| 正文 | 12-14px | 400 | table tbody td、信息块值 |
-| 页头页尾 | 14px | 400 | 页头/页尾信息行 |
-
----
-
-## IV. 表格样式 Token
-
-| 属性 | 值 |
-|------|-----|
-| 边框 | `1px solid rgba({{text_rgb}}, 0.1)` |
-| 交替行背景 | `rgba({{text_rgb}}, 0.02)` 偶数行 |
-| 表头文字色 | `#ffffff` |
-| 表头行高 | 28px |
-| 数据行高 | 26px |
-| 单元格内边距 | 6px 8px |
-
----
-
-## V. 8 列统一网格
-
-| 列 | 宽度 | 对齐 | 用途 |
-|----|------|------|------|
-| col1 | 42px | center | 序号 |
-| col2 | 66px | center | 分类/类型/关键词 |
-| col3 | 98px | left | 名称/品牌 |
-| col4 | 66px | left | 品牌/工具 |
-| col5 | 100px | left | 加工说明/操作说明（主列） |
-| col6 | 100px | left | 加工要求/操作说明续 |
-| col7 | 66px | center | 重量/操作说明续 |
-| col8 | 54px | center | 单位/注意事项 |
-
----
-
-## VI. 禁止事项
-
-- 禁止 hero_grid / mixed_grid / dashboard 等 PPT 布局
-- 禁止 metric 卡片、progress_bar、big_number、donut 等图表组件
-- 禁止 flex 卡片布局（除页头页尾的三列 flex 外）
-- 禁止 position:absolute（封面页除外）
-- 禁止 5 层装饰结构（背景/装饰/结构/内容/标识层）
-- 禁止卡片色条轮换（chart_colors 仅用于表格表头）
-- 禁止 SVG 图标装饰
-- 禁止盒阴影（box-shadow）
-- 禁止渐变（除标题行背景外）
-- 禁止圆角卡片容器
-
----
-
-## VII. 文档结构模板
-
-文档按固定顺序组装段落，不可增删、不可调换：
-
-1. **header**（页头）— 三列 flex，出品标准文档名 / 版本日期 / 页码
-2. **title**（标题）— 全宽合并，渐变背景，白色文字
-3. **info_block**（基本信息）— 标签-值对表格 + 图片占位
-4. **table_block**（食材清单）— 8 列标准网格，12 行数据
-5. **table_block**（操作步骤）— 5 列合并网格，7 行数据
-6. **footer**（页尾）— 三列 flex，版权 / 监制 / 页码
-
----
-
-## VIII. 分页规则
-
-- 单个表格数据行数超过页面可容纳量时，自动分页
-- 每页保留表头行，续页标题加"(续)"标注
-- 分页后每页独立编号
+- 修改模板中的任何数值
+- 添加模板中没有的元素
+- 删除模板中已有的元素
+- 硬编码 hex 色值（除 `#ffffff`）
+- 使用 linear-gradient 作为封面背景
+- 合并 quality_control 的 7 个维度行
+- 使用 PPT 布局（hero_grid/mixed_grid/dashboard/card 布局）
+- 使用图表组件（big_number/donut/progress_bar）

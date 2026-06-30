@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, StyleItem } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
@@ -1350,6 +1350,11 @@ function TemplateManager() {
   const [dragInfo, setDragInfo] = useState<{startX: number; startY: number; origX: number; origY: number} | null>(null)
   const [resizeInfo, setResizeInfo] = useState<{startX: number; startY: number; origW: number; origH: number; dir: string} | null>(null)
 
+  const dragMoved = useRef(false)
+  const resizeMoved = useRef(false)
+  const justOpened = useRef(false)
+  const editorRef = useRef<HTMLDivElement>(null)
+
   // Color scheme management state
   const [schemeData, setSchemeData] = useState<Record<string, any>>({})
   const [editingSchemeId, setEditingSchemeId] = useState<string | null>(null)
@@ -1606,17 +1611,34 @@ function TemplateManager() {
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (dragInfo) {
-        setEditorPos({ x: dragInfo.origX + (e.clientX - dragInfo.startX), y: dragInfo.origY + (e.clientY - dragInfo.startY) })
+        const dx = e.clientX - dragInfo.startX
+        const dy = e.clientY - dragInfo.startY
+        if (!dragMoved.current) {
+          if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return
+          dragMoved.current = true
+          setEditorPos({ x: dragInfo.origX, y: dragInfo.origY })
+        }
+        setEditorPos({ x: dragInfo.origX + dx, y: dragInfo.origY + dy })
       }
       if (resizeInfo) {
         const dx = e.clientX - resizeInfo.startX, dy = e.clientY - resizeInfo.startY
+        if (!resizeMoved.current) {
+          if (Math.abs(dx) < 3 && Math.abs(dy) < 3) return
+          resizeMoved.current = true
+          setEditorSize({ w: resizeInfo.origW, h: resizeInfo.origH })
+        }
         let nw = resizeInfo.origW, nh = resizeInfo.origH
-        if (resizeInfo.dir.includes('e')) nw = Math.max(400, resizeInfo.origW + dx)
-        if (resizeInfo.dir.includes('s')) nh = Math.max(300, resizeInfo.origH + dy)
+        if (resizeInfo.dir.includes('e')) nw = Math.min(window.innerWidth - 40, Math.max(400, resizeInfo.origW + dx))
+        if (resizeInfo.dir.includes('s')) nh = Math.min(window.innerHeight - 40, Math.max(300, resizeInfo.origH + dy))
         setEditorSize({ w: nw, h: nh })
       }
     }
-    const onUp = () => { setDragInfo(null); setResizeInfo(null) }
+    const onUp = () => {
+      setDragInfo(null)
+      setResizeInfo(null)
+      dragMoved.current = false
+      resizeMoved.current = false
+    }
     window.addEventListener('mousemove', onMove)
     window.addEventListener('mouseup', onUp)
     return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
@@ -1653,7 +1675,9 @@ function TemplateManager() {
   }
 
   const openEditor = async (styleId: string, styleName: string, mode: 'vi' | 'prompt') => {
+    justOpened.current = true
     setEditorOpen(true)
+    requestAnimationFrame(() => { justOpened.current = false })
     setEditorMode(mode)
     setEditorStyleId(styleId)
     setEditorStyleName(styleName)
@@ -2108,8 +2132,15 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(0,0,0,0.35)',
-        }} onClick={() => setEditorOpen(false)}>
-          <div style={{
+        }} onClick={(e) => {
+          if (justOpened.current) { justOpened.current = false; return }
+          if (e.target === e.currentTarget) {
+            setEditorOpen(false)
+            setEditorPos(null)
+            setEditorSize(null)
+          }
+        }}>
+          <div ref={editorRef} style={{
             position: 'absolute',
             left: editorPos ? `${pos.x}px` : '50%',
             top: editorPos ? `${pos.y}px` : '50%',
@@ -2131,7 +2162,6 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
               const mx = editorPos?.x ?? (window.innerWidth * 0.05)
               const my = editorPos?.y ?? (window.innerHeight * 0.075)
               setDragInfo({ startX: e.clientX, startY: e.clientY, origX: mx, origY: my })
-              if (!editorPos) setEditorPos({ x: mx, y: my })
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontWeight: 600, fontSize: 15, color: 'var(--text)' }}>
@@ -2284,10 +2314,10 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
               borderRadius: '0 0 12px 0',
             }} onMouseDown={(e) => {
               e.stopPropagation()
-              const cw = editorSize?.w || (window.innerWidth * 0.9 > 900 ? 900 : window.innerWidth * 0.9)
-              const ch = editorSize?.h || (window.innerHeight * 0.85)
+              const rect = editorRef.current?.getBoundingClientRect()
+              const cw = editorSize?.w || (rect ? rect.width : Math.min(window.innerWidth * 0.9, 900))
+              const ch = editorSize?.h || (rect ? rect.height : Math.min(window.innerHeight * 0.85, 800))
               setResizeInfo({ startX: e.clientX, startY: e.clientY, origW: cw, origH: ch, dir: 'se' })
-              if (!editorSize) setEditorSize({ w: cw, h: ch })
             }} />
             {/* Resize handle — right edge */}
             <div style={{
@@ -2295,10 +2325,10 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
               width: 6, cursor: 'ew-resize',
             }} onMouseDown={(e) => {
               e.stopPropagation()
-              const cw = editorSize?.w || (window.innerWidth * 0.9 > 900 ? 900 : window.innerWidth * 0.9)
-              const ch = editorSize?.h || (window.innerHeight * 0.85)
+              const rect = editorRef.current?.getBoundingClientRect()
+              const cw = editorSize?.w || (rect ? rect.width : Math.min(window.innerWidth * 0.9, 900))
+              const ch = editorSize?.h || (rect ? rect.height : Math.min(window.innerHeight * 0.85, 800))
               setResizeInfo({ startX: e.clientX, startY: e.clientY, origW: cw, origH: ch, dir: 'e' })
-              if (!editorSize) setEditorSize({ w: cw, h: ch })
             }} />
             {/* Resize handle — bottom edge */}
             <div style={{
@@ -2306,10 +2336,10 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
               height: 6, cursor: 'ns-resize',
             }} onMouseDown={(e) => {
               e.stopPropagation()
-              const cw = editorSize?.w || (window.innerWidth * 0.9 > 900 ? 900 : window.innerWidth * 0.9)
-              const ch = editorSize?.h || (window.innerHeight * 0.85)
+              const rect = editorRef.current?.getBoundingClientRect()
+              const cw = editorSize?.w || (rect ? rect.width : Math.min(window.innerWidth * 0.9, 900))
+              const ch = editorSize?.h || (rect ? rect.height : Math.min(window.innerHeight * 0.85, 800))
               setResizeInfo({ startX: e.clientX, startY: e.clientY, origW: cw, origH: ch, dir: 's' })
-              if (!editorSize) setEditorSize({ w: cw, h: ch })
             }} />
           </div>
         </div>

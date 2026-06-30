@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>出品标准与关键控制点 — 占位符模板</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #1a365d;
+    --primary-rgb: 26, 54, 93;
+    --accent: #e67e22;
+    --accent-rgb: 230, 126, 34;
+    --background: #ffffff;
+    --background-rgb: 255, 255, 255;
+    --text: #1a202c;
+    --text-rgb: 26, 32, 44;
+    --card_bg: #f0f4f8;
+    --card_bg-rgb: 240, 244, 248;
+    --chart-0: #1a365d;
+    --chart-0-rgb: 26, 54, 93;
+    --chart-1: #2c5282;
+    --chart-1-rgb: 44, 82, 130;
+    --chart-3: #38a169;
+    --chart-3-rgb: 56, 161, 105;
+  }
+  body {
+    background: #e8ecf1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="slide-wrapper">
+
+<div style="width:794px;height:1123px;display:flex;flex-direction:column;background:var(--background);font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;">
+
+  <!-- ═══ 页头区 45px ═══ -->
+  <div style="flex-shrink:0;height:45px;display:flex;align-items:center;font-size:10px;color:rgba(var(--text-rgb),0.45);border-bottom:1px solid rgba(var(--text-rgb),0.08);">
+    <div style="flex:1;text-align:left;padding-left:60px;">出品标准文档 &middot; 出品标准与关键控制点</div>
+    <div style="flex:1;text-align:left;">版本 2.0 / 2026-06-30</div>
+    <div style="flex:1;text-align:left;">5 / 5</div>
+  </div>
+
+  <!-- ═══ 内容区 flex:1 ═══ -->
+  <div style="flex:1;position:relative;overflow:hidden;">
+
+    <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="100" cy="950" r="140" fill="none" stroke="var(--primary)" stroke-width="1.2" opacity="0.12"/>
+    </svg>
+
+    <div style="width:100%;height:4px;background:var(--accent);"></div>
+
+    <div style="width:674px;margin:16px auto 0 auto;border:1px solid rgba(var(--text-rgb),0.2);">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;">
+      <colgroup>
+        <col style="width:120px">
+        <col style="width:554px">
+      </colgroup>
+      <tbody>
+        <tr style="background:var(--chart-1);color:#ffffff;">
+          <th style="padding:9px 8px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">维度</th>
+          <th style="padding:9px 8px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">关键技术</th>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">色泽</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">凤爪虎皮金黄无焦斑，花胶晶莹无白心，鲍鱼褐润，汤汁浓稠金黄不分层</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">香气</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">大地鱼粉引鲜，鲍汁花菇香，美拉德与鲜味协同，浓郁不腥</td>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">口感</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">凤爪软糯骨肉易离，鲍鱼弹韧回弹，花胶滑润，柔韧滑递进</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">质地</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">凤爪软糯，鲍鱼弹韧，花胶滑润弹而不散，一煲三境质感</td>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">口味</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">咸鲜回甘，鲜味协同以海提海，清爽不腻</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">温度</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">砂锅滚烫上桌，持续保温，汤汁微沸冒泡</td>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">形态</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">凤爪垫底，鲍鱼整只朝上弧整，花胶片形舒展，整体雅致</td>
+        </tr>
+        <tr style="background:var(--chart-0);color:#ffffff;">
+          <th style="padding:9px 8px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">维度</th>
+          <th style="padding:9px 8px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">危害控制</th>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">色泽</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">油温不足虎皮不成色浅，过高焦黑</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">香气</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">鱼粉投放过早则香气挥发，需在上桌前30分钟调入</td>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">口感</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">鲍鱼过煮发柴，花胶外糊内生，凤爪油腻</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">质地</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">鲍鱼过煮发柴，花胶外糊内生或入味过长失形</td>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">口味</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">咸味过量则遮蔽鲜味回甘，需以鲍汁天然咸度为基础再调味</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">温度</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">上桌温度不足则胶质凝结影响口感，砂锅须提前预热</td>
+        </tr>
+        <tr>
+          <td style="background:var(--card_bg);color:var(--primary);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);">形态</td>
+          <td style="color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);">花胶入味过长失形碎烂，出锅须轻取轻放</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <!-- 版权声明文本块 -->
+    <div style="width:674px;margin:0 auto;text-align:center;font-size:11px;color:rgba(var(--text-rgb),0.35);padding:16px 0;">
+      本文件为内部培训参考资料，未经授权不得外传。所有工艺流程均基于产品研发部实际验证数据编制，如有疑问请联系技术组确认。
+    </div>
+
+  </div>
+
+  <!-- ═══ 页尾区 45px ═══ -->
+  <div style="flex-shrink:0;height:45px;display:flex;align-items:center;font-size:10px;color:rgba(var(--text-rgb),0.4);border-top:1px solid rgba(var(--text-rgb),0.08);">
+    <div style="flex:1;text-align:left;padding-left:60px;">@智绘食谱教案系统</div>
+    <div style="flex:1;text-align:left;">lql</div>
+    <div style="flex:1;text-align:left;">第 5 页</div>
+  </div>
+
+</div>
+
+</div>
+</body>
+</html>

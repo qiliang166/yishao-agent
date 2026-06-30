@@ -664,7 +664,11 @@ export default function ProjectPage() {
         if (planMatch) {
           stepKey = planMatch[1]
         } else if (stepName.startsWith('_ppt_result_')) {
-          stepKey = step3Key()
+          // Derive stepKey from column_id in saved result_meta
+          const cid = r.column_id
+          if (cid === 'col3') stepKey = 'step3_sop_doc'
+          else if (cid === 'col5') stepKey = 'step3_yan_ppt'
+          else stepKey = 'step3_dao_ppt'  // col4 or unknown defaults to 分析PPT
         }
         if (!stepKey || pptSlidePlans[stepKey]) return // already loaded
         // Build planData from result fields (handle both slides and slide_plan keys)

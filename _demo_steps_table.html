@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>操作步骤 — 占位符模板</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #1a365d;
+    --primary-rgb: 26, 54, 93;
+    --accent: #e67e22;
+    --accent-rgb: 230, 126, 34;
+    --background: #ffffff;
+    --background-rgb: 255, 255, 255;
+    --text: #1a202c;
+    --text-rgb: 26, 32, 44;
+    --card_bg: #f0f4f8;
+    --card_bg-rgb: 240, 244, 248;
+    --chart-0: #1a365d;
+    --chart-0-rgb: 26, 54, 93;
+    --chart-1: #2c5282;
+    --chart-1-rgb: 44, 82, 130;
+  }
+  body {
+    background: #e8ecf1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="slide-wrapper">
+
+<div style="width:794px;height:1123px;display:flex;flex-direction:column;background:var(--background);font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;">
+
+  <!-- ═══ 页头区 45px ═══ -->
+  <div style="flex-shrink:0;height:45px;display:flex;align-items:center;font-size:10px;color:rgba(var(--text-rgb),0.45);border-bottom:1px solid rgba(var(--text-rgb),0.08);">
+    <div style="flex:1;text-align:left;padding-left:60px;">出品标准文档 &middot; 操作步骤</div>
+    <div style="flex:1;text-align:left;">版本 2.0 / 2026-06-30</div>
+    <div style="flex:1;text-align:left;">4 / 5</div>
+  </div>
+
+  <!-- ═══ 内容区 flex:1 ═══ -->
+  <div style="flex:1;position:relative;overflow:hidden;">
+
+    <svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="100" cy="950" r="140" fill="none" stroke="var(--primary)" stroke-width="1.2" opacity="0.12"/>
+    </svg>
+
+    <div style="width:100%;height:4px;background:var(--accent);"></div>
+
+    <div style="width:674px;margin:16px auto 0 auto;border:1px solid rgba(var(--text-rgb),0.2);">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;">
+      <colgroup>
+        <col style="width:48px"><col style="width:75px"><col style="width:112px"><col style="width:73px">
+        <col style="width:73px"><col style="width:74px"><col style="width:110px"><col style="width:109px">
+      </colgroup>
+      <thead>
+        <tr style="background:var(--chart-1);color:#ffffff;">
+          <th style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">序号</th>
+          <th style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">关键词</th>
+          <th style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">工具与器皿</th>
+          <th colspan="3" style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">操作说明</th>
+          <th colspan="2" style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">注意事项</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">1</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">蒸醒温浸</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">蒸笼、恒温浸泡盆</td>
+          <td colspan="3" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">花胶干品100℃蒸20分钟唤醒胶原，转50℃温水浸泡8-9小时至晶莹弹软</td>
+          <td colspan="2" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">蒸制时避免沸水直接接触，温浸温度不得超过60℃以防胶原断裂流失</td>
+        </tr>
+        <tr style="background:transparent;">
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">2</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">火枪定壳</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">火枪、腌制盘</td>
+          <td colspan="3" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">火枪喷烤背部使壳肉分离，取整肉以3-5%盐腌8-10分钟，开水烫漂表面凝固定型</td>
+          <td colspan="2" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">盐腌时间勿超15分钟，否则过咸失水</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">3</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">醋化爆皮</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">炸锅、漏勺</td>
+          <td colspan="3" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">凤爪用3-5%白醋焯水酸化，生抽腌渍着色，沥干后200-220℃热油猛炸至表皮爆破膨胀</td>
+          <td colspan="2" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">油温低于180℃无法形成虎皮，下锅时须防溅伤</td>
+        </tr>
+        <tr style="background:transparent;">
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">4</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">鱼粉增鲜</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">保温容器</td>
+          <td colspan="3" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">热汤汁调入大地鱼粉，放入发好花胶浸渍20-30分钟，利用浓度梯度渗入海绵状结构</td>
+          <td colspan="2" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">老龄花胶需延长浸泡，嫩花胶缩短时间</td>
+        </tr>
+        <tr style="background:rgba(var(--text-rgb),0.02);">
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">5</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">分层炖煮</td>
+          <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">砂锅</td>
+          <td colspan="3" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">凤爪垫底先炖1小时释放胶质，再铺入鲍鱼、花胶、花菇炖15分钟</td>
+          <td colspan="2" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">上桌时保持汤汁微滚，确保质感最佳；鲍鱼过煮则发柴</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+  </div>
+
+  <!-- ═══ 页尾区 45px ═══ -->
+  <div style="flex-shrink:0;height:45px;display:flex;align-items:center;font-size:10px;color:rgba(var(--text-rgb),0.4);border-top:1px solid rgba(var(--text-rgb),0.08);">
+    <div style="flex:1;text-align:left;padding-left:60px;">@智绘食谱教案系统</div>
+    <div style="flex:1;text-align:left;">lql</div>
+    <div style="flex:1;text-align:left;">第 4 页</div>
+  </div>
+
+</div>
+
+</div>
+</body>
+</html>

@@ -2828,6 +2828,10 @@ def api_ppt_outline(req: PPTPlanRequest):
             cfg = db.execute(
                 "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
                 (column_id,)).fetchone()
+        if not cfg:
+            cfg = db.execute(
+                "SELECT prompt, skill FROM column_configs WHERE column_id = 'col4'",
+            ).fetchone()
 
         column_prompt = cfg["prompt"] or "" if cfg else ""
         column_skill = cfg["skill"] or "" if cfg else ""
@@ -2901,6 +2905,10 @@ def api_ppt_plan(req: PPTPlanRequest):
             cfg = db.execute(
                 "SELECT prompt, skill FROM column_configs WHERE column_id = ?",
                 (column_id,)).fetchone()
+        if not cfg:
+            cfg = db.execute(
+                "SELECT prompt, skill FROM column_configs WHERE column_id = 'col4'",
+            ).fetchone()
 
         column_prompt = cfg["prompt"] or "" if cfg else ""
         column_skill = cfg["skill"] or "" if cfg else ""
@@ -3009,11 +3017,13 @@ def _fix_per_slide_divs(html: str) -> str:
 
 
 def _ensure_backup(run_dir: str):
-    """Create index_backup.html from index.html if no backup exists yet.
-    Preserves the original generated version for restore."""
+    """Create index_backup.html from current index.html before every splice.
+
+    Always overwrites so restore returns the state just before the LAST splice,
+    not the state from the first-ever splice (which would be stale)."""
     index_path = os.path.join(run_dir, "index.html")
     backup_path = os.path.join(run_dir, "index_backup.html")
-    if os.path.exists(index_path) and not os.path.exists(backup_path):
+    if os.path.exists(index_path):
         shutil.copy2(index_path, backup_path)
 
 
@@ -3466,19 +3476,24 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
 
     # ── Apply auto-fixers (hex→var, font-size) BEFORE variable resolution ──
     scheme_data = _load_scheme_data(style_id, color_scheme)
+    regen_cw, regen_ch = _get_canvas_dimensions(column_id)
+    is_a4_regen = regen_ch >= 1100
+    _log(f"A4检测: column_id={column_id}, canvas={regen_cw}x{regen_ch}, is_a4={is_a4_regen}")
     import re as _re_count
     for slide in html_slides:
         seq = slide.get("seq", 0)
         html_before = slide.get("html", "")
+        _14_before = html_before.count('font-size:14px') + html_before.count('font-size: 14px')
         hex_before = len(_re_count.findall(r'#[0-9a-fA-F]{3,6}\b', html_before))
         if scheme_data:
             slide["html"] = _auto_fix_hardcoded_hex(slide.get("html", ""), scheme_data, seq)
             slide["html_vars"] = _auto_fix_hardcoded_hex(slide.get("html_vars", slide.get("html", "")), scheme_data, seq)
-        slide["html"] = _auto_fix_font_size(slide.get("html", ""), seq)
-        slide["html_vars"] = _auto_fix_font_size(slide.get("html_vars", slide.get("html", "")), seq)
+        slide["html"] = _auto_fix_font_size(slide.get("html", ""), seq, is_a4=is_a4_regen)
+        slide["html_vars"] = _auto_fix_font_size(slide.get("html_vars", slide.get("html", "")), seq, is_a4=is_a4_regen)
+        _14_after = slide["html"].count('font-size:14px') + slide["html"].count('font-size: 14px')
         hex_after = len(_re_count.findall(r'#[0-9a-fA-F]{3,6}\b', slide.get("html", "")))
         var_count = len(_re_count.findall(r'\{\{[a-z_0-9]+\}\}', slide.get("html", "")))
-        _log(f"Slide {seq} 自动修正: {hex_before}→{hex_after} hex, {var_count} vars")
+        _log(f"Slide {seq} 自动修正: {hex_before}→{hex_after} hex, {var_count} vars, 14px {_14_before}→{_14_after}")
 
     # Splice regenerated slides back into the plan
     for slide in html_slides:
@@ -3550,6 +3565,12 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
 
     # Build partial mini-deck with only the regenerated slides
     regen_resolved = [s for s in resolved_slides if s.get("seq") in set(seqs)]
+
+    # Per-slide resolved HTML for targeted splice (not full-deck overwrite).
+    # MUST be computed BEFORE _assemble_html_deck because _preprocess_a4_slides
+    # renumbers slides in-place, corrupting seq values.
+    regen_slides = [{"seq": s["seq"], "html": s["html"]} for s in regen_resolved]
+
     partial_html = _assemble_html_deck(regen_resolved, title, style_id, scheme_data, total_slides=len(slide_plan), canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
     if scheme_data:
         partial_html = _resolve_color_vars(partial_html, scheme_data, css_vars=True)
@@ -3559,9 +3580,6 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
 
     preview_url = f"/api/exports/{req.run_id}/index_regenerated.html"
     partial_url = f"/api/exports/{req.run_id}/index_regenerated_partial.html"
-
-    # Per-slide resolved HTML for targeted splice (not full-deck overwrite)
-    regen_slides = [{"seq": s["seq"], "html": s["html"]} for s in regen_resolved]
 
     _log("DONE")
 
@@ -3736,7 +3754,8 @@ def api_ppt_splice_slides(run_id: str, req: dict):
                             _log_splice("Cover fix: dark background → white text")
     font_before_13 = len(_re.findall(r'font-size:\s*1[0-3]px', html))
     font_before_15 = len(_re.findall(r'font-size:\s*15px', html))
-    html = _auto_fix_font_size(html, 0)
+    is_a4_splice = 'width:794px' in html[:2000] or 'height:1123px' in html[:2000]
+    html = _auto_fix_font_size(html, 0, is_a4=is_a4_splice)
     font_after_13 = len(_re.findall(r'font-size:\s*1[0-3]px', html))
     font_after_15 = len(_re.findall(r'font-size:\s*15px', html))
     _log_splice(f"Post-splice font fix: 13px {font_before_13}→{font_after_13}, 15px {font_before_15}→{font_after_15}")

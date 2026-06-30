@@ -79,18 +79,15 @@
 
 ---
 
-## 文档构建块（8 项，A4 文档页面类型的积木组件）
+## 文档构建块（5 项，A4 文档五大页面）
 
 | 编号 | 块名 | 中文名 | 用途 | 文件 |
 |------|------|--------|------|------|
-| B01 | header | 页头 | 文档页头区域 | blocks/header.md |
-| B02 | title | 标题 | 主标题行，hero 渐变背景 + accent 下划线 | blocks/title.md |
-| B03 | info_block | 基本信息块 | 标签-值对 + 图片占位，文档元数据展示 | blocks/info_block.md |
-| B04 | table_block | 表格块 | 多列数据网格，含表头和交替行数据 | blocks/table_block.md |
-| B05 | text_block | 文字块 | 自由段落文字，用于叙述性内容 | blocks/text_block.md |
-| B06 | list_block | 列表块 | 编号或项目符号列表，用于决议、要点、清单 | blocks/list_block.md |
-| B07 | closing | 结尾块 | 文档结尾区，感谢语+行动号召+版权 | blocks/closing.md |
-| B08 | footer | 页脚 | 文档页脚，版权声明+页码 | blocks/footer.md |
+| B01 | cover | 封面与档案信息 | 全页渐变背景，主标题、日期、分类、核心要素、文档属性 | blocks/cover.md |
+| B02 | product_definition | 成品定义与感官目标 | 标签-值对表格 + 成品图占位 + 副标题 | blocks/product_definition.md |
+| B03 | materials_table | 食材清单表格 | 8列食材表格（序号/分类/名称/品牌/加工说明/加工要求/重量/单位） | blocks/materials_table.md |
+| B04 | steps_table | 操作步骤表格 | 8列步骤表格（序号/关键词/工具与器皿/操作说明×3/注意事项×2） | blocks/steps_table.md |
+| B05 | quality_control | 出品标准与关键控制点 | 2-section统一表格（关键技术 + 危害控制）+ 版权声明 | blocks/quality_control.md |
 
 ---
 
