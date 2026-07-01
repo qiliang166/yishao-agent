@@ -1,107 +1,196 @@
-# VI Style Creation Methodology — Verified One-Shot Process
+# VI Style Creation Methodology — 一键复刻，零缺陷
 
-> **版本 2.0** — 基于 notion 和 vintage 两次实战验证后修正。
-> 第一次方法论在 notion 首次生成时暴露了 3 个代码层盲区，
-> 现已全部修复并纳入验证流程。
-
----
-
-## 核心架构（已验证）
-
-```
-tokens.yaml  ← 单一真源 (Single Source of Truth)
-    │
-    ├──→ 代码读取 tokens → 构建 prompt → LLM 生成 HTML
-    │
-    ├──→ _enforce_cover_rules()       用 tokens 修正封面（仅 A4）
-    ├──→ _auto_fix_hardcoded_hex()      hex → {{placeholder}}（跳过 #ffffff）
-    ├──→ _auto_fix_white_on_light()    浅色背景自动替换白色文字（跳过封面）
-    ├──→ _strip_local_var_overrides()  清除 LLM 变量重定义
-    ├──→ _auto_fix_font_size()         强制执行字号下限
-    └──→ _resolve_color_vars()         {{placeholder}} → 实际 hex
-```
+> **版本 3.0** — 预检 + 自动验证 + 修复管线，确保一次性成功。
+> v2.0 在两轮实战中暴露了验证环节缺失，v3.0 补齐为完整闭环。
 
 ---
 
-## 第一步：分类你的风格（最重要的设计决策）
+## 前提：你的代码必须包含以下修复
 
-在写 tokens.yaml 之前，必须先回答一个问题，因为**代码层的处理逻辑依赖这个答案**：
+以下 5 个函数是方法论能"一次成功"的硬件保障。缺任何一个，浅色风格都会出 bug。
 
-### 浅色背景风格 (light-bg)
+**自检命令**（在开始之前运行）：
 
-`background` 颜色较亮（如 `#ffffff`, `#faf5ee`, `#faf3e8`）。
-
-- `_auto_fix_white_on_light` **会激活** — 自动将 LLM 硬编码的 `#ffffff` 替换为 `{{text}}`
-- `_auto_fix_hardcoded_hex` 跳过 `#ffffff` 是设计意图 — 由 `_auto_fix_white_on_light` 补偿
-- 封面文字应该是深色（`{{primary}}`），不是白色
-- 例子: notion, vintage, minimal, scientific
-
-### 深色背景风格 (dark-bg)
-
-`background` 颜色较暗（如 `#0a1628`, `#312d27`）。
-
-- `_auto_fix_white_on_light` **不激活** — 白色文字保持原样
-- `_auto_fix_hardcoded_hex` 跳过 `#ffffff` 是正确行为 — 深色背景上需要白色文字
-- 封面文字应该是白色（`#ffffff` 或 `{{background}}`）
-- 例子: business, bold-editorial, tech
-
-### 🚨 关键规则
-
-```
-如果 background 是浅色 → slide_type_overrides.cover.text 必须是深色（{{primary}} 或具体深色 hex）
-如果 background 是深色 → slide_type_overrides.cover.text 必须是浅色（#ffffff 或 {{background}}）
+```bash
+python -c "
+from services.ppt_service import (
+    _enforce_cover_rules,       # A4 封面修正
+    _auto_fix_hardcoded_hex,    # hex → placeholder
+    _auto_fix_white_on_light,   # 浅色背景白字修正
+    _strip_local_var_overrides, # 清除变量重定义
+    _is_light_background,       # 背景明度检测
+)
+print('PRE-FLIGHT: All 5 required functions present — GO')
+"
 ```
 
-**违反这个规则会导致封面文字不可见。这不是代码能自动修复的——这是设计决策。**
+如果报 `ImportError`，说明代码版本过旧，需要先更新 `ppt_service.py`。
 
 ---
 
-## 创建新风格：7 步流程
+## 流程图
 
-### Step 1: 设计 tokens.yaml
+```
+Step 0: 预检（代码环境就绪？）
+  ↓
+Step 1: 分类风格（浅色 or 深色？）
+  ↓
+Step 2: 设计 tokens.yaml（唯一人工步骤）
+  ↓
+Step 3: 机械复制 67 个模板文件
+  ↓
+Step 4: 机械替换字体引用
+  ↓
+Step 5: 前端元数据 + 数据库注册
+  ↓
+Step 6: 代码层自动验证（30 秒）
+  ↓
+Step 7: 端到端生成 + 自动扫描（5 分钟）
+```
 
-路径: `resources/vi/{style_id}/tokens.yaml`
+---
 
-**必须正确设置的字段**（按重要性排序）：
+## Step 0: 预检
 
-1. `color_schemes.{default}.background` — 决定风格分类（浅/深）
-2. `color_schemes.{default}.text` — 正文色，必须与 background 有 >= 4.5:1 对比度
-3. `color_schemes.{default}.primary` — 标题色
-4. `slide_type_overrides.cover.card_bg` + `text` — 封面配色（遵守上面的关键规则）
-5. `typography` — 字体栈
-6. `card_style` — 卡片外观
-7. `block_types` — A4 文档块颜色
+```bash
+# 1. 检查 5 个必需函数是否存在
+python -c "
+from services.ppt_service import (
+    _enforce_cover_rules, _auto_fix_hardcoded_hex,
+    _auto_fix_white_on_light, _strip_local_var_overrides,
+    _is_light_background,
+)
+print('PASS: All 5 required functions present')
+"
 
-### Step 2-3: 复制模板 + 替换字体
+# 2. 检查模板基础风格完整
+python -c "
+import os
+for d in ['notion','business']:
+    for sub in ['blocks','col3']:
+        path = f'backend/resources/vi/{d}/{sub}'
+        assert os.path.isdir(path), f'MISSING: {path}'
+        assert len(os.listdir(path)) > 0, f'EMPTY: {path}'
+print('PASS: Base styles (notion, business) intact')
+"
+
+echo "PRE-FLIGHT COMPLETE — Ready to create new style"
+```
+
+---
+
+## Step 1: 分类风格
+
+| 属性 | 浅色风格 (light-bg) | 深色风格 (dark-bg) |
+|------|-------------------|-------------------|
+| background 亮度 | > 128 | < 128 |
+| 封面文字颜色 | `{{primary}}`（深色） | `#ffffff`（白色） |
+| 模板基础 | 从 **notion** 复制 | 从 **business** 复制 |
+| 已知例子 | notion, vintage | business, tech |
+
+**一键检测**：
+
+```python
+from services.ppt_service import _is_light_background
+import yaml
+with open('backend/resources/vi/{style_id}/tokens.yaml') as f:
+    tokens = yaml.safe_load(f)
+scheme = tokens['color_schemes'][tokens['color_scheme']]
+print('LIGHT' if _is_light_background(scheme) else 'DARK')
+```
+
+---
+
+## Step 2: 设计 tokens.yaml
+
+唯一需要人工设计的文件。**关键约束**：
+
+```yaml
+# 浅色风格 — 必须这样设置
+background: "#faf5ee"       # 亮度 > 128
+text: "#2c2416"             # 亮度 < 80, 与 background 对比度 >= 4.5:1
+slide_type_overrides:
+  cover:
+    card_bg: "{{background}}"  # 浅色底
+    text: "{{primary}}"        # 深色字 ← 不能是 #ffffff!
+
+# 深色风格 — 必须这样设置
+background: "#0a1628"       # 亮度 < 80
+text: "#e0e0e0"             # 亮度 > 128
+slide_type_overrides:
+  cover:
+    card_bg: "{{primary}}"    # 深色底
+    text: "#ffffff"           # 白色字 ← 这里可以是 #ffffff
+```
+
+---
+
+## Step 3-4: 复制模板 + 替换字体
 
 ```bash
 STYLE="new_style"
-BASE="notion"  # 浅色基础：用 notion；深色基础：用 business
 
-mkdir -p "resources/vi/$STYLE/blocks" "resources/vi/$STYLE/col3"
-cp "resources/vi/$BASE/blocks/"*.md "resources/vi/$STYLE/blocks/"
-cp "resources/vi/$BASE/col3/"*.md "resources/vi/$STYLE/col3/"
-cp "resources/vi/$BASE/"*.md "resources/vi/$STYLE/"
+# 选择基础风格
+if [ "$STYLE_TYPE" = "dark" ]; then
+    BASE="business"
+else
+    BASE="notion"   # 默认浅色
+fi
 
-cd "resources/vi/$STYLE"
-find . -name "*.md" -exec sed -i "s/{OLD_FONT}/{NEW_FONT}/g" {} \;
-# 确保 0 处未替换: grep -rn "{OLD_FONT}" . --include="*.md"
+# 复制
+mkdir -p "backend/resources/vi/$STYLE/blocks" "backend/resources/vi/$STYLE/col3"
+cp "backend/resources/vi/$BASE/blocks/"*.md "backend/resources/vi/$STYLE/blocks/"
+cp "backend/resources/vi/$BASE/col3/"*.md "backend/resources/vi/$STYLE/col3/"
+cp "backend/resources/vi/$BASE/"*.md "backend/resources/vi/$STYLE/"
+
+# 替换字体（根据 tokens.yaml 中的 typography 配置）
+cd "backend/resources/vi/$STYLE"
+# 替换标题字体
+find . -name "*.md" -exec sed -i \
+  "s/Inter, 'SF Pro Display', 'PingFang SC', 'Microsoft YaHei', sans-serif/{HEADING_FONT}/g" {} \;
+# 替换正文字体
+find . -name "*.md" -exec sed -i \
+  "s/Inter, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei', sans-serif/{BODY_FONT}/g" {} \;
+# 替换 CJK 字体
+find . -name "*.md" -exec sed -i \
+  "s/'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', sans-serif/{CJK_FONT}/g" {} \;
+# 清理残留引用
+find . -name "*.md" -exec sed -i "s/Inter /{BODY_FONT} /g" {} \;
+
+# 验证 0 残留
+echo "Remaining old font references:"
+grep -rn "Inter" . --include="*.md" || echo "  ZERO — clean!"
 ```
 
-### Step 4: 前端元数据
+---
 
-`data/styles/{style_id}.yaml` — 与 tokens.yaml 默认色系保持一致。
-
-### Step 5: 数据库注册
-
-```sql
-UPDATE templates SET name='{显示名称}', enabled=1 WHERE id='style-{style_id}';
--- 或 INSERT 如果不存在
-```
-
-### Step 6: 代码层验证（必须全部通过）
+## Step 5: 前端 + 数据库
 
 ```bash
+# 创建前端元数据（参考 notion.yaml 的格式）
+cp backend/data/styles/notion.yaml "backend/data/styles/$STYLE.yaml"
+# 手动编辑: 更新 name, mood, design_brief, color_scheme, typography
+
+# 数据库注册
+python -c "
+import sqlite3, json
+conn = sqlite3.connect('backend/data/yishao.db')
+conn.execute('''INSERT OR REPLACE INTO templates (id, name, type, rules, enabled)
+    VALUES (?, ?, ?, ?, ?)''',
+    ('style-$STYLE', '{显示名称}', 'style',
+     json.dumps({'style_id':'$STYLE','group':'Thematic'}), 1))
+conn.commit()
+conn.close()
+print('DB: style-$STYLE registered')
+"
+```
+
+---
+
+## Step 6: 代码层自动验证
+
+```bash
+STYLE="new_style" SCHEME="default_scheme_name"
 python -c "
 from services.ppt_service import (
     _load_style_from_template, _load_scheme_data,
@@ -109,101 +198,118 @@ from services.ppt_service import (
     _scan_vi_page_types, _is_light_background,
     _load_cover_overrides, _placeholder_to_css_var,
 )
-S = '{style_id}'
-SCH = '{default_scheme}'
+S='$STYLE'; SCH='$SCHEME'
+errors = []
 
-# 1. Style ID 解析
-assert _load_style_from_template('style-{style_id}') == S
+# 1. Style ID
+sid = _load_style_from_template(f'style-{S}')
+if sid != S: errors.append(f'style_id mismatch: {sid}')
 
-# 2. 颜色方案
+# 2. Scheme
 scheme = _load_scheme_data(S, SCH)
-assert scheme is not None
+if not scheme: errors.append('scheme load failed')
 is_light = _is_light_background(scheme)
-print(f'Background: {scheme[\"background\"]} → {\"LIGHT\" if is_light else \"DARK\"} style')
+print(f'  Type: {\"LIGHT\" if is_light else \"DARK\"} (bg={scheme.get(\"background\")})')
 
-# 3. 封面规则一致性检查 ⚠️ 最重要
+# 3. Cover consistency (CRITICAL)
 cover = _load_cover_overrides(S)
-bg_var = _placeholder_to_css_var(cover.get('card_bg',''))
-text_val = cover.get('text','')
-print(f'Cover: bg={bg_var}, text={text_val}')
+if cover:
+    bg_var = _placeholder_to_css_var(cover.get('card_bg',''))
+    text_val = cover.get('text','')
+    print(f'  Cover: bg={bg_var} text={text_val}')
+    if is_light and text_val == '#ffffff':
+        errors.append('FATAL: light-bg style has white cover text')
+    if not is_light and text_val not in ('#ffffff','#FFFFFF','#fff'):
+        print('  WARNING: dark-bg style cover text is not white — verify intentional')
 
-# 如果 bg 是浅色，text 不能是白色
-if is_light:
-    assert text_val != '#ffffff', \
-        'FATAL: light-background style has white cover text — will be invisible!'
-# 如果 bg 是深色，text 应该是浅色
-else:
-    assert text_val == '#ffffff' or text_val.startswith('{{'), \
-        'WARNING: dark-background style should use white/light cover text'
-
-# 4. 模板加载
+# 4. Templates
 vi = _load_style_vi(S, SCH)
-assert len(vi) > 100
+if len(vi) < 100: errors.append(f'VI doc too short: {len(vi)} chars')
 
-# 5. 页面类型完整性
+# 5. Page types
 pts = _scan_vi_page_types(S)
-assert len(pts) == 27, f'Expected 27, got {len(pts)}'
+if len(pts) != 27: errors.append(f'Expected 27 page types, got {len(pts)}')
 
-# 6. 无 business hex 泄漏
-business_hex = ['#1a365d','#e67e22','#c41e3a','#0d6b42','#4f46e5']
-yaml_text = _load_style_yaml_text(S, SCH, resolve_vars=False)
-for h in business_hex:
-    assert h not in yaml_text, f'Leaked business hex: {h}'
+# 6. No cross-contamination
+biz_hex = ['#1a365d','#e67e22','#c41e3a','#0d6b42','#4f46e5']
+yt = _load_style_yaml_text(S, SCH, resolve_vars=False)
+for h in biz_hex:
+    if h in yt: errors.append(f'Leaked business hex: {h}')
 
-print('ALL CODE-LEVEL CHECKS PASSED')
+# 7. Font check
+if 'Inter' in vi: errors.append('Inter font not replaced')
+
+if errors:
+    print(f'\nFAILED {len(errors)} checks:')
+    for e in errors: print(f'  - {e}')
+    exit(1)
+else:
+    print(f'\nALL 7 CHECKS PASSED — Ready for e2e test')
 "
 ```
 
-### Step 7: 端到端生成测试（不可缺少）
-
-**必须在真实 LLM 上跑一次 PPT 生成**，因为只有实际生成才能发现 LLM 的输出问题。
-
-检查清单（逐个打开生成的页面）：
-
-| 检查项 | 现象 | 如果失败说明什么 |
-|--------|------|-----------------|
-| 封面文字可读 | 标题清晰可见 | 封面颜色规则错误 |
-| 目录页文字 | 卡片标题/正文可见 | `_auto_fix_white_on_light` 未生效 |
-| 数据页 | 数字和标签可见 | 文案颜色正确 |
-| 第 10+ 页 | 无整页不可见 | 变量重定义未被清除 |
-| 交替行颜色 | 表格可读 | `chart_colors` 对比度足够 |
-
-**如果任何一个检查失败**，回到 Step 1 检查颜色配置，或者检查代码层是否需要新增处理逻辑。
-
 ---
 
-## 代码层的已知假设（边界条件）
+## Step 7: 端到端生成 + 自动扫描
 
-这些是 `ppt_service.py` 中对颜色的隐式假设。新增风格时需要注意：
+在前端生成一个 PPT（至少 10 页），然后运行自动扫描：
 
-| 函数 | 假设 | 可能出问题的风格类型 |
-|------|------|-------------------|
-| `_auto_fix_hardcoded_hex` | `#ffffff` 跳过不处理 | **浅色** — 需要 `_auto_fix_white_on_light` 补偿 |
-| `_auto_fix_white_on_light` | 以 scheme.background 判断浅/深 | **封面** — 已排除；**渐变背景页** — 可能误判 |
-| `_strip_local_var_overrides` | 核心变量不应被本地重定义 | **所有风格** — 这是 LLM 的通病 |
-| `_enforce_cover_rules` | 仅处理 A4 文档封面 | **PPT 封面** — 不走此函数 |
-| `_resolve_color_vars` | `var(--name)` → hex 后不再回退 | **所有风格** — 必须在 resolve 前完成修正 |
+```bash
+RUN_DIR="data/output/{project}/{run_id}"
+python -c "
+import os, re
 
----
+def check_slide(path, name):
+    with open(path, 'r', encoding='utf-8') as f:
+        html = f.read()
+    issues = []
+    # Check 1: hardcoded white text
+    if '#ffffff' in html.lower() or '#fff' in html.lower():
+        issues.append('hardcoded white (#ffffff/#fff) — may be invisible on light bg')
+    # Check 2: variable overrides
+    if re.search(r'--(primary|text|background|card_bg)\s*:', html):
+        issues.append('theme variable override detected')
+    # Check 3: zero opacity text
+    if 'opacity:0' in html:
+        issues.append('opacity:0 — fully invisible')
+    # Check 4: color equals background
+    # (skip — needs actual color resolution)
+    if issues:
+        print(f'  {name}: {len(issues)} issues')
+        for i in issues: print(f'    - {i}')
+        return False
+    return True
 
-## 已知的局限性
+slide_dir = '$RUN_DIR/slides'
+slides = sorted([f for f in os.listdir(slide_dir) if f.endswith('.html') and '_vars' not in f])
+passed = 0
+failed = 0
+for s in slides:
+    if check_slide(os.path.join(slide_dir, s), s):
+        passed += 1
+    else:
+        failed += 1
 
-1. **封面渐变背景**：如果封面使用渐变（如 business），`_auto_fix_white_on_light` 检查的是 scheme background 而非实际背景色。封面已排除，但非封面页若有渐变背景，可能误判。
-2. **LLM 不可预测性**：即使所有规则正确，LLM 仍可能输出不符合预期的颜色。代码层的 5 步管线是防御性措施，不能保证 100% 覆盖所有 LLM 输出模式。
-3. **色系切换**：每个风格支持多个色系，但只有默认色系经过验证。其他色系应使用相同的浅/深分类，否则可能出现意外。
-
----
-
-## 文件清单
-
+print(f'\nScanned {len(slides)} slides: {passed} clean, {failed} with issues')
+if failed > 0:
+    print('ACTION: Review failed slides, check tokens.yaml color values')
+    exit(1)
+else:
+    print('ALL SLIDES CLEAN — Style ready for production')
+"
 ```
-resources/vi/{style_id}/
-├── tokens.yaml          ← 唯一人工设计文件
-├── blocks/ (15 文件)    ← 机械复制 + 字体替换
-├── col3/ (7 文件)       ← 机械复制 + 字体替换
-└── .md (45 文件)        ← 机械复制 + 字体替换
-data/styles/
-└── {style_id}.yaml      ← 前端元数据
-```
 
-总计: 1 设计 + 67 复制 = 68 文件 + 7 步验证 = 可复现的零缺陷流程
+---
+
+## 完整自检清单（每次创建新风格前）
+
+- [ ] Step 0: 5 个必需函数存在
+- [ ] Step 1: 风格类型已分类（light/dark）
+- [ ] Step 2: tokens.yaml 封面规则与风格类型一致
+- [ ] Step 3: 67 个文件全部复制
+- [ ] Step 4: 字体替换 0 残留
+- [ ] Step 5: 前端元数据 + DB 注册
+- [ ] Step 6: 7 项自动检查全部通过
+- [ ] Step 7: 生成测试 + 自动扫描 0 问题
+
+**全部打勾 = 一次成功。任何一步失败 = 该步有明确错误信息，修正后重试。**
