@@ -96,7 +96,11 @@ function Sidebar() {
           color: 'var(--text-secondary)',
           textAlign: 'left',
         }}>
-          <span className="ico">📝</span>{' '}
+          <span style={{
+            display: 'inline-block', width: 6, height: 6,
+            borderRadius: '50%', background: 'transparent', border: '1.5px solid var(--primary)',
+            verticalAlign: 'middle', marginRight: 5,
+          }} />
           {brandName} {sidebarVersion}
         </div>
         <div style={{ fontSize: 10, display: 'flex', gap: 8 }}>

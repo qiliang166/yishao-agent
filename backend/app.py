@@ -4846,9 +4846,13 @@ def api_export_sop(req: SOPExportRequest):
 def api_download_info():
     dl_dir = os.path.join(BASE_DIR, "data", "downloads")
     info: dict = {"desktop": None, "server": None}
-    exe_path = os.path.join(dl_dir, "YishaoAgent.exe")
-    if os.path.isfile(exe_path):
-        info["desktop"] = {"size": os.path.getsize(exe_path), "name": "YishaoAgent.exe"}
+    # Find any .exe in downloads (name changes with app settings)
+    if os.path.isdir(dl_dir):
+        for f in os.listdir(dl_dir):
+            if f.lower().endswith(".exe"):
+                fp = os.path.join(dl_dir, f)
+                info["desktop"] = {"size": os.path.getsize(fp), "name": f}
+                break
     zip_path = os.path.join(dl_dir, "yishao-agent-server.zip")
     if os.path.isfile(zip_path):
         info["server"] = {"size": os.path.getsize(zip_path), "name": "yishao-agent-server.zip"}
@@ -4858,10 +4862,16 @@ def api_download_info():
 @app.get("/api/download/desktop")
 def api_download_desktop():
     dl_dir = os.path.join(BASE_DIR, "data", "downloads")
-    path = os.path.join(dl_dir, "YishaoAgent.exe")
-    if not os.path.isfile(path):
+    # Find any .exe in downloads
+    exe_file = None
+    if os.path.isdir(dl_dir):
+        for f in os.listdir(dl_dir):
+            if f.lower().endswith(".exe"):
+                exe_file = f
+                break
+    if not exe_file:
         raise HTTPException(status_code=404, detail="桌面版安装包尚未构建")
-    return FileResponse(path, filename="YishaoAgent.exe")
+    return FileResponse(os.path.join(dl_dir, exe_file), filename=exe_file)
 
 
 @app.get("/api/download/server")

@@ -1200,15 +1200,10 @@ export default function ProjectPage() {
     { stepKey: 'step2_yanxi', modelKey: '_model_s2_yanxi', promptKey: 'yanxi', tempKey: '_temp_s2_yanxi', label: '手册文档', fallbackPrompt: '请将以下内容整理为手册格式，包含背景知识和要点。' },
   ]
 
-  // Core generation logic shared by doBatchGenerate and handleModelPickerConfirm
   const executeBatchGenerate = async (resolvedModels: Record<string, string>) => {
-    const s2ContentKeys: Record<string, string> = {
-      '2a': 'step2_sop', '2b': 'step2_daoshuyi', '2c': 'step2_yanxi',
-    }
-    const currentS2Content = steps[s2ContentKeys[sub] || ''] || ''
-    const otherS2Content = STAGE2_CONFIGS.reduce((acc, c) => acc || steps[c.stepKey] || '', '')
+    const stage2Source = STAGE2_CONFIGS.reduce((acc, c) => acc || steps[c.stepKey] || '', '')
     const stage1Source = steps.raw_video || steps.raw_text || steps.raw_file || ''
-    const source = currentS2Content || otherS2Content || stage1Source
+    const source = stage2Source || stage1Source
 
     if (!source) {
       modal.toast('没有可用的数据源。请先在 Stage 1 导入素材。', 'error')
