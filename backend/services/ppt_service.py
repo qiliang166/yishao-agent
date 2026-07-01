@@ -1554,8 +1554,17 @@ def _get_effective_page_bg_luminance(style_id: str, page_type: str, scheme: dict
     """
     import yaml
 
-    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    # Prevent path traversal: style_id must be a simple directory name
+    if not style_id or not re.match(r'^[a-zA-Z0-9_-]+$', style_id):
+        return _hex_luminance(scheme.get("background", ""))
+
+    vi_base = os.path.join(BASE_DIR, "resources", "vi")
+    tokens_path = os.path.join(vi_base, style_id, "tokens.yaml")
+    # Verify resolved path stays within the expected base
+    real_base = os.path.realpath(vi_base)
     if os.path.exists(tokens_path):
+        if not os.path.realpath(tokens_path).startswith(real_base + os.sep):
+            return _hex_luminance(scheme.get("background", ""))
         try:
             with open(tokens_path, "r", encoding="utf-8") as f:
                 tokens = yaml.safe_load(f.read())
