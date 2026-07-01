@@ -3034,7 +3034,10 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     # Post-process: fix white text on light backgrounds (LLM habit from dark styles)
                     # Must run AFTER _auto_fix_hardcoded_hex (which intentionally skips #ffffff)
                     # and BEFORE _resolve_color_vars (which converts {{placeholder}} → hex)
-                    if active_scheme:
+                    # IMPORTANT: Skip cover slides — covers have their own color logic
+                    # determined by the template (dark gradient vs light solid). An override
+                    # here would break business-style covers that correctly use white-on-dark.
+                    if active_scheme and stype != "cover":
                         html = _auto_fix_white_on_light(html, active_scheme, seq)
                     # Post-process: strip LLM-invented CSS variable reassignments
                     # (e.g. --primary: var(--card_bg) inverts the theme → invisible text)
