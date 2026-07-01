@@ -7,10 +7,10 @@ type MainTab = 'models' | 'columns'
 const COLUMN_GROUPS = [
   { id: 'col1', label: '素材输入', hasTemplate: false, summary: '输入配置' },
   { id: 'col2', label: '文档生成', hasTemplate: false, summary: '文档配置' },
-  { id: 'col3', label: '文档导出', hasTemplate: true, summary: '导出配置', tmplFile: '' },
+  { id: 'col3', label: '文档课件', hasTemplate: true, summary: '导出配置', tmplFile: '' },
   { id: 'col4', label: '分析PPT', hasTemplate: true, summary: '分析文档 | PPT配置', tmplFile: '' },
   { id: 'col5', label: '综合PPT', hasTemplate: true, summary: '手册文档 | PPT配置', tmplFile: '' },
-  { id: 'col6', label: '演讲生成', hasTemplate: false, summary: '演讲配置' },
+  { id: 'col6', label: '课件演讲', hasTemplate: false, summary: '演讲配置' },
   { id: 'col7', label: '语音合成', hasTemplate: false, summary: '音色库管理' },
 ]
 
@@ -42,6 +42,11 @@ export default function ProjSettingsPage() {
   const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([])
   const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [colSaving, setColSaving] = useState<Record<string, boolean>>({})
+  // Speech configs (independent table)
+  interface SpeechConfig { id: string; label: string; prompt: string; skill: string; sort_order: number }
+  const [speechConfigs, setSpeechConfigs] = useState<SpeechConfig[]>([])
+  const [speechValues, setSpeechValues] = useState<Record<string, { prompt: string; skill: string }>>({})
+  const [speechSaving, setSpeechSaving] = useState<Record<string, boolean>>({})
 
   // Accordion state
   const [openCols, setOpenCols] = useState<Set<string>>(new Set())
@@ -148,6 +153,12 @@ export default function ProjSettingsPage() {
       const vals: Record<string, { prompt: string; skill: string }> = {}
       configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
       setColValues(vals)
+    }).catch(() => {})
+    api.listSpeechConfigs().then((configs: SpeechConfig[]) => {
+      setSpeechConfigs(configs)
+      const vals: Record<string, { prompt: string; skill: string }> = {}
+      configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
+      setSpeechValues(vals)
     }).catch(() => {})
     api.getSettings().then(data => {
       const s = data.settings || {}
@@ -692,9 +703,64 @@ export default function ProjSettingsPage() {
                       </table>
                       <button className="btn btn-outline btn-sm" onClick={openNewVoice}>+ 添加音色</button>
                     </div>
-                  ) : (
+                  ) : col.id === 'col6' ? (
+                    // Speech configs — independent table
                     <>
-                      {columnConfigs.filter(c => c.column_id === col.id).map(config => (
+                      {speechConfigs.map(config => (
+                        <div key={config.id} className="ac-sub-item">
+                          <div className="ac-sub-item-header">{config.label}</div>
+                          <div className="ac-field-row">
+                            <div className="ac-field">
+                              <label>提示词</label>
+                              <textarea
+                                value={speechValues[config.id]?.prompt || ''}
+                                onChange={e => setSpeechValues(prev => ({
+                                  ...prev,
+                                  [config.id]: { ...prev[config.id], prompt: e.target.value }
+                                }))}
+                              />
+                            </div>
+                            <div className="ac-field">
+                              <label>SKILL 输出格式</label>
+                              <textarea
+                                value={speechValues[config.id]?.skill || ''}
+                                onChange={e => setSpeechValues(prev => ({
+                                  ...prev,
+                                  [config.id]: { ...prev[config.id], skill: e.target.value }
+                                }))}
+                              />
+                            </div>
+                          </div>
+
+
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                            <button className="btn btn-primary btn-sm"
+                              disabled={speechSaving[config.id]}
+                              onClick={async () => {
+                                setSpeechSaving(prev => ({ ...prev, [config.id]: true }))
+                                try {
+                                  await api.updateSpeechConfig(config.id, {
+                                    prompt: speechValues[config.id]?.prompt || '',
+                                    skill: speechValues[config.id]?.skill || '',
+                                  })
+                                  modal.toast('已保存', 'success')
+                                } catch (e: any) {
+                                  modal.toast('保存失败: ' + e.message, 'error')
+                                } finally {
+                                  setSpeechSaving(prev => ({ ...prev, [config.id]: false }))
+                                }
+                              }}>
+                              {speechSaving[config.id] ? '保存中...' : '保存'}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {speechConfigs.length === 0 && (
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: 8 }}>演讲配置加载中...</div>
+                      )}
+                    </>
+                  ) : (<>
+                    {columnConfigs.filter(c => c.column_id === col.id).map(config => (
                         <div key={config.id} className="ac-sub-item">
                           <div className="ac-sub-item-header">{config.label}</div>
                           <div className="ac-field-row">

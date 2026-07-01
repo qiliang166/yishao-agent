@@ -1,9 +1,15 @@
 import os
+import sys
 import sqlite3
 import shutil
 from datetime import datetime, timedelta
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# When running as PyInstaller bundle, data goes next to the exe
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 DATA_DIR = os.path.join(BASE_DIR, "data")
 DB_PATH = os.path.join(DATA_DIR, "yishao.db")
 BACKUP_DIR = os.path.join(DATA_DIR, "backups")
@@ -523,6 +529,15 @@ def init_db():
                 conn.execute("ALTER TABLE tts_history ADD COLUMN name TEXT DEFAULT ''")
             if 'voice_name' not in existing_cols:
                 conn.execute("ALTER TABLE tts_history ADD COLUMN voice_name TEXT DEFAULT ''")
+        except Exception:
+            pass
+        # Add volume and speed columns to voices if missing (migration, 2026-07-01)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(voices)").fetchall()]
+            if 'volume' not in existing_cols:
+                conn.execute("ALTER TABLE voices ADD COLUMN volume INTEGER DEFAULT 50")
+            if 'speed' not in existing_cols:
+                conn.execute("ALTER TABLE voices ADD COLUMN speed REAL DEFAULT 1.0")
         except Exception:
             pass
         conn.execute("""

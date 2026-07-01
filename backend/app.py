@@ -1,9 +1,10 @@
 import os
+import sys
 import shutil
 import uuid
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Body, Request, Depends
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -48,14 +49,25 @@ app.add_middleware(
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
-AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
+
+# In PyInstaller frozen mode, data dirs go next to the exe
+if getattr(sys, 'frozen', False):
+    _EXE_DIR = os.path.dirname(sys.executable)
+    WORKSPACE_ROOT = _EXE_DIR
+    AUDIO_DIR = os.path.join(_EXE_DIR, "data", "audio")
+    EXPORT_DIR = os.path.join(_EXE_DIR, "data", "exports")
+    LOGO_DIR = os.path.join(_EXE_DIR, "data", "logos")
+    THUMBNAIL_DIR = os.path.join(_EXE_DIR, "data", "thumbnails")
+else:
+    WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
+    AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
+    EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
+    LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
+    THUMBNAIL_DIR = os.path.join(BASE_DIR, "data", "thumbnails")
+
 os.makedirs(AUDIO_DIR, exist_ok=True)
-EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
-LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 os.makedirs(LOGO_DIR, exist_ok=True)
-THUMBNAIL_DIR = os.path.join(BASE_DIR, "data", "thumbnails")
 os.makedirs(THUMBNAIL_DIR, exist_ok=True)
 
 # Run-id → actual directory mapping for SVG preview serving
@@ -121,6 +133,12 @@ def api_serve_export_file(run_id: str, filename: str):
     headers = {}
     if filepath.endswith('.html'):
         headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    # Use meaningful display name for download
+    dl_name = _ppt_display_name(os.path.basename(filepath))
+    if dl_name != os.path.basename(filepath):
+        from urllib.parse import quote
+        encoded = quote(dl_name, safe='')
+        headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
     return _sr.FileResponse(filepath, headers=headers)
 
 import re
@@ -212,7 +230,7 @@ async def auth_middleware(request: Request, call_next):
     # Public paths that never need auth (static assets, login, etc.)
     _public_prefixes = (
         "/api/login", "/api/auth/check", "/api/logos/", "/api/exports/",
-        "/api/audio/", "/api/thumbnails/",
+        "/api/audio/", "/api/thumbnails/", "/api/download/",
     )
     if path.startswith("/api/") and not (
         path in _public_prefixes[:2]
@@ -341,11 +359,73 @@ def api_project_videos(project_id: str):
     return {"videos": videos, "storage_path": path}
 
 
+def _ppt_display_name(filename: str, prefix: str = "") -> str:
+    """Map technical PPT filenames to human-readable Chinese names.
+
+    When prefix is provided (e.g. "鲍鱼一品煲_课件"), generates project-specific names.
+    Without prefix, falls back to generic Chinese labels.
+    """
+    import re
+    name, ext = os.path.splitext(filename)
+    suffix_map = {
+        'index': '',
+        'index_vars': '_变量版',
+        'index_backup': '_备份',
+        'index_regenerated': '_重新生成',
+        'index_regenerated_partial': '_部分重生成',
+        'index_regenerated_vars': '_重新生成变量',
+    }
+    if name in suffix_map:
+        base = (prefix + suffix_map[name]) if prefix else {
+            'index': '完整课件',
+            'index_vars': '完整课件(变量版)',
+            'index_backup': '完整课件(备份)',
+            'index_regenerated': '完整课件(重新生成)',
+            'index_regenerated_partial': '完整课件(部分重生成)',
+            'index_regenerated_vars': '完整课件(重新生成变量)',
+        }[name]
+        return base + ext
+    # Map slide_01 → 第1页 / {prefix}_第1页
+    m = re.match(r'^slide_(\d+)(_vars)?$', name)
+    if m:
+        num = int(m.group(1))
+        suffix = '_变量版' if m.group(2) else ''
+        if prefix:
+            return f'{prefix}_第{num}页{suffix}{ext}'
+        label = '(变量版)' if m.group(2) else ''
+        return f'第{num}页{label}{ext}'
+    return filename
+
+
 @app.get("/api/projects/{project_id}/files")
 def api_project_files(project_id: str):
     """List all generated output files in the project's storage folder."""
     path = resolve_project_storage(project_id, auto_create=False)
     files = []
+
+    # Get project name for PPT display naming
+    proj_row = None
+    proj_db = get_db()
+    try:
+        proj_row = proj_db.execute("SELECT name FROM projects WHERE id = ?", (project_id,)).fetchone()
+    finally:
+        proj_db.close()
+    proj_name = proj_row["name"] if proj_row else project_id[:8]
+    safe_proj = "".join(c for c in proj_name if c.isalnum() or c in "._- ()（）").strip()
+    ppt_prefix = f"{safe_proj}_课件" if safe_proj else ""
+
+    # Build display name lookup from tts_history for audio files
+    db = get_db()
+    tts_names: dict[str, str] = {}
+    try:
+        rows = db.execute(
+            "SELECT audio_path, name, voice_name FROM tts_history WHERE project_id = ? AND audio_path != ''",
+            (project_id,)).fetchall()
+        for r in rows:
+            tts_names[r["audio_path"]] = r["name"] or r["voice_name"] or r["audio_path"]
+    finally:
+        db.close()
+
     if os.path.exists(path):
         for f in sorted(os.listdir(path), key=lambda x: os.path.getmtime(os.path.join(path, x)), reverse=True):
             full = os.path.join(path, f)
@@ -354,14 +434,211 @@ def api_project_files(project_id: str):
                 type_map = {'.pptx': 'PPT', '.docx': 'Word', '.txt': 'Text',
                            '.mp3': 'MP3', '.wav': 'Audio', '.mp4': 'Video'}
                 file_type = type_map.get(ext, 'Other')
+                # Category by workflow stage
+                if ext in ('.txt',):
+                    if '文字输入' in f or 'AI整理' in f:
+                        category = '1. 素材输入'
+                    else:
+                        category = '2. 文档生成'
+                elif ext in ('.docx',):
+                    category = '2. 文档生成'
+                elif ext in ('.pptx', '.svg', '.html', '.png', '.jpg'):
+                    category = '3. 课件输出'
+                elif ext in ('.mp3', '.wav'):
+                    category = '4. 演讲课件'
+                else:
+                    category = '其他'
+                # Display name: prefer tts_history name, else filename
+                display_name = tts_names.get(f, f)
+                # Audio URL for play button
+                audio_url = ""
+                if ext in ('.mp3', '.wav'):
+                    audio_url = f"/api/audio/{f}"
+                    params = [f"project_id={project_id}"]
+                    dl_name = "".join(c for c in (display_name or f) if c.isalnum() or c in "._- ()（）").strip()
+                    if dl_name:
+                        params.append(f"name={dl_name}")
+                    audio_url += "?" + "&".join(params)
                 files.append({
                     "filename": f,
+                    "display_name": display_name,
                     "type": file_type,
+                    "category": category,
                     "size": os.path.getsize(full),
                     "modified": os.path.getmtime(full),
-                    "download_url": f"/api/download/{f}?project_id={project_id}"
+                    "download_url": f"/api/download/{f}?project_id={project_id}",
+                    "audio_url": audio_url,
                 })
+    # Also include source materials (素材输入)
+    db = get_db()
+    try:
+        sources = db.execute(
+            "SELECT id, source_name, source_type, raw_content, created_at FROM source_materials WHERE project_id = ? ORDER BY created_at DESC",
+            (project_id,)).fetchall()
+        for s in sources:
+            fname = s["source_name"] or s["source_type"] or "素材"
+            content = s["raw_content"] or ""
+            files.append({
+                "filename": fname,
+                "display_name": s["source_name"] or fname,
+                "type": s["source_type"] or '素材',
+                "category": '1. 素材输入',
+                "size": len(content.encode('utf-8')),
+                "modified": 0,
+                "download_url": "",
+                "audio_url": "",
+                "source_name": s["source_name"] or fname,
+            })
+    finally:
+        db.close()
+
+    # Include PPT export runs (课件输出)
+    ppt_db = get_db()
+    try:
+        # Build column_id → label mapping
+        col_map: dict[str, str] = {}
+        try:
+            col_rows = ppt_db.execute("SELECT column_id, label FROM column_configs").fetchall()
+            for cr in col_rows:
+                col_map[cr["column_id"]] = cr["label"]
+        except Exception:
+            pass
+
+        runs = ppt_db.execute(
+            "SELECT step_name, content FROM step_results WHERE project_id = ? AND step_name LIKE '_ppt_result_%'",
+            (project_id,)).fetchall()
+        for run_idx, r in enumerate(runs):
+            run_id = r["step_name"].replace("_ppt_result_", "", 1)
+            run_dir = _run_dirs.get(run_id)
+            if not run_dir:
+                candidate = os.path.join(EXPORT_DIR, run_id)
+                if os.path.isdir(candidate):
+                    run_dir = candidate
+            if run_dir and os.path.isdir(run_dir):
+                # Extract column_id from run_id (e.g. "鲍鱼一品煲_col3" → "col3")
+                col_match = re.search(r'_(col\d+[a-z]?)$', run_id)
+                col_id = col_match.group(1) if col_match else ""
+                col_label = col_map.get(col_id, col_id)
+                run_prefix = f"{safe_proj}_{col_label}" if (safe_proj and col_label) else ppt_prefix
+                for rf in sorted(os.listdir(run_dir)):
+                    rfull = os.path.join(run_dir, rf)
+                    if os.path.isfile(rfull):
+                        ext = os.path.splitext(rf)[1].lower()
+                        if ext in ('.html', '.svg', '.png', '.jpg'):
+                            files.append({
+                                "filename": rf,
+                                "display_name": _ppt_display_name(rf, run_prefix),
+                                "type": ext.upper().lstrip('.'),
+                                "category": '3. 课件输出',
+                                "size": os.path.getsize(rfull),
+                                "modified": os.path.getmtime(rfull),
+                                "download_url": f"/api/exports/{run_id}/{rf}",
+                                "audio_url": "",
+                            })
+    finally:
+        ppt_db.close()
+
     return {"files": files, "storage_path": path}
+
+
+@app.get("/api/projects/{project_id}/download-all")
+def api_download_all(project_id: str):
+    """Download all files in a project folder as a zip archive."""
+    import zipfile, io
+    path = resolve_project_storage(project_id, auto_create=False)
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="项目文件夹不存在")
+    files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
+    if not files:
+        raise HTTPException(status_code=404, detail="项目文件夹为空")
+    proj = _get_project(project_id)
+    safe_name = "".join(c for c in (proj["name"] if proj else project_id) if c.isalnum() or c in "._- ()（）").strip() or project_id[:8]
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in files:
+            zf.write(os.path.join(path, f), f)
+    buf.seek(0)
+    from urllib.parse import quote
+    from datetime import datetime
+    safe_dl = quote(f"{safe_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip", safe="")
+    return Response(content=buf.getvalue(), media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_dl}"})
+
+
+@app.post("/api/projects/{project_id}/download-selected")
+async def api_download_selected(project_id: str, request: Request):
+    """Download selected files as a zip archive."""
+    body = await request.json()
+    import zipfile, io
+    proj = _get_project(project_id)
+    safe_name = "".join(c for c in (proj["name"] if proj else project_id) if c.isalnum() or c in "._- ()（）").strip() or project_id[:8]
+    path = resolve_project_storage(project_id, auto_create=False)
+
+    buf = io.BytesIO()
+    added = set()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for fd in body.get("files", []):
+            filename = fd.get("filename", "")
+            download_url = fd.get("download_url", "")
+            display_name = fd.get("display_name", filename)
+            arcname = display_name or filename
+
+            # Try to resolve the actual file path
+            filepath = None
+            if download_url and download_url.startswith("/api/exports/"):
+                # PPT export file: parse run_id and filename from URL
+                parts = download_url.replace("/api/exports/", "").split("/", 1)
+                if len(parts) == 2:
+                    run_id, rf = parts
+                    run_dir = _run_dirs.get(run_id)
+                    if not run_dir:
+                        candidate = os.path.join(EXPORT_DIR, run_id)
+                        if os.path.isdir(candidate):
+                            run_dir = candidate
+                    if run_dir:
+                        candidate = os.path.join(run_dir, rf)
+                        if os.path.isfile(candidate):
+                            filepath = candidate
+
+            if not filepath and os.path.exists(path):
+                candidate = os.path.join(path, filename)
+                if os.path.isfile(candidate):
+                    filepath = candidate
+
+            if filepath:
+                # Ensure unique archive names
+                if arcname in added:
+                    base, ext = os.path.splitext(arcname)
+                    i = 1
+                    while f"{base}_{i}{ext}" in added:
+                        i += 1
+                    arcname = f"{base}_{i}{ext}"
+                added.add(arcname)
+                zf.write(filepath, arcname)
+
+    if len(added) == 0:
+        raise HTTPException(status_code=404, detail="没有找到可下载的文件")
+
+    buf.seek(0)
+    from urllib.parse import quote
+    from datetime import datetime
+    safe_dl = quote(f"{safe_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip", safe="")
+    return Response(content=buf.getvalue(), media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_dl}"})
+
+
+@app.delete("/api/projects/{project_id}/files/{filename:path}")
+def api_delete_project_file(project_id: str, filename: str):
+    """Delete a single file from project storage."""
+    path = resolve_project_storage(project_id, auto_create=False)
+    filepath = os.path.join(path, filename)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    # Safety: ensure the file is inside the project directory
+    if not os.path.realpath(filepath).startswith(os.path.realpath(path)):
+        raise HTTPException(status_code=403, detail="非法路径")
+    os.remove(filepath)
+    return {"ok": True}
 
 
 @app.get("/api/projects/{project_id}")
@@ -1021,6 +1298,8 @@ class VoiceUpdate(BaseModel):
     voice_id: Optional[str] = None
     description: Optional[str] = None
     is_default: Optional[int] = None
+    volume: Optional[int] = None
+    speed: Optional[float] = None
 
 
 @app.get("/api/tts/providers")
@@ -1369,6 +1648,10 @@ def update_voice(voice_id: str, data: VoiceUpdate):
             updates["is_default"] = data.is_default
             if data.is_default:
                 db.execute("UPDATE voices SET is_default = 0")
+        if data.volume is not None:
+            updates["volume"] = data.volume
+        if data.speed is not None:
+            updates["speed"] = data.speed
         if updates:
             set_clause = ", ".join(f"{k} = ?" for k in updates)
             values = list(updates.values()) + [voice_id]
@@ -4557,6 +4840,39 @@ def api_export_sop(req: SOPExportRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ── Public download endpoints (no auth required, must precede /api/download/{filename}) ──
+
+@app.get("/api/download/info")
+def api_download_info():
+    dl_dir = os.path.join(BASE_DIR, "data", "downloads")
+    info: dict = {"desktop": None, "server": None}
+    exe_path = os.path.join(dl_dir, "YishaoAgent.exe")
+    if os.path.isfile(exe_path):
+        info["desktop"] = {"size": os.path.getsize(exe_path), "name": "YishaoAgent.exe"}
+    zip_path = os.path.join(dl_dir, "yishao-agent-server.zip")
+    if os.path.isfile(zip_path):
+        info["server"] = {"size": os.path.getsize(zip_path), "name": "yishao-agent-server.zip"}
+    return info
+
+
+@app.get("/api/download/desktop")
+def api_download_desktop():
+    dl_dir = os.path.join(BASE_DIR, "data", "downloads")
+    path = os.path.join(dl_dir, "YishaoAgent.exe")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="桌面版安装包尚未构建")
+    return FileResponse(path, filename="YishaoAgent.exe")
+
+
+@app.get("/api/download/server")
+def api_download_server():
+    dl_dir = os.path.join(BASE_DIR, "data", "downloads")
+    path = os.path.join(dl_dir, "yishao-agent-server.zip")
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="服务器版安装包尚未构建")
+    return FileResponse(path, filename="yishao-agent-server.zip")
+
+
 # ── File Download ──
 
 @app.get("/api/download/{filename}")
@@ -4633,11 +4949,18 @@ async def api_tts_synthesize(req: SynthesizeRequest):
             dl = await client.get(audio_url)
 
         output_dir = AUDIO_DIR
+        proj = None
         if req.project_id:
             output_dir = resolve_project_storage(req.project_id)
+            proj = _get_project(req.project_id)
         os.makedirs(output_dir, exist_ok=True)
 
-        audio_name = f"tts_{os.urandom(4).hex()}.mp3"
+        safe_project = "".join(c for c in (proj["name"] if proj else "audio") if c.isalnum() or c in "._- ()（）").strip() or "audio"
+        source = "".join(c for c in (req.source_name or "演讲") if c.isalnum() or c in "._- ()（）").strip()
+        base_name = f"{safe_project}_{source}"
+        existing = [f for f in os.listdir(output_dir) if f.startswith(base_name) and f.endswith(".mp3")]
+        seq = len(existing) + 1
+        audio_name = f"{base_name}_{seq}.mp3"
         audio_path = os.path.join(output_dir, audio_name)
         with open(audio_path, "wb") as f:
             f.write(dl.content)
@@ -4646,10 +4969,9 @@ async def api_tts_synthesize(req: SynthesizeRequest):
         params = []
         if req.project_id:
             params.append(f"project_id={req.project_id}")
-            proj = _get_project(req.project_id)
             if proj:
-                safe_name = "".join(c for c in proj["name"] if c.isalnum() or c in "._- ()（）").strip()
-                params.append(f"name={safe_name}_音频.mp3")
+                safe_dl = "".join(c for c in audio_name if c.isalnum() or c in "._- ()（）").strip()
+                params.append(f"name={safe_dl}")
         if params:
             serve_url += "?" + "&".join(params)
 
@@ -4660,7 +4982,7 @@ async def api_tts_synthesize(req: SynthesizeRequest):
             try:
                 db.execute(
                     "INSERT INTO tts_history (project_id, text, voice_id, model, audio_path, name, voice_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (req.project_id, req.text, req.voice_id or "", req.model, audio_name, f"{proj['name']}_演讲.mp3" if proj else "演讲.mp3", req.voice_name or "")
+                    (req.project_id, req.text, req.voice_id or "", req.model, audio_name, audio_name, req.voice_name or "")
                 )
                 db.commit()
                 history_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -4905,7 +5227,8 @@ UPDATE_CHECK_URL = "https://raw.githubusercontent.com/qiliang166/yishao-agent/ma
 
 @app.get("/api/version")
 def api_version():
-    return {"version": VERSION, "app": _get_site_name()}
+    ver = _get_setting("app_version")
+    return {"version": ver if ver else VERSION, "app": _get_site_name()}
 
 
 @app.get("/api/check-update")
@@ -5189,7 +5512,15 @@ async def upload_column_template(config_id: str, file: UploadFile = File(...)):
         db.close()
 
 
+# Production mode: serve built frontend (after all API routes)
+if getattr(sys, 'frozen', False):
+    FRONTEND_DIST = os.path.join(sys._MEIPASS, "frontend", "dist")
+else:
+    FRONTEND_DIST = os.path.join(WORKSPACE_ROOT, "frontend", "dist")
+if os.path.isdir(FRONTEND_DIST):
+    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+
 if __name__ == "__main__":
-    import sys, uvicorn
+    import uvicorn
     port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
     uvicorn.run(app, host="0.0.0.0", port=port)

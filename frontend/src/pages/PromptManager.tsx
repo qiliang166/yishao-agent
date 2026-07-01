@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { api, PromptDetail, PromptVersion, DiffResult } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
-const CATEGORIES = ['内容整理', '深度分析', '手册生成', '文档导出', '演讲稿', 'PPT Skill']
+const CATEGORIES = ['笔记整理', '道与术分析', '研习手册', 'SOP', '口播稿', 'Note Taking']
 
 // ---------- shared inline style factories ----------
 

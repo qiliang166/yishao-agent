@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
-import { sha256 } from '../services/sha256'
 import { useModal } from '../components/ModalProvider'
 import { DEFAULT_THEMES, applyThemeToDOM, resetThemeToDefault } from '../services/theme'
 import type { ThemePreset } from '../services/theme'
@@ -35,15 +34,12 @@ function SettingsPage() {
   const [logoUploading, setLogoUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [versionInfo, setVersionInfo] = useState<null | { current: string; latest: string; has_update: boolean; release_url?: string; error?: string }>(null)
-  const [checkingUpdate, setCheckingUpdate] = useState(false)
-  const [downloading, setDownloading] = useState(false)
-
   const [passwordEnabled, setPasswordEnabled] = useState(false)
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [initialPassword, setInitialPassword] = useState('')
   const [passwordMsg, setPasswordMsg] = useState('')
+  const [adminPhone, setAdminPhone] = useState('')
+  const [appVersion, setAppVersion] = useState('1.0.0')
 
   // -- 主题设置 state --
   const [currentThemeId, setCurrentThemeId] = useState('classic')
@@ -53,7 +49,7 @@ function SettingsPage() {
   const [editColors, setEditColors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    api.getSettings().then(data => {
+    Promise.all([api.getSettings(), api.getVersion()]).then(([data, ver]) => {
       const s = data.settings || {}
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.brand_name) setBrandName(s.brand_name)
@@ -61,6 +57,9 @@ function SettingsPage() {
       if (s.branding_copyright) setBrandingCopyright(s.branding_copyright)
       if (s.branding_signature) setBrandingSignature(s.branding_signature)
       if (s.admin_password_enabled === '1') setPasswordEnabled(true)
+      if (s.admin_phone) setAdminPhone(s.admin_phone)
+      if ((ver as any).version) setAppVersion((ver as any).version)
+      if (s.app_version) setAppVersion(s.app_version)
 
       // 加载主题数据
       const themeId = s.theme || 'classic'
@@ -97,31 +96,26 @@ function SettingsPage() {
     }
   }
 
-  const SALT = 'yishao-agent-salt-2026'
-  const INITIAL_PASSWORD = '11110000'
-
   const handlePasswordSave = async () => {
     setPasswordMsg('')
-    if (initialPassword !== INITIAL_PASSWORD) { setPasswordMsg('初始密码错误，无法修改密码'); return }
     if (!newPassword.trim()) { setPasswordMsg('密码不能为空'); return }
     if (newPassword !== confirmPassword) { setPasswordMsg('两次输入的密码不一致'); return }
     if (newPassword.length < 4) { setPasswordMsg('密码至少需要4个字符'); return }
     try {
-      const hash = sha256(SALT + newPassword)
-      await api.updateSettings({ admin_password: hash, admin_password_enabled: '1' })
+      await api.updateSettings({ admin_password: newPassword, admin_password_enabled: '1' })
       setPasswordEnabled(true)
-      setNewPassword(''); setConfirmPassword(''); setInitialPassword('')
-      setPasswordMsg('密码保护已启用')
+      setNewPassword(''); setConfirmPassword('')
+      setPasswordMsg('密码已更新')
     } catch (err: any) { setPasswordMsg('保存失败: ' + err.message) }
   }
 
   const handlePasswordDisable = async () => {
-    const ok = await modal.confirm('确定要关闭密码保护吗？关闭后，项目配置中的敏感栏目将无需密码即可访问。')
+    const ok = await modal.confirm('确定要关闭密码保护吗？关闭后无需密码即可访问系统。')
     if (!ok) return
     try {
       await api.updateSettings({ admin_password_enabled: '0' })
       setPasswordEnabled(false)
-      setNewPassword(''); setConfirmPassword(''); setInitialPassword('')
+      setNewPassword(''); setConfirmPassword('')
       setPasswordMsg('密码保护已关闭')
     } catch (err: any) { setPasswordMsg('操作失败: ' + err.message) }
   }
@@ -129,40 +123,20 @@ function SettingsPage() {
   const handleGlobalSave = async () => {
     setSaveMsg('')
     try {
-      await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature })
-      document.title = brandName || '文档智能体'
+      await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature, admin_phone: adminPhone, app_version: appVersion })
+      const fallback = (await api.getVersion()).app || ''
+      document.title = brandName || fallback
       setSaveMsg('保存成功')
     } catch (err: any) {
       setSaveMsg('保存失败: ' + err.message)
     }
   }
 
-  const handleCheckUpdate = async () => {
-    setCheckingUpdate(true)
-    try {
-      const data = await api.checkUpdate()
-      setVersionInfo(data)
-    } catch {
-      setVersionInfo({ current: '1.0.0', latest: '1.0.0', has_update: false, error: '检查更新失败，请检查网络连接' })
-    } finally {
-      setCheckingUpdate(false)
-    }
-  }
-
-  const handleDownloadUpdate = async () => {
-    setDownloading(true)
-    try {
-      await api.downloadUpdate(versionInfo?.release_url)
-    } catch (err: any) {
-      setSaveMsg('下载失败: ' + err.message)
-    } finally {
-      setDownloading(false)
-    }
-  }
-
   const handleBrowseFolder = async () => {
     try {
-      const res = await fetch('/api/browse-folder')
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch('/api/browse-folder', { headers })
       const data = await res.json()
       if (data.path) setSavePath(data.path)
     } catch {
@@ -223,10 +197,22 @@ function SettingsPage() {
     <div>
       {/* Tab Bar */}
       <div className="mgmt-tabs">
-        <button className={`mgmt-tab${activeTab === 'general' ? ' active' : ''}`}
-          onClick={() => setActiveTab('general')}>通用设置</button>
-        <button className={`mgmt-tab${activeTab === 'appearance' ? ' active' : ''}`}
-          onClick={() => setActiveTab('appearance')}>网站风格</button>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className={`mgmt-tab${activeTab === 'general' ? ' active' : ''}`}
+            onClick={() => setActiveTab('general')}>通用设置</button>
+          <button className={`mgmt-tab${activeTab === 'appearance' ? ' active' : ''}`}
+            onClick={() => setActiveTab('appearance')}>网站风格</button>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', marginRight: 50 }}>
+          {saveMsg && (
+            <span style={{ fontSize: 11, color: saveMsg.includes('失败') ? 'var(--warning)' : 'var(--success)' }}>
+              {saveMsg}
+            </span>
+          )}
+          <button className="btn btn-primary btn-sm" onClick={handleGlobalSave}>
+            全局保存
+          </button>
+        </div>
       </div>
       <div className="mgmt-content">
 
@@ -256,6 +242,11 @@ function SettingsPage() {
               <label>应用名称</label>
               <input className="form-input" type="text" value={brandName}
                 onChange={e => setBrandName(e.target.value)} style={{ maxWidth: 300 }} />
+            </div>
+            <div className="settings-row">
+              <label>版本号</label>
+              <input className="form-input" type="text" value={appVersion}
+                onChange={e => setAppVersion(e.target.value)} style={{ maxWidth: 120 }} />
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 8px' }}>
               以下信息将作为页脚嵌入导出的文档 / PPT 中。
@@ -288,9 +279,13 @@ function SettingsPage() {
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
             <h3>安全设置</h3>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
-              开启后，访问「项目配置」中的模型设置和栏目配置需要输入密码。
-              忘记密码？在下方关闭密码保护后重新设置即可。
+              开启密码保护后，登录和项目配置需要输入密码。
             </p>
+            <div className="settings-row">
+              <label>管理员手机号</label>
+              <input className="form-input" type="text" value={adminPhone}
+                onChange={e => setAdminPhone(e.target.value)} placeholder="忘记密码时用于验证身份" style={{ maxWidth: 220 }} />
+            </div>
             <div className="settings-row">
               <label>密码保护</label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', minWidth: 'auto' }}>
@@ -300,12 +295,6 @@ function SettingsPage() {
               </label>
             </div>
             {passwordEnabled && (<>
-              <div className="settings-row">
-                <label>初始密码</label>
-                <input className="form-input" type="password" value={initialPassword}
-                  onChange={e => setInitialPassword(e.target.value)}
-                  placeholder="输入初始密码" style={{ maxWidth: 220 }} />
-              </div>
               <div className="settings-row">
                 <label>新密码</label>
                 <input className="form-input" type="password" value={newPassword}
@@ -330,41 +319,12 @@ function SettingsPage() {
           </div>
 
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
-            <button className="btn btn-primary btn-sm" onClick={handleGlobalSave}>
-              全局保存
-            </button>
-            {saveMsg && (
-              <span style={{ marginLeft: 8, fontSize: 11, color: saveMsg.includes('失败') ? 'var(--warning)' : 'var(--success)' }}>
-                {saveMsg}
-              </span>
-            )}
-          </div>
-
-          <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
             <h3>关于</h3>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-              {brandName} v{versionInfo?.current || '1.0.0'}<br />
-              <button className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
-                onClick={handleCheckUpdate} disabled={checkingUpdate}>
-                {checkingUpdate ? '检查中...' : '检查更新'}
-              </button>
-              {versionInfo && !checkingUpdate && (
-                <div style={{ marginTop: 8, fontSize: 11 }}>
-                  {versionInfo.error ? (
-                    <span style={{ color: 'var(--warning)' }}>{versionInfo.error}</span>
-                  ) : versionInfo.has_update ? (
-                    <span style={{ color: 'var(--warning)' }}>
-                      发现新版本 v{versionInfo.latest}！
-                      <button className="btn btn-primary btn-sm" style={{ marginLeft: 8 }}
-                        onClick={handleDownloadUpdate} disabled={downloading}>
-                        {downloading ? '下载中...' : '下载并安装'}
-                      </button>
-                    </span>
-                  ) : (
-                    <span style={{ color: 'var(--success)' }}>当前已是最新版本</span>
-                  )}
-                </div>
-              )}
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.8 }}>
+              <div>应用名称：{brandName}</div>
+              <div>版本：{appVersion}</div>
+              {brandingCopyright && <div>版权：{brandingCopyright}</div>}
+              {brandingSignature && <div>作者：{brandingSignature}</div>}
             </div>
           </div>
         </>)}

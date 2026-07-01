@@ -5,7 +5,10 @@ import ProjectPage from './pages/ProjectPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjSettingsPage from './pages/ProjSettingsPage'
 import TemplateManager from './pages/TemplateManager'
+import LoginPage from './pages/LoginPage'
 import { ModalProvider } from './components/ModalProvider'
+import ProtectedRoute from './components/ProtectedRoute'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { api } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
@@ -15,17 +18,23 @@ function Sidebar() {
   const navigate = useNavigate()
   const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
+  const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
   const [projName, setProjName] = useState('')
   const isWorkspace = location.pathname.startsWith('/project/')
 
   useEffect(() => {
-    api.getSettings().then(data => {
+    Promise.all([api.getSettings(), api.getVersion()]).then(([data, ver]) => {
       const s = data.settings || {}
+      const fallback = (ver as any).app || ''
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.brand_name) {
         setBrandName(s.brand_name)
         document.title = s.brand_name
+      } else if (fallback) {
+        document.title = fallback
       }
+      if ((ver as any).version) setSidebarVersion((ver as any).version)
+      if (s.app_version) setSidebarVersion(s.app_version)
     }).catch(() => {})
   }, [])
 
@@ -75,22 +84,120 @@ function Sidebar() {
           <span className="ico">⚙</span> 全局设置
         </button>
       </nav>
-      <div className="sidebar-foot">
+      <div className="sidebar-foot" style={{ padding: '8px 16px 8px 10px', marginBottom: 50, lineHeight: 2.2 }}>
         {isWorkspace && (
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', padding: '4px 10px' }}>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
             当前项目：<strong>{projName || '—'}</strong>
           </div>
         )}
-        <div style={{ fontSize: 9, color: 'var(--text-secondary)', padding: '2px 10px 6px' }}>{brandName} v1.0.0</div>
+        <div style={{
+          display: 'block', width: '100%', padding: 0,
+          fontSize: 10,
+          color: 'var(--text-secondary)',
+          textAlign: 'left',
+        }}>
+          <span className="ico">📝</span>{' '}
+          {brandName} {sidebarVersion}
+        </div>
+        <div style={{ fontSize: 10, display: 'flex', gap: 8 }}>
+          <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
+          <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
+        </div>
+        <LogoutButton />
       </div>
     </aside>
   )
 }
 
-function App() {
+function LogoutButton() {
+  const { logout, passwordRequired } = useAuth()
+  const navigate = useNavigate()
+
+  if (!passwordRequired) return null
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login', { replace: true })
+  }
+
+  return (
+    <button
+      onClick={handleLogout}
+      style={{
+        display: 'block', width: '100%', padding: 0,
+        marginTop: 4,
+        fontSize: 10, color: 'var(--text-secondary)',
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        textAlign: 'left', borderRadius: 0,
+      }}
+      title="退出登录"
+    >
+      <span className="ico">🚪</span> 退出登录
+    </button>
+  )
+}
+
+function PhoneReminder() {
+  const [show, setShow] = useState(false)
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(res => res.json())
+      .then(data => {
+        const s = data.settings || {}
+        if (!s.admin_phone) setShow(true)
+      })
+      .catch(() => {})
+  }, [])
+
+  if (!show) return null
+
+  return (
+    <div className="dialog-overlay">
+      <div className="dialog-box" style={{ width: 400 }}>
+        <div className="dialog-title">完善安全设置</div>
+        <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text)', marginBottom: 12 }}>
+          您尚未设置<strong>管理员手机号</strong>，忘记密码时将无法通过手机验证找回。
+        </p>
+        <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+          请前往「全局设置」→「安全设置」填写手机号。
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShow(false)}>稍后提醒</button>
+          <button className="btn btn-primary btn-sm" onClick={() => { setShow(false); navigate('/settings') }}>去设置</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AppShell() {
   const location = useLocation()
   const isWorkspace = location.pathname.startsWith('/project/')
 
+  return (
+    <>
+      <PhoneReminder />
+    <div className="app-layout">
+      <Sidebar />
+      <div className="main-area">
+        <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
+          <Routes>
+            <Route path="/project/:id" element={<ProjectPage />} />
+            <Route path="/templates" element={<TemplateManager />} />
+            <Route path="/proj-settings" element={<ProjSettingsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/" element={<HomePage />} />
+          </Routes>
+        </div>
+      </div>
+    </div>
+    </>
+  )
+}
+
+function App() {
   useEffect(() => {
     api.getSettings().then(data => {
       const s = data.settings || {}
@@ -117,22 +224,18 @@ function App() {
   }, [])
 
   return (
-    <ModalProvider>
-      <div className="app-layout">
-        <Sidebar />
-        <div className="main-area">
-          <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
-            <Routes>
-              <Route path="/project/:id" element={<ProjectPage />} />
-              <Route path="/templates" element={<TemplateManager />} />
-              <Route path="/proj-settings" element={<ProjSettingsPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/" element={<HomePage />} />
-            </Routes>
-          </div>
-        </div>
-      </div>
-    </ModalProvider>
+    <AuthProvider>
+      <ModalProvider>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="*" element={
+            <ProtectedRoute>
+              <AppShell />
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </ModalProvider>
+    </AuthProvider>
   )
 }
 

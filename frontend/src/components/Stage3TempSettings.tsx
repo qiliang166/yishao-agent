@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 
 export interface StageTemps {
-  sop: number           // Tab 1: SOP 生成+导出
+  sop: number           // Tab 1: 文档课件
   keyword: number       // Tab 2: 提取关键词搜资料
   research: number      // Tab 2: 深度理解内容主题
   outline: number       // Tab 2: 规划类型标题要点

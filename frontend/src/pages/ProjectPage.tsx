@@ -294,6 +294,248 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
   return new Blob([buf], { type: 'audio/wav' })
 }
 
+// ── Project Output List (Stage 5) ──
+function ProjectOutputList({ projectId, projectName }: { projectId: string; projectName: string }) {
+  const modal = useModal()
+  const [files, setFiles] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [loaded, setLoaded] = useState(false)
+  const [playingAudio, setPlayingAudio] = useState('')
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+
+  const handleAudioToggle = (audioUrl: string) => {
+    if (!audioRef.current || audioRef.current.src !== audioUrl) {
+      if (audioRef.current) { audioRef.current.pause() }
+      const a = new Audio(audioUrl)
+      a.onended = () => setPlayingAudio('')
+      a.onpause = () => setPlayingAudio('')
+      a.onplay = () => setPlayingAudio(audioUrl)
+      audioRef.current = a
+      a.play().catch(() => {})
+    } else if (audioRef.current.paused) {
+      audioRef.current.play().catch(() => {})
+    } else {
+      audioRef.current.pause()
+    }
+  }
+
+  const loadFiles = useCallback(async () => {
+    setLoading(true)
+    try {
+      const data = await api.getProjectFiles(projectId) as any
+      const all = data.files || []
+      setFiles(all)
+      if (!loaded) {
+        const categories = [...new Set<string>(all.map((f: any) => f.category || '其他'))]
+        setExpanded(new Set<string>(categories))
+        setLoaded(true)
+      }
+    } catch { setFiles([]) }
+    finally { setLoading(false) }
+  }, [projectId, loaded])
+
+  useEffect(() => { loadFiles() }, [loadFiles])
+
+  const fileIcon = (f: any) => {
+    const cat = f.category || ''
+    if (cat.includes('素材输入')) return '📥'
+    if (cat.includes('文档生成')) return '📝'
+    if (cat.includes('课件输出')) return '📌'
+    if (cat.includes('演讲课件')) return '🎵'
+    return '📄'
+  }
+  const fileKey = (f: any) => f.download_url || f.filename
+  const formatSize = (bytes?: number) => {
+    if (bytes == null) return '—'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / 1048576).toFixed(1)} MB`
+  }
+  const filtered = files.filter((f: any) => !search || (f.display_name || f.filename).toLowerCase().includes(search.toLowerCase()))
+  const grouped = filtered.reduce((acc: Record<string, any[]>, f: any) => {
+    const g = f.category || '其他'
+    if (!acc[g]) acc[g] = []
+    acc[g].push(f)
+    return acc
+  }, {})
+  const totalSize = files.reduce((sum: number, f: any) => sum + (f.size || 0), 0)
+  const allExpanded = Object.keys(grouped).length > 0 && Object.keys(grouped).every(k => expanded.has(k))
+
+  const toggleSelect = (key: string) => {
+    setSelected(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length && filtered.length > 0) setSelected(new Set())
+    else setSelected(new Set(filtered.map((f: any) => fileKey(f))))
+  }
+  const toggleGroup = (cat: string) => {
+    setExpanded(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n })
+  }
+  const toggleAllGroups = () => {
+    if (allExpanded) setExpanded(new Set())
+    else setExpanded(new Set(Object.keys(grouped)))
+  }
+  const deleteFile = async (f: any) => {
+    const key = fileKey(f)
+    const ok = await modal.confirm(`确认删除「${f.display_name || f.filename}」？`)
+    if (!ok) return
+    try {
+      await api.deleteProjectFile(projectId, f.filename)
+      setFiles(prev => prev.filter(x => fileKey(x) !== key))
+      setSelected(prev => { const n = new Set(prev); n.delete(key); return n })
+    } catch (e: any) { modal.toast('删除失败: ' + (e?.message || e), 'error') }
+  }
+  const batchDelete = async () => {
+    if (selected.size === 0) return
+    const keys = [...selected]
+    const ok = await modal.confirm(`确认删除 ${keys.length} 个文件？`)
+    if (!ok) return
+    let deleted = 0
+    for (const key of keys) {
+      const f = files.find(x => fileKey(x) === key)
+      if (f) {
+        try { await api.deleteProjectFile(projectId, f.filename); deleted++ } catch {}
+      }
+    }
+    setFiles(prev => prev.filter(x => !selected.has(fileKey(x))))
+    setSelected(new Set())
+    if (deleted > 0) modal.toast(`已删除 ${deleted} 个文件`, 'success')
+  }
+
+  const downloadSelected = async () => {
+    const list = files.filter((f: any) => selected.has(fileKey(f)))
+    if (list.length === 0) return
+    try {
+      await api.downloadSelectedFiles(projectId, list.map((f: any) => ({
+        filename: f.filename,
+        download_url: f.download_url || '',
+        display_name: f.display_name || f.filename,
+      })))
+      modal.toast(`已打包下载 ${list.length} 个文件`, 'success')
+    } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
+  }
+
+  return (
+    <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <span>📦 {projectName} 输出列表</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn btn-ghost btn-sm" onClick={loadFiles}
+            style={{ fontSize: 11 }} title="刷新列表">🔄 刷新</button>
+          {files.length > 0 && (
+            <button onClick={() => selected.size > 0 ? downloadSelected() : api.downloadAllFiles(projectId)}
+              className="btn btn-outline btn-sm"
+              style={{ fontSize: 11, padding: '4px 12px' }}>
+              {selected.size > 0 ? `📥 下载选中 (${selected.size})` : `📦 一键下载 (${files.length})`}
+            </button>
+          )}
+        </div>
+      </div>
+      {loading ? (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+          加载中...
+        </div>
+      ) : files.length > 0 ? (
+        <>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '0 0 8px', flexWrap: 'wrap' }}>
+            <input className="form-input" placeholder="搜索文件名..."
+              style={{ flex: 1, minWidth: 160, fontSize: 11, padding: '4px 8px' }}
+              value={search}
+              onChange={e => setSearch(e.target.value)} />
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              {filtered.length} / {files.length} 个文件 · {formatSize(totalSize)}
+            </span>
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+              onClick={toggleSelectAll}>
+              {selected.size === filtered.length && filtered.length > 0 ? '取消全选' : '全选'}
+            </button>
+            {selected.size > 0 && (
+              <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)' }}
+                onClick={batchDelete}>
+                删除选中 ({selected.size})
+              </button>
+            )}
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+              onClick={toggleAllGroups}>
+              {allExpanded ? '全部折叠' : '全部展开'}
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b, 'zh-CN')).map(([category, catFiles]) => {
+              const isExpanded = expanded.has(category)
+              return (
+              <div key={category} style={{ marginBottom: 4 }}>
+                <div onClick={() => toggleGroup(category)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', cursor: 'pointer', background: 'var(--bg-secondary)', borderRadius: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  <span style={{ fontSize: 10 }}>{isExpanded ? '▼' : '▶'}</span>
+                  <span>{fileIcon(catFiles[0])}</span>
+                  <span style={{ flex: 1 }}>{category}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>{catFiles.length} 个文件</span>
+                </div>
+                {isExpanded && (
+                  <div style={{ padding: '2px 0 2px 14px' }}>
+                    {catFiles.map((f: any) => {
+                      const isAudio = f.type === 'MP3' || f.type === 'Audio'
+                      const dateStr = f.modified ? new Date(f.modified * 1000).toLocaleDateString('zh-CN') : ''
+                      return (
+                      <div key={fileKey(f)}
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 6px', fontSize: 11, borderBottom: '1px solid var(--border)', background: selected.has(fileKey(f)) ? 'var(--bg-hover)' : 'transparent' }}>
+                        <input type="checkbox" checked={selected.has(fileKey(f))}
+                          onChange={() => toggleSelect(fileKey(f))}
+                          style={{ flexShrink: 0 }} />
+                        <span style={{ flexShrink: 0 }}>{fileIcon(f)}</span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
+                          {f.display_name || f.filename}
+                        </span>
+                        <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0, minWidth: 50, textAlign: 'right' }}>{dateStr}</span>
+                        <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0, minWidth: 45, textAlign: 'right' }}>{formatSize(f.size)}</span>
+                        {isAudio && f.audio_url && (() => {
+                          const url = (f.audio_url as string).startsWith('/') ? f.audio_url : '/' + (f.audio_url as string).replace(/^\//, '')
+                          const isPlaying = playingAudio === url
+                          return (
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--accent)', flexShrink: 0 }}
+                            onClick={() => handleAudioToggle(url)}
+                            title={isPlaying ? '暂停' : '播放'}>
+                            {isPlaying ? '⏸' : '▶'}
+                          </button>
+                          )
+                        })()}
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', flexShrink: 0 }}
+                          onClick={async () => {
+                            try {
+                              const dlName = f.display_name || f.filename
+                              if (f.download_url) {
+                                await api.downloadWithName(f.download_url, dlName)
+                              } else {
+                                await api.downloadWithName(
+                                  `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(projectId)}`,
+                                  dlName
+                                )
+                              }
+                            } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
+                          }}>下载</button>
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--warning)', flexShrink: 0 }}
+                          onClick={() => deleteFile(f)}>✕</button>
+                      </div>
+                    )})}
+                  </div>
+                )}
+              </div>
+            )})}
+          </div>
+        </>
+      ) : (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
+          暂无产出物
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main Component ──
 export default function ProjectPage() {
   const modal = useModal()
@@ -458,6 +700,8 @@ export default function ProjectPage() {
   const [ttsInputText, setTtsInputText] = useState('')
   const [ttsGenerating, setTtsGenerating] = useState(false)
   const [ttsAudioUrl, setTtsAudioUrl] = useState('')
+  const [ttsVolume, setTtsVolume] = useState(50)
+  const [ttsSpeed, setTtsSpeed] = useState(1.0)
   const [ttsHistory, setTtsHistory] = useState<{ id: number; voice: string; audioUrl: string; audioPath: string; filename: string; time: string }[]>([])
   const [projStoragePath, setProjStoragePath] = useState('')
   const [savingPath, setSavingPath] = useState(false)
@@ -1357,12 +1601,14 @@ export default function ProjectPage() {
     setPlayingVoiceId('')
     setPlayingHistoryIdx(null)
   }
-  const playAudio = (url: string, voiceId?: string, historyIdx?: number) => {
+  const playAudio = (url: string, voiceId?: string, historyIdx?: number, vol?: number, spd?: number) => {
     stopAudio()
     const a = new Audio(url)
     playingAudioRef.current = a
     if (voiceId) setPlayingVoiceId(voiceId)
     if (historyIdx !== undefined) setPlayingHistoryIdx(historyIdx)
+    if (vol !== undefined) a.volume = Math.max(0, Math.min(1, vol / 100))
+    if (spd !== undefined) a.playbackRate = spd
     a.onended = () => {
       playingAudioRef.current = null
       setPlayingVoiceId('')
@@ -1376,24 +1622,24 @@ export default function ProjectPage() {
     setTtsGenerating(true)
     try {
       const selectedVoice = ttsVoices.find(v => v.id === voiceId) || clonedVoices.find(v => v.id === voiceId)
+      const sourceLabels: Record<string, string> = { doc: '文档演讲', analysis: '分析演讲', comprehensive: '综合演讲', blank: '白板编辑' }
+      const sourceLabel = sourceLabels[ttsSourceTab] || '演讲'
       const result: any = await api.ttsSynthesize(
         ttsInputText, cloneModel,
         selectedVoice?.voice_id,
-        undefined, undefined,
+        selectedVoice?.volume ?? ttsVolume, selectedVoice?.speed ?? ttsSpeed,
         id, ttsProviderId || undefined,
         selectedVoice?.name,
+        sourceLabel,
       )
       setTtsAudioUrl(result.audio_url)
       const url = result.audio_url || '/api/audio/' + encodeURIComponent(result.filename || '')
-      // If history was saved to DB, update voice_name
-      if (result.history_id) {
-        api.updateTtsHistory(result.history_id, (project?.name || 'output') + '_演讲.mp3').catch(() => {})
-      }
+      const ttsFilename = result.filename || result.audio_name || 'tts.mp3'
       // Reload from API to get full data
       loadTtsHistory()
       setGenFiles(prev => [...prev, {
-        name: (project?.name || 'output') + '_演讲.mp3', type: 'MP3',
-        source: '演讲口播',
+        name: ttsFilename, type: 'MP3',
+        source: sourceLabel,
         url,
       }])
     } catch (e: any) { modal.toast('TTS失败: ' + e.message, 'error') }
@@ -1575,6 +1821,7 @@ export default function ProjectPage() {
       }
       setCloneName(voiceName)
       loadClonedVoices()
+      api.listVoices(ttsProviderId || undefined).then(setTtsVoices).catch(() => {})
       setCloneFile(null)
       modal.toast(cloneMode === 'design' ? '声音设计成功' : '声音克隆成功', 'success')
     } catch (e: any) {
@@ -1585,8 +1832,11 @@ export default function ProjectPage() {
   }
 
   // Generated files tracking
-  const [genFiles, setGenFiles] = useState<{ name: string; type: string; source: string; url: string }[]>([])
+  const [genFiles, setGenFiles] = useState<{ name: string; type: string; source: string; url: string; size?: number }[]>([])
   const [filesLoaded, setFilesLoaded] = useState(false)
+  const [stage5Search, setStage5Search] = useState('')
+  const [stage5Selected, setStage5Selected] = useState<Set<string>>(new Set())
+  const [stage5Expanded, setStage5Expanded] = useState<Set<string>>(new Set())
 
   // Load existing files from project folder on mount
   useEffect(() => {
@@ -1597,6 +1847,7 @@ export default function ProjectPage() {
         type: f.type,
         source: '项目文件',
         url: f.download_url,
+        size: f.size,
       }))
       setGenFiles(prev => {
         const existingNames = new Set(existing.map((e: any) => e.name))
@@ -1606,6 +1857,15 @@ export default function ProjectPage() {
       setFilesLoaded(true)
     }).catch(() => {})
   }, [id, filesLoaded])
+
+  // Auto-expand groups when genFiles changes
+  useEffect(() => {
+    const sources = [...new Set(genFiles.map(f => f.source))]
+    setStage5Expanded(prev => {
+      if (prev.size === 0 && sources.length > 0) return new Set(sources)
+      return prev
+    })
+  }, [genFiles])
 
   // Global generation tracking — visible across all stages
   const isAnyS1 = Object.values(step1Generating).some(Boolean)
@@ -1739,11 +1999,7 @@ export default function ProjectPage() {
             </span>
           ))}
         </div>
-      ) : (
-        <div className="sub-nav">
-          <span className="sub-nav-desc">输出列表 — 所有产出物统一下载</span>
-        </div>
-      )}
+      ) : null}
 
       {/* ═══ Content ═══ */}
       <div className="content-area">
@@ -3424,22 +3680,23 @@ export default function ProjectPage() {
                     </div>
                   )}
 
-                  <div className="form-label" style={{ fontSize: 10 }}>系统音色</div>
+                  <div className="form-label" style={{ fontSize: 10 }}>选择音色</div>
                   <select className="form-select" style={{ marginBottom: 8, fontSize: 11 }}
                     value={voiceId} onChange={e => setVoiceId(e.target.value)}>
-                    <option value="">默认音色 (系统)</option>
-                    {ttsVoices.map(v => <option key={v.id} value={v.id}>{v.name} ({v.voice_id})</option>)}
+                    <option value="">默认音色</option>
+                    {ttsVoices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    {clonedVoices.filter(v => !ttsVoices.some(tv => tv.id === v.id)).map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                   </select>
 
                   {/* 我的音色 */}
                   <div style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginBottom: 8 }}>
                     <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>我的音色</div>
                     {clonedVoices.length > 0 ? (
-                      <div style={{ maxHeight: 120, overflowY: 'auto' }}>
+                      <div style={{ maxHeight: 280, overflowY: 'auto' }}>
                         {clonedVoices.map((v: any) => (
                           <div key={v.id}
                             onClick={() => setVoiceId(v.id)}
-                            style={{ fontSize: 10, padding: '3px 4px', marginBottom: 2, background: voiceId === v.id ? 'var(--primary-light)' : 'var(--bg)', borderRadius: 3, border: voiceId === v.id ? '1px solid var(--primary)' : '1px solid transparent', cursor: 'pointer' }}>
+                            style={{ fontSize: 10, padding: '4px 6px', marginBottom: 4, background: voiceId === v.id ? 'var(--primary-light)' : 'var(--bg)', borderRadius: 4, border: voiceId === v.id ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               {editingVoiceId === v.id ? (
                                 <input className="form-input"
@@ -3460,35 +3717,53 @@ export default function ProjectPage() {
                               )}
                               <span style={{ color: 'var(--text-secondary)', fontSize: 9 }}>{new Date(v.created_at).toLocaleDateString('zh-CN')}</span>
                             </div>
-                            <div style={{ display: 'flex', gap: 3, marginTop: 2 }} onClick={e => e.stopPropagation()}>
+                            <div style={{ display: 'flex', gap: 3, marginTop: 2, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
                               {playingVoiceId === v.id ? (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--warning)' }}
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
                                   onClick={stopAudio}>■</button>
                               ) : (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px' }}
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
                                   onClick={async () => {
                                     try {
                                       const res = await api.previewVoice(v.id)
-                                      playAudio(res.audio_url, v.id)
+                                      playAudio(res.audio_url, v.id, undefined, v.volume, v.speed)
                                     } catch {}
                                   }}>
                                 ▶</button>
                               )}
+                              <input type="range" min="0" max="100" value={v.volume ?? 50}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => {
+                                  const vol = Number(e.target.value)
+                                  setClonedVoices(prev => prev.map(x => x.id === v.id ? { ...x, volume: vol } : x))
+                                  api.updateVoice(v.id, { volume: vol }).catch(() => {})
+                                }}
+                                title={`音量 ${v.volume ?? 50}`}
+                                style={{ flex: 1, height: 10, accentColor: 'var(--primary)', minWidth: 40 }} />
+                              <input type="range" min="0.5" max="2.0" step="0.1" value={v.speed ?? 1.0}
+                                onClick={e => e.stopPropagation()}
+                                onChange={e => {
+                                  const spd = Number(e.target.value)
+                                  setClonedVoices(prev => prev.map(x => x.id === v.id ? { ...x, speed: spd } : x))
+                                  api.updateVoice(v.id, { speed: spd }).catch(() => {})
+                                }}
+                                title={`语速 ${(v.speed ?? 1.0).toFixed(1)}`}
+                                style={{ flex: 1, height: 10, accentColor: 'var(--primary)', minWidth: 40 }} />
                               {editingVoiceId === v.id ? (
                                 <>
-                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--success)' }}
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--success)' }}
                                     onClick={() => {
                                       api.updateVoice(v.id, { name: editVoiceName }).then(() => loadClonedVoices())
                                       setEditingVoiceId('')
                                     }}>✓</button>
-                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--text-secondary)' }}
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--text-secondary)' }}
                                     onClick={() => setEditingVoiceId('')}>✕</button>
                                 </>
                               ) : (
                                 <>
-                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px' }}
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
                                     onClick={() => { setEditingVoiceId(v.id); setEditVoiceName(v.name) }}>✏</button>
-                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--warning)' }}
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
                                     onClick={() => { if (confirm('确定删除此音色？')) { api.deleteVoice(v.id).then(() => loadClonedVoices()) } }}>✕</button>
                                 </>
                               )}
@@ -3576,57 +3851,50 @@ export default function ProjectPage() {
                       ttsHistory.map((h, i) => (
                         <div key={i} style={{ fontSize: 11, marginBottom: 8, padding: 6, background: 'var(--bg)', borderRadius: 4, border: '1px solid var(--border)' }}>
                           {editingHistoryIdx === i ? (
-                            <input className="form-input"
-                              style={{ width: '100%', fontSize: 10, padding: '2px 4px', marginBottom: 2 }}
-                              value={editHistoryName}
-                              onChange={e => setEditHistoryName(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') {
-                                  api.updateTtsHistory(h.id, editHistoryName).then(() => loadTtsHistory())
-                                  setEditingHistoryIdx(null)
-                                }
-                              }}
-                              autoFocus
-                            />
-                          ) : (
-                            <div style={{ color: 'var(--text-primary)', marginBottom: 2 }}>{h.filename}</div>
-                          )}
-                          <div style={{ color: 'var(--text-secondary)', fontSize: 10, marginBottom: 4 }}>{h.voice} · {h.time}</div>
-                          <div style={{ display: 'flex', gap: 4 }}>
-                            {h.audioUrl && (
-                              playingHistoryIdx === i ? (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)' }}
-                                  onClick={stopAudio}>■ 停止</button>
-                              ) : (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                                  onClick={() => playAudio(h.audioUrl, undefined, i)}>
-                                  ▶ 播放
-                                </button>
-                              )
-                            )}
-                            <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                              onClick={() => downloadFile(h.audioUrl, h.filename)}>
-                              💾 下载
-                            </button>
-                            {editingHistoryIdx === i ? (
-                              <>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--success)' }}
-                                  onClick={() => {
+                            <div style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 2 }}>
+                              <input className="form-input"
+                                style={{ flex: 1, fontSize: 10, padding: '2px 4px' }}
+                                value={editHistoryName}
+                                onChange={e => setEditHistoryName(e.target.value)}
+                                onKeyDown={e => {
+                                  if (e.key === 'Enter') {
                                     api.updateTtsHistory(h.id, editHistoryName).then(() => loadTtsHistory())
                                     setEditingHistoryIdx(null)
-                                  }}>✓</button>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                                  onClick={() => setEditingHistoryIdx(null)}>✕</button>
-                              </>
-                            ) : (
-                              <>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--success)' }}
+                                onClick={() => {
+                                  api.updateTtsHistory(h.id, editHistoryName).then(() => loadTtsHistory())
+                                  setEditingHistoryIdx(null)
+                                }}>✓</button>
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                                onClick={() => setEditingHistoryIdx(null)}>✕</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{h.filename}</span>
+                              <div style={{ display: 'flex', gap: 2, flexShrink: 0, marginLeft: 6 }}>
+                                {h.audioUrl && (
+                                  playingHistoryIdx === i ? (
+                                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)', padding: '0 4px' }}
+                                      onClick={stopAudio}>■</button>
+                                  ) : (
+                                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
+                                      onClick={() => playAudio(h.audioUrl, undefined, i)}>▶</button>
+                                  )
+                                )}
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
+                                  onClick={() => downloadFile(h.audioUrl, h.filename)}>💾</button>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
                                   onClick={() => { setEditingHistoryIdx(i); setEditHistoryName(h.filename) }}>✏</button>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)' }}
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)', padding: '0 4px' }}
                                   onClick={() => { if (confirm('确定删除此合成记录？')) { api.deleteTtsHistory(h.id).then(() => loadTtsHistory()) } }}>✕</button>
-                              </>
-                            )}
-                          </div>
+                              </div>
+                            </div>
+                          )}
+                          <div style={{ color: 'var(--text-secondary)', fontSize: 10 }}>{h.voice} · {h.time}</div>
                         </div>
                       ))
                     )}
@@ -3800,48 +4068,7 @@ export default function ProjectPage() {
 
         {/* ====== STAGE 5: 输出列表 ====== */}
         {stage === 5 && (
-          <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div className="card-title">所有产出物</div>
-            {genFiles.length > 0 ? (
-              <table className="output-table">
-                <thead><tr><th>文件</th><th>类型</th><th>来源</th><th>大小</th><th>操作</th></tr></thead>
-                <tbody>
-                  {genFiles.map((f, i) => (
-                    <tr key={i}>
-                      <td>
-                        {f.type === 'Word' ? '📃 ' : f.type === 'PPT' ? '📌 ' : f.type === 'SVG' ? '🎨 ' : '🎵 '}
-                        {f.name}
-                      </td>
-                      <td>{f.type}</td>
-                      <td>{f.source}</td>
-                      <td style={{ fontSize: 10, color: 'var(--text-secondary)' }}>—</td>
-                      <td>
-                        <button className="btn btn-ghost btn-sm"
-                          onClick={() => downloadFile(f.url, f.name)}>下载</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
-                暂无产出物。请完成前面阶段的生成后，文件将自动出现在此列表中。
-              </div>
-            )}
-            {genFiles.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-                <button className="btn btn-outline btn-sm"
-                  onClick={async () => {
-                    for (const f of genFiles) {
-                      try { await downloadFile(f.url, f.name) } catch (e: any) { /* skip failed */ }
-                    }
-                  }}>
-                  📦 一键下载全部 ({genFiles.length} 个文件)
-                </button>
-                <button className="btn btn-ghost btn-sm">📁 打开文件夹</button>
-              </div>
-            )}
-          </div>
+          <ProjectOutputList projectId={id!} projectName={project?.name || '项目'} />
         )}
       </div>
 

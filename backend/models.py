@@ -91,6 +91,7 @@ class SynthesizeRequest(BaseModel):
     speed: float = 1.0
     project_id: Optional[str] = None
     provider_id: Optional[str] = None
+    source_name: Optional[str] = None
 
 
 class TtsHistoryUpdate(BaseModel):

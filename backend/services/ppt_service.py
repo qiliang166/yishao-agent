@@ -406,6 +406,10 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                 f.write(deck_vars)
             _logger.info(f"Variable-version deck written: {vars_path}")
 
+            # Save individual slide files for future granular edits
+            _save_slide_files(html_dir, slide_data)
+            _logger.info(f"Individual slide files saved to {os.path.join(html_dir, SLIDES_DIR)}")
+
             # Speaker notes
             notes_path = os.path.join(html_dir, "speaker-notes.md")
             try:
@@ -3875,6 +3879,108 @@ def _fix_llm_html_errors(html: str, is_a4: bool = False) -> str:
     return html
 
 
+# ═══════════════════════════════════════════════════════════════════
+# Per-slide file storage — eliminates fragile HTML string splicing
+# ═══════════════════════════════════════════════════════════════════
+
+SLIDES_DIR = "slides"
+
+
+def _save_slide_files(run_dir: str, slides: list):
+    """Save each slide's resolved and unresolved HTML as individual files.
+
+    Directory layout:
+      {run_dir}/slides/slide_01.html        (resolved: var(--primary))
+      {run_dir}/slides/slide_01_vars.html   (unresolved: {{primary}})
+      ...
+    """
+    import os as _os
+    slides_dir = _os.path.join(run_dir, SLIDES_DIR)
+    _os.makedirs(slides_dir, exist_ok=True)
+    for s in slides:
+        seq = s.get("seq", 0)
+        html = s.get("html", "")
+        html_vars = s.get("html_vars", html)
+        if html:
+            path = _os.path.join(slides_dir, f"slide_{seq:02d}.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(html)
+        if html_vars:
+            path = _os.path.join(slides_dir, f"slide_{seq:02d}_vars.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(html_vars)
+
+
+def _load_slide_files(run_dir: str) -> list[dict]:
+    """Load all individual slide HTML files from a run directory.
+
+    Returns a list of dicts with keys: seq, html, html_vars.
+    Slides are sorted by seq.
+    """
+    import os as _os
+    import re as _re
+    slides_dir = _os.path.join(run_dir, SLIDES_DIR)
+    if not _os.path.isdir(slides_dir):
+        return []
+    slides: dict[int, dict] = {}
+    for fname in _os.listdir(slides_dir):
+        m = _re.match(r"slide_(\d+)\.html$", fname)
+        if not m:
+            continue
+        seq = int(m.group(1))
+        if seq not in slides:
+            slides[seq] = {"seq": seq}
+        path = _os.path.join(slides_dir, fname)
+        with open(path, "r", encoding="utf-8") as f:
+            slides[seq]["html"] = f.read()
+    # Also load vars versions
+    for fname in _os.listdir(slides_dir):
+        m = _re.match(r"slide_(\d+)_vars\.html$", fname)
+        if not m:
+            continue
+        seq = int(m.group(1))
+        if seq not in slides:
+            slides[seq] = {"seq": seq}
+        path = _os.path.join(slides_dir, fname)
+        with open(path, "r", encoding="utf-8") as f:
+            slides[seq]["html_vars"] = f.read()
+    return [slides[k] for k in sorted(slides.keys())]
+
+
+def _extract_slides_from_html(full_html: str) -> list[dict]:
+    """Extract individual slide HTML from a full assembled HTML document.
+
+    Handles both slide-wrapper (div) and section-based formats.
+    Returns list of dicts with keys: seq, html.
+    """
+    import re as _re
+    slides = []
+
+    # Try slide-wrapper format
+    wrapper_pat = _re.compile(
+        r'<div\s+class="slide-wrapper"\s+data-seq="(\d+)"\s*>(.*?)</div>\s*(?=<div\s+class="slide-wrapper"|</body>|</html>|$)',
+        _re.DOTALL
+    )
+    for m in wrapper_pat.finditer(full_html):
+        seq = int(m.group(1))
+        inner = m.group(2).strip()
+        # Inner content is the actual slide HTML (may be wrapped in another div)
+        slides.append({"seq": seq, "html": inner})
+
+    if not slides:
+        # Try section-based format
+        section_pat = _re.compile(
+            r'<section\s+class="slide"\s+data-seq="(\d+)"[^>]*>(.*?)</section>',
+            _re.DOTALL
+        )
+        for m in section_pat.finditer(full_html):
+            seq = int(m.group(1))
+            slides.append({"seq": seq, "html": m.group(2).strip()})
+
+    slides.sort(key=lambda s: s["seq"])
+    return slides
+
+
 def _build_root_vars(scheme_data: dict) -> str:
     """Build :root CSS block defining all color variables with actual hex/rgb values."""
     lines = [":root {"]
@@ -4255,6 +4361,112 @@ def _extract_outermost_div(html: str) -> str:
     return html[first_open:] + '</div>'
 
 
+def _enforce_cover_rules(html: str, scheme_data: dict) -> str:
+    """Enforce VI cover rules by code — LLM output is untrusted for structural rules.
+
+    VI §cover requires:
+      - Background: hero_bg gradient (linear-gradient(135deg, primary, secondary))
+      - All text: #ffffff (gradient is always dark)
+      - No card container wrapping content
+    """
+    import re as _re
+
+    primary = scheme_data.get("primary", "")
+    secondary = scheme_data.get("secondary", "")
+    text_color = scheme_data.get("text", "")
+    if not primary or not secondary:
+        return html
+
+    hero_gradient = f"linear-gradient(135deg, {primary} 0%, {secondary} 100%)"
+    hero_gradient_var = "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)"
+
+    # 1. Force hero gradient background on the outermost div
+    #    Pattern covers: background:var(--background), background:var(--primary),
+    #    background:#xxx, background-color:xxx
+    outer_bg_patterns = [
+        (r'(<div[^>]*\bbackground)\s*:\s*var\(--background\)', rf'\1: {hero_gradient_var}'),
+        (r'(<div[^>]*\bbackground)\s*:\s*var\(--primary\)', rf'\1: {hero_gradient_var}'),
+        (r'(<div[^>]*\bbackground)\s*:\s*var\(--secondary\)', rf'\1: {hero_gradient_var}'),
+        (r'(<div[^>]*\bbackground)\s*:\s*#[0-9a-fA-F]{3,6}', rf'\1: {hero_gradient_var}'),
+        (r'(<div[^>]*\bbackground-color)\s*:\s*[^;"]+', rf'\1: {hero_gradient_var}'),
+    ]
+
+    # Only fix the FIRST match (outermost div of the slide)
+    for pattern, replacement in outer_bg_patterns:
+        if _re.search(pattern, html, _re.IGNORECASE):
+            html = _re.sub(pattern, replacement, html, count=1, flags=_re.IGNORECASE)
+            break
+
+    # 2. Force white text for ALL text elements on cover
+    #    (hero gradient is always dark — text must be white to be readable)
+    if text_color:
+        text_replacements = [
+            (f"color:{text_color}", "color:#ffffff"),
+            (f"color:{text_color};", "color:#ffffff;"),
+            (f"color: {text_color}", "color: #ffffff"),
+            (f"color: {text_color};", "color: #ffffff;"),
+            # Also fix var(--text) → #ffffff
+            ("color:var(--text)", "color:#ffffff"),
+            ("color:var(--text);", "color:#ffffff;"),
+            ("color: var(--text)", "color: #ffffff"),
+            ("color: var(--text);", "color: #ffffff;"),
+        ]
+        for old, new in text_replacements:
+            html = html.replace(old, new)
+
+    return html
+
+
+def _strip_page_numbers(html: str) -> str:
+    """Strip AI-generated page number divs using depth-balanced matching.
+
+    Replaces the fragile regex approach (which could match wrong divs and
+    create div imbalance by only stripping one </div> from a nested tree).
+    """
+    # Find divs that look like page numbers: bottom+right positioning + NN / MM text
+    import re as _re_pn
+    pn_pattern = _re_pn.compile(
+        r'<div\b[^>]*position:\s*absolute[^>]*bottom:\s*\d+px[^>]*right:\s*\d+px[^>]*>'
+    )
+    page_num_text = _re_pn.compile(r'\d{1,2}\s*/\s*\d{1,2}')
+
+    search_from = 0
+    while True:
+        m = pn_pattern.search(html, search_from)
+        if not m:
+            break
+        open_start = m.start()
+        # Check if this div contains page number text within reasonable range
+        look_ahead = html[open_start:open_start + 600]
+        if not page_num_text.search(look_ahead):
+            search_from = open_start + 1
+            continue
+        # Depth-balanced removal: trace from opening <div to matching </div>
+        depth = 1
+        pos = open_start + len('<div')
+        while pos < len(html) and depth > 0:
+            nxt = html.find('<div', pos)
+            end = html.find('</div>', pos)
+            if end == -1:
+                break
+            if nxt != -1 and nxt < end:
+                depth += 1
+                pos = nxt + 4
+            else:
+                depth -= 1
+                if depth == 0:
+                    # Remove the entire balanced div (including trailing newline)
+                    while open_start > 0 and html[open_start - 1] in ('\n', '\r'):
+                        open_start -= 1
+                    html = html[:open_start] + html[end + 6:]
+                    search_from = open_start  # restart search from removal point
+                    break
+                pos = end + 6
+        else:
+            search_from = open_start + 1
+    return html
+
+
 def _assemble_html_deck(slides: list, title: str = "Presentation",
                         style_id: str = "business", scheme_data: dict = None,
                         total_slides: int = None,
@@ -4278,11 +4490,8 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
             continue
         slide_num = s.get("seq", i + 1)
 
-        # Strip AI-generated page number divs (position:absolute + bottom: + right: + XX/YY)
-        html = re.sub(
-            r'<div[^>]*position:\s*absolute[^>]*bottom:\s*\d+px[^>]*right:\s*\d+px[^>]*>.*?\d{1,2}\s*/\s*\d{1,2}.*?</div>',
-            '', html, flags=re.DOTALL
-        )
+        # Strip AI-generated page number divs (depth-balanced — no regex div leakage)
+        html = _strip_page_numbers(html)
 
         # ═══ Extract outermost div: prevents cross-slide DOM corruption ═══
         # The LLM is told to output exactly one outer <div>. We extract it
@@ -4344,21 +4553,10 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
         html = html.replace('{{BRAND_COPYRIGHT}}', _html_escape.escape(_copyright_str))
         html = html.replace('{{BRAND_SIGNATURE}}', _html_escape.escape(_sig_str))
 
-        # Cover slide: if background is primary/secondary (dark), text must be light
+        # Cover slide: code-enforced design rules (VI §cover)
+        # LLM cannot be trusted to follow cover rules — code enforces them.
         if slide_num == 1 and scheme_data:
-            primary = scheme_data.get("primary", "")
-            secondary = scheme_data.get("secondary", "")
-            text_color = scheme_data.get("text", "")
-            if primary and text_color:
-                has_dark_bg = (f"background:{primary}" in html
-                              or f"background:{secondary}" in html
-                              or f"background: {primary}" in html
-                              or f"background: {secondary}" in html)
-                if has_dark_bg:
-                    html = html.replace(f"color:{text_color}", "color:#ffffff")
-                    html = html.replace(f"color:{text_color};", "color:#ffffff;")
-                    html = html.replace(f"color: {text_color}", "color: #ffffff")
-                    html = html.replace(f"color: {text_color};", "color: #ffffff;")
+            html = _enforce_cover_rules(html, scheme_data)
             # Cover font-size: upscale subtitle/metadata 12px→14px in content area
             # (above bottom branding div)
             _btm = html.rfind("position:absolute;bottom:")

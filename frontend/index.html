@@ -4,7 +4,7 @@
     <script>(function(){var id=localStorage.getItem('theme');if(!id||id==='classic')return;var presets=localStorage.getItem('theme_presets');document.documentElement.setAttribute('data-theme',id);if(!presets)return;try{var themes=JSON.parse(presets);var t=themes.find(function(p){return p.id===id});if(!t)return;var c=t.colors,r=document.documentElement.style;r.setProperty('--bg',c.bg);r.setProperty('--card',c.card);r.setProperty('--text',c.text);r.setProperty('--text-secondary',c.textSecondary);r.setProperty('--primary',c.primary);r.setProperty('--primary-light',c.primaryLight);r.setProperty('--border',c.border);r.setProperty('--success',c.success);r.setProperty('--warning',c.warning);r.setProperty('--purple',c.purple);r.setProperty('--cyan',c.cyan);r.setProperty('--primary-hover',c.primaryHover);r.setProperty('--bg-secondary',c.bgSecondary);r.setProperty('--bg-hover',c.bgHover||c.bgSecondary);r.setProperty('--muted',c.muted);r.setProperty('--btn-dirty-bg',c.btnDirtyBg);r.setProperty('--btn-dirty-text',c.btnDirtyText);r.setProperty('--success-light',c.successLight)}catch(e){}})();</script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SOP Agent</title>
+    <title>智绘食谱教案系统</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
   </head>

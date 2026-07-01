@@ -171,7 +171,9 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       return
     }
     try {
-      const resp = await fetch(pptxDownloadUrl + '?_t=' + Date.now())
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const resp = await fetch(pptxDownloadUrl + '?_t=' + Date.now(), { headers })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       const blob = await resp.blob()
       const url = URL.createObjectURL(blob)
@@ -187,7 +189,9 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
 
   const handleSaveHtml = async () => {
     try {
-      const resp = await fetch(previewUrl + '?_t=' + Date.now())
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const resp = await fetch(previewUrl + '?_t=' + Date.now(), { headers })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       let html = await resp.text()
       html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
@@ -316,7 +320,9 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
     setSourceLoading(true)
     try {
       const url = previewUrl + '?_t=' + Date.now()
-      const resp = await fetch(url)
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const resp = await fetch(url, { headers })
       const html = await resp.text()
       setSourceCode(html)
       sourceOriginRef.current = html

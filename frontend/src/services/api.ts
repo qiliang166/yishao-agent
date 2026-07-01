@@ -97,6 +97,8 @@ export interface Voice {
   description: string
   preview_audio_path: string
   is_default: number
+  volume?: number
+  speed?: number
   created_at: string
 }
 
@@ -257,7 +259,7 @@ export const api = {
     request(`/api/voices${providerId ? `?provider_id=${encodeURIComponent(providerId)}` : ''}`).then(d => d.voices as Voice[]),
   createVoice: (data: { name: string; provider_id: string; voice_id: string; description?: string; is_default?: number }) =>
     request('/api/voices', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
-  updateVoice: (id: string, data: { name?: string; provider_id?: string; voice_id?: string; description?: string; is_default?: number }) =>
+  updateVoice: (id: string, data: { name?: string; provider_id?: string; voice_id?: string; description?: string; is_default?: number; volume?: number; speed?: number }) =>
     request(`/api/voices/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteVoice: (id: string) => request(`/api/voices/${id}`, { method: 'DELETE' }),
   previewVoice: (id: string) => request(`/api/voices/${id}/preview`, { method: 'POST' }),
@@ -473,6 +475,47 @@ export const api = {
   // Project files
   getProjectFiles: (projectId: string) =>
     request(`/api/projects/${projectId}/files`),
+  deleteProjectFile: (projectId: string, filename: string) =>
+    request(`/api/projects/${projectId}/files/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+  downloadFile: (projectId: string, filename: string) => {
+    window.open(`${BASE}/api/download/${encodeURIComponent(filename)}?project_id=${encodeURIComponent(projectId)}`, '_blank')
+  },
+  /** Download a file via fetch+blob with a custom filename (works for HTML exports too). */
+  downloadWithName: async (url: string, filename: string) => {
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+    const res = await fetch(url.startsWith('http') ? url : `${BASE}${url}`, { headers })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const blob = await res.blob()
+    const objUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = objUrl; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(objUrl)
+  },
+  downloadAllFiles: (projectId: string) => {
+    window.open(`${BASE}/api/projects/${projectId}/download-all`, '_blank')
+  },
+  downloadSelectedFiles: async (projectId: string, files: {filename:string, download_url?:string, display_name?:string}[]) => {
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+    const res = await fetch(`${BASE}/api/projects/${projectId}/download-selected`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ files }),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    // Extract filename from Content-Disposition header (RFC 5987)
+    let filename = 'download.zip'
+    const cd = res.headers.get('Content-Disposition')
+    if (cd) {
+      const match = cd.match(/filename\*=UTF-8''([^;]+)/) || cd.match(/filename="?([^";]+)"?/)
+      if (match) filename = decodeURIComponent(match[1])
+    }
+    const blob = await res.blob()
+    const objUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = objUrl; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(objUrl)
+  },
 
   // PPT
   generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, projectId?: string) =>
@@ -638,8 +681,8 @@ export const api = {
     request('/api/export/sop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, branding, project_id: projectId || null}) }),
 
   // TTS
-  ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number, projectId?: string, providerId?: string, voiceName?: string) =>
-    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null, voice_name: voiceName || null}) }),
+  ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number, projectId?: string, providerId?: string, voiceName?: string, sourceName?: string) =>
+    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null, voice_name: voiceName || null, source_name: sourceName || null}) }),
 
   // TTS History
   listTtsHistory: (projectId: string) =>
@@ -726,6 +769,9 @@ export const api = {
   // Project Copy (project itself is the template)
   copyProject: (projectId: string) =>
     request(`/api/projects/${projectId}/copy`, { method: 'POST' }),
+
+  // Downloads
+  getDownloadInfo: () => request('/api/download/info'),
 
   // Version
   getVersion: () => request('/api/version'),
