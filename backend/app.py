@@ -1,15 +1,19 @@
 import os
 import shutil
 import uuid
-import hashlib
-from fastapi import FastAPI, HTTPException, UploadFile, File, Body, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from datetime import datetime, timedelta
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Body, Request, Depends
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import bcrypt
+from jose import JWTError, jwt
 from database import init_db, get_db
+from services.cosyvoice_service import clone_voice, design_voice
 from models import (ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest,
     LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest, PPTEditSlideRequest,
-    PPTSlideSourceRequest, PPTRegenerateSlideRequest,
+    PPTSlideSourceRequest, PPTRegenerateSlideRequest, TtsHistoryUpdate,
     ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
     ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave)
 from typing import Optional
@@ -22,6 +26,16 @@ from services.prompt_service import (
 )
 
 DEFAULT_SITE_NAME = "Yishao Agent"
+
+# Allowed domains for TTS audio download (SSRF prevention)
+_AUDIO_ALLOWED_HOSTS = {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "aliyuncs.com"}
+
+def _is_safe_audio_url(url: str) -> bool:
+    try:
+        host = url.split("/")[2]  # https://host/path → host
+        return any(host == allowed or host.endswith("." + allowed) for allowed in _AUDIO_ALLOWED_HOSTS)
+    except Exception:
+        return False
 
 init_db()
 
@@ -145,11 +159,80 @@ def _get_site_name() -> str:
     return name if name else DEFAULT_SITE_NAME
 
 
-SALT = "yishao-agent-salt-2026"
+# ── JWT / Auth config ──────────────────────────────────────────────
+SECRET_KEY = os.environ.get("JWT_SECRET", "yishao-agent-jwt-secret-2026")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_HOURS = 24
+
+security = HTTPBearer()
 
 
 def _hash_password(password: str) -> str:
-    return hashlib.sha256((SALT + password).encode("utf-8")).hexdigest()
+    """bcrypt hash for new passwords. Truncates to 72 bytes (bcrypt limit)."""
+    return bcrypt.hashpw(password.encode("utf-8")[:72], bcrypt.gensalt()).decode("utf-8")
+
+
+def _verify_password(plain: str, stored_hash: str) -> bool:
+    """Verify plain password against stored hash.
+    Tries bcrypt first; falls back to legacy SHA256.
+    """
+    if stored_hash.startswith("$2"):
+        try:
+            return bcrypt.checkpw(plain.encode("utf-8")[:72], stored_hash.encode("utf-8"))
+        except Exception:
+            return False
+    # Legacy SHA256 fallback (hex digest)
+    import hashlib
+    SALT = "yishao-agent-salt-2026"
+    legacy = hashlib.sha256((SALT + plain).encode("utf-8")).hexdigest()
+    return legacy == stored_hash
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Validate JWT and return payload. Raises 401 on any failure."""
+    token = credentials.credentials
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="无效或过期的令牌")
+
+
+# Auth middleware: protect all /api/* routes except login & auth/check
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Public paths that never need auth (static assets, login, etc.)
+    _public_prefixes = (
+        "/api/login", "/api/auth/check", "/api/logos/", "/api/exports/",
+        "/api/audio/", "/api/thumbnails/",
+    )
+    if path.startswith("/api/") and not (
+        path in _public_prefixes[:2]
+        or any(path.startswith(p) for p in _public_prefixes[2:])
+        or (path == "/api/settings" and request.method == "GET")
+    ):
+        # If no admin password is configured, allow unauthenticated access
+        stored_hash = _get_setting("admin_password")
+        if not stored_hash:
+            return await call_next(request)
+
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "缺少认证令牌"})
+        token = auth_header[7:]
+        try:
+            jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        except JWTError:
+            return JSONResponse(status_code=401, content={"detail": "无效或过期的令牌"})
+    return await call_next(request)
 
 
 def _get_project(project_id: str):
@@ -1340,6 +1423,184 @@ async def preview_voice(voice_id: str):
         if not audio_url:
             raise HTTPException(status_code=400, detail="未获取到音频URL")
         return {"audio_url": audio_url}
+    finally:
+        db.close()
+
+
+class VoiceDesignRequest(BaseModel):
+    name: str
+    model: str = "cosyvoice-v3.5-plus"
+    voice_prompt: str = ""
+    preview_text: str = ""
+
+
+@app.post("/api/voices/clone")
+async def api_voice_clone(name: str = Form(...), model: str = Form("cosyvoice-v3.5-plus"),
+                          audio: UploadFile = File(...), provider_id: str = Form("")):
+    """Clone a voice from an audio sample."""
+    audio_bytes = await audio.read()
+    ext = (audio.filename or "voice.wav").rsplit(".", 1)[-1] if "." in (audio.filename or "") else "wav"
+    sample_filename = f"{uuid.uuid4().hex}.{ext}"
+    sample_path = os.path.join(AUDIO_DIR, sample_filename)
+    with open(sample_path, "wb") as f:
+        f.write(audio_bytes)
+
+    # Resolve TTS API credentials
+    api_key = ""
+    base_url = "https://dashscope.aliyuncs.com/api/v1"
+    resolved_provider_id = provider_id
+    tts_db = get_db()
+    try:
+        if provider_id:
+            provider = tts_db.execute(
+                "SELECT * FROM tts_providers WHERE id = ? AND is_enabled = 1",
+                (provider_id,)).fetchone()
+        else:
+            provider = tts_db.execute(
+                "SELECT * FROM tts_providers WHERE is_enabled = 1 ORDER BY created_at LIMIT 1"
+            ).fetchone()
+            if provider:
+                resolved_provider_id = provider["id"]
+        if provider:
+            api_key = provider["api_key"]
+            base_url = provider["base_url"]
+    finally:
+        tts_db.close()
+    if not api_key:
+        api_key = _get_setting("tts_api_key") or os.getenv("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请先在项目配置中设置 TTS API Key")
+
+    try:
+        result = await clone_voice(name, model, audio_bytes, sample_filename, api_key, base_url)
+    except Exception as e:
+        # Clean up sample on failure
+        if os.path.exists(sample_path):
+            os.remove(sample_path)
+        raise HTTPException(status_code=400, detail=str(e))
+
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO voices (id, name, provider_id, voice_id, description, preview_audio_path) VALUES (?, ?, ?, ?, ?, ?)",
+            (result["voice_id"], name, resolved_provider_id, result["voice_id"], "", sample_path))
+        db.commit()
+    finally:
+        db.close()
+
+    return {"voice_id": result["voice_id"], "name": name, "request_id": result.get("request_id")}
+
+
+@app.post("/api/voices/design")
+async def api_voice_design(req: VoiceDesignRequest, provider_id: str = ""):
+    """Design a voice from text description."""
+    api_key = ""
+    base_url = "https://dashscope.aliyuncs.com/api/v1"
+    resolved_provider_id = provider_id
+    tts_db = get_db()
+    try:
+        if provider_id:
+            provider = tts_db.execute(
+                "SELECT * FROM tts_providers WHERE id = ? AND is_enabled = 1",
+                (provider_id,)).fetchone()
+        else:
+            provider = tts_db.execute(
+                "SELECT * FROM tts_providers WHERE is_enabled = 1 ORDER BY created_at LIMIT 1"
+            ).fetchone()
+            if provider:
+                resolved_provider_id = provider["id"]
+        if provider:
+            api_key = provider["api_key"]
+            base_url = provider["base_url"]
+    finally:
+        tts_db.close()
+    if not api_key:
+        api_key = _get_setting("tts_api_key") or os.getenv("DASHSCOPE_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="请先在项目配置中设置 TTS API Key")
+
+    try:
+        result = await design_voice(req.name, req.model, req.voice_prompt, req.preview_text, api_key, base_url)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Generate preview audio as sample
+    sample_path = ""
+    try:
+        import httpx
+        tts_url = base_url.rstrip("/") + "/services/audio/tts/SpeechSynthesizer"
+        payload = {
+            "model": req.model,
+            "input": {"text": req.preview_text, "voice": result["voice_id"], "format": "mp3"},
+        }
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                tts_url,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if resp.status_code == 200:
+            tts_result = resp.json()
+            audio_url = tts_result.get("output", {}).get("audio", {}).get("url", "")
+            if audio_url and _is_safe_audio_url(audio_url):
+                async with httpx.AsyncClient(timeout=60) as client:
+                    dl = await client.get(audio_url)
+                    if dl.status_code == 200:
+                        sample_filename = f"{result['voice_id']}.mp3"
+                        sample_path = os.path.join(AUDIO_DIR, sample_filename)
+                        with open(sample_path, "wb") as f:
+                            f.write(dl.content)
+    except Exception:
+        pass  # sample generation is best-effort
+
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO voices (id, name, provider_id, voice_id, description, preview_audio_path) VALUES (?, ?, ?, ?, ?, ?)",
+            (result["voice_id"], req.name, resolved_provider_id, result["voice_id"], req.voice_prompt, sample_path))
+        db.commit()
+    finally:
+        db.close()
+
+    return {"voice_id": result["voice_id"], "name": req.name, "request_id": result.get("request_id")}
+
+
+@app.get("/api/voices/clones")
+def list_cloned_voices(provider_id: str = "", page: int = 1, size: int = 20):
+    """List cloned/designed voices (non-default, with preview_audio_path)."""
+    db = get_db()
+    try:
+        if provider_id:
+            rows = db.execute(
+                "SELECT * FROM voices WHERE provider_id = ? AND is_default = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (provider_id, size, (page - 1) * size)).fetchall()
+            total = db.execute("SELECT COUNT(*) FROM voices WHERE provider_id = ? AND is_default = 0",
+                               (provider_id,)).fetchone()[0]
+        else:
+            rows = db.execute(
+                "SELECT * FROM voices WHERE is_default = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (size, (page - 1) * size)).fetchall()
+            total = db.execute("SELECT COUNT(*) FROM voices WHERE is_default = 0").fetchone()[0]
+        return {"clones": [dict(r) for r in rows], "total": total, "page": page}
+    finally:
+        db.close()
+
+
+@app.delete("/api/voices/clone/{voice_id}")
+def delete_cloned_voice(voice_id: str):
+    """Delete a cloned voice and its sample audio."""
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT preview_audio_path FROM voices WHERE id = ? AND is_default = 0",
+            (voice_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Voice not found")
+        if row["preview_audio_path"] and os.path.exists(row["preview_audio_path"]):
+            os.remove(row["preview_audio_path"])
+        db.execute("DELETE FROM voices WHERE id = ? AND is_default = 0", (voice_id,))
+        db.commit()
+        return {"ok": True}
     finally:
         db.close()
 
@@ -3566,6 +3827,11 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
     # Build partial mini-deck with only the regenerated slides
     regen_resolved = [s for s in resolved_slides if s.get("seq") in set(seqs)]
 
+    # Save individual slide files for regenerated slides
+    from services.ppt_service import _save_slide_files
+    _save_slide_files(run_dir, regen_resolved)
+    _log(f"已保存 {len(regen_resolved)} 页独立幻灯片文件")
+
     # Per-slide resolved HTML for targeted splice (not full-deck overwrite).
     # MUST be computed BEFORE _assemble_html_deck because _preprocess_a4_slides
     # renumbers slides in-place, corrupting seq values.
@@ -3590,10 +3856,14 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
 
 @app.put("/api/ppt/splice-slides/{run_id}")
 def api_ppt_splice_slides(run_id: str, req: dict):
-    """Replace specific slides in index.html with new HTML.
+    """Rebuild index.html from individual slide files after regeneration.
 
-    Used by the regenerate flow: only the regenerated slides are spliced in,
-    leaving other pages untouched.
+    The new flow:
+    1. Overwrite regenerated slide files in slides/
+    2. Load all slide files from slides/
+    3. Reassemble complete index.html via _assemble_html_deck
+
+    Falls back to old string-splice approach if slides/ directory doesn't exist.
     """
     import re as _re
 
@@ -3614,144 +3884,178 @@ def api_ppt_splice_slides(run_id: str, req: dict):
             _lf.write(line)
             _lf.flush()
 
-    index_path = os.path.join(run_dir, "index.html")
-    if not os.path.exists(index_path):
-        raise HTTPException(status_code=404, detail="index.html not found")
+    from services.ppt_service import (
+        _save_slide_files, _load_slide_files, _assemble_html_deck,
+        _load_scheme_data, _resolve_color_vars,
+        _auto_fix_font_size, _auto_fix_hardcoded_hex,
+        _get_canvas_dimensions, _build_root_vars,
+    )
 
-    with open(index_path, "r", encoding="utf-8") as _f:
-        html = _f.read()
-
-    has_wrapper = '<div class="slide-wrapper"' in html[:5000]
-    _log_splice(f"DEBUG has_wrapper={has_wrapper}, html_len={len(html)}, slides={len(slides_data)}, first_section={'<section' in html[:5000]}")
-
-    replaced = 0
-    for slide in slides_data:
-        seq = slide["seq"]
-        new_html = slide["html"]
-        _log_splice(f"DEBUG slide seq={seq}, html_len={len(new_html)}")
-        if has_wrapper:
-            # Find the nth <div class="slide-wrapper" by counting wrappers,
-            # then find its matching </div> by balancing div depth.
-            wrapper_tag = f'<div class="slide-wrapper" data-seq="{seq}">'
-            pos = html.find(wrapper_tag)
-            if pos == -1:
-                # Fallback: count nth wrapper by position (old format without data-seq)
-                nth = seq - 1
-                pos = 0
-                for _ in range(nth + 1):
-                    pos = html.find('<div class="slide-wrapper"', pos)
-                    if pos == -1:
-                        break
-                    if _ < nth:
-                        pos += len('<div class="slide-wrapper"')
-            else:
-                # Found by data-seq; use this position
-                pass
-
-            if pos == -1:
-                # Last resort: try matching by seq within the slide content
-                # (search for data-seq attribute anywhere inside a wrapper)
-                tag_pat = _re.compile(
-                    r'<div\s+class="slide-wrapper"[^>]*>',
-                    _re.DOTALL
-                )
-                all_wrappers = list(tag_pat.finditer(html))
-                if 0 <= seq - 1 < len(all_wrappers):
-                    pos = all_wrappers[seq - 1].start()
-
-            if pos != -1:
-                # Find the wrapper opener end (>)
-                tag_end = html.find('>', pos) + 1
-                # Balance divs to find matching closer
-                depth = 1
-                i = tag_end
-                while i < len(html) and depth > 0:
-                    next_open = html.find('<div', i)
-                    next_close = html.find('</div>', i)
-                    if next_close == -1:
-                        break
-                    if next_open != -1 and next_open < next_close:
-                        depth += 1
-                        i = next_open + 4
-                    else:
-                        depth -= 1
-                        if depth == 0:
-                            close_end = next_close + 6  # after </div>
-                            replacement = f'<div class="slide-wrapper" data-seq="{seq}">{new_html}</div>'
-                            html = html[:pos] + replacement + html[close_end:]
-                            replaced += 1
-                            break
-                        i = next_close + 6
-        else:
-            # Old format (<section> based) — primary path for section-based files
-            pat = _re.compile(
-                r'<section[^>]*\s+data-seq="' + str(seq)
-                + r'"[^>]*>.*?</section>',
-                _re.DOTALL
-            )
-            new_html_text, count = pat.subn(new_html, html, count=1)
-            _log_splice(f"DEBUG else-branch seq={seq}, count={count}, pat_ok={pat.search(html) is not None}")
-            if count > 0:
-                html = new_html_text
-                replaced += count
-
-    # Write back to index.html (auto-backup preserves original)
-    _ensure_backup(run_dir)
-
-    # ── Post-splice auto-fix: clean font sizes & hex colors in ALL slides ──
-    from services.ppt_service import _auto_fix_font_size, _auto_fix_hardcoded_hex, _load_scheme_data, _resolve_color_vars
+    # Read color scheme from result.json
     rj_path = os.path.join(run_dir, "result.json")
     style_id = "business"
     color_scheme = "deep-blue"
+    column_id = ""
     if os.path.exists(rj_path):
         try:
             rj_meta = json.loads(open(rj_path, "r", encoding="utf-8").read())
             style_id = rj_meta.get("style_id") or style_id
             color_scheme = rj_meta.get("color_scheme") or color_scheme
+            column_id = rj_meta.get("column_id", "")
         except Exception:
             pass
     _log_splice(f"色系(from result.json): {color_scheme}")
+
     scheme_data = _load_scheme_data(style_id, color_scheme)
+    regen_canvas_w, regen_canvas_h = _get_canvas_dimensions(column_id)
+    is_a4 = regen_canvas_h >= 1100
+
+    # ── Save regenerated slides to individual files ──
+    _save_slide_files(run_dir, slides_data)
+    _log_splice(f"已保存 {len(slides_data)} 页到 slides/ 目录")
+
+    # ── Load all slides from files ──
+    all_slides = _load_slide_files(run_dir)
+    _ensure_backup(run_dir)
+
+    if all_slides:
+        # ── File-based rebuild: clean, no string surgery ──
+        _log_splice(f"从 {len(all_slides)} 个独立文件重建 index.html")
+
+        # Resolve color variables in each slide
+        for s in all_slides:
+            html = s.get("html", "")
+            html_vars = s.get("html_vars", html)
+            # Re-resolve with current scheme
+            if html_vars and scheme_data:
+                html = _resolve_color_vars(html_vars, scheme_data, css_vars=True)
+            elif html and scheme_data:
+                html = _resolve_color_vars(html, scheme_data, css_vars=True)
+            if scheme_data:
+                hex_before = len(_re.findall(r'#[0-9a-fA-F]{3,6}\b', html))
+                html = _auto_fix_hardcoded_hex(html, scheme_data, s["seq"])
+                html = _auto_fix_font_size(html, s["seq"], is_a4=is_a4)
+            s["html"] = html
+
+        # Cover fix: dark bg → white text
+        if all_slides and scheme_data:
+            cover = all_slides[0]
+            primary = scheme_data.get("primary", "")
+            secondary = scheme_data.get("secondary", "")
+            text_color = scheme_data.get("text", "")
+            if primary and text_color:
+                cover_html = cover.get("html", "")
+                has_dark_bg = (f"background:{primary}" in cover_html
+                              or f"background:{secondary}" in cover_html
+                              or f"background: {primary}" in cover_html
+                              or f"background: {secondary}" in cover_html)
+                if has_dark_bg:
+                    for pat in [f"color:{text_color}", f"color:{text_color};",
+                                f"color: {text_color}", f"color: {text_color};"]:
+                        replace_val = "color:#ffffff" if ";" not in pat else "color:#ffffff;"
+                        cover_html = cover_html.replace(pat, replace_val)
+                    all_slides[0]["html"] = cover_html
+                    _log_splice("Cover fix: dark background → white text")
+
+        title = all_slides[0].get("heading", "") if all_slides else "Presentation"
+        deck_html = _assemble_html_deck(all_slides, title, style_id, scheme_data,
+                                        canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
+        if scheme_data:
+            deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
+
+        index_path = os.path.join(run_dir, "index.html")
+        with open(index_path, "w", encoding="utf-8") as f:
+            f.write(deck_html)
+
+        # Also rebuild vars deck
+        vars_slides = [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in all_slides]
+        deck_vars = _assemble_html_deck(vars_slides, title, style_id, scheme_data,
+                                        canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
+        vars_path = os.path.join(run_dir, "index_vars.html")
+        with open(vars_path, "w", encoding="utf-8") as f:
+            f.write(deck_vars)
+
+        replaced = len(slides_data)
+        _log_splice(f"重建完成: {len(all_slides)} 页, {len(deck_html)} 字节")
+        return {"ok": True, "replaced": replaced, "total": len(slides_data)}
+    else:
+        # ── Fallback: old-style string splice for runs without slides/ directory ──
+        _log_splice("slides/ 目录不存在，使用旧版字符串拼接模式")
+        return _splice_slides_legacy(run_dir, slides_data, scheme_data, style_id,
+                                     color_scheme, log_path_splice, _log_splice, _re)
+
+
+def _splice_slides_legacy(run_dir, slides_data, scheme_data, style_id,
+                          color_scheme, log_path_splice, _log_splice, _re):
+    """Legacy string-splice for runs without individual slide files."""
+    from services.ppt_service import _auto_fix_font_size, _auto_fix_hardcoded_hex
+
+    index_path = os.path.join(run_dir, "index.html")
+    with open(index_path, "r", encoding="utf-8") as _f:
+        html = _f.read()
+
+    has_wrapper = '<div class="slide-wrapper"' in html[:5000]
+    replaced = 0
+    for slide in slides_data:
+        seq = slide["seq"]
+        new_html = slide["html"]
+        if has_wrapper:
+            wrapper_tag = f'<div class="slide-wrapper" data-seq="{seq}">'
+            pos = html.find(wrapper_tag)
+            if pos == -1:
+                nth = seq - 1
+                pos = 0
+                for _ in range(nth + 1):
+                    pos = html.find('<div class="slide-wrapper"', pos)
+                    if pos == -1: break
+                    if _ < nth: pos += len('<div class="slide-wrapper"')
+            if pos != -1:
+                tag_end = html.find('>', pos) + 1
+                depth = 1
+                i = tag_end
+                while i < len(html) and depth > 0:
+                    next_open = html.find('<div', i)
+                    next_close = html.find('</div>', i)
+                    if next_close == -1: break
+                    if next_open != -1 and next_open < next_close:
+                        depth += 1; i = next_open + 4
+                    else:
+                        depth -= 1
+                        if depth == 0:
+                            close_end = next_close + 6
+                            replacement = f'<div class="slide-wrapper" data-seq="{seq}">{new_html}</div>'
+                            html = html[:pos] + replacement + html[close_end:]
+                            replaced += 1; break
+                        i = next_close + 6
+        else:
+            pat = _re.compile(r'<section[^>]*\s+data-seq="' + str(seq) + r'"[^>]*>.*?</section>', _re.DOTALL)
+            new_html_text, count = pat.subn(new_html, html, count=1)
+            if count > 0: html = new_html_text; replaced += count
+
+    _ensure_backup(run_dir)
+
     if scheme_data:
         hex_before = len(_re.findall(r'#[0-9a-fA-F]{3,6}\b', html))
         html = _auto_fix_hardcoded_hex(html, scheme_data, 0)
+        from services.ppt_service import _resolve_color_vars
         html = _resolve_color_vars(html, scheme_data, css_vars=True)
         hex_after = len(_re.findall(r'#[0-9a-fA-F]{3,6}\b', html))
         _log_splice(f"Post-splice hex fix: {hex_before}→{hex_after}")
-        # Transitional: if splice produced var(--*) refs but no :root block exists
-        # (old-format index.html with new-format regenerated slides), inject :root
-        if "var(--" in html and ":root {" not in html:
+        if "var(--" in html and ":root {" in html:
             from services.ppt_service import _build_root_vars
             root_block = _build_root_vars(scheme_data)
-            style_close = html.find('</style>')
-            if style_close > 0:
-                html = html[:style_close] + '\n' + root_block + '\n' + html[style_close:]
-                _log_splice("Transitional fix: injected :root block for CSS var compatibility")
-        # Cover fix: dark bg → white text
-        primary = scheme_data.get("primary", "")
-        secondary = scheme_data.get("secondary", "")
-        if primary:
-            cover_start = html.find('<div class="slide-wrapper" data-seq="1">')
-            if cover_start == -1:
-                cover_start = html.find('<section class="slide" data-seq="1"')
-            if cover_start != -1:
-                cover_end = html.find('</div>', cover_start)
-                if cover_end == -1:
-                    cover_end = html.find('</section>', cover_start)
-                if cover_end != -1:
-                    cover_html = html[cover_start:cover_end]
-                    has_dark_bg = (f"background:{primary}" in cover_html
-                                  or f"background:{secondary}" in cover_html
-                                  or f"background: {primary}" in cover_html
-                                  or f"background: {secondary}" in cover_html)
-                    if has_dark_bg:
-                        text_color = scheme_data.get("text", "")
-                        if text_color and text_color != "#ffffff":
-                            cover_html_fixed = cover_html
-                            for pat in [f"color:{text_color}", f"color: {text_color}", f"color:{text_color};", f"color: {text_color};"]:
-                                cover_html_fixed = cover_html_fixed.replace(pat, "color:#ffffff" if ";" not in pat else "color:#ffffff;")
-                            html = html[:cover_start] + cover_html_fixed + html[cover_end:]
-                            _log_splice("Cover fix: dark background → white text")
+            root_start = html.find(':root {')
+            if root_start > 0:
+                depth = 1; scan = root_start + len(':root {')
+                while scan < len(html) and depth > 0:
+                    ch = html[scan]
+                    if ch == '{': depth += 1
+                    elif ch == '}': depth -= 1
+                    scan += 1
+                root_end = scan
+                html = html[:root_start] + root_block + html[root_end:]
+                _log_splice(f"Updated :root block for color scheme: {color_scheme}")
+
     font_before_13 = len(_re.findall(r'font-size:\s*1[0-3]px', html))
     font_before_15 = len(_re.findall(r'font-size:\s*15px', html))
     is_a4_splice = 'width:794px' in html[:2000] or 'height:1123px' in html[:2000]
@@ -4321,6 +4625,8 @@ async def api_tts_synthesize(req: SynthesizeRequest):
         audio_url = result.get("output", {}).get("audio", {}).get("url", "")
         if not audio_url:
             raise HTTPException(status_code=400, detail="未获取到音频URL")
+        if not _is_safe_audio_url(audio_url):
+            raise HTTPException(status_code=400, detail="音频URL域名不受信任")
 
         # Download and save
         async with httpx.AsyncClient(timeout=60) as client:
@@ -4346,11 +4652,94 @@ async def api_tts_synthesize(req: SynthesizeRequest):
                 params.append(f"name={safe_name}_音频.mp3")
         if params:
             serve_url += "?" + "&".join(params)
-        return {"audio_url": serve_url, "filename": audio_name}
+
+        # Save to tts_history
+        history_id = None
+        if req.project_id:
+            db = get_db()
+            try:
+                db.execute(
+                    "INSERT INTO tts_history (project_id, text, voice_id, model, audio_path, name, voice_name) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (req.project_id, req.text, req.voice_id or "", req.model, audio_name, f"{proj['name']}_演讲.mp3" if proj else "演讲.mp3", req.voice_name or "")
+                )
+                db.commit()
+                history_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+            finally:
+                db.close()
+
+        return {"audio_url": serve_url, "filename": audio_name, "history_id": history_id, "audio_path": audio_name}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── TTS History CRUD ──
+
+@app.get("/api/projects/{project_id}/tts-history")
+def api_tts_history_list(project_id: str):
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT id, project_id, text, voice_id, model, audio_path, name, voice_name, created_at FROM tts_history WHERE project_id = ? ORDER BY created_at DESC",
+            (project_id,)
+        ).fetchall()
+        return [{
+            "id": r["id"],
+            "project_id": r["project_id"],
+            "text": r["text"],
+            "voice_id": r["voice_id"],
+            "model": r["model"],
+            "audio_path": r["audio_path"],
+            "name": r["name"] or "",
+            "voice_name": r["voice_name"] or "",
+            "created_at": r["created_at"],
+        } for r in rows]
+    finally:
+        db.close()
+
+
+@app.put("/api/tts-history/{history_id}")
+def api_tts_history_update(history_id: int, req: TtsHistoryUpdate):
+    db = get_db()
+    try:
+        row = db.execute("SELECT id FROM tts_history WHERE id = ?", (history_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="记录不存在")
+        if req.name is not None:
+            db.execute("UPDATE tts_history SET name = ? WHERE id = ?", (req.name, history_id))
+            db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/tts-history/{history_id}")
+def api_tts_history_delete(history_id: int):
+    db = get_db()
+    try:
+        row = db.execute("SELECT id, audio_path, project_id FROM tts_history WHERE id = ?", (history_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="记录不存在")
+        # Delete audio file (best effort)
+        if row["audio_path"]:
+            try:
+                output_dir = AUDIO_DIR
+                if row["project_id"]:
+                    try:
+                        output_dir = resolve_project_storage(row["project_id"], auto_create=False)
+                    except Exception:
+                        pass
+                filepath = os.path.join(output_dir, row["audio_path"])
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+            except Exception:
+                pass
+        db.execute("DELETE FROM tts_history WHERE id = ?", (history_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
 
 
 @app.get("/api/audio/{filename}")
@@ -4411,7 +4800,13 @@ def get_settings():
     db = get_db()
     try:
         rows = db.execute("SELECT key, value FROM settings").fetchall()
-        return {"settings": {r["key"]: r["value"] for r in rows}}
+        settings = {}
+        for r in rows:
+            if r["key"] == "admin_password":
+                settings["admin_password_enabled"] = "1" if r["value"] else "0"
+            else:
+                settings[r["key"]] = r["value"]
+        return {"settings": settings}
     finally:
         db.close()
 
@@ -4421,6 +4816,9 @@ def update_settings(req: dict):
     db = get_db()
     try:
         for key, value in req.items():
+            # bcrypt-hash admin_password on write
+            if key == "admin_password" and value and not value.startswith("$2"):
+                value = _hash_password(value)
             existing = db.execute("SELECT key FROM settings WHERE key = ?", (key,)).fetchone()
             if existing:
                 db.execute("UPDATE settings SET value = ? WHERE key = ?", (value, key))
@@ -4432,6 +4830,39 @@ def update_settings(req: dict):
         db.close()
 
 
+@app.post("/api/login")
+def login(req: dict):
+    plain = req.get("password", "")
+    if not plain:
+        raise HTTPException(status_code=400, detail="密码不能为空")
+    stored_hash = _get_setting("admin_password")
+    if not stored_hash:
+        raise HTTPException(status_code=400, detail="未设置初始密码，请先通过设置页面创建密码")
+    if not _verify_password(plain, stored_hash):
+        raise HTTPException(status_code=403, detail="密码错误")
+    # Upgrade legacy hash to bcrypt
+    if not stored_hash.startswith("$2"):
+        db = get_db()
+        try:
+            db.execute(
+                "UPDATE settings SET value = ? WHERE key = 'admin_password'",
+                (_hash_password(plain),),
+            )
+            db.commit()
+        finally:
+            db.close()
+    token = create_access_token({"sub": "admin"})
+    return {
+        "token": token,
+        "expires_at": (datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)).isoformat(),
+    }
+
+
+@app.get("/api/auth/check")
+def auth_check(payload: dict = Depends(get_current_user)):
+    return {"ok": True}
+
+
 @app.post("/api/verify-password")
 def verify_password(req: dict):
     plain = req.get("password", "")
@@ -4440,8 +4871,16 @@ def verify_password(req: dict):
     stored_hash = _get_setting("admin_password")
     if not stored_hash:
         raise HTTPException(status_code=400, detail="未设置密码")
-    if _hash_password(plain) != stored_hash:
+    if not _verify_password(plain, stored_hash):
         raise HTTPException(status_code=403, detail="密码错误")
+    # Upgrade legacy hash to bcrypt on successful verification
+    if not stored_hash.startswith("$2"):
+        db = get_db()
+        try:
+            db.execute("UPDATE settings SET value = ? WHERE key = 'admin_password'", (_hash_password(plain),))
+            db.commit()
+        finally:
+            db.close()
     return {"ok": True}
 
 
@@ -4686,6 +5125,34 @@ def update_column_config(config_id: str, req: dict):
             db.execute("UPDATE column_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
         db.commit()
         row = db.execute("SELECT * FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.get("/api/speech-configs")
+def list_speech_configs():
+    db = get_db()
+    try:
+        rows = db.execute("SELECT * FROM speech_configs ORDER BY sort_order").fetchall()
+        return {"configs": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.put("/api/speech-configs/{config_id}")
+def update_speech_config(config_id: str, req: dict):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Config not found")
+        if 'prompt' in req:
+            db.execute("UPDATE speech_configs SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['prompt'], config_id))
+        if 'skill' in req:
+            db.execute("UPDATE speech_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
+        db.commit()
+        row = db.execute("SELECT * FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)
     finally:
         db.close()

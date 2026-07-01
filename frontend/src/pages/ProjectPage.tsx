@@ -31,7 +31,7 @@ const CONFIG: Record<number, { model: string; tmpl: string; tmplInfo: string }> 
   1: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '—', tmplInfo: '' },
   2: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '—', tmplInfo: '' },
   3: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '标准文档模板.docx / PPT模板', tmplInfo: '提示词: 标准文档格式 v2.0 · SKILL: 文档表格填充' },
-  4: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '标准演讲模板', tmplInfo: '提示词: 演讲稿生成 v1.0 · SKILL: 演讲风格' },
+  4: { model: 'DeepSeek (deepseek-v4-pro)', tmpl: '栏目配置提示词', tmplInfo: '3个演讲类型各自独立提示词 + SKILL' },
   5: { model: '—', tmpl: '—', tmplInfo: '' },
 }
 
@@ -255,6 +255,45 @@ function Stage2Controls({
   )
 }
 
+// ── Audio Utils ──
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const channels = buffer.numberOfChannels
+  const sampleRate = buffer.sampleRate
+  const length = buffer.length
+  const bytesPerSample = 2
+  const blockAlign = channels * bytesPerSample
+  const dataSize = length * blockAlign
+  const headerSize = 44
+  const buf = new ArrayBuffer(headerSize + dataSize)
+  const view = new DataView(buf)
+  const writeStr = (offset: number, s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i))
+  }
+  writeStr(0, 'RIFF')
+  view.setUint32(4, 36 + dataSize, true)
+  writeStr(8, 'WAVE')
+  writeStr(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, channels, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * blockAlign, true)
+  view.setUint16(32, blockAlign, true)
+  view.setUint16(34, bytesPerSample * 8, true)
+  writeStr(36, 'data')
+  view.setUint32(40, dataSize, true)
+  let offset = 44
+  for (let i = 0; i < length; i++) {
+    for (let ch = 0; ch < channels; ch++) {
+      const sample = Math.max(-1, Math.min(1, buffer.getChannelData(ch)[i]))
+      const val = sample < 0 ? sample * 0x8000 : sample * 0x7FFF
+      view.setInt16(offset, val, true)
+      offset += 2
+    }
+  }
+  return new Blob([buf], { type: 'audio/wav' })
+}
+
 // ── Main Component ──
 export default function ProjectPage() {
   const modal = useModal()
@@ -262,7 +301,9 @@ export default function ProjectPage() {
   const navigate = useNavigate()
 
   async function downloadFile(url: string, filename: string) {
-    const res = await fetch(url)
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+    const res = await fetch(url, { headers })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const blob = await res.blob()
     const objUrl = URL.createObjectURL(blob)
@@ -345,7 +386,7 @@ export default function ProjectPage() {
   const [stage2Prompts, setStage2Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [stage1Prompts, setStage1Prompts] = useState<Record<string, string>>({})
   const [stage1Skill, setStage1Skill] = useState('')
-  const [stage4KouboPrompt, setStage4KouboPrompt] = useState('')
+  const [stage4Prompts, setStage4Prompts] = useState<Record<string, { prompt: string; skill: string }>>({})
   // Stage 3 state
   const [sopSelected, setSopSelected] = useState('sop-std')
   const [daoPptSelected, setDaoPptSelected] = useState('dao-std')
@@ -393,18 +434,68 @@ export default function ProjectPage() {
   const [templatesMap, setTemplatesMap] = useState<Record<string, { prompt: string; skill: string; hasFile: boolean }>>({})
 
   // Stage 4 state
-  const [s4KouboModel, setS4KouboModel] = useState('')
-  const [kouboSelected, setKouboSelected] = useState('')
+  const S4_SPEECH_TABS = [
+    { key: 'doc' as const, label: '文档演讲', stepKey: 'step4_speech_doc', modelKey: '_model_s4_speech_doc' },
+    { key: 'analysis' as const, label: '分析演讲', stepKey: 'step4_speech_analysis', modelKey: '_model_s4_speech_analysis' },
+    { key: 'comprehensive' as const, label: '综合演讲', stepKey: 'step4_speech_comprehensive', modelKey: '_model_s4_speech_comprehensive' },
+  ]
+  const S4_SOURCE_OPTS = [
+    { key: 'step2_sop', label: '标准文档' },
+    { key: 'step2_daoshuyi', label: '分析文档' },
+    { key: 'step2_yanxi', label: '手册文档' },
+  ]
+  const [s4ActiveSpeechTab, setS4ActiveSpeechTab] = useState<'doc' | 'analysis' | 'comprehensive'>('doc')
+  const [s4SpeechModels, setS4SpeechModels] = useState<Record<string, string>>({})
+  const [s4SpeechGenerating, setS4SpeechGenerating] = useState<Record<string, boolean>>({})
+  const [s4DataSources, setS4DataSources] = useState<Record<string, string>>({ doc: 'step2_sop', analysis: 'step2_daoshuyi', comprehensive: 'step2_yanxi' })
+  const [s4SourceEdits, setS4SourceEdits] = useState<Record<string, string>>({})
   const [ttsProviderId, setTtsProviderId] = useState('')
-  const [ttsModel, setTtsModel] = useState('cosyvoice-v3-flash')
+
   const [voiceId, setVoiceId] = useState('')
   const [ttsVoices, setTtsVoices] = useState<Voice[]>([])
   const [ttsProviders, setTtsProviders] = useState<TTSProvider[]>([])
-  const [kouboText, setKouboText] = useState('')
+  const [ttsSourceTab, setTtsSourceTab] = useState<'doc' | 'analysis' | 'comprehensive' | 'blank'>('comprehensive')
+  const [ttsInputText, setTtsInputText] = useState('')
   const [ttsGenerating, setTtsGenerating] = useState(false)
   const [ttsAudioUrl, setTtsAudioUrl] = useState('')
+  const [ttsHistory, setTtsHistory] = useState<{ id: number; voice: string; audioUrl: string; audioPath: string; filename: string; time: string }[]>([])
   const [projStoragePath, setProjStoragePath] = useState('')
   const [savingPath, setSavingPath] = useState(false)
+  // Voice clone states
+  const [cloneMode, setCloneMode] = useState<'clone' | 'design'>('clone')
+  const [cloneName, setCloneName] = useState('我的声音')
+  const [cloneModel, setCloneModel] = useState('cosyvoice-v3.5-plus')
+  const [cloneFile, setCloneFile] = useState<File | null>(null)
+  const [cloning, setCloning] = useState(false)
+  const [showNameDialog, setShowNameDialog] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [editingVoiceId, setEditingVoiceId] = useState('')
+  const [editVoiceName, setEditVoiceName] = useState('')
+  const [editingHistoryIdx, setEditingHistoryIdx] = useState<number | null>(null)
+  const [editHistoryName, setEditHistoryName] = useState('')
+  const [playingVoiceId, setPlayingVoiceId] = useState('')
+  const [playingHistoryIdx, setPlayingHistoryIdx] = useState<number | null>(null)
+  const playingAudioRef = useRef<HTMLAudioElement | null>(null)
+  const [recording, setRecording] = useState(false)
+  const [recordingStarted, setRecordingStarted] = useState(false)
+  const [recordingDone, setRecordingDone] = useState(false)
+  const [recTooShort, setRecTooShort] = useState(false)
+  const [recPreviewUrl, setRecPreviewUrl] = useState('')
+  const [recTime, setRecTime] = useState(0)
+  const [countdown, setCountdown] = useState(0)
+  const [recPos, setRecPos] = useState({ x: 0, y: 0 })
+  const recDragRef = useRef({ dragging: false, startX: 0, startY: 0, posX: 0, posY: 0 })
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const recTimeRef = useRef(0)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recStreamRef = useRef<MediaStream | null>(null)
+  const recFileRef = useRef<File | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const animFrameRef = useRef<number | null>(null)
+  const [waveData, setWaveData] = useState<number[]>([4, 6, 3, 8, 5, 4, 7, 3, 6, 4, 5, 3])
+  const [voicePrompt, setVoicePrompt] = useState('温柔知性的年轻女性声音，语调自然流畅，适合阅读和讲述')
+  const [previewText, setPreviewText] = useState('各位听众朋友们大家好，欢迎使用我的语音合成服务')
+  const [clonedVoices, setClonedVoices] = useState<any[]>([])
 
   // Load project
   useEffect(() => {
@@ -442,6 +533,13 @@ export default function ProjectPage() {
       if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
+      if (map['_model_s4_speech_doc']) { setS4SpeechModels(prev => ({ ...prev, doc: map['_model_s4_speech_doc'] })) }
+      if (map['_model_s4_speech_analysis']) { setS4SpeechModels(prev => ({ ...prev, analysis: map['_model_s4_speech_analysis'] })) }
+      if (map['_model_s4_speech_comprehensive']) { setS4SpeechModels(prev => ({ ...prev, comprehensive: map['_model_s4_speech_comprehensive'] })) }
+      // Restore Stage 4 data source selections
+      if (map['_ds_s4_doc']) { setS4DataSources(prev => ({ ...prev, doc: map['_ds_s4_doc'] })) }
+      if (map['_ds_s4_analysis']) { setS4DataSources(prev => ({ ...prev, analysis: map['_ds_s4_analysis'] })) }
+      if (map['_ds_s4_comprehensive']) { setS4DataSources(prev => ({ ...prev, comprehensive: map['_ds_s4_comprehensive'] })) }
       if (map['_temp_step3_sop']) { setS3SopTemp(parseFloat(map['_temp_step3_sop']) || 0.3) }
       if (map['_temp_step3_dao_ppt']) { setS3DaoPptTemp(parseFloat(map['_temp_step3_dao_ppt']) || 0.3) }
       if (map['_temp_step3_yan_ppt']) { setS3YanxiPptTemp(parseFloat(map['_temp_step3_yan_ppt']) || 0.3) }
@@ -510,7 +608,6 @@ export default function ProjectPage() {
       let s1s = ''
       const s2p: Record<string, { prompt: string; skill: string }> = {}
       const s3p: Record<string, { prompt: string; skill: string }> = {}
-      let kouboP = ''
       configs.forEach((c: any) => {
         if (c.column_id === 'col1') {
           const key = c.id === 'c1-text' ? 'text' : c.id === 'c1-video' ? 'video' : c.id === 'c1-file' ? 'file' : ''
@@ -530,15 +627,19 @@ export default function ProjectPage() {
         if (c.column_id === 'col5') {
           if (c.id === 'c4-yanxi') s3p['yanxiPpt'] = { prompt: c.prompt, skill: c.skill }
         }
-        if (c.column_id === 'col6' && c.id === 'c5-koubo') {
-          kouboP = c.prompt
-        }
       })
       setStage1Prompts(s1p)
       if (s1s) setStage1Skill(s1s)
       setStage2Prompts(s2p)
       setStage3Prompts(s3p)
-      if (kouboP) setStage4KouboPrompt(kouboP)
+    }).catch(() => {})
+    api.listSpeechConfigs().then((configs: any[]) => {
+      const s4p: Record<string, { prompt: string; skill: string }> = {}
+      configs.forEach((c: any) => {
+        const key = c.id === 'speech-doc' ? 'doc' : c.id === 'speech-analysis' ? 'analysis' : c.id === 'speech-comprehensive' ? 'comprehensive' : ''
+        if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
+      })
+      setStage4Prompts(s4p)
     }).catch(() => {})
     // Load templates for Stage 3 PPT columns
     const loadTemplates = (stageType: string) =>
@@ -604,7 +705,7 @@ export default function ProjectPage() {
         const def = providers.find(p => p.is_default) || providers[0]
         setTtsProviderId(def.id)
         const models = Array.isArray(def.models) ? def.models : []
-        if (models.length > 0) setTtsModel(models[0])
+        if (models.length > 0) setCloneModel(models[0])
       }
     }).catch(() => {})
     api.listVoices().then((v: Voice[]) => {
@@ -1231,7 +1332,9 @@ export default function ProjectPage() {
       return
     }
     try {
-      const resp = await fetch(plan.previewUrl)
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+      const resp = await fetch(plan.previewUrl, { headers })
       if (!resp.ok) {
         modal.toast(`HTML导出失败: 服务器返回 ${resp.status}`, 'error')
         return
@@ -1249,25 +1352,236 @@ export default function ProjectPage() {
   }
 
   // ── TTS ──
+  const stopAudio = () => {
+    if (playingAudioRef.current) { playingAudioRef.current.pause(); playingAudioRef.current = null }
+    setPlayingVoiceId('')
+    setPlayingHistoryIdx(null)
+  }
+  const playAudio = (url: string, voiceId?: string, historyIdx?: number) => {
+    stopAudio()
+    const a = new Audio(url)
+    playingAudioRef.current = a
+    if (voiceId) setPlayingVoiceId(voiceId)
+    if (historyIdx !== undefined) setPlayingHistoryIdx(historyIdx)
+    a.onended = () => {
+      playingAudioRef.current = null
+      setPlayingVoiceId('')
+      setPlayingHistoryIdx(null)
+    }
+    a.play().catch(() => { stopAudio() })
+  }
+
   const doTTS = async () => {
-    if (!kouboText.trim()) return
+    if (!ttsInputText.trim()) return
     setTtsGenerating(true)
     try {
-      const selectedVoice = ttsVoices.find(v => v.id === voiceId)
+      const selectedVoice = ttsVoices.find(v => v.id === voiceId) || clonedVoices.find(v => v.id === voiceId)
       const result: any = await api.ttsSynthesize(
-        kouboText, ttsModel,
+        ttsInputText, cloneModel,
         selectedVoice?.voice_id,
         undefined, undefined,
         id, ttsProviderId || undefined,
+        selectedVoice?.name,
       )
       setTtsAudioUrl(result.audio_url)
+      const url = result.audio_url || '/api/audio/' + encodeURIComponent(result.filename || '')
+      // If history was saved to DB, update voice_name
+      if (result.history_id) {
+        api.updateTtsHistory(result.history_id, (project?.name || 'output') + '_演讲.mp3').catch(() => {})
+      }
+      // Reload from API to get full data
+      loadTtsHistory()
       setGenFiles(prev => [...prev, {
         name: (project?.name || 'output') + '_演讲.mp3', type: 'MP3',
         source: '演讲口播',
-        url: result.audio_url || '/api/audio/' + encodeURIComponent(result.filename || ''),
+        url,
       }])
     } catch (e: any) { modal.toast('TTS失败: ' + e.message, 'error') }
     finally { setTtsGenerating(false) }
+  }
+
+  // ── Voice Clone ──
+  const loadClonedVoices = () => {
+    api.listClonedVoices(ttsProviderId || undefined).then(setClonedVoices).catch(() => {})
+  }
+
+  const loadTtsHistory = () => {
+    if (id) {
+      api.listTtsHistory(id).then((data: any) => {
+        setTtsHistory(data.map((r: any) => ({
+          id: r.id,
+          voice: r.voice_name || '默认音色',
+          audioUrl: `/api/audio/${r.audio_path}${r.project_id ? `?project_id=${r.project_id}` : ''}`,
+          audioPath: r.audio_path,
+          filename: r.name || '演讲.mp3',
+          time: new Date(r.created_at + 'Z').toLocaleString('zh-CN'),
+        })))
+      }).catch(() => {})
+    }
+  }
+
+  useEffect(() => {
+    if (ttsProviderId) loadClonedVoices()
+  }, [ttsProviderId])
+
+  useEffect(() => {
+    loadTtsHistory()
+  }, [id])
+
+  const startRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        modal.toast('当前浏览器不支持录音功能，请使用 Chrome 或 Edge', 'error')
+        return
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      recStreamRef.current = stream
+      setRecPos({ x: 0, y: 0 })
+      setRecording(true)
+      setRecordingStarted(false)
+      setRecTime(0)
+      recTimeRef.current = 0
+    } catch (e: any) {
+      modal.toast('录音失败: ' + (e.message || '无法访问麦克风'), 'error')
+    }
+  }
+
+  const startCountdown = () => {
+    setCountdown(3)
+    let n = 3
+    const iv = setInterval(() => {
+      n--
+      if (n <= 0) {
+        clearInterval(iv)
+        setCountdown(0)
+        beginRecording()
+      } else {
+        setCountdown(n)
+      }
+    }, 600)
+  }
+
+  const beginRecording = () => {
+    const stream = recStreamRef.current!
+    // Real-time waveform analyser
+    const ctx = new AudioContext()
+    audioCtxRef.current = ctx
+    const source = ctx.createMediaStreamSource(stream)
+    const analyser = ctx.createAnalyser()
+    analyser.fftSize = 64
+    source.connect(analyser)
+    const bufferLength = analyser.frequencyBinCount
+    const dataArray = new Uint8Array(bufferLength)
+    const animate = () => {
+      analyser.getByteFrequencyData(dataArray)
+      const bars = Array.from(dataArray.slice(0, 16)).map(v => Math.max(3, Math.round(v / 8)))
+      setWaveData(bars)
+      animFrameRef.current = requestAnimationFrame(animate)
+    }
+    animate()
+
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : ''
+    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
+    mediaRecorderRef.current = mr
+    const chunks: BlobPart[] = []
+    mr.ondataavailable = e => chunks.push(e.data)
+    mr.onstop = async () => {
+      const blob = new Blob(chunks, { type: mimeType || 'audio/webm' })
+      stream.getTracks().forEach(t => t.stop())
+      // Decode, trim last 300ms to remove click, re-encode as WAV
+      try {
+        const arrayBuf = await blob.arrayBuffer()
+        const audioCtx = new AudioContext()
+        const audioBuf = await audioCtx.decodeAudioData(arrayBuf)
+        const sampleRate = audioBuf.sampleRate
+        const trimSamples = Math.round(sampleRate * 0.3) // trim 300ms
+        const keepSamples = Math.max(0, audioBuf.length - trimSamples)
+        const trimmed = audioCtx.createBuffer(audioBuf.numberOfChannels, keepSamples, sampleRate)
+        for (let ch = 0; ch < audioBuf.numberOfChannels; ch++) {
+          trimmed.copyToChannel(audioBuf.getChannelData(ch).subarray(0, keepSamples), ch)
+        }
+        // AudioBuffer → WAV
+        const wavBlob = audioBufferToWav(trimmed)
+        const file = new File([wavBlob], 'recording.wav', { type: 'audio/wav' })
+        recFileRef.current = file
+        setCloneFile(file)
+        const url = URL.createObjectURL(wavBlob)
+        setRecPreviewUrl(url)
+        audioCtx.close()
+      } catch {
+        // Fallback: use original blob if decoding fails
+        const file = new File([blob], 'recording.webm', { type: mimeType || 'audio/webm' })
+        recFileRef.current = file
+        setCloneFile(file)
+        const url = URL.createObjectURL(blob)
+        setRecPreviewUrl(url)
+      }
+      setRecordingDone(true)
+      setRecTooShort(recTimeRef.current < 3)
+    }
+    mr.start()
+    setRecordingStarted(true)
+    setRecTime(0)
+    recTimeRef.current = 0
+    recTimerRef.current = setInterval(() => { setRecTime(t => t + 1); recTimeRef.current++ }, 1000)
+  }
+
+  const stopRecording = () => {
+    setRecordingStarted(false)
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null }
+    mediaRecorderRef.current?.stop()
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null }
+    audioCtxRef.current?.close()
+    audioCtxRef.current = null
+    recStreamRef.current = null
+  }
+
+  const confirmClone = () => {
+    setRecording(false)
+    setRecordingDone(false)
+    setNameInput(cloneName)
+    setShowNameDialog(true)
+  }
+
+  const cancelRecording = () => {
+    recStreamRef.current?.getTracks().forEach(t => t.stop())
+    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null }
+    audioCtxRef.current?.close()
+    audioCtxRef.current = null
+    if (recPreviewUrl) { URL.revokeObjectURL(recPreviewUrl); setRecPreviewUrl('') }
+    setRecording(false)
+    setRecordingStarted(false)
+    setRecordingDone(false)
+    recStreamRef.current = null
+    recFileRef.current = null
+    setCloneFile(null)
+  }
+
+  const doClone = async (name?: string) => {
+    const voiceName = name || cloneName
+    setCloning(true)
+    try {
+      if (cloneMode === 'design') {
+        await api.designVoice(voiceName, cloneModel, voicePrompt, previewText, ttsProviderId || undefined)
+      } else {
+        const file = cloneFile || recFileRef.current
+        if (!file) return
+        await api.cloneVoice(voiceName, cloneModel, file, ttsProviderId || undefined)
+        recFileRef.current = null
+      }
+      setCloneName(voiceName)
+      loadClonedVoices()
+      setCloneFile(null)
+      modal.toast(cloneMode === 'design' ? '声音设计成功' : '声音克隆成功', 'success')
+    } catch (e: any) {
+      modal.toast((cloneMode === 'design' ? '声音设计' : '克隆') + '失败: ' + (e?.message || e), 'error')
+    } finally {
+      setCloning(false)
+    }
   }
 
   // Generated files tracking
@@ -1296,10 +1610,12 @@ export default function ProjectPage() {
   // Global generation tracking — visible across all stages
   const isAnyS1 = Object.values(step1Generating).some(Boolean)
   const isAnyS2 = Object.values(step2Generating).some(Boolean)
+  const isAnyS4 = Object.values(s4SpeechGenerating).some(Boolean)
   const isAnyOutlineLoading = Object.values(pptOutlineLoading).some(Boolean)
-  const isGlobalGenerating = isAnyS1 || isAnyS2 || Object.keys(pptGenerating).length > 0 || ttsGenerating || isAnyOutlineLoading
+  const isGlobalGenerating = isAnyS1 || isAnyS2 || isAnyS4 || Object.keys(pptGenerating).length > 0 || ttsGenerating || isAnyOutlineLoading
   const globalGenLabel = Object.keys(pptGenerating).length > 0 ? 'PPT 合成中'
     : ttsGenerating ? '语音合成中'
+    : isAnyS4 ? '演讲稿生成中'
     : isAnyOutlineLoading ? '大纲生成中'
     : isAnyS2 ? 'AI 生成文档中'
     : isAnyS1 ? '整理文档中'
@@ -1310,7 +1626,7 @@ export default function ProjectPage() {
     if (s === 1 && (st.step1_video || st.step1_text || st.step1_file)) return 'done'
     if (s === 2 && (st.step2_sop || st.step2_daoshuyi || st.step2_yanxi)) return 'done'
     if (s === 3 && (st.step3_sop_doc || st.step3_dao_ppt || st.step3_yan_ppt)) return 'done'
-    if (s === 4 && (st.step4_koubo || st.step4_tts)) return 'done'
+    if (s === 4 && (st.step4_speech_doc || st.step4_speech_analysis || st.step4_speech_comprehensive || st.step4_tts)) return 'done'
     if (s === 5 && genFiles.length > 0) return 'done'
     if (s === stage) return 'progress'
     return 'waiting'
@@ -2851,54 +3167,181 @@ export default function ProjectPage() {
             <div className="panel-left">
               <div className="card">
                 <div className="card-title">演讲文案</div>
-                <div className="card-hint">基于文档内容，生成演讲稿</div>
-                <div className="form-label">来源</div>
-                <select className="form-select" style={{ marginBottom: 8 }}><option>手册文档</option></select>
-                <div className="form-label">大模型</div>
-                <select className="form-select" style={{ marginBottom: 8 }}
-                  value={s4KouboModel} onChange={e => { setS4KouboModel(e.target.value); saveStep('_model_s4_koubo', e.target.value) }}>
-                  <option value="">默认 (DeepSeek)</option>
-                  {llmProviders.map(p => (
-                    Array.isArray(p.models) ? p.models.map((m: string) => (
-                      <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} ({m})</option>
-                    )) : null
+                <div className="card-hint">基于文档内容，生成对应风格的演讲稿</div>
+                {/* ── Sub-tab bar ── */}
+                <div className="s4-speech-tabs" style={{ display: 'flex', gap: 2, marginBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                  {S4_SPEECH_TABS.map(t => (
+                    <button key={t.key}
+                      className="btn btn-ghost btn-sm"
+                      style={{
+                        borderBottom: s4ActiveSpeechTab === t.key ? '2px solid var(--primary)' : '2px solid transparent',
+                        borderRadius: 0,
+                        fontWeight: s4ActiveSpeechTab === t.key ? 600 : 400,
+                        color: s4ActiveSpeechTab === t.key ? 'var(--primary)' : 'var(--text-secondary)',
+                        fontSize: 12,
+                      }}
+                      onClick={() => setS4ActiveSpeechTab(t.key)}>
+                      {t.label}
+                    </button>
                   ))}
-                </select>
-                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  disabled={step2Generating['koubo']}
-                  onClick={async () => {
-                    const ctrl = new AbortController(); abortRef.current['step4_koubo'] = ctrl
-                    setStep2Generating(prev => ({ ...prev, koubo: true }))
-                    try {
-                      let prompt = stage4KouboPrompt || '请根据以下内容生成演讲稿，风格亲切自然。'
-                      let pid = '', mdl = ''
-                      if (s4KouboModel) { [pid, mdl] = s4KouboModel.split(':') }
-                      const content = await doGenerate('step4_koubo', prompt,
-                        steps.step2_yanxi || steps.step1_video || steps.step1_text || steps.step1_file || '',
-                        pid, mdl, 0.3, ctrl.signal)
-                      if (content) setKouboText(content)
-                    } finally { setStep2Generating(prev => ({ ...prev, koubo: false })); delete abortRef.current['step4_koubo'] }
-                  }}>
-                  {step2Generating['koubo'] ? '⏳ 生成中...' : '📢 生成演讲稿'}
-                </button>
-                {step2Generating['koubo'] && (
-                  <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
-                    onClick={() => { abortRef.current['step4_koubo']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
-                )}
+                </div>
+                {/* ── Active tab content ── */}
+                {S4_SPEECH_TABS.map(t => {
+                  const isActive = s4ActiveSpeechTab === t.key
+                  const activeModel = s4SpeechModels[t.key] || ''
+                  const activePrompt = stage4Prompts[t.key]?.prompt || '请根据以下内容生成演讲稿，风格亲切自然。'
+                  const activeSkill = stage4Prompts[t.key]?.skill || ''
+                  const dsKey = s4DataSources[t.key] || 'step2_sop'
+                  const sourceContent = steps[dsKey] || steps.step1_video || steps.step1_text || steps.step1_file || ''
+                  const isGenerating = s4SpeechGenerating[t.key] || false
+                  return (
+                    <div key={t.key} style={{ display: isActive ? 'block' : 'none' }}>
+                      <div className="form-label">来源</div>
+                      <select className="form-select" style={{ marginBottom: 8 }}
+                        value={dsKey} onChange={e => {
+                          const val = e.target.value
+                          setS4DataSources(prev => ({ ...prev, [t.key]: val }))
+                          saveStep(`_ds_s4_${t.key}`, val)
+                        }}>
+                        {S4_SOURCE_OPTS.map(s => (
+                          <option key={s.key} value={s.key}>{s.label}</option>
+                        ))}
+                      </select>
+                      <div className="form-label">大模型</div>
+                      <select className="form-select" style={{ marginBottom: 8 }}
+                        value={activeModel} onChange={e => {
+                          const val = e.target.value
+                          setS4SpeechModels(prev => ({ ...prev, [t.key]: val }))
+                          saveStep(t.modelKey, val)
+                        }}>
+                        <option value="">默认 (DeepSeek)</option>
+                        {llmProviders.map(p => (
+                          Array.isArray(p.models) ? p.models.map((m: string) => (
+                            <option key={`${p.id}:${m}`} value={`${p.id}:${m}`}>{p.name} ({m})</option>
+                          )) : null
+                        ))}
+                      </select>
+                      <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
+                        disabled={isGenerating}
+                        onClick={async () => {
+                          const ctrl = new AbortController(); abortRef.current[t.stepKey] = ctrl
+                          setS4SpeechGenerating(prev => ({ ...prev, [t.key]: true }))
+                          let inputContent = sourceContent
+                          const editKey = `${t.key}_${dsKey}`
+                          if (s4SourceEdits[editKey] !== undefined) inputContent = s4SourceEdits[editKey]
+                          try {
+                            let pid = '', mdl = ''
+                            if (activeModel) { [pid, mdl] = activeModel.split(':') }
+                            const userMessage = activeSkill
+                              ? `请将以下内容按指定格式生成演讲稿：\n\n${inputContent}\n\n输出格式要求：\n${activeSkill}`
+                              : inputContent
+                            const content = await doGenerate(t.stepKey, activePrompt, userMessage, pid, mdl, 0.3, ctrl.signal)
+                          } finally {
+                            setS4SpeechGenerating(prev => ({ ...prev, [t.key]: false }))
+                            delete abortRef.current[t.stepKey]
+                          }
+                        }}>
+                        {isGenerating ? '⏳ 生成中...' : '📢 生成演讲稿'}
+                      </button>
+                      {isGenerating && (
+                        <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
+                          onClick={() => { abortRef.current[t.stepKey]?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
+                      )}
+                      {(() => {
+                        const curDs = s4DataSources[t.key] || 'step2_sop'
+                        const editKey = `${t.key}_${curDs}`
+                        const editVal = s4SourceEdits[editKey] !== undefined ? s4SourceEdits[editKey] : steps[curDs] || ''
+                        return (
+                          <div style={{ marginTop: 10 }}>
+                            <div className="form-label">来源文档（可编辑）</div>
+                            <textarea className="form-textarea"
+                              style={{ width: '100%', minHeight: 320, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, resize: 'vertical' }}
+                              value={editVal}
+                              onChange={e => setS4SourceEdits(prev => ({ ...prev, [editKey]: e.target.value }))}
+                            />
+                            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                              <button className="btn btn-ghost btn-sm"
+                                onClick={() => {
+                                  saveStep(curDs, editVal)
+                                  setSteps(prev => ({ ...prev, [curDs]: editVal }))
+                                  flashSave()
+                                }}>
+                                {getSaveBtnLabel(editVal, curDs)}
+                              </button>
+                              <button className="btn btn-ghost btn-sm"
+                                style={{ color: 'var(--warning)' }}
+                                onClick={() => setS4SourceEdits(prev => ({ ...prev, [editKey]: '' }))}>
+                                🗑 清空
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  )
+                })}
               </div>
             </div>
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="tmpl-preview-header">📢 演讲稿预览</div>
-                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
-                    <div className="prev-script">
-                      {steps.step4_koubo ? (
-                        steps.step4_koubo.split('\n').map((line, i) => <p key={i}>{line || ' '}</p>)
-                      ) : (
-                        <p style={{ color: 'var(--text-secondary)' }}>点击「生成演讲稿」生成...</p>
-                      )}
-                    </div>
+                <div className="tmpl-preview-header">
+                  📢 演讲稿预览 — {S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)?.label || '文档演讲'}
+                </div>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 8, overflow: 'auto' }}>
+                  {(() => {
+                    const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+                    const content = steps[activeTab?.stepKey || 'step4_speech_doc'] || ''
+                    return (
+                      <textarea className="form-textarea"
+                        style={{ flex: 1, width: '100%', minHeight: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, border: '1px solid var(--border)', borderRadius: 4, padding: 8, background: 'var(--bg)', color: 'var(--text-primary)', resize: 'none', outline: 'none' }}
+                        value={content}
+                        placeholder="点击「生成演讲稿」生成..."
+                        onChange={e => setSteps(prev => ({ ...prev, [activeTab!.stepKey]: e.target.value }))}
+                      />
+                    )
+                  })()}
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    {(() => {
+                      const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+                      const content = steps[activeTab?.stepKey || 'step4_speech_doc'] || ''
+                      return (
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={() => {
+                            if (activeTab && content.trim()) {
+                              saveStep(activeTab.stepKey, content)
+                              flashSave()
+                            }
+                          }}>
+                          {getSaveBtnLabel(content, activeTab?.stepKey || 'step4_speech_doc')}
+                        </button>
+                      )
+                    })()}
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => {
+                        const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+                        const text = activeTab ? (steps[activeTab.stepKey] || '') : ''
+                        if (text.trim()) {
+                          const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+                          const url = URL.createObjectURL(blob)
+                          const a = document.createElement('a')
+                          a.href = url; a.download = `${activeTab!.label}_${id}.txt`
+                          a.click(); URL.revokeObjectURL(url)
+                        }
+                      }}>
+                      📥 下载
+                    </button>
+                    <button className="btn btn-ghost btn-sm"
+                      style={{ color: 'var(--warning)' }}
+                      onClick={() => {
+                        const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+                        if (activeTab) {
+                          setSteps(prev => ({ ...prev, [activeTab.stepKey]: '' }))
+                          saveStep(activeTab.stepKey, '')
+                          flashSave()
+                        }
+                      }}>
+                      🗑 清空
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2907,13 +3350,10 @@ export default function ProjectPage() {
         )}
 
         {stage === 4 && sub === '4b' && (
+          <>
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">TTS 语音合成</div>
-                <div className="card-hint">选择提供商、合成模型和音色，生成语音文件</div>
-                <div className="form-label">来源</div>
-                <select className="form-select" style={{ marginBottom: 8 }}><option>演讲文案</option></select>
                 <div className="form-label">TTS 提供商</div>
                 <select className="form-select" style={{ marginBottom: 8 }}
                   value={ttsProviderId} onChange={e => {
@@ -2921,64 +3361,441 @@ export default function ProjectPage() {
                     const p = ttsProviders.find(x => x.id === e.target.value)
                     if (p) {
                       const models = Array.isArray(p.models) ? p.models : []
-                      if (models.length > 0) setTtsModel(models[0])
+                      if (models.length > 0) setCloneModel(models[0])
                       api.listVoices(e.target.value).then(setTtsVoices).catch(() => {})
                     }
                   }}>
                   {ttsProviders.length === 0 && <option value="">暂无提供商</option>}
                   {ttsProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                <div className="form-label">合成模型</div>
-                <select className="form-select" style={{ marginBottom: 8 }}
-                  value={ttsModel} onChange={e => setTtsModel(e.target.value)}>
-                  {(Array.isArray(ttsProviders.find(p => p.id === ttsProviderId)?.models)
-                    ? ttsProviders.find(p => p.id === ttsProviderId)!.models
-                    : []).map((m: string) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                <div className="form-label">音色</div>
-                <select className="form-select" style={{ marginBottom: 10 }}
-                  value={voiceId} onChange={e => setVoiceId(e.target.value)}>
-                  <option value="">默认音色 (系统)</option>
-                  {ttsVoices.map(v => <option key={v.id} value={v.id}>{v.name} ({v.voice_id})</option>)}
-                </select>
-                <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
-                  disabled={ttsGenerating} onClick={doTTS}>
-                  {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
-                </button>
-                {ttsAudioUrl && (
-                  <div style={{ marginTop: 8 }}>
-                    <audio controls style={{ width: '100%', height: 32 }}>
-                      <source src={ttsAudioUrl} type="audio/mpeg" />
-                    </audio>
-                    <button className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
-                      onClick={() => downloadFile(ttsAudioUrl, 'tts_output.mp3')}>
-                      💾 下载 .mp3
-                    </button>
+
+                <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+                  {/* Tabs: 克隆音色 / 音色设计 */}
+                  <div style={{ display: 'flex', marginBottom: 10, background: 'var(--bg)', borderRadius: 20, padding: 2 }}>
+                    <button
+                      style={{ flex: 1, padding: '5px 0', fontSize: 11, fontWeight: cloneMode === 'clone' ? 600 : 400, borderRadius: 20, border: 'none', cursor: 'pointer', background: cloneMode === 'clone' ? 'var(--card-bg)' : 'transparent', color: cloneMode === 'clone' ? 'var(--text-primary)' : 'var(--text-secondary)', boxShadow: cloneMode === 'clone' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                      onClick={() => setCloneMode('clone')}>克隆音色</button>
+                    <button
+                      style={{ flex: 1, padding: '5px 0', fontSize: 11, fontWeight: cloneMode === 'design' ? 600 : 400, borderRadius: 20, border: 'none', cursor: 'pointer', background: cloneMode === 'design' ? 'var(--card-bg)' : 'transparent', color: cloneMode === 'design' ? 'var(--text-primary)' : 'var(--text-secondary)', boxShadow: cloneMode === 'design' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}
+                      onClick={() => setCloneMode('design')}>音色设计</button>
                   </div>
-                )}
+
+                  {/* 绑定模型 */}
+                  <div style={{ marginBottom: 8 }}>
+                    <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>绑定模型</label>
+                    <select className="form-select" style={{ width: '100%', fontSize: 11 }} value={cloneModel} onChange={e => setCloneModel(e.target.value)}>
+                      {ttsProviders.length === 0 && <option value="cosyvoice-v3.5-plus">CosyVoice 3.5 Plus</option>}
+                      {ttsProviders.flatMap((p: any) => Array.isArray(p.models) ? p.models.filter((m: string) => m.includes('v3.5') || m.includes('cosyvoice')).map((m: string) => (
+                        <option key={`${p.id}:${m}`} value={m}>{m}</option>
+                      )) : [])}
+                    </select>
+                  </div>
+
+                  {cloneMode === 'design' ? (
+                    <>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>声音描述</label>
+                        <textarea className="form-textarea" style={{ width: '100%', minHeight: 60, resize: 'vertical', fontSize: 11 }}
+                          value={voicePrompt} onChange={e => setVoicePrompt(e.target.value)}
+                          placeholder="例如: 沉稳的中年男性，音色低沉有磁性" />
+                      </div>
+                      <div style={{ marginBottom: 8 }}>
+                        <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>预览文本</label>
+                        <input className="form-input" style={{ width: '100%', fontSize: 11 }} value={previewText} onChange={e => setPreviewText(e.target.value)} />
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <label style={{ flex: 1 }}>
+                          <input type="file" accept="audio/*" style={{ display: 'none' }}
+                            onChange={e => setCloneFile(e.target.files?.[0] || null)} />
+                          <span style={{ display: 'block', textAlign: 'center', background: 'var(--bg)', padding: '6px 0', borderRadius: 6, cursor: 'pointer', fontSize: 11, color: 'var(--text-primary)' }}>
+                            选择音频文件
+                          </span>
+                        </label>
+                        <button style={{ flex: 1, background: 'var(--bg)', border: 'none', padding: '6px 0', borderRadius: 6, cursor: 'pointer', fontSize: 11, color: 'var(--text-primary)' }}
+                          onClick={recording ? stopRecording : startRecording}>
+                          {recording ? '停止录制' : '录制声音'}
+                        </button>
+                      </div>
+                      {cloneFile && <div style={{ fontSize: 10, color: 'var(--success)', marginTop: 3 }}>已选择: {cloneFile.name}</div>}
+                      <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 3 }}>建议 10-20 秒清晰人声，WAV/MP3 格式</div>
+                    </div>
+                  )}
+
+                  <div className="form-label" style={{ fontSize: 10 }}>系统音色</div>
+                  <select className="form-select" style={{ marginBottom: 8, fontSize: 11 }}
+                    value={voiceId} onChange={e => setVoiceId(e.target.value)}>
+                    <option value="">默认音色 (系统)</option>
+                    {ttsVoices.map(v => <option key={v.id} value={v.id}>{v.name} ({v.voice_id})</option>)}
+                  </select>
+
+                  {/* 我的音色 */}
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginBottom: 8 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>我的音色</div>
+                    {clonedVoices.length > 0 ? (
+                      <div style={{ maxHeight: 120, overflowY: 'auto' }}>
+                        {clonedVoices.map((v: any) => (
+                          <div key={v.id}
+                            onClick={() => setVoiceId(v.id)}
+                            style={{ fontSize: 10, padding: '3px 4px', marginBottom: 2, background: voiceId === v.id ? 'var(--primary-light)' : 'var(--bg)', borderRadius: 3, border: voiceId === v.id ? '1px solid var(--primary)' : '1px solid transparent', cursor: 'pointer' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              {editingVoiceId === v.id ? (
+                                <input className="form-input"
+                                  style={{ flex: 1, fontSize: 10, padding: '1px 4px' }}
+                                  value={editVoiceName}
+                                  onChange={e => setEditVoiceName(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') {
+                                      api.updateVoice(v.id, { name: editVoiceName }).then(() => loadClonedVoices())
+                                      setEditingVoiceId('')
+                                    }
+                                  }}
+                                  onClick={e => e.stopPropagation()}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span style={{ color: voiceId === v.id ? 'var(--primary)' : 'var(--text-primary)', fontWeight: voiceId === v.id ? 600 : 400 }}>{v.name}</span>
+                              )}
+                              <span style={{ color: 'var(--text-secondary)', fontSize: 9 }}>{new Date(v.created_at).toLocaleDateString('zh-CN')}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 3, marginTop: 2 }} onClick={e => e.stopPropagation()}>
+                              {playingVoiceId === v.id ? (
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--warning)' }}
+                                  onClick={stopAudio}>■</button>
+                              ) : (
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px' }}
+                                  onClick={async () => {
+                                    try {
+                                      const res = await api.previewVoice(v.id)
+                                      playAudio(res.audio_url, v.id)
+                                    } catch {}
+                                  }}>
+                                ▶</button>
+                              )}
+                              {editingVoiceId === v.id ? (
+                                <>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--success)' }}
+                                    onClick={() => {
+                                      api.updateVoice(v.id, { name: editVoiceName }).then(() => loadClonedVoices())
+                                      setEditingVoiceId('')
+                                    }}>✓</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--text-secondary)' }}
+                                    onClick={() => setEditingVoiceId('')}>✕</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px' }}
+                                    onClick={() => { setEditingVoiceId(v.id); setEditVoiceName(v.name) }}>✏</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 4px', color: 'var(--warning)' }}
+                                    onClick={() => { if (confirm('确定删除此音色？')) { api.deleteVoice(v.id).then(() => loadClonedVoices()) } }}>✕</button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>暂无克隆音色</div>
+                    )}
+                  </div>
+
+                  <button className="btn btn-primary btn-sm" style={{ width: '100%', fontSize: 11 }}
+                    onClick={() => {
+                      setNameInput(cloneName)
+                      setShowNameDialog(true)
+                    }} disabled={cloning || (cloneMode === 'clone' && !cloneFile)}>
+                    {cloning ? '处理中...' : (cloneMode === 'design' ? '开始设计' : '开始克隆')}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="tmpl-preview" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="tmpl-preview-header">🎵 音色预览 — {ttsVoices.find(v => v.id === voiceId)?.name || '默认音色'}</div>
-                  <div className="tmpl-preview-body" style={{ flex: 1, overflow: 'auto' }}>
-                    <div className="prev-voice">
-                      <div className="voice-wave" />
-                      <div className="voice-meta">
-                        <strong>{ttsVoices.find(v => v.id === voiceId)?.name || '系统默认音色'}</strong><br />
-                        音色ID: {ttsVoices.find(v => v.id === voiceId)?.voice_id || 'longanyang'}<br />
-                        {ttsVoices.find(v => v.id === voiceId)?.description || '自然亲切的女声'}
-                      </div>
+                <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'auto' }}>
+                  {/* 文案编辑 */}
+                  <div style={{ padding: 10, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>文案编辑</div>
+                    <div className="form-label" style={{ fontSize: 10 }}>来源</div>
+                    <select className="form-select" style={{ marginBottom: 8, fontSize: 11 }}
+                      value={ttsSourceTab} onChange={e => {
+                        const val = e.target.value as typeof ttsSourceTab
+                        setTtsSourceTab(val)
+                        if (val === 'blank') {
+                          setTtsInputText(steps['step4_tts_blank'] || '')
+                        } else {
+                          const tab = S4_SPEECH_TABS.find(t => t.key === val)
+                          setTtsInputText(steps[tab?.stepKey || 'step4_speech_comprehensive'] || '')
+                        }
+                      }}>
+                      {S4_SPEECH_TABS.map(t => (
+                        <option key={t.key} value={t.key}>{t.label}{steps[t.stepKey] ? ' ✓' : ' (暂无内容)'}</option>
+                      ))}
+                      <option value="blank">白板编辑</option>
+                    </select>
+                    <textarea className="form-textarea"
+                      style={{ width: '100%', flex: 1, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, resize: 'vertical' }}
+                      value={ttsInputText}
+                      onChange={e => setTtsInputText(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', gap: 6, marginTop: 4, marginBottom: 8 }}>
+                      {(() => {
+                        const tab = S4_SPEECH_TABS.find(t => t.key === ttsSourceTab)
+                        const stepKey = ttsSourceTab === 'blank' ? 'step4_tts_blank' : (tab?.stepKey || 'step4_speech_comprehensive')
+                        return (
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => {
+                              if (ttsInputText.trim()) {
+                                saveStep(stepKey, ttsInputText)
+                                setSteps(prev => ({ ...prev, [stepKey]: ttsInputText }))
+                                flashSave()
+                              }
+                            }}>
+                            {getSaveBtnLabel(ttsInputText, stepKey)}
+                          </button>
+                        )
+                      })()}
+                      <button className="btn btn-ghost btn-sm"
+                        style={{ color: 'var(--warning)' }}
+                        onClick={() => setTtsInputText('')}>
+                        🗑 清空
+                      </button>
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 6 }}>
-                      {ttsVoices.find(v => v.id === voiceId)?.description || ''}
-                    </div>
+                    <button className="btn btn-primary btn-sm w-full"
+                      disabled={ttsGenerating} onClick={doTTS}>
+                      {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
+                    </button>
+                  </div>
+                  {/* 合成列表 */}
+                  <div style={{ padding: 10, overflow: 'auto' }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>合成列表</div>
+                    {ttsHistory.length === 0 ? (
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>暂无合成记录</div>
+                    ) : (
+                      ttsHistory.map((h, i) => (
+                        <div key={i} style={{ fontSize: 11, marginBottom: 8, padding: 6, background: 'var(--bg)', borderRadius: 4, border: '1px solid var(--border)' }}>
+                          {editingHistoryIdx === i ? (
+                            <input className="form-input"
+                              style={{ width: '100%', fontSize: 10, padding: '2px 4px', marginBottom: 2 }}
+                              value={editHistoryName}
+                              onChange={e => setEditHistoryName(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  api.updateTtsHistory(h.id, editHistoryName).then(() => loadTtsHistory())
+                                  setEditingHistoryIdx(null)
+                                }
+                              }}
+                              autoFocus
+                            />
+                          ) : (
+                            <div style={{ color: 'var(--text-primary)', marginBottom: 2 }}>{h.filename}</div>
+                          )}
+                          <div style={{ color: 'var(--text-secondary)', fontSize: 10, marginBottom: 4 }}>{h.voice} · {h.time}</div>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {h.audioUrl && (
+                              playingHistoryIdx === i ? (
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)' }}
+                                  onClick={stopAudio}>■ 停止</button>
+                              ) : (
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                                  onClick={() => playAudio(h.audioUrl, undefined, i)}>
+                                  ▶ 播放
+                                </button>
+                              )
+                            )}
+                            <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                              onClick={() => downloadFile(h.audioUrl, h.filename)}>
+                              💾 下载
+                            </button>
+                            {editingHistoryIdx === i ? (
+                              <>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--success)' }}
+                                  onClick={() => {
+                                    api.updateTtsHistory(h.id, editHistoryName).then(() => loadTtsHistory())
+                                    setEditingHistoryIdx(null)
+                                  }}>✓</button>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                                  onClick={() => setEditingHistoryIdx(null)}>✕</button>
+                              </>
+                            ) : (
+                              <>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                                  onClick={() => { setEditingHistoryIdx(i); setEditHistoryName(h.filename) }}>✏</button>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)' }}
+                                  onClick={() => { if (confirm('确定删除此合成记录？')) { api.deleteTtsHistory(h.id).then(() => loadTtsHistory()) } }}>✕</button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
+          {/* ── Recording Overlay ── */}
+          {recording && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 110 }}
+              onMouseMove={e => {
+                if (!recDragRef.current.dragging) return
+                setRecPos({
+                  x: recDragRef.current.posX + e.clientX - recDragRef.current.startX,
+                  y: recDragRef.current.posY + e.clientY - recDragRef.current.startY,
+                })
+              }}
+              onMouseUp={() => { recDragRef.current.dragging = false }}
+              onMouseLeave={() => { recDragRef.current.dragging = false }}>
+              <div style={{ position: 'absolute', left: `calc(50% + ${recPos.x}px)`, top: `calc(50% + ${recPos.y}px)`, transform: 'translate(-50%, -50%)', background: '#fff', borderRadius: 20, padding: '36px 32px', width: 300, textAlign: 'center', boxShadow: '0 20px 60px rgba(0,0,0,0.25)', cursor: 'default' }}
+                onMouseDown={e => {
+                  // Only drag from non-interactive areas
+                  const target = e.target as HTMLElement
+                  if (target.tagName === 'BUTTON') return
+                  recDragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, posX: recPos.x, posY: recPos.y }
+                }}>
+                <div style={{ position: 'absolute', top: 8, left: 0, right: 0, height: 20, cursor: 'move', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                  onMouseDown={e => {
+                    recDragRef.current = { dragging: true, startX: e.clientX, startY: e.clientY, posX: recPos.x, posY: recPos.y }
+                  }}>
+                  <span style={{ width: 32, height: 4, background: 'var(--border)', borderRadius: 2 }} />
+                </div>
+                {recordingDone ? (
+                  <>
+                    <div style={{ marginBottom: 20 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--primary)', fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif", marginBottom: 12 }}>录制完成</div>
+                      <audio controls style={{ width: '100%', height: 40, borderRadius: 8 }}>
+                        <source src={recPreviewUrl} />
+                      </audio>
+                      {recTooShort && (
+                        <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}>
+                          录制时长不足 3 秒，请重新录制
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <button
+                        style={{ background: 'var(--bg)', color: 'var(--text-secondary)', border: '1px solid var(--border)', padding: '10px 18px', borderRadius: 24, cursor: 'pointer', fontSize: 13, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                        onClick={async () => {
+                          if (recPreviewUrl) { URL.revokeObjectURL(recPreviewUrl); setRecPreviewUrl('') }
+                          setRecordingDone(false)
+                          setRecTime(0)
+                          recTimeRef.current = 0
+                          setRecTooShort(false)
+                          setCloneFile(null)
+                          recFileRef.current = null
+                          try {
+                            const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+                            recStreamRef.current = stream
+                          } catch {}
+                        }}>
+                        重新录制
+                      </button>
+                      <button
+                        style={{ background: recTooShort ? 'var(--muted)' : 'var(--primary)', color: recTooShort ? 'var(--text-secondary)' : '#fff', border: 'none', padding: '10px 18px', borderRadius: 24, cursor: recTooShort ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                        onClick={recTooShort ? undefined : confirmClone}
+                        disabled={recTooShort}>
+                        确认克隆
+                      </button>
+                      <button
+                        style={{ background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--border)', padding: '10px 18px', borderRadius: 24, cursor: 'pointer', fontSize: 13, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                        onClick={cancelRecording}>
+                        关闭
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: 24 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 12 }}>
+                        {(recordingStarted ? waveData : [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4]).map((h, i) => (
+                          <span key={i} style={{ width: 5, height: recordingStarted ? h * 3 : 12, background: 'var(--primary)', borderRadius: 3, display: 'inline-block', transition: 'height 0.08s ease', opacity: recordingStarted ? 1 : 0.4 }} />
+                        ))}
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--primary)', fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}>
+                        {countdown > 0 ? '即将开始...' : (recordingStarted ? '正在录音...' : '准备录音')}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 52, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif", fontWeight: 700, color: 'var(--primary)', marginBottom: 24 }}>
+                      {countdown > 0 ? countdown : `${String(Math.floor(recTime / 60)).padStart(2, '0')}:${String(recTime % 60).padStart(2, '0')}`}
+                    </div>
+                    {recordingStarted ? (
+                      <>
+                        <button
+                          style={{ background: recTime < 3 ? 'var(--muted)' : 'var(--primary)', color: recTime < 3 ? 'var(--text-secondary)' : '#fff', border: 'none', padding: '12px 40px', borderRadius: 24, cursor: recTime < 3 ? 'not-allowed' : 'pointer', fontSize: 14, fontWeight: 600, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                          onClick={recTime < 3 ? undefined : stopRecording}
+                          disabled={recTime < 3}>
+                          停止录制
+                        </button>
+                        {recTime < 3 && (
+                          <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 6, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}>
+                            至少录制 3 秒 ({recTime}s / 3s)
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                        <button
+                          style={{ background: 'var(--bg)', color: 'var(--text-secondary)', border: '1px solid var(--border)', padding: '10px 32px', borderRadius: 24, cursor: 'pointer', fontSize: 14, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                          onClick={cancelRecording}>
+                          取消
+                        </button>
+                        <button
+                          style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '10px 32px', borderRadius: 24, cursor: 'pointer', fontSize: 14, fontWeight: 600, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                          onClick={startCountdown}>
+                          开始录制
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Naming Dialog ── */}
+          {showNameDialog && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 120, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={e => { if (e.target === e.currentTarget) setShowNameDialog(false) }}>
+              <div style={{ background: '#fff', borderRadius: 16, padding: '28px 24px', width: 320, boxShadow: '0 20px 60px rgba(0,0,0,0.25)' }}
+                onClick={e => e.stopPropagation()}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}>
+                  {cloneMode === 'design' ? '命名音色' : '命名克隆音色'}
+                </div>
+                <input className="form-input"
+                  style={{ width: '100%', fontSize: 13, marginBottom: 20, padding: '8px 12px' }}
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  placeholder="输入声音名称"
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && nameInput.trim()) {
+                      setShowNameDialog(false)
+                      doClone(nameInput.trim())
+                    }
+                  }}
+                />
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                  <button
+                    style={{ background: 'var(--bg)', color: 'var(--text-secondary)', border: '1px solid var(--border)', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', fontSize: 13, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                    onClick={() => setShowNameDialog(false)}>
+                    取消
+                  </button>
+                  <button
+                    style={{ background: 'var(--primary)', color: '#fff', border: 'none', padding: '8px 20px', borderRadius: 20, cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'幼圆', 'Microsoft YaHei', sans-serif" }}
+                    disabled={!nameInput.trim()}
+                    onClick={() => {
+                      setShowNameDialog(false)
+                      doClone(nameInput.trim())
+                    }}>
+                    确认
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* ====== STAGE 5: 输出列表 ====== */}

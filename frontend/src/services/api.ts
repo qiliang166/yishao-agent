@@ -1,4 +1,10 @@
 const BASE = ''
+const TOKEN_KEY = 'auth_token'
+
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem(TOKEN_KEY)
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 async function request(path: string, options?: RequestInit & { timeoutMs?: number }) {
   const ctrl = new AbortController()
@@ -17,7 +23,17 @@ async function request(path: string, options?: RequestInit & { timeoutMs?: numbe
   try {
     // Remove custom field before passing to fetch
     const { timeoutMs: _, ...fetchOpts } = (options || {})
-    const res = await fetch(BASE + path, { ...fetchOpts, signal: ctrl.signal })
+
+    // Attach JWT token for all /api/ requests
+    const headers: Record<string, string> = { ...getAuthHeaders() }
+    if (fetchOpts.headers) {
+      Object.assign(headers, fetchOpts.headers as Record<string, string>)
+    }
+    if (!headers['Content-Type'] && !(fetchOpts.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json'
+    }
+
+    const res = await fetch(BASE + path, { ...fetchOpts, headers, signal: ctrl.signal })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || `服务器错误 (${res.status})`)
     return data
@@ -199,7 +215,7 @@ export const api = {
   uploadCookies: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch('/api/video/upload-cookies', { method: 'POST', body: formData })
+    const res = await fetch('/api/video/upload-cookies', { method: 'POST', body: formData, headers: getAuthHeaders() })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { cookies_path: string; filename: string }
@@ -245,6 +261,23 @@ export const api = {
     request(`/api/voices/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteVoice: (id: string) => request(`/api/voices/${id}`, { method: 'DELETE' }),
   previewVoice: (id: string) => request(`/api/voices/${id}/preview`, { method: 'POST' }),
+  cloneVoice: (name: string, model: string, audioFile: File, providerId?: string) => {
+    const fd = new FormData()
+    fd.append('name', name)
+    fd.append('model', model)
+    fd.append('audio', audioFile)
+    if (providerId) fd.append('provider_id', providerId)
+    return request('/api/voices/clone', { method: 'POST', body: fd })
+  },
+  designVoice: (name: string, model: string, voicePrompt: string, previewText: string, providerId?: string) =>
+    request(`/api/voices/design${providerId ? `?provider_id=${encodeURIComponent(providerId)}` : ''}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ name, model, voice_prompt: voicePrompt, preview_text: previewText }),
+    }),
+  listClonedVoices: (providerId?: string) =>
+    request(`/api/voices/clones${providerId ? `?provider_id=${encodeURIComponent(providerId)}` : ''}`).then(d => d.clones),
+  deleteClonedVoice: (voiceId: string) => request(`/api/voices/clone/${voiceId}`, { method: 'DELETE' }),
 
   // ASR Providers
   listAsrProviders: () => request('/api/asr/providers').then(d => d.providers as ASRProvider[]),
@@ -291,7 +324,7 @@ export const api = {
   }): AsyncGenerator<string, void, unknown> {
     const res = await fetch('/api/llm/generate-stream', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(data),
       signal: data.signal,
     })
@@ -411,7 +444,7 @@ export const api = {
   uploadTemplateThumbnail: async (templateId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload-thumbnail`, { method: 'POST', body: formData })
+    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload-thumbnail`, { method: 'POST', body: formData, headers: getAuthHeaders() })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { ok: boolean; thumbnail_path: string; filename: string }
@@ -419,7 +452,7 @@ export const api = {
   uploadTemplateFile: async (templateId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload`, { method: 'POST', body: formData })
+    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload`, { method: 'POST', body: formData, headers: getAuthHeaders() })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { ok: boolean; file_path: string; filename: string }
@@ -605,14 +638,22 @@ export const api = {
     request('/api/export/sop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, branding, project_id: projectId || null}) }),
 
   // TTS
-  ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number, projectId?: string, providerId?: string) =>
-    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null}) }),
+  ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number, projectId?: string, providerId?: string, voiceName?: string) =>
+    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null, voice_name: voiceName || null}) }),
+
+  // TTS History
+  listTtsHistory: (projectId: string) =>
+    request(`/api/projects/${projectId}/tts-history`),
+  updateTtsHistory: (id: number, name: string) =>
+    request(`/api/tts-history/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name}) }),
+  deleteTtsHistory: (id: number) =>
+    request(`/api/tts-history/${id}`, { method: 'DELETE' }),
 
   // Logo upload
   uploadLogo: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch('/api/upload/logo', { method: 'POST', body: formData })
+    const res = await fetch('/api/upload/logo', { method: 'POST', body: formData, headers: getAuthHeaders() })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { filename: string; url: string }
@@ -626,6 +667,10 @@ export const api = {
   listColumnConfigs: () => request('/api/column-configs').then(d => d.configs),
   updateColumnConfig: (id: string, data: { prompt?: string; skill?: string; rules?: string }) =>
     request(`/api/column-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  // Speech Configs (independent table)
+  listSpeechConfigs: () => request('/api/speech-configs').then(d => d.configs),
+  updateSpeechConfig: (id: string, data: { prompt?: string; skill?: string }) =>
+    request(`/api/speech-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   analyzeTemplate: (templateId: string, stageType: string = 'daoPpt', providerId: string = '', model: string = '') => {
     const params = new URLSearchParams({ stage_type: stageType })
     if (providerId) params.set('provider_id', providerId)
@@ -637,7 +682,7 @@ export const api = {
   uploadColumnTemplate: async (id: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch(`/api/column-configs/${id}/upload-template`, { method: 'POST', body: formData })
+    const res = await fetch(`/api/column-configs/${id}/upload-template`, { method: 'POST', body: formData, headers: getAuthHeaders() })
     const data = await res.json()
     if (!res.ok) throw new Error(data.detail || 'Upload failed')
     return data as { ok: boolean; path: string; content?: string }
@@ -651,7 +696,7 @@ export const api = {
   uploadMaterial: async (projectId: string, file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    const res = await fetch(`/api/projects/${projectId}/materials/upload`, { method: 'POST', body: formData })
+    const res = await fetch(`/api/projects/${projectId}/materials/upload`, { method: 'POST', body: formData, headers: getAuthHeaders() })
     if (!res.ok) throw new Error((await res.json()).detail || 'Upload failed')
     return res.json()
   },

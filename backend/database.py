@@ -336,10 +336,9 @@ def init_db():
         except Exception:
             pass
 
-        # Migrate column_configs for column split (existing DBs)
+        # Migrate column_configs for column split (existing DBs) — col6 entries moved to speech_configs table
         try:
             conn.execute("UPDATE column_configs SET column_id='col5', sort_order=8 WHERE id='c4-yanxi' AND column_id='col4'")
-            conn.execute("UPDATE column_configs SET column_id='col6', sort_order=9 WHERE id='c5-koubo' AND column_id='col5'")
         except Exception:
             pass
 
@@ -517,6 +516,15 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Add name and voice_name columns to tts_history if missing (migration, 2026-07-01)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(tts_history)").fetchall()]
+            if 'name' not in existing_cols:
+                conn.execute("ALTER TABLE tts_history ADD COLUMN name TEXT DEFAULT ''")
+            if 'voice_name' not in existing_cols:
+                conn.execute("ALTER TABLE tts_history ADD COLUMN voice_name TEXT DEFAULT ''")
+        except Exception:
+            pass
         conn.execute("""
             CREATE TABLE IF NOT EXISTS voices (
                 id TEXT PRIMARY KEY,
@@ -621,6 +629,46 @@ def init_db():
                         "INSERT INTO templates (id, name, type, file_path, prompt, skill, rules, "
                         "thumbnail_path, linked_skill_id, branding_config, is_default, typography_profile, slide_plan) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", s
+                    )
+        except Exception:
+            pass
+
+        # Create speech_configs table and seed data
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS speech_configs (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                prompt TEXT,
+                skill TEXT,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Remove any stale col6 entries from column_configs (speech is now in its own table)
+        try:
+            conn.execute("DELETE FROM column_configs WHERE column_id = 'col6'")
+        except Exception:
+            pass
+        # Seed speech_configs if empty
+        try:
+            sc_count = conn.execute("SELECT COUNT(*) FROM speech_configs").fetchone()[0]
+            if sc_count == 0:
+                defaults = [
+                    ('speech-doc', '文档演讲',
+                     '你是一位专业的美食讲解员。请根据以下标准文档内容，生成一篇自然亲切的演讲稿，适合在烹饪教学场景中使用。要求：语言生动有趣，节奏感强，包含开场白、主体内容和结束语。',
+                     '', 1),
+                    ('speech-analysis', '分析演讲',
+                     '你是一位专业的美食评论家。请根据以下分析文档内容，生成一篇深度分析的演讲稿，适合在烹饪教学场景中使用。要求：突出原理与技法分析，逻辑清晰，让听众理解背后的"道"与"术"。',
+                     '', 2),
+                    ('speech-comprehensive', '综合演讲',
+                     '你是一位专业的美食教育家。请根据以下手册文档内容，生成一篇综合性的演讲稿，适合在烹饪教学场景中使用。要求：结合背景知识与实操要点，既有理论深度又有实践指导。',
+                     '', 3),
+                ]
+                for d in defaults:
+                    conn.execute(
+                        "INSERT INTO speech_configs (id, label, prompt, skill, sort_order) VALUES (?, ?, ?, ?, ?)",
+                        d
                     )
         except Exception:
             pass

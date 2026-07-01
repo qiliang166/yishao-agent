@@ -86,10 +86,15 @@ class SynthesizeRequest(BaseModel):
     text: str
     model: str = "cosyvoice-v3-flash"
     voice_id: Optional[str] = None
+    voice_name: Optional[str] = None
     volume: int = 50
     speed: float = 1.0
     project_id: Optional[str] = None
     provider_id: Optional[str] = None
+
+
+class TtsHistoryUpdate(BaseModel):
+    name: Optional[str] = None
 
 
 class PPTEditSlideRequest(BaseModel):
