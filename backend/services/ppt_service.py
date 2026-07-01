@@ -1520,24 +1520,75 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
     return html
 
 
+def _hex_luminance(hex_color: str) -> float | None:
+    """Compute relative luminance (0-255) from a hex color string."""
+    if not hex_color or not hex_color.startswith("#") or len(hex_color) != 7:
+        return None
+    try:
+        r, g, b = int(hex_color[1:3], 16), int(hex_color[3:5], 16), int(hex_color[5:7], 16)
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    except ValueError:
+        return None
+
+
+def _resolve_placeholder_value(value: str, scheme: dict) -> str:
+    """Resolve a single {{placeholder}} against scheme. Returns hex if resolved, else original."""
+    m = re.match(r'\{\{(\w+)\}\}', str(value).strip())
+    if m:
+        key = m.group(1)
+        resolved = scheme.get(key, "")
+        if resolved and resolved.startswith("#"):
+            return resolved
+    return str(value)
+
+
+def _get_effective_page_bg_luminance(style_id: str, page_type: str, scheme: dict) -> float | None:
+    """Compute the effective background luminance for a specific page type.
+
+    Checks tokens.yaml slide_type_overrides[page_type] for card_bg or background,
+    resolves {{placeholder}} references against scheme, and computes relative luminance.
+    Falls back to scheme.background if no override is found.
+
+    This is the single source of truth for "is this page dark or light?" —
+    no hardcoded lists, no assumptions about which styles have dark pages.
+    """
+    import yaml
+
+    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    if os.path.exists(tokens_path):
+        try:
+            with open(tokens_path, "r", encoding="utf-8") as f:
+                tokens = yaml.safe_load(f.read())
+            overrides = tokens.get("slide_type_overrides", {})
+            page_override = overrides.get(page_type, {})
+            bg_ref = page_override.get("card_bg") or page_override.get("background")
+            if bg_ref:
+                bg_hex = _resolve_placeholder_value(str(bg_ref), scheme)
+                lum = _hex_luminance(bg_hex)
+                if lum is not None:
+                    return lum
+        except Exception:
+            pass
+
+    # Fallback: global scheme background
+    return _hex_luminance(scheme.get("background", ""))
+
+
 def _is_light_background(scheme: dict) -> bool:
-    """Return True if the scheme's background color is light (relative luminance > 128).
-    Used to decide whether white/light text needs to be auto-fixed to dark."""
-    bg_hex = scheme.get("background", "")
-    if not bg_hex or not bg_hex.startswith("#") or len(bg_hex) != 7:
-        return False
-    r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
-    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
-    return luminance > 128
+    """Return True if the scheme's global background color is light (luminance > 128)."""
+    lum = _hex_luminance(scheme.get("background", ""))
+    return lum is not None and lum > 128
 
 
-def _auto_fix_white_on_light(html: str, scheme: dict, slide_seq: int) -> str:
+def _auto_fix_white_on_light(html: str, scheme: dict, slide_seq: int,
+                             style_id: str = None, page_type: str = None) -> str:
     """Fix LLM hardcoded white text on light backgrounds.
 
-    When a style has a light background (e.g. notion, vintage), the LLM
-    sometimes hardcodes #ffffff / rgba(255,255,255,...) text — a habit from
-    dark-background styles like business. This function detects light backgrounds
-    and replaces white text with the correct text color from the scheme.
+    Uses page-type-specific background from tokens.yaml slide_type_overrides
+    when available (via _get_effective_page_bg_luminance), falling back to the
+    global scheme background. This ensures pages with dark overrides in tokens.yaml
+    (e.g. business cover/section/summary/quote, vintage section/summary) correctly
+    keep their white text — no hardcoded exclusion list needed.
 
     Must run AFTER _auto_fix_hardcoded_hex (which intentionally skips #ffffff)
     and BEFORE _resolve_color_vars (which converts {{placeholder}} → hex).
@@ -1545,7 +1596,14 @@ def _auto_fix_white_on_light(html: str, scheme: dict, slide_seq: int) -> str:
     if not scheme or not html:
         return html
 
-    if not _is_light_background(scheme):
+    # Determine effective background luminance for THIS page type
+    if style_id and page_type:
+        bg_luminance = _get_effective_page_bg_luminance(style_id, page_type, scheme)
+    else:
+        bg_luminance = _hex_luminance(scheme.get("background", ""))
+
+    # If the effective background is dark, white text is correct — skip
+    if bg_luminance is None or bg_luminance <= 128:
         return html
 
     text_hex = scheme.get("text", "")
@@ -3037,8 +3095,9 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     # IMPORTANT: Skip slides whose tokens.yaml overrides specify
                     # dark backgrounds with white text (cover, section, summary, quote).
                     # These correctly use white-on-dark — overriding would break them.
-                    if active_scheme and stype not in ("cover", "section", "summary", "quote"):
-                        html = _auto_fix_white_on_light(html, active_scheme, seq)
+                    if active_scheme:
+                        html = _auto_fix_white_on_light(html, active_scheme, seq,
+                                                        style_id=style_id, page_type=stype)
                     # Post-process: strip LLM-invented CSS variable reassignments
                     # (e.g. --primary: var(--card_bg) inverts the theme → invisible text)
                     html = _strip_local_var_overrides(html, seq)
