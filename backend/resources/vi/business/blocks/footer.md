@@ -11,7 +11,7 @@
 ```
 
 ```html
-<div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(0,0,0,0.08);display:flex;justify-content:space-between;font-size:14px;color:rgba(0,0,0,0.4);">
+<div style="margin-top:auto;padding-top:14px;border-top:1px solid rgba(var(--text-rgb),0.08);display:flex;justify-content:space-between;font-size:14px;color:rgba(var(--text-rgb),0.4);">
   <span>© 2024 {公司名} · 保密文档</span>
   <span>{部门}监制</span>
   <span>第 {页码} 页</span>
@@ -26,8 +26,8 @@
 | 布局 | `display:flex; justify-content:space-between` |
 | 字号 | 14px |
 | 字体 | Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif |
-| 颜色 | `rgba(0,0,0,0.4)` |
-| 顶部线 | `1px solid rgba(0,0,0,0.08)` |
+| 颜色 | `rgba(var(--text-rgb),0.4)` |
+| 顶部线 | `1px solid rgba(var(--text-rgb),0.08)` |
 | 上内边距 | 14px |
 | 上外边距 | `margin-top:auto`（排至页面底部） |
 

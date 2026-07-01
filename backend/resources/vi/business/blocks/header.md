@@ -11,7 +11,7 @@
 ```
 
 ```html
-<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid rgba(0,0,0,0.08);font-size:14px;color:rgba(0,0,0,0.45);">
+<div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:8px;border-bottom:1px solid rgba(var(--text-rgb),0.08);font-size:14px;color:rgba(var(--text-rgb),0.45);">
   <span>出品标准文档 · {菜品名}</span>
   <span>版本 {版本号} / {日期}</span>
   <span>{页码} / {总页数}</span>
@@ -26,8 +26,8 @@
 | 布局 | `display:flex; justify-content:space-between` |
 | 字号 | 14px |
 | 字体 | Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif |
-| 颜色 | `rgba(0,0,0,0.45)` |
-| 底部线 | `1px solid rgba(0,0,0,0.08)` |
+| 颜色 | `rgba(var(--text-rgb),0.45)` |
+| 底部线 | `1px solid rgba(var(--text-rgb),0.08)` |
 | 下内边距 | 8px |
 
 ## 三列语义

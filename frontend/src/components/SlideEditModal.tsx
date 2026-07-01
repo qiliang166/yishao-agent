@@ -12,6 +12,7 @@ interface Props {
   projectId?: string
   projectName?: string
   columnId?: string
+  styleId?: string
   onClose: () => void
   pptxDownloadUrl?: string
   pptxFilename?: string
@@ -19,7 +20,7 @@ interface Props {
   onDownloadHtml?: () => void
 }
 
-export default function SlideEditModal({ open, runId, previewUrl, slideCount, providerId: _pid, model: _model, projectId, projectName, columnId, onClose, pptxDownloadUrl, pptxFilename, downloadFormat, onDownloadHtml: _onDownloadHtml }: Props) {
+export default function SlideEditModal({ open, runId, previewUrl, slideCount, providerId: _pid, model: _model, projectId, projectName, columnId, styleId, onClose, pptxDownloadUrl, pptxFilename, downloadFormat, onDownloadHtml: _onDownloadHtml }: Props) {
   const [contentEditable, setContentEditable] = useState(false)
   const [savingImages, setSavingImages] = useState(false)
   const [colorScheme, setColorScheme] = useState('deep-blue')
@@ -55,7 +56,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       setRegenerating(false)
       setRegenerateLog('')
       setRecoloring(false)
-      api.listColorSchemes('business').then(cs => { if (cs?.length) { setColorSchemes(cs); setColorScheme(cs[0].id) } }).catch(() => {})
+      api.listColorSchemes(styleId || 'business').then(cs => { if (cs?.length) { setColorSchemes(cs); setColorScheme(cs[0].id) } }).catch(() => {})
       setContentEditable(false)
       // Restore persisted regenerate-tab state so it survives modal close/reopen
       if (runId) {
@@ -90,7 +91,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       const result = await api.recolorSlide({
         run_id: runId,
         slide_seq: 1,
-        style: 'business',
+        style: styleId || 'business',
         color_scheme: schemeId,
       })
       if (result != null && result.ok && result.changed) {

@@ -2797,6 +2797,13 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 - 禁止输出 <!DOCTYPE html>/<html>/<head>/<body>/<title>/<meta>/<link>
 - 输出只包含一个 div 容器（width:{canvas_w}px;height:{canvas_h}px）及其子元素"""
 
+        # ── Cover slide: inject quantified color rules from tokens ──
+        cover_color_rules = ""
+        if is_a4 and stype == "cover" and active_scheme:
+            cover_color_rules = _build_cover_color_rules(style_id, color_scheme, active_scheme)
+            if cover_color_rules:
+                cover_color_rules = f"\n{cover_color_rules}\n"
+
         tailored_system = f"""{persona_block}
 
 {core_system}
@@ -2807,7 +2814,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 ```
 {font_info}
 {vi_append}
-
+{cover_color_rules}
 {html_output_inst}"""
 
         content_parts = [
@@ -2884,6 +2891,13 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
                     # Post-process: fix common LLM HTML errors
                     html = _fix_llm_html_errors(html, is_a4=is_a4)
+                    # Post-process: enforce cover rules on UNRESOLVED HTML
+                    # Must run BEFORE _auto_fix_hardcoded_hex (which skips #ffffff)
+                    # and BEFORE _resolve_color_vars (which destroys CSS variable info).
+                    # After resolution, is_variable_bg check fails because var(--card_bg)
+                    # has been replaced with its hex value.
+                    if is_a4 and stype == "cover" and active_scheme:
+                        html = _enforce_cover_rules(html, active_scheme, style_id)
                     # Post-process: scan & replace hardcoded hex with {{placeholder}} vars
                     html = _auto_fix_hardcoded_hex(html, active_scheme, seq)
                     # Post-process: enforce VI typography minimums (15px → 16px)
@@ -4361,58 +4375,177 @@ def _extract_outermost_div(html: str) -> str:
     return html[first_open:] + '</div>'
 
 
-def _enforce_cover_rules(html: str, scheme_data: dict) -> str:
-    """Enforce VI cover rules by code — LLM output is untrusted for structural rules.
+def _wcag_relative_luminance(hex_color: str) -> float:
+    """WCAG 2.1 relative luminance of a hex color."""
+    h = hex_color.lstrip("#")
+    if len(h) != 6:
+        return 0.0
+    r, g, b = int(h[0:2], 16) / 255.0, int(h[2:4], 16) / 255.0, int(h[4:6], 16) / 255.0
+    rs = r / 12.92 if r <= 0.04045 else ((r + 0.055) / 1.055) ** 2.4
+    gs = g / 12.92 if g <= 0.04045 else ((g + 0.055) / 1.055) ** 2.4
+    bs = b / 12.92 if b <= 0.04045 else ((b + 0.055) / 1.055) ** 2.4
+    return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs
 
-    VI §cover requires:
-      - Background: hero_bg gradient (linear-gradient(135deg, primary, secondary))
-      - All text: #ffffff (gradient is always dark)
-      - No card container wrapping content
+
+def _wcag_contrast_ratio(hex1: str, hex2: str) -> float:
+    """WCAG 2.1 contrast ratio between two hex colors."""
+    l1 = _wcag_relative_luminance(hex1)
+    l2 = _wcag_relative_luminance(hex2)
+    lighter = max(l1, l2)
+    darker = min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _load_cover_overrides(style_id: str) -> dict:
+    """Load cover slide_type_overrides from tokens.yaml.
+
+    Returns dict with 'card_bg' and 'text' keys (raw values from YAML,
+    may be {{placeholder}} or hex). Returns empty dict on failure.
+    """
+    import yaml
+    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    if not os.path.exists(tokens_path):
+        return {}
+    try:
+        with open(tokens_path, "r", encoding="utf-8") as f:
+            tokens = yaml.safe_load(f.read())
+        return tokens.get("slide_type_overrides", {}).get("cover", {})
+    except Exception:
+        return {}
+
+
+def _placeholder_to_css_var(placeholder: str) -> str:
+    """Resolve {{name}} → var(--name). Hex values pass through unchanged."""
+    if not placeholder:
+        return ""
+    m = re.match(r'\{\{(\w+)\}\}', placeholder)
+    if m:
+        return f"var(--{m.group(1).replace('_', '-')})"
+    return placeholder
+
+
+def _build_cover_color_rules(style_id: str, color_scheme: str, scheme: dict) -> str:
+    """Generate quantified cover color rules with WCAG contrast data for LLM prompt.
+
+    Reads slide_type_overrides.cover from tokens.yaml, resolves colors,
+    calculates WCAG AA contrast ratios, and returns a markdown rule block
+    that tells the LLM exactly which CSS variables to use and WHY.
+    """
+    cover = _load_cover_overrides(style_id)
+    if not cover:
+        return ""
+
+    bg_placeholder = cover.get("card_bg", "")
+    text_placeholder = cover.get("text", "")
+    if not bg_placeholder or not text_placeholder:
+        return ""
+
+    bg_var = _placeholder_to_css_var(bg_placeholder)
+    text_var = _placeholder_to_css_var(text_placeholder)
+
+    # Resolve placeholders to actual hex values from the active scheme
+    def _resolve(p):
+        m = re.match(r'\{\{(\w+)\}\}', p)
+        if m:
+            return scheme.get(m.group(1), p)
+        return p
+
+    bg_hex = _resolve(bg_placeholder)
+    text_hex = _resolve(text_placeholder)
+
+    # Calculate WCAG contrast
+    cr = 0.0
+    white_cr = 0.0
+    if bg_hex.startswith("#") and text_hex.startswith("#"):
+        cr = _wcag_contrast_ratio(bg_hex, text_hex)
+        white_cr = _wcag_contrast_ratio(bg_hex, "#ffffff")
+
+    cr_status = "PASS (>= 4.5:1)" if cr >= 4.5 else "FAIL (< 4.5:1)"
+    is_light_bg = _wcag_relative_luminance(bg_hex) > 0.5 if bg_hex.startswith("#") else False
+
+    # Build quantified rule block
+    rules = f"""## 封面颜色规则（从活跃色系自动派生 — 量化标准，必须严格执行）
+
+| 属性 | CSS 变量 | 实际色值 | WCAG 说明 |
+|------|---------|---------|----------|
+| 封面背景 | `background: {bg_var}` | {bg_hex} | — |
+| 封面标题文字 | `color: {text_var}` | {text_hex} | 对比度 {cr:.1f}:1 → {cr_status} |
+| #ffffff 在封面背景上 | — | — | 对比度仅 {white_cr:.1f}:1 {"→ 不可读，严禁使用" if white_cr < 3.0 else "→ 不满足 AA，禁止用于正文"} |
+
+**硬约束（违反 = 废稿）：**
+- 封面标题 `color` 必须是 `{text_var}` —— 严禁使用 hex 值（包括 #ffffff、{bg_hex} 等）
+- 封面背景 `background` 必须是 `{bg_var}` —— 严禁改为其他 CSS 变量或 hex 值
+{"- 封面背景为浅色（L > 0.5），文字必须使用深色 CSS 变量 —— 严禁 #ffffff" if is_light_bg else "- 封面背景为深色（L < 0.5），文字色由 tokens 定义"}
+- 装饰文字/辅助信息使用 `rgba(var(--text-rgb), N)` 控制透明度，N 取值 0.08-0.65"""
+
+    return rules
+
+
+def _enforce_cover_rules(html: str, scheme_data: dict, style_id: str = "business") -> str:
+    """Enforce VI cover rules — fully tokens-driven, single unified path for all styles.
+
+    Zero hardcoded assumptions:
+    - No branching on background type (variable vs. non-variable)
+    - No forced gradient (templates control their own backgrounds)
+    - No hardcoded CSS variable name lists
+
+    Tokens say X → code enforces X. That's it.
     """
     import re as _re
 
-    primary = scheme_data.get("primary", "")
-    secondary = scheme_data.get("secondary", "")
-    text_color = scheme_data.get("text", "")
-    if not primary or not secondary:
+    cover = _load_cover_overrides(style_id)
+    if not cover:
         return html
 
-    hero_gradient = f"linear-gradient(135deg, {primary} 0%, {secondary} 100%)"
-    hero_gradient_var = "linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%)"
+    bg_var = _placeholder_to_css_var(cover.get("card_bg", ""))
+    text_val = _placeholder_to_css_var(cover.get("text", ""))
+    if not bg_var or not text_val:
+        return html
 
-    # 1. Force hero gradient background on the outermost div
-    #    Pattern covers: background:var(--background), background:var(--primary),
-    #    background:#xxx, background-color:xxx
-    outer_bg_patterns = [
-        (r'(<div[^>]*\bbackground)\s*:\s*var\(--background\)', rf'\1: {hero_gradient_var}'),
-        (r'(<div[^>]*\bbackground)\s*:\s*var\(--primary\)', rf'\1: {hero_gradient_var}'),
-        (r'(<div[^>]*\bbackground)\s*:\s*var\(--secondary\)', rf'\1: {hero_gradient_var}'),
-        (r'(<div[^>]*\bbackground)\s*:\s*#[0-9a-fA-F]{3,6}', rf'\1: {hero_gradient_var}'),
-        (r'(<div[^>]*\bbackground-color)\s*:\s*[^;"]+', rf'\1: {hero_gradient_var}'),
-    ]
+    # ── Layer 1: Fix hardcoded white text → correct value from tokens ──
+    # Covers all forms: 6-digit, 3-digit, lowercase, uppercase, with/without space.
+    # If tokens say text should be white, these are no-ops (correct by definition).
+    for hardcoded in ('#ffffff', '#FFFFFF', '#fff', '#FFF'):
+        html = html.replace(f'color:{hardcoded}', f'color:{text_val}')
+        html = html.replace(f'color: {hardcoded}', f'color: {text_val}')
+        html = html.replace(f'color:{hardcoded};', f'color:{text_val};')
+        html = html.replace(f'color: {hardcoded};', f'color: {text_val};')
 
-    # Only fix the FIRST match (outermost div of the slide)
-    for pattern, replacement in outer_bg_patterns:
-        if _re.search(pattern, html, _re.IGNORECASE):
-            html = _re.sub(pattern, replacement, html, count=1, flags=_re.IGNORECASE)
-            break
+    # ── Layer 2: Fix hardcoded rgba(R,G,B, → rgba(var(--text-rgb), ──
+    # LLM sometimes copies the resolved hex RGB into rgba() instead of using
+    # the CSS variable form. Detect from scheme_data and fix.
+    text_hex = scheme_data.get("text", "")
+    if text_hex.startswith("#") and len(text_hex) == 7:
+        r, g, b = int(text_hex[1:3], 16), int(text_hex[3:5], 16), int(text_hex[5:7], 16)
+        html = html.replace(f'rgba({r},{g},{b},', 'rgba(var(--text-rgb),')
+        html = html.replace(f'rgba({r}, {g}, {b},', 'rgba(var(--text-rgb),')
 
-    # 2. Force white text for ALL text elements on cover
-    #    (hero gradient is always dark — text must be white to be readable)
-    if text_color:
-        text_replacements = [
-            (f"color:{text_color}", "color:#ffffff"),
-            (f"color:{text_color};", "color:#ffffff;"),
-            (f"color: {text_color}", "color: #ffffff"),
-            (f"color: {text_color};", "color: #ffffff;"),
-            # Also fix var(--text) → #ffffff
-            ("color:var(--text)", "color:#ffffff"),
-            ("color:var(--text);", "color:#ffffff;"),
-            ("color: var(--text)", "color: #ffffff"),
-            ("color: var(--text);", "color: #ffffff;"),
-        ]
-        for old, new in text_replacements:
-            html = html.replace(old, new)
+    # ── Layer 3: Fix hardcoded primary RGB in rgba form ──
+    # Same issue: LLM may use resolved primary RGB instead of var(--primary-rgb).
+    primary_hex = scheme_data.get("primary", "")
+    if primary_hex.startswith("#") and len(primary_hex) == 7:
+        r, g, b = int(primary_hex[1:3], 16), int(primary_hex[3:5], 16), int(primary_hex[5:7], 16)
+        html = html.replace(f'rgba({r},{g},{b},', 'rgba(var(--primary-rgb),')
+        html = html.replace(f'rgba({r}, {g}, {b},', 'rgba(var(--primary-rgb),')
+
+    # ── Layer 4: Fix var(--text) → correct text variable from tokens ──
+    # Template may use var(--text) but tokens override to e.g. var(--primary) or #ffffff.
+    if text_val != 'var(--text)':
+        new = text_val
+        html = html.replace('color:var(--text)', f'color:{new}')
+        html = html.replace('color: var(--text)', f'color: {new}')
+        html = html.replace('color:var(--text);', f'color:{new};')
+        html = html.replace('color: var(--text);', f'color: {new};')
+
+    # ── Layer 5: Fix background hardcoded hex → correct CSS variable ──
+    # If the cover background token resolves to a scheme color, replace any
+    # hardcoded-hex version of it with the CSS variable form.
+    m = _re.match(r'\{\{(\w+)\}\}', cover.get("card_bg", ""))
+    if m:
+        bg_hex = scheme_data.get(m.group(1), "")
+        if bg_hex.startswith("#"):
+            html = html.replace(f'background:{bg_hex}', f'background:{bg_var}')
+            html = html.replace(f'background: {bg_hex}', f'background: {bg_var}')
 
     return html
 
@@ -4556,7 +4689,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
         # Cover slide: code-enforced design rules (VI §cover)
         # LLM cannot be trusted to follow cover rules — code enforces them.
         if slide_num == 1 and scheme_data:
-            html = _enforce_cover_rules(html, scheme_data)
+            html = _enforce_cover_rules(html, scheme_data, style_id)
             # Cover font-size: upscale subtitle/metadata 12px→14px in content area
             # (above bottom branding div)
             _btm = html.rfind("position:absolute;bottom:")

@@ -64,7 +64,7 @@
         <td colspan="2" style="height:180px;text-align:center;color:var(--text);opacity:0.5;font-size:12px;font-style:italic;border:1px solid rgba(var(--text-rgb),0.1);border-top:none;background:rgba(var(--text-rgb),0.01);vertical-align:middle;">{{DESCRIPTION}}</td>
       </tr>
       <tr>
-        <td colspan="2" style="border:1.5px dashed rgba(var(--accent-rgb),0.35);border-radius:8px;text-align:center;color:#999;font-size:12px;padding:16px 0;">{{IMAGE_PLACEHOLDER}}</td>
+        <td colspan="2" style="border:1.5px dashed rgba(var(--accent-rgb),0.35);border-radius:8px;text-align:center;color:rgba(var(--text-rgb),0.4);font-size:12px;padding:16px 0;">{{IMAGE_PLACEHOLDER}}</td>
       </tr>
     </table>
 

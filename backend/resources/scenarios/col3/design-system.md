@@ -35,7 +35,7 @@
 
 | 序号 | type | 页头 | 页尾 | 背景 | 核心结构 |
 |------|------|------|------|------|---------|
-| 1 | cover | 无 | 无 | var(--primary)纯色 | absolute定位文字 + SVG圆圈装饰 + 底部品牌信息 |
+| 1 | cover | 无 | 无 | 由封面模板定义（严格遵循 blocks/cover.md 的背景色） | absolute定位文字 + SVG圆圈装饰 + 底部品牌信息 |
 | 2 | product_definition | 有 | 有 | var(--background) | 标签-值表格(88+586) + 斜体副标题行 + 虚线图片占位行 |
 | 3 | materials_table | 有 | 有 | var(--background) | 8列表格(674px宽, chart_0表头) + {{TABLE_ROWS}} |
 | 4 | steps_table | 有 | 有 | var(--background) | 8列表格含colspan(674px宽, chart_1表头) + {{TABLE_ROWS}} |
@@ -68,7 +68,7 @@
 
 | 变量 | 用途 |
 |------|------|
-| `var(--primary)` | 封面背景、标签列文字色 |
+| `var(--primary)` | 标签列文字色、品牌标识色 |
 | `var(--accent)` | 顶部色条、标题底线、图片占位虚线 |
 | `var(--background)` | 页面底色（内部页面） |
 | `var(--text)` | 正文文字 |
@@ -78,7 +78,7 @@
 | `rgba(var(--text-rgb), N)` | 半透明文字/边框（N 为 opacity 值） |
 | `rgba(var(--accent-rgb), N)` | 半透明 accent（虚线边框等） |
 
-**严禁硬编码 hex 色值。** 唯一例外：`#ffffff` 用于暗色背景上的文字和封面 SVG 圆圈。
+**严禁硬编码 hex 色值。** 所有颜色必须使用 `var(--name)` 或 `rgba(var(--name-rgb), N)` 形式。封面文字颜色从封面模板（blocks/cover.md）中读取——模板中的 CSS 变量已经保证 WCAG AA 对比度 >= 4.5:1。禁止用 `#ffffff` 或任何 hex 值覆盖模板中的颜色变量。
 
 ## 禁止项
 
@@ -86,9 +86,8 @@
 - 修改模板中的任何 width/height/font-size/padding/margin/position 数值
 - 添加模板中没有的额外 div/table/svg/装饰元素
 - 删除模板中已有的元素
-- 使用 `linear-gradient` 作为封面背景（封面用纯色 `var(--primary)`）
 - 合并 quality_control 的维度行（必须 7 行独立：色泽/香气/口感/质地/口味/温度/形态）
-- 硬编码 hex 色值（唯一例外：`#ffffff`）
+- 硬编码 hex 色值
 - 在非 cover 模块使用 position:absolute（仅 SVG 装饰圈可用）
 - ⛔ **禁止** 使用 `<section>` 标签
 - ⛔ **禁止** 替换 `{{BRAND_COPYRIGHT}}` 和 `{{BRAND_SIGNATURE}}` 为实际文字

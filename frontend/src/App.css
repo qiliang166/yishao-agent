@@ -472,7 +472,7 @@
   align-items: flex-start;
 }
 .tmpl-card:hover {
-  border-color: var(--purple);
+  border-color: var(--primary);
 }
 .tmpl-card.selected {
   border-left-color: var(--primary);

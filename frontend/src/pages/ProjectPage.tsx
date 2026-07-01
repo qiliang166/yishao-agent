@@ -659,11 +659,18 @@ export default function ProjectPage() {
   const pptLogPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pptLogContainerRef = useRef<HTMLDivElement | null>(null)
   const abortRef = useRef<Record<string, AbortController>>({})
-  const [pptSlidePlans, setPptSlidePlans] = useState<Record<string, { slides: any[]; filename: string; downloadUrl: string; templateId: string; previewUrl?: string; zipUrl?: string; format?: string }>>({})
+  const [pptSlidePlans, setPptSlidePlans] = useState<Record<string, { slides: any[]; filename: string; downloadUrl: string; templateId: string; previewUrl?: string; zipUrl?: string; format?: string; styleId?: string; colorScheme?: string }>>({})
   const [pptOutline, setPptOutline] = useState<Record<string, { outline_json: any[]; outline_text: string }>>({})
   const [pptOutlineLoading, setPptOutlineLoading] = useState<Record<string, boolean>>({})
   const [pptColorScheme, setPptColorScheme] = useState<Record<string, string>>({})
-  const [pptColorSchemes, setPptColorSchemes] = useState<{id:string;label:string;primary:string;accent:string;background:string;text:string;card_bg:string}[]>([])
+  const [pptColorSchemesByStage, setPptColorSchemesByStage] = useState<Record<string, {id:string;label:string;primary:string;accent:string;background:string;text:string;card_bg:string}[]>>({})
+  const getStyleIdFromTemplate = (tmplId: string) => tmplId.startsWith('style-') ? tmplId.replace('style-', '') : 'business'
+  const loadColorSchemesForStage = (stepKey: string, tmplId: string) => {
+    const styleId = getStyleIdFromTemplate(tmplId)
+    api.listColorSchemes(styleId).then(cs => {
+      if (cs?.length) setPptColorSchemesByStage(prev => ({ ...prev, [stepKey]: cs }))
+    }).catch(() => {})
+  }
   const [pptSavingOutline, setPptSavingOutline] = useState<Record<string, boolean>>({})
   const [previewHtml, setPreviewHtml] = useState<Record<string, string>>({})
   const [previewLoading, setPreviewLoading] = useState<Record<string, boolean>>({})
@@ -904,8 +911,6 @@ export default function ProjectPage() {
         items.forEach((t: any) => { map[t.id] = { prompt: t.prompt || '', skill: t.skill || '', hasFile: t.hasFile } })
         return { tmplItems, map, items }
       }).catch(() => ({ tmplItems: [], map: {}, items: [] }))
-    // Pre-fetch color schemes
-    api.listColorSchemes('business').then(cs => { if (cs?.length) setPptColorSchemes(cs) }).catch(() => {})
     // Pre-fetch style colors before loading templates
     api.listStyles().then((styles: any[]) => {
       (styles || []).forEach((s: any) => {
@@ -997,6 +1002,17 @@ export default function ProjectPage() {
     }).catch(() => {})
   }, [id, navigate])
 
+  // Load color schemes when template selection changes (handles initial load, restoration, and user clicks)
+  useEffect(() => {
+    if (sopSelected) loadColorSchemesForStage('step3_sop_doc', sopSelected)
+  }, [sopSelected])
+  useEffect(() => {
+    if (daoPptSelected) loadColorSchemesForStage('step3_dao_ppt', daoPptSelected)
+  }, [daoPptSelected])
+  useEffect(() => {
+    if (yanxiPptSelected) loadColorSchemesForStage('step3_yan_ppt', yanxiPptSelected)
+  }, [yanxiPptSelected])
+
   // Auto-load saved PPT results on mount (fallback for results not in step state)
   useEffect(() => {
     if (!id) return
@@ -1027,6 +1043,8 @@ export default function ProjectPage() {
           zipUrl: r.zip_url || r.zipUrl || '',
           templateId: r.template_id || r.templateId || '',
           format: r.format || 'svg',
+          styleId: r.styleId || r.style_id || '',
+          colorScheme: r.colorScheme || r.color_scheme || '',
         }
         setPptSlidePlans(prev => ({ ...prev, [stepKey]: planData }))
         if (r.preview_url || r.previewUrl) {
@@ -1060,7 +1078,8 @@ export default function ProjectPage() {
     const slideCount = plan?.slides?.length || 0
     const model = key === 'step3_dao_ppt' ? s3DaoPptModel : key === 'step3_yan_ppt' ? s3YanxiPptModel : s3SopModel
     const [pid, mdl] = model ? model.split(':') : ['', '']
-    return { runId, slideCount, providerId: pid, model: mdl, previewUrl }
+    const styleId = plan?.styleId || 'business'
+    return { runId, slideCount, providerId: pid, model: mdl, previewUrl, styleId }
   }
 
   // ── Stage nav ──
@@ -1468,6 +1487,8 @@ export default function ProjectPage() {
           zipUrl: result.zip_url,
           templateId: tmplId,
           format: 'svg',
+          styleId: (result as any).style_id || '',
+          colorScheme: (result as any).color_scheme || '',
         }
         setPptSlidePlans(prev => ({ ...prev, [stepKey]: planData }))
         saveStep(`_ppt_plan_${stepKey}`, JSON.stringify(planData))
@@ -2484,11 +2505,11 @@ export default function ProjectPage() {
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={sopTemplates} selectedId={sopSelected}
                   onSelect={t => { setSopSelected(t.id); saveStep('_tmpl_step3_sop', t.id) }} previewTarget="prev3" />
-                {pptColorSchemes.length > 1 && (
+                {(pptColorSchemesByStage[step3Key()] || []).length > 1 && (
                   <div style={{ marginTop: 8, marginBottom: 8 }}>
                     <div className="form-label">配色方案</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {pptColorSchemes.map(cs => {
+                      {(pptColorSchemesByStage[step3Key()] || []).map(cs => {
                         const key = step3Key()
                         const current = pptColorScheme[key] || 'deep-blue'
                         return (
@@ -2774,6 +2795,7 @@ export default function ProjectPage() {
                   slideCount={editPanelProps().slideCount}
                   providerId={editPanelProps().providerId}
                   model={editPanelProps().model}
+                  styleId={editPanelProps().styleId}
                   columnId="col3"
                   pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
                   pptxFilename={pptSlidePlans[step3Key()]?.filename}
@@ -2800,11 +2822,11 @@ export default function ProjectPage() {
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={daoPptTemplates} selectedId={daoPptSelected}
                   onSelect={t => { setDaoPptSelected(t.id); saveStep('_tmpl_step3_dao_ppt', t.id) }} previewTarget="prev3b" />
-                {pptColorSchemes.length > 1 && (
+                {(pptColorSchemesByStage[step3Key()] || []).length > 1 && (
                   <div style={{ marginTop: 8, marginBottom: 8 }}>
                     <div className="form-label">配色方案</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {pptColorSchemes.map(cs => {
+                      {(pptColorSchemesByStage[step3Key()] || []).map(cs => {
                         const key = step3Key()
                         const current = pptColorScheme[key] || 'deep-blue'
                         return (
@@ -3085,6 +3107,7 @@ export default function ProjectPage() {
                   slideCount={editPanelProps().slideCount}
                   providerId={editPanelProps().providerId}
                   model={editPanelProps().model}
+                  styleId={editPanelProps().styleId}
                   columnId="col4"
                   pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
                   pptxFilename={pptSlidePlans[step3Key()]?.filename}
@@ -3111,11 +3134,11 @@ export default function ProjectPage() {
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={yanxiPptTemplates} selectedId={yanxiPptSelected}
                   onSelect={t => { setYanxiPptSelected(t.id); saveStep('_tmpl_step3_yan_ppt', t.id) }} previewTarget="prev3c" />
-                {pptColorSchemes.length > 1 && (
+                {(pptColorSchemesByStage[step3Key()] || []).length > 1 && (
                   <div style={{ marginTop: 8, marginBottom: 8 }}>
                     <div className="form-label">配色方案</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {pptColorSchemes.map(cs => {
+                      {(pptColorSchemesByStage[step3Key()] || []).map(cs => {
                         const key = step3Key()
                         const current = pptColorScheme[key] || 'deep-blue'
                         return (
@@ -3395,6 +3418,7 @@ export default function ProjectPage() {
                   slideCount={editPanelProps().slideCount}
                   providerId={editPanelProps().providerId}
                   model={editPanelProps().model}
+                  styleId={editPanelProps().styleId}
                   columnId="col5"
                   pptxDownloadUrl={pptSlidePlans[step3Key()]?.downloadUrl}
                   pptxFilename={pptSlidePlans[step3Key()]?.filename}

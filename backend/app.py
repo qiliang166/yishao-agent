@@ -133,12 +133,12 @@ def api_serve_export_file(run_id: str, filename: str):
     headers = {}
     if filepath.endswith('.html'):
         headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    # Use meaningful display name for download
-    dl_name = _ppt_display_name(os.path.basename(filepath))
-    if dl_name != os.path.basename(filepath):
-        from urllib.parse import quote
-        encoded = quote(dl_name, safe='')
-        headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
+    else:
+        dl_name = _ppt_display_name(os.path.basename(filepath))
+        if dl_name != os.path.basename(filepath):
+            from urllib.parse import quote
+            encoded = quote(dl_name, safe='')
+            headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
     return _sr.FileResponse(filepath, headers=headers)
 
 import re
@@ -3325,6 +3325,9 @@ def api_generate_ppt(req: PPTGenerateRequest):
                 "zip_url": zip_url,
                 "slide_plan": slide_plan,
                 "slide_count": len(generated_slides) if generated_slides else 0,
+                "style_id": result_meta.get("style_id", ""),
+                "color_scheme": result_meta.get("color_scheme", ""),
+                "template_id": req.template_id or "",
             }
         elif is_pptx:
             # PPTX output — legacy download URL
