@@ -131,18 +131,20 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
     }
   }
 
-  const handleColorChange = (color: string) => {
-    setTextColor(color)
+  const execCmd = (command: string, value?: string) => {
     const iframe = iframeRef.current
     if (!iframe?.contentDocument) return
-    const doc = iframe.contentDocument
-    // Restore focus to iframe so execCommand targets the right document
     iframe.contentWindow?.focus()
     try {
-      doc.execCommand('foreColor', false, color)
+      iframe.contentDocument.execCommand(command, false, value)
     } catch {
-      // execCommand may fail on some browsers — silently ignore
+      // silently ignore
     }
+  }
+
+  const handleColorChange = (color: string) => {
+    setTextColor(color)
+    execCmd('foreColor', color)
   }
 
   const handleRestore = async () => {
@@ -484,41 +486,67 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
               {contentEditable ? '完成编辑' : '编辑文字'}
             </button>
             {contentEditable && (
-              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-                <input
-                  type="color"
-                  value={textColor}
-                  onChange={e => handleColorChange(e.target.value)}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    opacity: 0,
-                    width: '100%',
-                    height: '100%',
-                    cursor: 'pointer',
-                  }}
-                  title="字体颜色"
-                />
-                <span
+              <div style={{
+                display: 'flex', gap: 2, alignItems: 'center',
+                padding: '0 4px', background: 'var(--bg-secondary, #f1f5f9)',
+                borderRadius: 6,
+              }}>
+                {/* Bold */}
+                <button onClick={() => execCmd('bold')}
                   className="btn btn-ghost btn-sm"
-                  style={{
-                    fontSize: 12,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  <span style={{
-                    display: 'inline-block',
-                    width: 14,
-                    height: 14,
-                    borderRadius: 3,
-                    background: textColor,
-                    border: '1px solid rgba(0,0,0,0.2)',
-                  }} />
-                  A
-                </span>
+                  style={{ fontSize: 13, fontWeight: 700, minWidth: 28 }}
+                  title="加粗">B</button>
+                {/* Italic */}
+                <button onClick={() => execCmd('italic')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, fontStyle: 'italic', minWidth: 28 }}
+                  title="斜体">I</button>
+                {/* Underline */}
+                <button onClick={() => execCmd('underline')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, textDecoration: 'underline', minWidth: 28 }}
+                  title="下划线">U</button>
+                {/* Strikethrough */}
+                <button onClick={() => execCmd('strikeThrough')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, textDecoration: 'line-through', minWidth: 28 }}
+                  title="删除线">S</button>
+                <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
+                {/* Font size - */}
+                <button onClick={() => execCmd('decreaseFontSize')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, minWidth: 22 }}
+                  title="缩小字号">A-</button>
+                {/* Font size + */}
+                <button onClick={() => execCmd('increaseFontSize')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, minWidth: 22 }}
+                  title="增大字号">A+</button>
+                <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
+                {/* Text color */}
+                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  <input type="color" value={textColor}
+                    onChange={e => handleColorChange(e.target.value)}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                    title="字体颜色" />
+                  <span className="btn btn-ghost btn-sm" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, pointerEvents: 'none' }}>
+                    <span style={{
+                      display: 'inline-block', width: 13, height: 13, borderRadius: 2,
+                      background: textColor, border: '1px solid rgba(0,0,0,0.15)',
+                    }} />A</span>
+                </div>
+                {/* Background color */}
+                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  <input type="color" value="#ffff00"
+                    onChange={e => execCmd('backColor', e.target.value)}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                    title="背景色" />
+                  <span className="btn btn-ghost btn-sm" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, pointerEvents: 'none' }}>
+                    <span style={{
+                      display: 'inline-block', width: 13, height: 13, borderRadius: 2,
+                      background: '#ffff00', border: '1px solid rgba(0,0,0,0.15)',
+                    }} />A</span>
+                </div>
               </div>
             )}
             <button
