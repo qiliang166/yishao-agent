@@ -782,4 +782,16 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ download_url: downloadUrl || '' }),
     }),
+
+  // License
+  activateLicense: (key: string) =>
+    request('/api/license/activate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key }),
+    }),
+  getLicenseStatus: () =>
+    request('/api/license/status'),
+  deactivateLicense: () =>
+    request('/api/license/deactivate', { method: 'POST' }),
 }

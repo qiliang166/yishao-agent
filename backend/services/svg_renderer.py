@@ -21,6 +21,9 @@ _STYLE_GROUPS = {
     "fantasy-animation": "Thematic",
     "pixel-art": "Thematic",
     "vintage": "Thematic",
+    "nature": "Thematic",
+    "sketch-notes": "Thematic",
+    "watercolor": "Thematic",
     "watercolor": "Thematic",
     "sketch-notes": "Thematic",
 }

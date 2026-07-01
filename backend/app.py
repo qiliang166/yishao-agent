@@ -25,6 +25,10 @@ from services.prompt_service import (
     list_prompts, get_prompt, create_prompt, update_prompt, delete_prompt,
     rollback_version, diff_versions, set_default, export_prompts, import_prompts,
 )
+from services.license_service import (
+    validate_license_key, activate as license_activate,
+    check_activation, deactivate as license_deactivate, get_license_status,
+)
 
 DEFAULT_SITE_NAME = "Yishao Agent"
 
@@ -229,12 +233,14 @@ async def auth_middleware(request: Request, call_next):
     path = request.url.path
     # Public paths that never need auth (static assets, login, etc.)
     _public_prefixes = (
-        "/api/login", "/api/auth/check", "/api/logos/", "/api/exports/",
+        "/api/login", "/api/auth/check", "/api/license/activate",
+        "/api/license/status", "/api/version",
+        "/api/logos/", "/api/exports/",
         "/api/audio/", "/api/thumbnails/", "/api/download/",
     )
     if path.startswith("/api/") and not (
-        path in _public_prefixes[:2]
-        or any(path.startswith(p) for p in _public_prefixes[2:])
+        path in _public_prefixes[:5]
+        or any(path.startswith(p) for p in _public_prefixes[5:])
         or (path == "/api/settings" and request.method == "GET")
     ):
         # If no admin password is configured, allow unauthenticated access
@@ -250,6 +256,35 @@ async def auth_middleware(request: Request, call_next):
             jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         except JWTError:
             return JSONResponse(status_code=401, content={"detail": "无效或过期的令牌"})
+    return await call_next(request)
+
+
+# License middleware: block /api/* routes when unactivated (outermost)
+@app.middleware("http")
+async def license_middleware(request: Request, call_next):
+    path = request.url.path
+
+    _license_endpoints = {
+        "/api/license/status",
+        "/api/license/activate",
+        "/api/license/deactivate",
+    }
+    # Always allow license endpoints, login, auth check, branding, static assets
+    if (path in _license_endpoints
+        or path in ("/api/login", "/api/auth/check", "/api/verify-password",
+                    "/api/settings", "/api/version")
+        or path.startswith("/api/logos/")
+        or path.startswith("/api/download/")
+        or not path.startswith("/api/")):
+        return await call_next(request)
+
+    # Check license activation for all other /api/* routes
+    activation = check_activation()
+    if not activation.get("activated"):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "未激活许可证", "code": "LICENSE_REQUIRED"},
+        )
     return await call_next(request)
 
 
@@ -4490,14 +4525,16 @@ def _validate_vi_path(style_id: str, section: str, for_write: bool = False) -> s
     """Resolve and validate a VI path stays within the style directory. Returns the safe path."""
     p = _vi_section_path(style_id, section)
     base = os.path.realpath(_style_dir(style_id))
-    # Use normpath to collapse ../ sequences, then verify the result is under base
+    # Use normpath to collapse ../ sequences, then verify the result is under base.
+    # Use normcase for case-insensitive comparison (Windows: __file__ may be lowercase
+    # while realpath returns actual filesystem casing).
     normalized = os.path.normpath(os.path.abspath(p))
-    if not normalized.startswith(os.path.normpath(base) + os.sep):
+    if not os.path.normcase(normalized).startswith(os.path.normcase(os.path.normpath(base) + os.sep)):
         raise HTTPException(status_code=403, detail="Path traversal denied")
     # For read paths that exist, additionally resolve symlinks via realpath
     if not for_write and os.path.exists(p):
         real_p = os.path.realpath(p)
-        if not real_p.startswith(base + os.sep):
+        if not os.path.normcase(real_p).startswith(os.path.normcase(base + os.sep)):
             raise HTTPException(status_code=403, detail="Path traversal denied")
     return p
 
@@ -5195,6 +5232,34 @@ def login(req: dict):
 
 @app.get("/api/auth/check")
 def auth_check(payload: dict = Depends(get_current_user)):
+    return {"ok": True}
+
+
+# ── License activation endpoints ────────────────────────────────────
+
+@app.post("/api/license/activate")
+def license_activate_endpoint(req: dict):
+    """Activate a license key on this machine."""
+    key = (req.get("key", "") or "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="请输入许可证密钥")
+    try:
+        result = license_activate(key)
+        return {"ok": True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/license/status")
+def license_status_endpoint():
+    """Return current license activation status."""
+    return get_license_status()
+
+
+@app.post("/api/license/deactivate")
+def license_deactivate_endpoint():
+    """Remove the current license activation."""
+    license_deactivate()
     return {"ok": True}
 
 

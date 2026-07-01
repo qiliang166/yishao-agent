@@ -41,6 +41,12 @@ function SettingsPage() {
   const [adminPhone, setAdminPhone] = useState('')
   const [appVersion, setAppVersion] = useState('1.0.0')
 
+  // License state
+  const [licenseStatus, setLicenseStatus] = useState<any>(null)
+  const [licenseKeyInput, setLicenseKeyInput] = useState('')
+  const [licenseLoading, setLicenseLoading] = useState(false)
+  const [licenseMsg, setLicenseMsg] = useState('')
+
   // -- 主题设置 state --
   const [currentThemeId, setCurrentThemeId] = useState('classic')
   const [themePresets, setThemePresets] = useState<ThemePreset[]>(DEFAULT_THEMES)
@@ -60,6 +66,9 @@ function SettingsPage() {
       if (s.admin_phone) setAdminPhone(s.admin_phone)
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
+
+      // 加载许可证状态
+      api.getLicenseStatus().then((d: any) => setLicenseStatus(d)).catch(() => {})
 
       // 加载主题数据
       const themeId = s.theme || 'classic'
@@ -141,6 +150,48 @@ function SettingsPage() {
       if (data.path) setSavePath(data.path)
     } catch {
       // user cancelled or not supported
+    }
+  }
+
+  // -- 许可证 handlers --
+  const handleLicenseActivate = async () => {
+    setLicenseMsg('')
+    if (!licenseKeyInput.trim()) { setLicenseMsg('请输入许可证密钥'); return }
+    setLicenseLoading(true)
+    try {
+      await api.activateLicense(licenseKeyInput.trim())
+      setLicenseMsg('激活成功')
+      setLicenseKeyInput('')
+      const d = await api.getLicenseStatus()
+      setLicenseStatus(d)
+    } catch (err: any) {
+      setLicenseMsg('激活失败: ' + err.message)
+    } finally {
+      setLicenseLoading(false)
+    }
+  }
+
+  const handleLicenseDeactivate = async () => {
+    const ok = await modal.confirm('确定要解除许可证激活吗？解除后软件将无法使用，需重新输入许可证密钥。')
+    if (!ok) return
+    try {
+      const pwdOk = await api.verifyPassword('admin')
+      if (!pwdOk.ok) throw new Error('验证失败')
+    } catch {
+      try {
+        await api.verifyPassword('')
+      } catch {
+        setLicenseMsg('解除激活失败：需要先设置管理员密码')
+        return
+      }
+    }
+    try {
+      await api.deactivateLicense()
+      setLicenseMsg('已解除激活')
+      const d = await api.getLicenseStatus()
+      setLicenseStatus(d)
+    } catch (err: any) {
+      setLicenseMsg('操作失败: ' + err.message)
     }
   }
 
@@ -316,6 +367,80 @@ function SettingsPage() {
                 )}
               </div>
             </>)}
+          </div>
+
+          <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
+            <h3>许可证</h3>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
+              激活状态管理。一个许可证密钥仅绑定一台机器。
+            </p>
+
+            {licenseStatus?.activated ? (
+              <>
+                <div style={{ fontSize: 12, lineHeight: 1.8, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                    <span>状态：<strong style={{ color: 'var(--success)' }}>已激活</strong></span>
+                    {licenseStatus.serial_number != null && (
+                      <span>序列号：<strong>#{String(licenseStatus.serial_number).padStart(5, '0')}</strong></span>
+                    )}
+                    {licenseStatus.product_id != null && (
+                      <span>产品：<strong>标准版</strong></span>
+                    )}
+                  </div>
+                  {licenseStatus.license_key && (
+                    <div style={{ marginTop: 4 }}>
+                      激活码：<code style={{
+                        fontSize: 11, fontFamily: 'var(--mono)',
+                        background: 'var(--primaryLight)', padding: '2px 6px',
+                        borderRadius: 4, wordBreak: 'break-all',
+                      }}>{licenseStatus.license_key}</code>
+                    </div>
+                  )}
+                  {licenseStatus.activated_at && (
+                    <div>激活时间：{licenseStatus.activated_at}</div>
+                  )}
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
+                  onClick={handleLicenseDeactivate}>
+                  解除激活
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  fontSize: 12, color: 'var(--warning)', marginBottom: 12,
+                  background: '#fef3c7', padding: '6px 10px', borderRadius: 6,
+                  display: 'inline-block',
+                }}>
+                  未激活 — 请输入有效的许可证密钥
+                </div>
+                <div className="settings-row">
+                  <label>许可证密钥</label>
+                  <input className="form-input" type="text" value={licenseKeyInput}
+                    onChange={e => { setLicenseKeyInput(e.target.value); setLicenseMsg('') }}
+                    placeholder="YSAG-XXXXX-XXXXX-..."
+                    style={{ maxWidth: 380, fontFamily: 'monospace', fontSize: 12 }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleLicenseActivate() }}
+                  />
+                </div>
+                <div className="settings-row">
+                  <label></label>
+                  <button className="btn btn-primary btn-sm" onClick={handleLicenseActivate}
+                    disabled={licenseLoading}>
+                    {licenseLoading ? '激活中...' : '激活'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {licenseMsg && (
+              <div style={{
+                fontSize: 11, marginTop: 8,
+                color: licenseMsg.includes('失败') || licenseMsg.includes('错误') ? 'var(--warning)' : 'var(--success)',
+              }}>
+                {licenseMsg}
+              </div>
+            )}
           </div>
 
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>

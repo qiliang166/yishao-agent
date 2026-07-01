@@ -650,6 +650,17 @@ def init_db():
 
         # Create speech_configs table and seed data
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS license (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                license_key TEXT NOT NULL,
+                machine_id TEXT NOT NULL,
+                product_id INTEGER NOT NULL DEFAULT 1,
+                serial_number INTEGER NOT NULL DEFAULT 0,
+                activated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS speech_configs (
                 id TEXT PRIMARY KEY,
                 label TEXT NOT NULL,

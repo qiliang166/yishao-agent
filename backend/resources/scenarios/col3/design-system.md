@@ -78,7 +78,7 @@
 | `rgba(var(--text-rgb), N)` | 半透明文字/边框（N 为 opacity 值） |
 | `rgba(var(--accent-rgb), N)` | 半透明 accent（虚线边框等） |
 
-**严禁硬编码 hex 色值。** 所有颜色必须使用 `var(--name)` 或 `rgba(var(--name-rgb), N)` 形式。封面文字颜色从封面模板（blocks/cover.md）中读取——模板中的 CSS 变量已经保证 WCAG AA 对比度 >= 4.5:1。禁止用 `#ffffff` 或任何 hex 值覆盖模板中的颜色变量。
+**严禁硬编码 hex 色值。** 所有颜色必须使用 `var(--name)` 或 `rgba(var(--name-rgb), N)` 形式。封面文字颜色由 tokens.yaml 的 `slide_type_overrides.cover.text` 定义，代码自动注入量化对比度规则到 prompt 中。禁止用 `#ffffff` 或任何 hex 值覆盖模板中或 tokens 定义的 CSS 变量。
 
 ## 禁止项
 

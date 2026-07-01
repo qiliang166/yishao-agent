@@ -1588,7 +1588,8 @@ def _get_effective_page_bg_luminance(style_id: str, page_type: str, scheme: dict
     # Verify resolved path stays within the expected base
     real_base = os.path.realpath(vi_base)
     if os.path.exists(tokens_path):
-        if not os.path.realpath(tokens_path).startswith(real_base + os.sep):
+        if not os.path.normcase(os.path.realpath(tokens_path)).startswith(
+            os.path.normcase(real_base + os.sep)):
             return _hex_luminance(scheme.get("background", ""))
         try:
             with open(tokens_path, "r", encoding="utf-8") as f:
@@ -1690,6 +1691,98 @@ def _auto_fix_white_on_light(html: str, scheme: dict, slide_seq: int,
         _logger.info(
             f"[WHITE-FIX] Slide {slide_seq}: fixed {fix_count} white-on-light "
             f"occurrences → {{{{text}}}} (bg luminance > 128)"
+        )
+
+    return html
+
+
+def _auto_fix_dark_on_dark(html: str, scheme: dict, slide_seq: int,
+                           style_id: str = None, page_type: str = None) -> str:
+    """Fix {{primary}}-colored text on dark backgrounds (symmetric to _auto_fix_white_on_light).
+
+    For dark themes, {{primary}} is a very dark color (e.g. #0a1628) and
+    {{background}} is also dark (e.g. #060d18). colors.md historically told
+    the LLM to use {{primary}} for all titles, making them invisible on dark pages.
+
+    Algorithm (contrast-driven, handles all 85 color combinations):
+    1. Get effective background luminance from tokens.yaml
+    2. If background is light (luminance > 128) → skip (primary is readable)
+    3. If background is dark AND page has explicit text override in tokens → skip
+    4. Replace color:{{primary}} → color:{{text}} (only color property)
+    5. Do NOT touch background:{{primary}}, fill:{{primary}}, stroke:{{primary}}
+
+    Must run BEFORE _resolve_color_vars (so we see {{primary}} placeholders).
+    """
+    if not scheme or not html:
+        return html
+
+    # Determine effective background luminance for THIS page type
+    if style_id and page_type:
+        bg_luminance = _get_effective_page_bg_luminance(style_id, page_type, scheme)
+    else:
+        bg_luminance = _hex_luminance(scheme.get("background", ""))
+
+    # If background is light, dark text is readable — skip
+    if bg_luminance is None or bg_luminance > 128:
+        return html
+
+    # Check for explicit text override in tokens.yaml
+    # Pages with explicit overrides (cover/section/summary/quote) should keep
+    # their token-defined text color — do not override
+    if style_id and page_type:
+        import yaml as _yaml_dod
+        tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+        if os.path.exists(tokens_path):
+            try:
+                vi_base = os.path.join(BASE_DIR, "resources", "vi")
+                real_base = os.path.realpath(vi_base)
+                if os.path.normcase(os.path.realpath(tokens_path)).startswith(
+                    os.path.normcase(real_base + os.sep)):
+                    with open(tokens_path, "r", encoding="utf-8") as f:
+                        tokens = _yaml_dod.safe_load(f.read())
+                    overrides = tokens.get("slide_type_overrides", {})
+                    page_ov = overrides.get(page_type, {})
+                    if page_ov.get("text"):
+                        # Explicit text override exists — skip
+                        return html
+            except Exception:
+                pass
+
+    primary_hex = scheme.get("primary", "")
+    if not primary_hex or not primary_hex.startswith("#"):
+        return html
+
+    # Verify that primary is indeed dark on this dark background
+    # (safety: only fix if primary-on-bg contrast is genuinely poor)
+    bg_hex = scheme.get("background", "")
+    if bg_hex.startswith("#"):
+        cr = _wcag_contrast_ratio(primary_hex, bg_hex)
+        if cr >= 4.5:
+            # primary is actually readable on this background — skip
+            return html
+
+    import re as _re_dod
+
+    fix_count = 0
+
+    # ── Replace color:{{primary}} → color:{{text}} ──
+    # Only target the CSS 'color' property, not background/fill/stroke
+    color_patterns = [
+        ('color:{{primary}}', 'color:{{text}}'),
+        ('color: {{primary}}', 'color: {{text}}'),
+        ('color:{{primary}};', 'color:{{text}};'),
+        ('color: {{primary}};', 'color: {{text}};'),
+    ]
+    for pat, repl in color_patterns:
+        count = html.count(pat)
+        if count > 0:
+            html = html.replace(pat, repl)
+            fix_count += count
+
+    if fix_count > 0:
+        _logger.info(
+            f"[DARK-FIX] Slide {slide_seq}: fixed {fix_count} dark-on-dark "
+            f"primary→text occurrences (bg luminance={bg_luminance:.0f} ≤ 128)"
         )
 
     return html
@@ -3005,7 +3098,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             # Skip build_slide_prompt — PPT card/layout rules don't apply to documents
             core_system = ""
         else:
-            core_system = build_slide_prompt(stype, layout, has_chart)
+            core_system = build_slide_prompt(stype, layout, has_chart,
+                                                  scheme=active_scheme, style_id=style_id)
         # Append VI section for this slide type (design instruction, not user content)
         vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id)
         vi_append = ""
@@ -3143,6 +3237,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     if active_scheme:
                         html = _auto_fix_white_on_light(html, active_scheme, seq,
                                                         style_id=style_id, page_type=stype)
+                        html = _auto_fix_dark_on_dark(html, active_scheme, seq,
+                                                      style_id=style_id, page_type=stype)
                     # Post-process: strip LLM-invented CSS variable reassignments
                     # (e.g. --primary: var(--card_bg) inverts the theme → invisible text)
                     html = _strip_local_var_overrides(html, seq)
@@ -3586,7 +3682,66 @@ def _count_content_blocks(card_element) -> int:
     return count
 
 
-def build_slide_prompt(page_type: str, layout: str, has_chart: bool) -> str:
+def _compute_title_color(style_id: str, page_type: str, scheme: dict) -> str | None:
+    """Compute which CSS variable to use for page titles based on WCAG contrast.
+
+    Algorithm (handles all 17×5=85 color combinations without hardcoded lists):
+    1. Check tokens.yaml slide_type_overrides[page_type].text → if explicit, return it
+    2. Get page's effective background (card_bg or background from overrides)
+    3. Compute WCAG contrast of {{primary}} on that background
+    4. If contrast ≥ 4.5 → return "primary" (brand color is readable)
+    5. If contrast < 4.5 → return "text" (always readable by design token contract)
+
+    Returns variable name string ("primary" or "text"), or None if uncertain.
+    """
+    import yaml
+
+    if not style_id or not scheme:
+        return None
+
+    # Bookend pages have explicit text overrides in tokens — skip computation
+    if page_type in ("cover", "section", "summary", "quote"):
+        return None
+
+    primary_hex = scheme.get("primary", "")
+    if not primary_hex or not primary_hex.startswith("#"):
+        return None
+
+    # Try to read page-specific background from tokens.yaml
+    bg_hex = scheme.get("background", "")
+    tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
+    if os.path.exists(tokens_path):
+        try:
+            vi_base = os.path.join(BASE_DIR, "resources", "vi")
+            real_base = os.path.realpath(vi_base)
+            if os.path.normcase(os.path.realpath(tokens_path)).startswith(
+                os.path.normcase(real_base + os.sep)):
+                with open(tokens_path, "r", encoding="utf-8") as f:
+                    tokens = yaml.safe_load(f.read())
+                overrides = tokens.get("slide_type_overrides", {})
+                page_ov = overrides.get(page_type, {})
+                # Check for explicit text override first
+                explicit_text = page_ov.get("text")
+                if explicit_text:
+                    return None  # Explicit override exists, no computation needed
+                bg_ref = page_ov.get("card_bg") or page_ov.get("background")
+                if bg_ref:
+                    bg_hex = _resolve_placeholder_value(str(bg_ref), scheme)
+        except Exception:
+            pass
+
+    if not bg_hex.startswith("#"):
+        return None
+
+    cr = _wcag_contrast_ratio(primary_hex, bg_hex)
+    if cr >= 4.5:
+        return "primary"
+    else:
+        return "text"
+
+
+def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
+                       scheme: dict | None = None, style_id: str = "") -> str:
     """Build tailored system prompt from modular core/ files — no regex, no full-document parse.
 
     File structure:
@@ -3617,6 +3772,21 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool) -> str:
         text = _read("always", f"{name}.md")
         if text:
             parts.append(text)
+
+    # ── Contrast-driven title color rule (overrides colors.md when needed) ──
+    if scheme and style_id and page_type not in ("cover", "section", "summary", "quote"):
+        title_var = _compute_title_color(style_id, page_type, scheme)
+        if title_var:
+            forbidden_var = "text" if title_var == "primary" else "primary"
+            parts.append(
+                f"\n## 标题颜色（对比度自动计算 — 必须严格执行）\n\n"
+                f"当前色系下，此类页面的有效背景上 `{{{{primary}}}}` 的 WCAG 对比度"
+                f"{'≥ 4.5:1' if title_var == 'primary' else '不足 4.5:1'}。\n"
+                f"→ 页面标题（heading）必须使用 `{{{{" + title_var + f"}}}}`。\n"
+                f"→ 卡片标题（card title）可使用 `{{{{primary}}}}`（卡片有独立 card_bg）。\n"
+                f"→ 禁止在页面标题上使用 `{{{{" + forbidden_var + f"}}}}`。\n"
+                f"此规则由代码根据 tokens.yaml 自动计算，禁止自行判断。"
+            )
 
     # ── By type: card design depth (skip for bookend pages) ──
     no_card_types = {"cover", "quote", "section", "summary", "closing"}

@@ -239,13 +239,17 @@ grep -rn "Inter" . --include="*.md" || echo "  ZERO — clean!"
 cp backend/data/styles/notion.yaml "backend/data/styles/$STYLE.yaml"
 # 手动编辑: 更新 name, mood, design_brief, color_scheme, typography
 
+# 注册到 index.json（在 style-notion 条目后添加 style-{style_id} 条目）
+# 更新 total_count.styles += 1
+
 # 数据库注册
 python -c "
 import sqlite3, json
 conn = sqlite3.connect('backend/data/yishao.db')
-conn.execute('''INSERT OR REPLACE INTO templates (id, name, type, rules, enabled)
-    VALUES (?, ?, ?, ?, ?)''',
+conn.execute('''INSERT OR REPLACE INTO templates (id, name, type, file_path, rules, enabled)
+    VALUES (?, ?, ?, ?, ?, ?)''',
     ('style-$STYLE', '{显示名称}', 'style',
+     'backend/services/ppt_engine/assets/preview-template.html',
      json.dumps({'style_id':'$STYLE','group':'Thematic'}), 1))
 conn.commit()
 conn.close()
@@ -429,6 +433,17 @@ else:
 | v3.0 | Step 0 预检 + 自动扫描 | 无预检 |
 | v4.0 | `_get_effective_page_bg_luminance` 逐页检测 | 硬编码排除列表 `("cover","section","summary","quote")` 不完整 |
 | v5.0 | `_fix_malformed_hex` + `format-spec.md` | LLM 生成损坏 hex（`#fffffffff`）、缺少格式规范 |
+| v5.1 | `os.path.normcase()` Windows 路径验证 | `_validate_vi_path` 和 `_get_effective_page_bg_luminance` 在 Windows 上因大小写不匹配拒绝合法路径（`d:\yishaoagent\...` vs `D:\YISHAOAGENT\...`），导致色系管理无法加载数据、逐页亮度检测回退为全局背景 |
+
+## v5.1 Windows 路径大小写修复
+
+**根因**: `__file__` 在 Windows 上保留了模块加载时的大小写（如 `d:\yishaoagent\...`），而 `os.path.realpath()` 返回文件系统的真实大小写（如 `D:\YISHAOAGENT\...`）。Python 的 `str.startswith()` 是大小写敏感的，导致路径遍历防护将合法路径误判为攻击。
+
+**影响范围**:
+- `app.py:_validate_vi_path()` — 色系管理 API 全部返回 403
+- `ppt_service.py:_get_effective_page_bg_luminance()` — 逐页亮度检测静默回退，导致 `_auto_fix_white_on_light` 无法正确判断每个页面类型
+
+**修复**: 两处 `startswith` 比较均改为 `os.path.normcase(a).startswith(os.path.normcase(b))`，在 Windows 上进行大小写不敏感比较。
 
 ## v5.0 的三层防线如何保证零漏洞
 
