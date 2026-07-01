@@ -1520,6 +1520,31 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
     return html
 
 
+def _fix_malformed_hex(html: str, slide_seq: int) -> str:
+    """Fix LLM-garbled hex values like #fffffffff → #ffffff.
+
+    The LLM sometimes corrupts hex colors by repeating characters beyond the
+    standard 6. This normalizes # followed by 7+ identical hex chars → 6 chars.
+    Valid 8-digit hex (RRGGBBAA) is NOT touched — only all-same-char sequences.
+    Must run BEFORE _auto_fix_hardcoded_hex.
+    """
+    import re as _re_mh
+
+    def _normalize(m):
+        full = m.group(0)
+        chars = full[1:]
+        if len(chars) > 6 and len(set(chars)) == 1:
+            fixed = full[:7]
+            _logger.info(
+                f"[MALFORMED-HEX] Slide {slide_seq}: {full} → {fixed} "
+                f"(garbled repeat, normalized to 6 chars)"
+            )
+            return fixed
+        return full
+
+    return _re_mh.sub(r'#[0-9a-fA-F]{7,}', _normalize, html)
+
+
 def _hex_luminance(hex_color: str) -> float | None:
     """Compute relative luminance (0-255) from a hex color string."""
     if not hex_color or not hex_color.startswith("#") or len(hex_color) != 7:
@@ -3097,6 +3122,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     if is_a4 and stype == "cover" and active_scheme:
                         html = _enforce_cover_rules(html, active_scheme, style_id)
                     # Post-process: scan & replace hardcoded hex with {{placeholder}} vars
+                    html = _fix_malformed_hex(html, seq)
                     html = _auto_fix_hardcoded_hex(html, active_scheme, seq)
                     # Post-process: fix white text on light backgrounds (LLM habit from dark styles)
                     # Must run AFTER _auto_fix_hardcoded_hex (which intentionally skips #ffffff)
