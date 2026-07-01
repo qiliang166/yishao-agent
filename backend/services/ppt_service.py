@@ -2971,6 +2971,15 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         if doc_design_system:
             doc_design_system = f"\n{doc_design_system}\n"
 
+    # Load format specification (right/wrong examples for every syntax category)
+    # Included for BOTH PPT and A4 pipelines — prevents LLM from generating
+    # malformed hex, missing CSS units, wrong variable syntax, etc.
+    format_spec_path = os.path.join(BASE_DIR, "resources", "prompts", "core", "always", "format-spec.md")
+    format_spec = ""
+    if os.path.exists(format_spec_path):
+        with open(format_spec_path, encoding="utf-8") as _fs:
+            format_spec = _fs.read()
+
     import threading as _threading
     _done_lock = _threading.Lock()
     _done_count = [0]
@@ -3038,7 +3047,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 {font_info}
 {vi_append}
 {cover_color_rules}
-{html_output_inst}"""
+{html_output_inst}
+{format_spec}"""
 
         content_parts = [
             f"页码: {seq}/{total}",
@@ -3602,7 +3612,8 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool) -> str:
 
     # ── Always (7 files, ~3K chars total) ──
     for name in ("identity", "iron-laws", "colors", "color-semantics", "structure",
-                  "richness", "typography", "consistency", "checklist"):
+                  "richness", "typography", "consistency", "checklist",
+                  "format-spec"):
         text = _read("always", f"{name}.md")
         if text:
             parts.append(text)
