@@ -1603,6 +1603,54 @@ def _auto_fix_white_on_light(html: str, scheme: dict, slide_seq: int) -> str:
     return html
 
 
+# Core theme variables that must NEVER be overridden on individual slides.
+# The LLM sometimes invents local reassignments like --primary: var(--card_bg)
+# which inverts the color theme and causes invisible text.
+_PROTECTED_CSS_VARS = [
+    "primary", "primary_rgb", "primary_r", "primary_g", "primary_b",
+    "secondary", "secondary_rgb", "secondary_r", "secondary_g", "secondary_b",
+    "text", "text_rgb", "text_r", "text_g", "text_b",
+    "background", "background_rgb", "background_r", "background_g", "background_b",
+    "card_bg", "card_bg_rgb", "card_bg_r", "card_bg_g", "card_bg_b",
+    "accent", "accent_rgb", "accent_r", "accent_g", "accent_b",
+]
+
+
+def _strip_local_var_overrides(html: str, slide_seq: int) -> str:
+    """Remove LLM-invented CSS variable reassignments from individual slides.
+
+    The LLM sometimes adds local style overrides like:
+      style="... --primary: var(--card_bg); --text: var(--card_bg); --card_bg: var(--chart-1); ..."
+
+    This inverts the color theme — on light-background styles, it turns text
+    light-on-light (invisible). These core theme variables must only be defined
+    once at :root level and inherited, never reassigned per-slide.
+    """
+    if not html:
+        return html
+
+    import re as _re_strip
+
+    fix_count = 0
+
+    for var_name in _PROTECTED_CSS_VARS:
+        # Match: --varname: <anything up to ; or >
+        # Pattern: --varname followed by optional whitespace, colon, then any non-empty value until ; or end of style attr
+        pattern = rf'--{var_name}\s*:\s*[^;"]+(?:;\s*)?'
+        matches = list(_re_strip.finditer(pattern, html))
+        if matches:
+            html = _re_strip.sub(pattern, '', html)
+            fix_count += len(matches)
+
+    if fix_count > 0:
+        _logger.info(
+            f"[STRIP-VARS] Slide {slide_seq}: removed {fix_count} local CSS "
+            f"variable overrides (core theme vars must be inherited from :root)"
+        )
+
+    return html
+
+
 def _auto_fix_font_size(html: str, slide_seq: int, is_a4: bool = False) -> str:
     """Enforce VI typography minimums per spec.
 
@@ -2988,6 +3036,9 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     # and BEFORE _resolve_color_vars (which converts {{placeholder}} → hex)
                     if active_scheme:
                         html = _auto_fix_white_on_light(html, active_scheme, seq)
+                    # Post-process: strip LLM-invented CSS variable reassignments
+                    # (e.g. --primary: var(--card_bg) inverts the theme → invisible text)
+                    html = _strip_local_var_overrides(html, seq)
                     # Post-process: enforce VI typography minimums (15px → 16px)
                     html = _auto_fix_font_size(html, seq, is_a4=is_a4)
                     # Save unresolved HTML for later recolor (before hex resolution)
