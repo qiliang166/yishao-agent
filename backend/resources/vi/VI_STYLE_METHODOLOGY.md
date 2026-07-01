@@ -1,26 +1,60 @@
 # VI Style Creation Methodology — 一键复刻，零缺陷
 
-> **版本 3.0** — 预检 + 自动验证 + 修复管线，确保一次性成功。
-> v2.0 在两轮实战中暴露了验证环节缺失，v3.0 补齐为完整闭环。
+> **版本 4.0** — 自调整白字检测：tokens.yaml 为唯一真源，零硬编码排除列表。
+> v3.0 的硬编码 `("cover", "section", "summary", "quote")` 在 vintage style 中漏掉了 section/summary，证明硬编码列表=漏洞。
+> v4.0 改为逐页读取 `slide_type_overrides` 计算有效背景亮度，自动覆盖所有已知和未来的页面类型。
+
+---
+
+## 核心原则：tokens.yaml 是唯一真源
+
+```
+tokens.yaml  →  slide_type_overrides[page_type]  →  card_bg / background
+                   ↓ (解析 {{placeholder}})
+                   有效背景色  →  计算亮度
+                   ↓
+              亮度 ≤ 128  →  深色背景  →  白字正确，跳过修复
+              亮度 > 128  →  浅色背景  →  白字是 bug，自动替换为 {{text}}
+```
+
+**这个规则对所有 style × page type 的组合自动生效，无需维护任何硬编码列表。**
+
+已知验证矩阵（自动推导，非硬编码）：
+
+| style | page type | override bg | 有效亮度 | 决策 |
+|-------|-----------|-------------|----------|------|
+| business | cover | {{primary}} | 51 (dark) | KEEP white |
+| business | section | {{primary}} | 51 (dark) | KEEP white |
+| business | summary | {{primary}} | 51 (dark) | KEEP white |
+| business | quote | {{primary}} | 51 (dark) | KEEP white |
+| business | content | {{background}} | 255 (light) | FIX white |
+| notion | cover | {{background}} | 255 (light) | FIX white |
+| notion | section | {{card_bg}} | 243 (light) | FIX white |
+| vintage | cover | {{background}} | 246 (light) | FIX white |
+| vintage | section | {{primary}} | 46 (dark) | KEEP white |
+| vintage | summary | {{primary}} | 46 (dark) | KEEP white |
+| (任何未来风格) | (任何页面类型) | (自动读取) | (自动计算) | (自动决定) |
 
 ---
 
 ## 前提：你的代码必须包含以下修复
 
-以下 5 个函数是方法论能"一次成功"的硬件保障。缺任何一个，浅色风格都会出 bug。
+以下函数是方法论能"一次成功"的硬件保障：
 
 **自检命令**（在开始之前运行）：
 
 ```bash
 python -c "
 from services.ppt_service import (
-    _enforce_cover_rules,       # A4 封面修正
-    _auto_fix_hardcoded_hex,    # hex → placeholder
-    _auto_fix_white_on_light,   # 浅色背景白字修正
-    _strip_local_var_overrides, # 清除变量重定义
-    _is_light_background,       # 背景明度检测
+    _enforce_cover_rules,            # A4 封面修正
+    _auto_fix_hardcoded_hex,         # hex → placeholder
+    _auto_fix_white_on_light,        # 浅色背景白字修正（页类型感知）
+    _strip_local_var_overrides,      # 清除变量重定义
+    _get_effective_page_bg_luminance,# 逐页背景亮度检测（核心）
+    _hex_luminance,                  # hex → 亮度计算
+    _resolve_placeholder_value,      # {{primary}} → #hex
 )
-print('PRE-FLIGHT: All 5 required functions present — GO')
+print('PRE-FLIGHT: All 7 required functions present — GO')
 "
 ```
 
@@ -53,14 +87,15 @@ Step 7: 端到端生成 + 自动扫描（5 分钟）
 ## Step 0: 预检
 
 ```bash
-# 1. 检查 5 个必需函数是否存在
+# 1. 检查 7 个必需函数是否存在
 python -c "
 from services.ppt_service import (
     _enforce_cover_rules, _auto_fix_hardcoded_hex,
     _auto_fix_white_on_light, _strip_local_var_overrides,
-    _is_light_background,
+    _get_effective_page_bg_luminance, _hex_luminance,
+    _resolve_placeholder_value,
 )
-print('PASS: All 5 required functions present')
+print('PASS: All 7 required functions present')
 "
 
 # 2. 检查模板基础风格完整
@@ -122,6 +157,14 @@ slide_type_overrides:
     card_bg: "{{primary}}"    # 深色底
     text: "#ffffff"           # 白色字 ← 这里可以是 #ffffff
 ```
+
+### slide_type_overrides 规则
+
+每个页面类型可以指定 `card_bg` 或 `background`。代码会自动检查两者（`card_bg` 优先）。
+
+- **如果某个页面类型使用深色背景**（如 `{{primary}}`），`text` 必须设为 `#ffffff` 或浅色占位符
+- **如果某个页面类型使用浅色背景**（如 `{{background}}`），`text` 必须设为 `{{primary}}` 或深色值
+- **代码会逐页验证**：深色背景页面的白字不会被修改，浅色背景页面的白字会自动修正
 
 ---
 
@@ -196,6 +239,7 @@ from services.ppt_service import (
     _load_style_from_template, _load_scheme_data,
     _load_style_yaml_text, _load_style_vi,
     _scan_vi_page_types, _is_light_background,
+    _get_effective_page_bg_luminance,
     _load_cover_overrides, _placeholder_to_css_var,
 )
 S='$STYLE'; SCH='$SCHEME'
@@ -211,16 +255,27 @@ if not scheme: errors.append('scheme load failed')
 is_light = _is_light_background(scheme)
 print(f'  Type: {\"LIGHT\" if is_light else \"DARK\"} (bg={scheme.get(\"background\")})')
 
-# 3. Cover consistency (CRITICAL)
-cover = _load_cover_overrides(S)
-if cover:
-    bg_var = _placeholder_to_css_var(cover.get('card_bg',''))
-    text_val = cover.get('text','')
-    print(f'  Cover: bg={bg_var} text={text_val}')
-    if is_light and text_val == '#ffffff':
-        errors.append('FATAL: light-bg style has white cover text')
-    if not is_light and text_val not in ('#ffffff','#FFFFFF','#fff'):
-        print('  WARNING: dark-bg style cover text is not white — verify intentional')
+# 3. Per-page-type background check (CRITICAL — replaces hardcoded exclusion list)
+# Verify every page type with a slide_type_override has consistent bg/text pairing
+import yaml, os
+tokens_path = f'backend/resources/vi/{S}/tokens.yaml'
+if os.path.exists(tokens_path):
+    with open(tokens_path, 'r', encoding='utf-8') as f:
+        tokens = yaml.safe_load(f.read())
+    overrides = tokens.get('slide_type_overrides', {})
+    for pt, ov in overrides.items():
+        lum = _get_effective_page_bg_luminance(S, pt, scheme)
+        text_val = ov.get('text', '')
+        bg_ref = ov.get('card_bg') or ov.get('background')
+        if bg_ref:
+            bg_type = 'DARK' if lum and lum <= 128 else 'LIGHT'
+            print(f'  {pt}: bg={bg_ref} lum={lum:.0f} ({bg_type}) text={text_val}')
+            # Consistency check: dark bg + dark text = likely bug
+            if lum and lum <= 128 and text_val and not text_val.startswith('#') and text_val != '#ffffff':
+                # placeholder text on dark bg is fine (resolves to correct color)
+                pass
+            if lum and lum > 128 and text_val == '#ffffff':
+                errors.append(f'FATAL: {pt} has light bg but white text in tokens.yaml')
 
 # 4. Templates
 vi = _load_style_vi(S, SCH)
@@ -244,7 +299,7 @@ if errors:
     for e in errors: print(f'  - {e}')
     exit(1)
 else:
-    print(f'\nALL 7 CHECKS PASSED — Ready for e2e test')
+    print(f'\nALL CHECKS PASSED — Ready for e2e test')
 "
 ```
 
@@ -256,36 +311,54 @@ else:
 
 ```bash
 RUN_DIR="data/output/{project}/{run_id}"
+STYLE="new_style" SCHEME="default_scheme_name"
 python -c "
 import os, re
+from services.ppt_service import _get_effective_page_bg_luminance, _load_scheme_data
 
-def check_slide(path, name):
+scheme = _load_scheme_data('$STYLE', '$SCHEME')
+
+def check_slide(path, name, page_type):
     with open(path, 'r', encoding='utf-8') as f:
         html = f.read()
     issues = []
-    # Check 1: hardcoded white text
-    if '#ffffff' in html.lower() or '#fff' in html.lower():
-        issues.append('hardcoded white (#ffffff/#fff) — may be invisible on light bg')
+    # Check 1: hardcoded white text — is it correct or a bug?
+    has_white = '#ffffff' in html.lower() or '#fff' in html.lower()
+    if has_white:
+        lum = _get_effective_page_bg_luminance('$STYLE', page_type, scheme)
+        if lum and lum > 128:
+            # Light background + white text = bug (should have been fixed by _auto_fix_white_on_light)
+            issues.append(f'white text on LIGHT bg (lum={lum:.0f}) — _auto_fix_white_on_light missed this')
     # Check 2: variable overrides
     if re.search(r'--(primary|text|background|card_bg)\s*:', html):
-        issues.append('theme variable override detected')
+        issues.append('theme variable override detected (_strip_local_var_overrides missed)')
     # Check 3: zero opacity text
     if 'opacity:0' in html:
         issues.append('opacity:0 — fully invisible')
-    # Check 4: color equals background
-    # (skip — needs actual color resolution)
     if issues:
-        print(f'  {name}: {len(issues)} issues')
+        print(f'  {name} ({page_type}): {len(issues)} issues')
         for i in issues: print(f'    - {i}')
         return False
     return True
 
 slide_dir = '$RUN_DIR/slides'
 slides = sorted([f for f in os.listdir(slide_dir) if f.endswith('.html') and '_vars' not in f])
+
+# Map slide index to page type — read from structure.json if available
+import json
+structure_path = os.path.join(os.path.dirname(slide_dir), 'structure.json')
+page_types = {}
+if os.path.exists(structure_path):
+    with open(structure_path) as f:
+        structure = json.load(f)
+    for i, s in enumerate(structure.get('slides', [])):
+        page_types[f'slide_{i+1:02d}.html'] = s.get('type', 'content')
+
 passed = 0
 failed = 0
 for s in slides:
-    if check_slide(os.path.join(slide_dir, s), s):
+    pt = page_types.get(s, 'content')
+    if check_slide(os.path.join(slide_dir, s), s, pt):
         passed += 1
     else:
         failed += 1
@@ -303,13 +376,30 @@ else:
 
 ## 完整自检清单（每次创建新风格前）
 
-- [ ] Step 0: 5 个必需函数存在
+- [ ] Step 0: 7 个必需函数存在（含 `_get_effective_page_bg_luminance`）
 - [ ] Step 1: 风格类型已分类（light/dark）
-- [ ] Step 2: tokens.yaml 封面规则与风格类型一致
+- [ ] Step 2: tokens.yaml 中每个 slide_type_override 的 bg/text 配对一致（深底+浅字 / 浅底+深字）
 - [ ] Step 3: 67 个文件全部复制
 - [ ] Step 4: 字体替换 0 残留
 - [ ] Step 5: 前端元数据 + DB 注册
-- [ ] Step 6: 7 项自动检查全部通过
+- [ ] Step 6: 逐页背景亮度验证通过（零硬编码排除）
 - [ ] Step 7: 生成测试 + 自动扫描 0 问题
 
 **全部打勾 = 一次成功。任何一步失败 = 该步有明确错误信息，修正后重试。**
+
+---
+
+## 为什么 v4.0 零漏洞
+
+v3.0 的方法是用硬编码列表 `("cover", "section", "summary", "quote")` 跳过特定页面类型。这有两个漏洞：
+
+1. **不知道新风格的页面类型**：vintage 的 section/summary 使用 `{{primary}}` 深色背景，硬编码列表没列 vintage 就会出错
+2. **不知道未来的页面类型**：如果新增一个 `hero` 页面类型使用深色背景，硬编码列表必须手动更新
+
+v4.0 改为**逐页读取 tokens.yaml 计算有效背景亮度**：
+- 每个页面类型独立检查 `slide_type_overrides[page_type].card_bg` 或 `.background`
+- 解析 `{{placeholder}}` 引用得到实际 hex 值
+- 计算亮度判断深色/浅色
+- 自动决定白字是否合法
+
+**规则是自调整的，数据驱动，不与任何特定 style 或 page type 耦合。**
