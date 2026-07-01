@@ -1520,6 +1520,89 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
     return html
 
 
+def _is_light_background(scheme: dict) -> bool:
+    """Return True if the scheme's background color is light (relative luminance > 128).
+    Used to decide whether white/light text needs to be auto-fixed to dark."""
+    bg_hex = scheme.get("background", "")
+    if not bg_hex or not bg_hex.startswith("#") or len(bg_hex) != 7:
+        return False
+    r, g, b = int(bg_hex[1:3], 16), int(bg_hex[3:5], 16), int(bg_hex[5:7], 16)
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return luminance > 128
+
+
+def _auto_fix_white_on_light(html: str, scheme: dict, slide_seq: int) -> str:
+    """Fix LLM hardcoded white text on light backgrounds.
+
+    When a style has a light background (e.g. notion, vintage), the LLM
+    sometimes hardcodes #ffffff / rgba(255,255,255,...) text — a habit from
+    dark-background styles like business. This function detects light backgrounds
+    and replaces white text with the correct text color from the scheme.
+
+    Must run AFTER _auto_fix_hardcoded_hex (which intentionally skips #ffffff)
+    and BEFORE _resolve_color_vars (which converts {{placeholder}} → hex).
+    """
+    if not scheme or not html:
+        return html
+
+    if not _is_light_background(scheme):
+        return html
+
+    text_hex = scheme.get("text", "")
+    if not text_hex or not text_hex.startswith("#"):
+        return html
+
+    import re as _re_wol
+
+    white_patterns = ['#ffffff', '#FFFFFF', '#fff', '#FFF']
+    white_hex_re = r'(?i)#(?:fff|ffffff)\b'
+
+    # Count for logging
+    fix_count = 0
+
+    # ── Layer 1: Solid white text → {{text}} placeholder ──
+    for white in white_patterns:
+        # Match white as a color value in CSS
+        patterns = [
+            (f'color:{white}', f'color:{{{{text}}}}'),
+            (f'color: {white}', f'color: {{{{text}}}}'),
+        ]
+        for pat, repl in patterns:
+            count = html.count(pat)
+            if count > 0:
+                html = html.replace(pat, repl)
+                fix_count += count
+
+    # ── Layer 2: rgba(255,255,255,N) → rgba(var(--text-rgb),N) ──
+    rgba_patterns = [
+        (r'rgba\(\s*255\s*,\s*255\s*,\s*255\s*,', 'rgba(var(--text-rgb),'),
+        (r'rgba\(255,255,255,', 'rgba(var(--text-rgb),'),
+    ]
+    for pat, repl in rgba_patterns:
+        matches = list(_re_wol.finditer(pat, html))
+        if matches:
+            html = _re_wol.sub(pat, repl, html)
+            fix_count += len(matches)
+
+    # ── Layer 3: white borders on light backgrounds → use accent or text ──
+    # Only fix border-color (not border shorthand which is complex)
+    accent_hex = scheme.get("accent", "")
+    if accent_hex and accent_hex.startswith("#"):
+        for white in white_patterns:
+            border_pat = f'border-color:{white}'
+            if border_pat in html:
+                html = html.replace(border_pat, f'border-color:{accent_hex}')
+                fix_count += 1
+
+    if fix_count > 0:
+        _logger.info(
+            f"[WHITE-FIX] Slide {slide_seq}: fixed {fix_count} white-on-light "
+            f"occurrences → {{{{text}}}} (bg luminance > 128)"
+        )
+
+    return html
+
+
 def _auto_fix_font_size(html: str, slide_seq: int, is_a4: bool = False) -> str:
     """Enforce VI typography minimums per spec.
 
@@ -2900,6 +2983,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         html = _enforce_cover_rules(html, active_scheme, style_id)
                     # Post-process: scan & replace hardcoded hex with {{placeholder}} vars
                     html = _auto_fix_hardcoded_hex(html, active_scheme, seq)
+                    # Post-process: fix white text on light backgrounds (LLM habit from dark styles)
+                    # Must run AFTER _auto_fix_hardcoded_hex (which intentionally skips #ffffff)
+                    # and BEFORE _resolve_color_vars (which converts {{placeholder}} → hex)
+                    if active_scheme:
+                        html = _auto_fix_white_on_light(html, active_scheme, seq)
                     # Post-process: enforce VI typography minimums (15px → 16px)
                     html = _auto_fix_font_size(html, seq, is_a4=is_a4)
                     # Save unresolved HTML for later recolor (before hex resolution)
