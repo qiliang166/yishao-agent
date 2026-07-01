@@ -22,6 +22,7 @@ interface Props {
 
 export default function SlideEditModal({ open, runId, previewUrl, slideCount, providerId: _pid, model: _model, projectId, projectName, columnId, styleId, onClose, pptxDownloadUrl, pptxFilename, downloadFormat, onDownloadHtml: _onDownloadHtml }: Props) {
   const [contentEditable, setContentEditable] = useState(false)
+  const [textColor, setTextColor] = useState('#ffffff')
   const [savingImages, setSavingImages] = useState(false)
   const [colorScheme, setColorScheme] = useState('deep-blue')
   const [colorSchemes, setColorSchemes] = useState<{id:string;label:string;primary:string;accent:string;background:string;text:string;card_bg:string}[]>([])
@@ -127,6 +128,20 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
         doc.body.setAttribute('contenteditable', 'true')
         doc.body.style.cursor = 'text'
       }
+    }
+  }
+
+  const handleColorChange = (color: string) => {
+    setTextColor(color)
+    const iframe = iframeRef.current
+    if (!iframe?.contentDocument) return
+    const doc = iframe.contentDocument
+    // Restore focus to iframe so execCommand targets the right document
+    iframe.contentWindow?.focus()
+    try {
+      doc.execCommand('foreColor', false, color)
+    } catch {
+      // execCommand may fail on some browsers — silently ignore
     }
   }
 
@@ -468,6 +483,44 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
             >
               {contentEditable ? '完成编辑' : '编辑文字'}
             </button>
+            {contentEditable && (
+              <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                <input
+                  type="color"
+                  value={textColor}
+                  onChange={e => handleColorChange(e.target.value)}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    opacity: 0,
+                    width: '100%',
+                    height: '100%',
+                    cursor: 'pointer',
+                  }}
+                  title="字体颜色"
+                />
+                <span
+                  className="btn btn-ghost btn-sm"
+                  style={{
+                    fontSize: 12,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <span style={{
+                    display: 'inline-block',
+                    width: 14,
+                    height: 14,
+                    borderRadius: 3,
+                    background: textColor,
+                    border: '1px solid rgba(0,0,0,0.2)',
+                  }} />
+                  A
+                </span>
+              </div>
+            )}
             <button
               onClick={() => window.open(previewUrl + '?_t=' + Date.now(), '_blank')}
               className="btn btn-ghost btn-sm"
