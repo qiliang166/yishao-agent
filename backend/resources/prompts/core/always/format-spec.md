@@ -9,7 +9,9 @@ Hex 必须是 `#` + 6 位十六进制字符（或 3 位简写）。超过 6 位�
 | 错误 | 正确 | 说明 |
 |------|------|------|
 | `#fffffffff` | `#ffffff` | 9 位 → 6 位，多打字符 |
+| `#fffffff` | `#ffffff` | 7 位相同字符 → 6 位 |
 | `#ffffffff` | `#ffffff` | 8 位相同字符 → 6 位 |
+| `#fffffffff` | `#ffffff` | 9 位相同字符 → 6 位 |
 | `#FFF` | `#fff` | 必须小写（CSS 中大写也有效，但统一用小写避免混用） |
 | `#1a365dff` | `#1a365d` | 不要给 hex 追加 alpha 通道，alpha 用 rgba() |
 

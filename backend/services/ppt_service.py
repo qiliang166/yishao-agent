@@ -684,7 +684,8 @@ def _resolve_review_models(provider_id: str, model: str) -> tuple[str, str, str]
 
 def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: str,
                      temperature: float = 0.3,
-                     temp_keyword: float = 0, temp_research: float = 0) -> str:
+                     temp_keyword: float = 0, temp_research: float = 0,
+                     project_id: str = "") -> str:
     """Phase 2 (Research): Direct deep analysis of SOP using LLM trained knowledge.
 
     No web search — the LLM already has sufficient domain knowledge.
@@ -693,7 +694,7 @@ def _phase2_research(provider_id: str, model: str, llm_generate, sop_content: st
     if not sop_content or not sop_content.strip():
         return ""
 
-    research_system = _load_research_prompt()
+    research_system = _load_research_prompt(project_id)
 
     research_user = f"""## SOP 文档（唯一分析对象）
 {sop_content}
@@ -737,7 +738,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     try:
         research_context = _phase2_research(provider_id, model, llm_generate, sop_content,
                                             temp_keyword=st.get('keyword', temperature),
-                                            temp_research=st.get('research', temperature))
+                                            temp_research=st.get('research', temperature),
+                                            project_id=project_id)
         if research_context:
             _logger.info(f"Phase 2 research done: {len(research_context)} chars")
             if project_id:
@@ -751,7 +753,7 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                              system_prompt, skill_template, research_context=research_context,
                              temp_outline=st.get('outline', temperature),
                              temp_fill=st.get('fill', temperature),
-                             column_id=column_id)
+                             column_id=column_id, project_id=project_id)
     if not stage1:
         return None
     _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
@@ -783,7 +785,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                                       stage1, style_id=style_id,
                                       temperature=st.get('cards', temperature),
                                       column_id=column_id,
-                                      color_scheme=color_scheme)
+                                      color_scheme=color_scheme,
+                                      project_id=project_id)
         if not structure:
             return None
         _logger.info(f"Phase 1 structure: {len(structure)} slides planned")
@@ -835,7 +838,8 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
     try:
         research_context = _phase2_research(provider_id, model, llm_generate, sop_content,
                                             temp_keyword=st.get('keyword', temperature),
-                                            temp_research=st.get('research', temperature))
+                                            temp_research=st.get('research', temperature),
+                                            project_id=project_id)
         if research_context:
             _logger.info(f"Outline-only research done: {len(research_context)} chars")
             if project_id:
@@ -848,7 +852,7 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
                               system_prompt, skill_template, research_context=research_context,
                               temp_outline=st.get('outline', temperature),
                               temp_fill=st.get('fill', temperature),
-                              column_id=column_id)
+                              column_id=column_id, project_id=project_id)
     if not stage1:
         if project_id:
             _ppt_status.pop(project_id, None)
@@ -916,7 +920,7 @@ def _slides_to_human_text(slides: list) -> str:
     return "\n\n———\n\n".join(parts)
 
 
-def _human_text_to_json(provider_id, model, human_text: str, original_json: list) -> list | None:
+def _human_text_to_json(provider_id, model, human_text: str, original_json: list, project_id: str = "") -> list | None:
     """Use LLM to convert edited natural-language text back to structured JSON.
 
     Low temperature (0.1) ensures near-deterministic output. The LLM is
@@ -940,7 +944,7 @@ def _human_text_to_json(provider_id, model, human_text: str, original_json: list
                 existing_types.add(s["page_type"])
     type_list = ", ".join(sorted(existing_types)) if existing_types else "cover, toc, content, summary"
 
-    t2j_template = _load_text_to_json_prompt()
+    t2j_template = _load_text_to_json_prompt(project_id)
     if not t2j_template:
         t2j_template = """你是数据整理专家。你的唯一任务是将人类编辑的自然文本转回结构化 JSON。
 
@@ -987,7 +991,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
                     system_prompt: str = "", skill_template: str = "",
                     research_context: str = "", temperature: float = 0.3,
                     temp_outline: float = 0, temp_fill: float = 0,
-                    column_id: str = "") -> list | None:
+                    column_id: str = "", project_id: str = "") -> list | None:
     """Stage 1: Two-phase — outline first, then fill content per slide in batches.
 
     research_context from Phase 2 (research-core) provides pre-analyzed SOP structure,
@@ -1012,7 +1016,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 ## 认知设计原则（必须遵守）
 {cognitive_spec_stage1}
 """
-    pyramid_rules = _load_outline_rules()
+    pyramid_rules = _load_outline_rules(project_id)
     if not pyramid_rules:
         pyramid_rules = """重要补充：从提供的 SOP 文章中提取内容，严格按金字塔原理组织大纲。
 核心纪律：大纲中的每个「技法」/「步骤」/「章节」必须独占一页，绝不合并。
@@ -1086,7 +1090,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
     # ── Phase 2: Fill content per slide in parallel batches ──
     BATCH_SIZE = 4
-    fill_system = _load_fill_content_prompt()
+    fill_system = _load_fill_content_prompt(project_id)
     if not fill_system:
         fill_system = (
             "你是内容编辑专家。根据 SOP 文章和金字塔原理为指定幻灯片填充正文内容。"
@@ -2598,7 +2602,8 @@ def _validate_cards(slides: list) -> list[str]:
 
 def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
                    style_id: str = "business", temperature: float = 0.3,
-                   column_id: str = "", color_scheme: str = "deep-blue") -> list | None:
+                   column_id: str = "", color_scheme: str = "deep-blue",
+                   project_id: str = "") -> list | None:
     """Phase 5+6: AI selects Bento Grid layout + fills card content per slide.
 
     Input: stage1_slides [{seq, heading, page_type, layout_hint, body, ...}, ...]
@@ -2614,29 +2619,9 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
     spec_version = rules.get("spec_version", "2.2.1")
 
     # ── System prompt: AI as designer with strict structural rules ──
-    cards_system_core = _load_cards_system_prompt()
+    cards_system_core = _load_cards_system_prompt(project_id)
     if not cards_system_core:
-        cards_system_core = """你是一位演示文稿设计师。你必须严格按照设计系统为每页幻灯片生成结构化的卡片数据。
-
-## 你的任务
-
-根据大纲内容，为每页幻灯片做出设计决策：
-1. **选择布局** — 根据内容语义从 10 种布局中选择（参考第十节决策树），封面必须用 full_bleed
-2. **确定卡片** — 按布局→卡片映射表确定 role 和数量（参考第十一节卡片目录），每页 ≤5 张
-3. **数据可视化** — 识别大纲中的数字并转化为 chart（参考第十二节 chart 决策树），有数字必有图表
-4. **色彩分配** — 遵循色彩角色分工：accent=页面框架装饰，chart_colors=卡片色条轮换，primary=标题
-5. **文案精炼** — 将大纲 body 文字转化为精炼的卡片 title（≤48字）+ body
-
-## 硬性规则
-
-- 封面页 layout=full_bleed，cards ≤3 个，禁止 hero 卡带 chart_colors 色块背景
-- 每卡必有 role + (title 或 body 或 chart)
-- 卡片色条颜色按 chart_colors[0]→[1]→[2]→[3]→[4] 轮换，禁止所有卡片同一颜色
-- 数据页（含 %/数字/占比）→ 优先 dashboard 或 mixed_grid 布局
-- 对比内容（优劣/A vs B）→ two_column 布局
-- 流程/步骤 → timeline 布局
-
-输出纯 JSON，不要用 markdown 包裹。"""
+        cards_system_core = ""
 
     cards_system = f"""{cards_system_core}
 
@@ -2862,7 +2847,8 @@ def _fallback_stage1_structure(stage1_slides: list) -> list:
 
 def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
                       style_id: str = "business", temperature: float = 0.3,
-                      column_id: str = "", color_scheme: str = "deep-blue") -> list | None:
+                      column_id: str = "", color_scheme: str = "deep-blue",
+                      project_id: str = "") -> list | None:
     """Phase 1 of two-phase HTML pipeline: Lightweight structure planning.
 
     One LLM call for ALL slides. AI decides: slide types, layouts, card count/roles,
@@ -2879,7 +2865,7 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
     if style_prompt:
         persona_block = style_prompt
     else:
-        persona_block = "你是演示文稿结构规划师。你必须严格按照以下设计系统为每页幻灯片做出结构设计决策。"
+        persona_block = ""
 
     vi_block = ""
     if style_vi:
@@ -2889,16 +2875,9 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 {style_vi}
 """
 
-    struct_output = _load_structure_output_prompt()
+    struct_output = _load_structure_output_prompt(project_id)
     if not struct_output:
-        struct_output = """2. layout: 从第十节布局库中选择
-3. cards: 每张卡指定 role 和 content_hint
-4. has_chart: 有数字/百分比时 = true
-5. chart_hint: big_number/donut/bar/progress_bar/timeline/sparkline
-
-页面数量严格等于大纲给出的页数，不增不减。
-
-输出纯 JSON，不要用 markdown 包裹。"""
+        struct_output = ""
 
     system = f"""{persona_block}
 
@@ -3051,7 +3030,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     elif style_prompt:
         persona_block = style_prompt
     else:
-        persona_block = "你是演示文稿设计艺术总监。你必须严格按照《幻灯片 HTML 设计系统 v2》为每一页生成完整的 HTML。"
+        persona_block = ""
 
     total = len(structure_slides)
     is_a4 = canvas_h > canvas_w
@@ -3099,7 +3078,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             core_system = ""
         else:
             core_system = build_slide_prompt(stype, layout, has_chart,
-                                                  scheme=active_scheme, style_id=style_id)
+                                                  scheme=active_scheme, style_id=style_id,
+                                                  project_id=project_id)
         # Append VI section for this slide type (design instruction, not user content)
         vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id)
         vi_append = ""
@@ -3123,12 +3103,28 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 - 禁止输出 <!DOCTYPE html>/<html>/<head>/<body>/<title>/<meta>/<link>
 - 输出只包含一个 div 容器（width:{canvas_w}px;height:{canvas_h}px）及其子元素"""
 
-        # ── Cover slide: inject quantified color rules from tokens ──
-        cover_color_rules = ""
-        if is_a4 and stype == "cover" and active_scheme:
-            cover_color_rules = _build_cover_color_rules(style_id, color_scheme, active_scheme)
-            if cover_color_rules:
-                cover_color_rules = f"\n{cover_color_rules}\n"
+        # ── Per-page-type color rules from tokens.yaml ──
+        # These tell the AI the correct CSS variables, but code enforces
+        # them deterministically via _enforce_slide_rules regardless.
+        slide_color_rules = ""
+        if active_scheme:
+            overrides = _load_page_overrides(style_id, stype)
+            if overrides:
+                bg_var = _placeholder_to_css_var(overrides.get("card_bg") or overrides.get("background") or "")
+                text_val = _placeholder_to_css_var(overrides.get("text", ""))
+                if bg_var and text_val:
+                    slide_color_rules = (
+                        f"\n## 本页颜色规则（代码强设，必须遵守）\n"
+                        f"- 背景 `background` 必须是 `{bg_var}` —— 严禁改为任何其他 CSS 变量或 hex 值\n"
+                        f"- 标题/主文字 `color` 必须是 `{text_val}` —— 严禁使用 hex 值\n"
+                    )
+        # Also include full WCAG cover rules for cover slides
+        if stype == "cover":
+            cover_extra = _build_cover_color_rules(style_id, color_scheme, active_scheme)
+            if cover_extra:
+                slide_color_rules = (slide_color_rules + "\n" + cover_extra).strip()
+        if slide_color_rules:
+            slide_color_rules = f"\n{slide_color_rules}\n"
 
         tailored_system = f"""{persona_block}
 
@@ -3140,7 +3136,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 ```
 {font_info}
 {vi_append}
-{cover_color_rules}
+{slide_color_rules}
 {html_output_inst}
 {format_spec}"""
 
@@ -3218,13 +3214,13 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
                     # Post-process: fix common LLM HTML errors
                     html = _fix_llm_html_errors(html, is_a4=is_a4)
-                    # Post-process: enforce cover rules on UNRESOLVED HTML
+                    # Post-process: enforce slide overrides from tokens.yaml
                     # Must run BEFORE _auto_fix_hardcoded_hex (which skips #ffffff)
                     # and BEFORE _resolve_color_vars (which destroys CSS variable info).
-                    # After resolution, is_variable_bg check fails because var(--card_bg)
-                    # has been replaced with its hex value.
-                    if is_a4 and stype == "cover" and active_scheme:
-                        html = _enforce_cover_rules(html, active_scheme, style_id)
+                    # Code deterministically sets background + text color per page type.
+                    # AI does NOT choose colors — tokens.yaml defines everything.
+                    if active_scheme:
+                        html = _enforce_slide_rules(html, active_scheme, style_id, stype)
                     # Post-process: scan & replace hardcoded hex with {{placeholder}} vars
                     html = _fix_malformed_hex(html, seq)
                     html = _auto_fix_hardcoded_hex(html, active_scheme, seq)
@@ -3740,8 +3736,42 @@ def _compute_title_color(style_id: str, page_type: str, scheme: dict) -> str | N
         return "text"
 
 
+# ── Unified core prompt loader ──
+
+def _load_core_prompt(prompt_key: str, project_id: str = "") -> str:
+    """Load a core prompt by key from project_items (per-project) or fallback to disk.
+
+    Resolution order:
+    1) project_items (output_mode='core_prompt') — per-project config
+    2) Disk file resources/prompts/core/{prompt_key}.md — final fallback
+    """
+    # 1) Per-project override from project_items
+    if project_id:
+        safe_key = prompt_key.replace("/", "-").replace("\\", "-")
+        item_id = f"pi-{project_id}-core-{safe_key}"
+        try:
+            db = get_db()
+            row = db.execute(
+                "SELECT prompt FROM project_items WHERE id = ? AND project_id = ?",
+                (item_id, project_id)
+            ).fetchone()
+            db.close()
+            if row and row["prompt"]:
+                return row["prompt"]
+        except Exception:
+            pass
+
+    # 2) Disk fallback
+    p = os.path.join(BASE_DIR, "resources", "prompts", "core", f"{prompt_key}.md")
+    if os.path.exists(p):
+        with open(p, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""
+
+
 def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
-                       scheme: dict | None = None, style_id: str = "") -> str:
+                       scheme: dict | None = None, style_id: str = "",
+                       project_id: str = "") -> str:
     """Build tailored system prompt from modular core/ files — no regex, no full-document parse.
 
     File structure:
@@ -3755,13 +3785,13 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
     import re
 
     _CORE = os.path.join(BASE_DIR, "resources", "prompts", "core")
+    _pcache: dict[str, str | None] = {}  # per-request cache
 
     def _read(*parts: str) -> str | None:
-        p = os.path.join(_CORE, *parts)
-        if os.path.exists(p):
-            with open(p, encoding="utf-8") as f:
-                return f.read()
-        return None
+        prompt_key = "/".join(parts).replace(".md", "")
+        if prompt_key not in _pcache:
+            _pcache[prompt_key] = _load_core_prompt(prompt_key, project_id) or None
+        return _pcache[prompt_key]
 
     parts: list[str] = []
 
@@ -3836,99 +3866,67 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
     return "\n\n".join(parts)
 
 
-# ── Core prompt file loaders ──
+# ── Core prompt file loaders (delegate to unified loader) ──
 
-def _load_research_prompt() -> str:
-    """Load Phase 2 research system prompt from core/research.md."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "research.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return "你是专业的内容研究员。对提供的 SOP 文档进行深度结构化分析。"
+def _load_research_prompt(project_id: str = "") -> str:
+    return _load_core_prompt("research", project_id)
 
 
-def _load_outline_rules() -> str:
-    """Load outline generation rules from core/outline-rules.md."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "outline-rules.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+def _load_outline_rules(project_id: str = "") -> str:
+    return _load_core_prompt("outline-rules", project_id)
 
 
-def _load_fill_content_prompt() -> str:
-    """Load Phase 2 fill content system prompt from core/fill-content.md."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "fill-content.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return "你是内容编辑专家。根据 SOP 文章和金字塔原理为指定幻灯片填充正文内容。"
+def _load_fill_content_prompt(project_id: str = "") -> str:
+    return _load_core_prompt("fill-content", project_id)
 
 
-def _load_text_to_json_prompt() -> str:
-    """Load text-to-JSON conversion prompt template from core/text-to-json.md."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "text-to-json.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return "你是数据整理专家。你的唯一任务是将人类编辑的自然文本转回结构化 JSON。"
+def _load_text_to_json_prompt(project_id: str = "") -> str:
+    return _load_core_prompt("text-to-json", project_id)
 
 
-def _load_cards_system_prompt() -> str:
-    """Load cards generation system prompt from core/cards-system.md."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "cards-system.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+def _load_cards_system_prompt(project_id: str = "") -> str:
+    return _load_core_prompt("cards-system", project_id)
 
 
-def _load_structure_output_prompt() -> str:
-    """Load structure planning output format from core/structure-output.md."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "structure-output.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+def _load_structure_output_prompt(project_id: str = "") -> str:
+    return _load_core_prompt("structure-output", project_id)
 
 
-def _load_html_output_prompt(column_id: str = "") -> str:
+def _load_html_output_prompt(column_id: str = "", project_id: str = "") -> str:
     """Load HTML output format instructions — per-column override supported.
 
-    Resolution order (same pattern as _load_scenario_file):
-    1) scenarios/{column_id}/html-output.md  (per-column override)
-    2) scenarios/_default/html-output.md     (shared default)
-    3) prompts/core/html-output.md           (legacy fallback)
+    Resolution order:
+    1) project_items (per-project, output_mode='core_prompt', key='html-output')
+    2) scenarios/{column_id}/html-output.md  (per-column override)
+    3) scenarios/_default/html-output.md     (shared default)
+    4) prompts/core/html-output.md           (legacy fallback)
     """
-    # 1) Per-column custom file
+    # 1) Per-project override
+    if project_id:
+        content = _load_core_prompt("html-output", project_id)
+        if content:
+            return content
+    # 2) Per-column custom file
     if column_id:
         col_file = os.path.join(SCENARIOS_DIR, column_id, "html-output.md")
         if os.path.exists(col_file):
             with open(col_file, "r", encoding="utf-8") as f:
                 return f.read()
-    # 2) Default scenario template
+    # 3) Default scenario template
     default_file = os.path.join(SCENARIOS_DIR, "_default", "html-output.md")
     if os.path.exists(default_file):
         with open(default_file, "r", encoding="utf-8") as f:
             return f.read()
-    # 3) Legacy core prompt (fallback — keep for backward compatibility)
-    core_file = os.path.join(BASE_DIR, "resources", "prompts", "core", "html-output.md")
-    if os.path.exists(core_file):
-        with open(core_file, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+    # 4) Legacy core prompt
+    return _load_core_prompt("html-output")
 
 
-def _load_edit_agent_prompt() -> str:
-    """Load edit agent system prompt template from core/edit-agent.md."""
-    p = os.path.join(BASE_DIR, "resources", "prompts", "core", "edit-agent.md")
-    if os.path.exists(p):
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    return ""
+def _load_edit_agent_prompt(project_id: str = "") -> str:
+    return _load_core_prompt("edit-agent", project_id)
 
 
-def _build_edit_system_prompt(style_id: str, color_scheme: str = "deep-blue") -> str:
+def _build_edit_system_prompt(style_id: str, color_scheme: str = "deep-blue",
+                              project_id: str = "") -> str:
     """Build edit-slide system prompt — agent with knowledge lookup tool.
 
     Architecture:
@@ -3941,43 +3939,9 @@ def _build_edit_system_prompt(style_id: str, color_scheme: str = "deep-blue") ->
     if not persona:
         persona = "你是演示文稿设计艺术总监。"
 
-    agent_tmpl = _load_edit_agent_prompt()
+    agent_tmpl = _load_edit_agent_prompt(project_id)
     if not agent_tmpl:
-        return f"""## 角色
-
-{persona}
-
-你的工作对象是用户提供的单页幻灯片 HTML。你的能力：
-- 分析当前设计是否符合设计系统规范
-- 使用工具查阅具体的设计规范
-- 与用户讨论改进方案
-- 在用户确认后输出修改后的 HTML
-
-## 可用工具
-
-你有以下工具可以使用：
-1. **list_knowledge_topics** — 列出所有可查询的设计知识主题
-2. **lookup_knowledge** — 按主题名查询具体的设计规范内容
-
-## 工作流
-
-1. **接收用户消息** → 判断意图：讨论 / 简单明确修改 / 模糊修改需求
-2. **简单明确修改**（如"标题改42px""删第三段"）→ 直接执行，不需要查知识库
-3. **模糊需求/涉及设计规范**（如"颜色感觉不对""这里布局合理吗"）→ 先用工具查相关规范，再分析回复
-4. **用户确认**（如"改""做吧""就按这个"）→ 输出修改后的完整 HTML
-
-## 输出格式
-
-- 讨论/分析 → 纯文本
-- 执行修改 → 完整 slide HTML，用 ```html ... ``` 包裹
-
-## 约束
-
-- 画布: 1280×720px，全部内联样式
-- 内容区基准边距: left:60px; right:60px，禁止修改
-- 顶部 accent 色条、标题短线、页码标记属于页面框架，禁止删除
-- 卡片容器必须包含 overflow:hidden
-- 修改范围不超过用户要求，风格匹配已有元素"""
+        return ""
 
     return agent_tmpl.format(persona=persona)
 
@@ -4813,11 +4777,17 @@ def _wcag_contrast_ratio(hex1: str, hex2: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
-def _load_cover_overrides(style_id: str) -> dict:
-    """Load cover slide_type_overrides from tokens.yaml.
+def _load_page_overrides(style_id: str, page_type: str) -> dict:
+    """Load slide_type_overrides for a specific page type from tokens.yaml.
 
-    Returns dict with 'card_bg' and 'text' keys (raw values from YAML,
-    may be {{placeholder}} or hex). Returns empty dict on failure.
+    Returns dict with 'card_bg'/'background' and 'text' keys (raw values
+    from YAML, may be {{placeholder}} or hex).
+
+    If no explicit override exists, derives sensible defaults based on
+    vi.md Section XIII page type categories:
+      - copyright, closing → inherit from summary (or section)
+      - image_hero → inherit from cover
+      - all others → {{background}} (theme default)
     """
     import yaml
     tokens_path = os.path.join(BASE_DIR, "resources", "vi", style_id, "tokens.yaml")
@@ -4826,7 +4796,36 @@ def _load_cover_overrides(style_id: str) -> dict:
     try:
         with open(tokens_path, "r", encoding="utf-8") as f:
             tokens = yaml.safe_load(f.read())
-        return tokens.get("slide_type_overrides", {}).get("cover", {})
+        overrides = tokens.get("slide_type_overrides", {})
+
+        # Explicit override exists AND has bg info — return as-is
+        if page_type in overrides:
+            entry = overrides[page_type]
+            if entry.get("card_bg") or entry.get("background"):
+                return entry
+            # Entry exists but has only non-color keys (e.g. data: {heading_scale, layout})
+            # Fall through to derivation below.
+
+        # ── Derive from parent patterns per vi.md Section XIII ──
+        # copyright & closing: inherit from summary (per their .md files)
+        if page_type in ("copyright", "closing"):
+            parent = overrides.get("summary") or overrides.get("section") or {}
+            if parent:
+                derived = dict(parent)
+                derived.setdefault("layout", "full_bleed")
+                derived.setdefault("no_card_container", True)
+                return derived
+
+        # image_hero: inherit from cover (both full_bleed hero pages)
+        if page_type == "image_hero":
+            parent = overrides.get("cover") or {}
+            if parent:
+                derived = dict(parent)
+                derived.setdefault("layout", "full_bleed")
+                return derived
+
+        # Default types: {{background}} background, theme-default text
+        return {"background": "{{background}}"}
     except Exception:
         return {}
 
@@ -4848,12 +4847,12 @@ def _build_cover_color_rules(style_id: str, color_scheme: str, scheme: dict) -> 
     calculates WCAG AA contrast ratios, and returns a markdown rule block
     that tells the LLM exactly which CSS variables to use and WHY.
     """
-    cover = _load_cover_overrides(style_id)
-    if not cover:
+    overrides = _load_page_overrides(style_id, "cover")
+    if not overrides:
         return ""
 
-    bg_placeholder = cover.get("card_bg", "")
-    text_placeholder = cover.get("text", "")
+    bg_placeholder = overrides.get("card_bg", "")
+    text_placeholder = overrides.get("text", "")
     if not bg_placeholder or not text_placeholder:
         return ""
 
@@ -4898,39 +4897,36 @@ def _build_cover_color_rules(style_id: str, color_scheme: str, scheme: dict) -> 
     return rules
 
 
-def _enforce_cover_rules(html: str, scheme_data: dict, style_id: str = "business") -> str:
-    """Enforce VI cover rules — fully tokens-driven, single unified path for all styles.
+def _enforce_slide_rules(html: str, scheme_data: dict, style_id: str = "business", page_type: str = "content") -> str:
+    """Enforce VI slide rules for any page type — fully tokens-driven.
 
-    Zero hardcoded assumptions:
-    - No branching on background type (variable vs. non-variable)
-    - No forced gradient (templates control their own backgrounds)
-    - No hardcoded CSS variable name lists
+    Reads slide_type_overrides[page_type] from tokens.yaml. Overrides are
+    derived from parent patterns when no explicit entry exists (copyright/closing
+    from summary, image_hero from cover, defaults from {{background}}).
 
-    Tokens say X → code enforces X. That's it.
+    Code deterministically replaces the outermost background and all hardcoded
+    color references with the token-defined values. AI chooses no colors.
     """
     import re as _re
 
-    cover = _load_cover_overrides(style_id)
-    if not cover:
+    overrides = _load_page_overrides(style_id, page_type)
+    if not overrides:
         return html
 
-    bg_var = _placeholder_to_css_var(cover.get("card_bg", ""))
-    text_val = _placeholder_to_css_var(cover.get("text", ""))
-    if not bg_var or not text_val:
+    bg_var = _placeholder_to_css_var(overrides.get("card_bg") or overrides.get("background") or "")
+    text_val = _placeholder_to_css_var(overrides.get("text", ""))
+    if not bg_var:
         return html
 
     # ── Layer 1: Fix hardcoded white text → correct value from tokens ──
-    # Covers all forms: 6-digit, 3-digit, lowercase, uppercase, with/without space.
-    # If tokens say text should be white, these are no-ops (correct by definition).
-    for hardcoded in ('#ffffff', '#FFFFFF', '#fff', '#FFF'):
-        html = html.replace(f'color:{hardcoded}', f'color:{text_val}')
-        html = html.replace(f'color: {hardcoded}', f'color: {text_val}')
-        html = html.replace(f'color:{hardcoded};', f'color:{text_val};')
-        html = html.replace(f'color: {hardcoded};', f'color: {text_val};')
+    if text_val:
+        for hardcoded in ('#ffffff', '#FFFFFF', '#fff', '#FFF', '#fffffff', '#FFFFFFF'):
+            html = html.replace(f'color:{hardcoded}', f'color:{text_val}')
+            html = html.replace(f'color: {hardcoded}', f'color: {text_val}')
+            html = html.replace(f'color:{hardcoded};', f'color:{text_val};')
+            html = html.replace(f'color: {hardcoded};', f'color: {text_val};')
 
     # ── Layer 2: Fix hardcoded rgba(R,G,B, → rgba(var(--text-rgb), ──
-    # LLM sometimes copies the resolved hex RGB into rgba() instead of using
-    # the CSS variable form. Detect from scheme_data and fix.
     text_hex = scheme_data.get("text", "")
     if text_hex.startswith("#") and len(text_hex) == 7:
         r, g, b = int(text_hex[1:3], 16), int(text_hex[3:5], 16), int(text_hex[5:7], 16)
@@ -4938,7 +4934,6 @@ def _enforce_cover_rules(html: str, scheme_data: dict, style_id: str = "business
         html = html.replace(f'rgba({r}, {g}, {b},', 'rgba(var(--text-rgb),')
 
     # ── Layer 3: Fix hardcoded primary RGB in rgba form ──
-    # Same issue: LLM may use resolved primary RGB instead of var(--primary-rgb).
     primary_hex = scheme_data.get("primary", "")
     if primary_hex.startswith("#") and len(primary_hex) == 7:
         r, g, b = int(primary_hex[1:3], 16), int(primary_hex[3:5], 16), int(primary_hex[5:7], 16)
@@ -4946,23 +4941,21 @@ def _enforce_cover_rules(html: str, scheme_data: dict, style_id: str = "business
         html = html.replace(f'rgba({r}, {g}, {b},', 'rgba(var(--primary-rgb),')
 
     # ── Layer 4: Fix var(--text) → correct text variable from tokens ──
-    # Template may use var(--text) but tokens override to e.g. var(--primary) or #ffffff.
-    if text_val != 'var(--text)':
+    if text_val and text_val != 'var(--text)':
         new = text_val
         html = html.replace('color:var(--text)', f'color:{new}')
         html = html.replace('color: var(--text)', f'color: {new}')
         html = html.replace('color:var(--text);', f'color:{new};')
         html = html.replace('color: var(--text);', f'color: {new};')
 
-    # ── Layer 5: Fix background hardcoded hex → correct CSS variable ──
-    # If the cover background token resolves to a scheme color, replace any
-    # hardcoded-hex version of it with the CSS variable form.
-    m = _re.match(r'\{\{(\w+)\}\}', cover.get("card_bg", ""))
-    if m:
-        bg_hex = scheme_data.get(m.group(1), "")
-        if bg_hex.startswith("#"):
-            html = html.replace(f'background:{bg_hex}', f'background:{bg_var}')
-            html = html.replace(f'background: {bg_hex}', f'background: {bg_var}')
+    # ── Layer 5: Force outermost background to token-defined value ──
+    # AI may use var(--card_bg), var(--background), hardcoded hex, or any
+    # other background. Tokens define the correct background unconditionally.
+    html = _re.sub(
+        r'(\bbackground\s*:\s*)(?:var\(--[^)]+\)|#[0-9a-fA-F]{3,8}|[^;"]+)',
+        rf'\g<1>{bg_var}',
+        html, count=1
+    )
 
     return html
 
@@ -5103,10 +5096,11 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
         html = html.replace('{{BRAND_COPYRIGHT}}', _html_escape.escape(_copyright_str))
         html = html.replace('{{BRAND_SIGNATURE}}', _html_escape.escape(_sig_str))
 
-        # Cover slide: code-enforced design rules (VI §cover)
-        # LLM cannot be trusted to follow cover rules — code enforces them.
-        if slide_num == 1 and scheme_data:
-            html = _enforce_cover_rules(html, scheme_data, style_id)
+        # Per-slide code enforcement: background + text from tokens.yaml
+        # AI does not choose colors — tokens define everything per page type.
+        page_type = s.get("type", "content")
+        if scheme_data:
+            html = _enforce_slide_rules(html, scheme_data, style_id, page_type)
             # Cover font-size: upscale subtitle/metadata 12px→14px in content area
             # (above bottom branding div)
             _btm = html.rfind("position:absolute;bottom:")
