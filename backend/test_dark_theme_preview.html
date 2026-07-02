@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Dark Theme Fix — Before vs After</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Inter, PingFang SC, sans-serif; background:#1a1a2e; color:#e0e0e0; padding:20px; }
+  h1 { color:#22d3ee; font-size:24px; margin-bottom:8px; }
+  .subtitle { color:#94a3b8; font-size:14px; margin-bottom:24px; }
+  .comparison { display:flex; gap:20px; flex-wrap:wrap; }
+  .col { flex:1; min-width:500px; }
+  .col h2 { font-size:18px; margin-bottom:12px; padding:8px 16px; border-radius:6px; }
+  .col.before h2 { background:#7f1d1d; color:#fca5a5; }
+  .col.after h2 { background:#14532d; color:#86efac; }
+  .slide-wrapper { border-radius:8px; overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.5); }
+  .slide-wrapper iframe { border:none; display:block; }
+  .label { font-size:12px; color:#94a3b8; margin-top:8px; }
+  .fix-indicator { display:inline-block; padding:2px 10px; border-radius:4px; font-size:12px; margin-left:8px; }
+  .fixed { background:#14532d; color:#86efac; }
+  .broken { background:#7f1d1d; color:#fca5a5; }
+  .legend { display:flex; gap:16px; margin-bottom:20px; font-size:13px; }
+  .arrow { position:absolute; top:8px; right:8px; font-size:18px; }
+</style>
+</head>
+<body>
+<h1>Dark Theme Title Color Fix — E2E Verification</h1>
+<p class="subtitle">Tech Modern / Cyber-Cyan · 模拟 LLM 输出 · 完整后处理管线</p>
+
+<div class="legend">
+  <div><b>场景:</b> 内容页(content), Tech Modern / cyber-cyan</div>
+  <div><b>primary:</b> #0a1628 (深蓝黑)</div>
+  <div><b>background:</b> #060d18 (极深蓝黑)</div>
+  <div><b>text:</b> #f1f5f9 (浅灰白)</div>
+  <div><b>WCAG primary-on-bg:</b> 1.1:1 <span class="broken">不可读</span></div>
+  <div><b>WCAG text-on-bg:</b> 17.8:1 <span class="fixed">可读</span></div>
+</div>
+
+<div class="comparison">
+  <div class="col before">
+    <h2>BEFORE <span class="broken">修复前</span></h2>
+    <p style="font-size:13px;color:#fca5a5;margin-bottom:12px;">
+      标题 color={primary} (#0a1628) → 深色文字在深色背景上 → <b>不可见</b><br>
+      _auto_fix_dark_on_dark 不存在 → 深色标题未被修复
+    </p>
+    <div class="slide-wrapper">
+      <iframe width="1280" height="360" srcdoc="&lt;div style=&quot;width:1280px;height:720px;position:relative;overflow:hidden;background:var(--background);font-family:Space Grotesk,Inter,PingFang SC,sans-serif;&quot;&gt;
+  &lt;!-- Page decoration --&gt;
+  &lt;svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;circle cx=&quot;1150&quot; cy=&quot;100&quot; r=&quot;180&quot; fill=&quot;none&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.08&quot;/&gt;
+    &lt;circle cx=&quot;1200&quot; cy=&quot;620&quot; r=&quot;120&quot; fill=&quot;none&quot; stroke=&quot;var(--accent)&quot; stroke-width=&quot;1&quot; opacity=&quot;0.06&quot;/&gt;
+    &lt;line x1=&quot;40&quot; y1=&quot;68&quot; x2=&quot;80&quot; y2=&quot;68&quot; stroke=&quot;var(--accent)&quot; stroke-width=&quot;3&quot;/&gt;
+  &lt;/svg&gt;
+  &lt;!-- Accent stripe --&gt;
+  &lt;div style=&quot;width:100%;height:4px;background:var(--accent);&quot;&gt;&lt;/div&gt;
+  &lt;!-- Page title — OLD: uses var(--primary) = dark on dark = INVISIBLE --&gt;
+  &lt;h1 style=&quot;color:var(--primary);font-size:40px;font-weight:700;margin:32px 60px 0;letter-spacing:1px;&quot;&gt;季度产品安全性检测报告&lt;/h1&gt;
+  &lt;p style=&quot;color:var(--text);opacity:0.55;font-size:16px;margin:8px 60px 0;&quot;&gt;2026 Q2 质量与安全评估 · 麻香鸡系列&lt;/p&gt;
+  &lt;!-- Metric cards --&gt;
+  &lt;div style=&quot;display:flex;gap:24px;margin:36px 60px 0;&quot;&gt;
+    &lt;div style=&quot;flex:1;background:var(--card_bg);overflow:hidden;border-radius:8px;padding:24px;border-left:3px solid {{chart_0}};&quot;&gt;
+      &lt;div style=&quot;font-size:14px;color:var(--text);opacity:0.55;&quot;&gt;检测批次&lt;/div&gt;
+      &lt;div style=&quot;font-size:36px;font-weight:700;color:{{chart_0}};margin-top:8px;&quot;&gt;247&lt;/div&gt;
+      &lt;div style=&quot;font-size:14px;color:{{semantic_positive}};margin-top:12px;&quot;&gt;▲ 12% vs上季&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div style=&quot;flex:1;background:var(--card_bg);overflow:hidden;border-radius:8px;padding:24px;border-left:3px solid {{chart_1}};&quot;&gt;
+      &lt;div style=&quot;font-size:14px;color:var(--text);opacity:0.55;&quot;&gt;合格率&lt;/div&gt;
+      &lt;div style=&quot;font-size:36px;font-weight:700;color:{{chart_1}};margin-top:8px;&quot;&gt;98.7%&lt;/div&gt;
+      &lt;div style=&quot;font-size:14px;color:{{semantic_positive}};margin-top:12px;&quot;&gt;▲ 0.5% vs上季&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div style=&quot;flex:1;background:var(--card_bg);overflow:hidden;border-radius:8px;padding:24px;border-left:3px solid {{chart_2}};&quot;&gt;
+      &lt;div style=&quot;font-size:14px;color:var(--text);opacity:0.55;&quot;&gt;预警次数&lt;/div&gt;
+      &lt;div style=&quot;font-size:36px;font-weight:700;color:{{chart_2}};margin-top:8px;&quot;&gt;3&lt;/div&gt;
+      &lt;div style=&quot;font-size:14px;color:{{semantic_negative}};margin-top:12px;&quot;&gt;▼ 40% vs上季&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;!-- Card title — OLD: also uses var(--primary)  --&gt;
+  &lt;div style=&quot;background:var(--card_bg);overflow:hidden;border-radius:8px;margin:32px 60px 0;padding:24px;&quot;&gt;
+    &lt;h2 style=&quot;color:var(--primary);font-size:24px;font-weight:600;margin: 0px;&quot;&gt;微生物指标检测明细&lt;/h2&gt;
+    &lt;p style=&quot;color:var(--text);font-size:16px;line-height:1.8;margin-top:12px;&quot;&gt;菌落总数、大肠菌群、沙门氏菌、金黄色葡萄球菌四项核心指标均符合 GB 2726-2016 标准。其中菌落总数中位数为 1.2×10⁴ CFU/g，远低于限量值 1.0×10⁵ CFU/g。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;!-- Hero card — correct (dark bg + white text) --&gt;
+  &lt;div style=&quot;background:var(--primary);overflow:hidden;border-radius:8px;margin:24px 60px 0;padding:24px;&quot;&gt;
+    &lt;p style=&quot;color:#ffffff;font-size:16px;font-weight:600;margin: 0px;&quot;&gt;关键发现：2026 Q2 所有检测指标均达标，无重大质量事故&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;!-- Page number --&gt;
+  &lt;div style=&quot;position:absolute;bottom:28px;right:60px;font-size:14px;color:var(--text);opacity:0.35;&quot;&gt;02 / 15&lt;/div&gt;
+&lt;/div&gt;"></iframe>
+    </div>
+  </div>
+  <div class="col after">
+    <h2>AFTER <span class="fixed">修复后</span></h2>
+    <p style="font-size:13px;color:#86efac;margin-bottom:12px;">
+      标题 color={text} (#f1f5f9) → 浅色文字在深色背景上 → <b>清晰可见</b><br>
+      _auto_fix_dark_on_dark 将标题 primary→text，保留 hero bg 和卡片颜色
+    </p>
+    <div class="slide-wrapper">
+      <iframe width="1280" height="360" srcdoc="&lt;div style=&quot;width:1280px;height:720px;position:relative;overflow:hidden;background:var(--background);font-family:Space Grotesk,Inter,PingFang SC,sans-serif;&quot;&gt;
+  &lt;!-- Page decoration --&gt;
+  &lt;svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;&gt;
+    &lt;circle cx=&quot;1150&quot; cy=&quot;100&quot; r=&quot;180&quot; fill=&quot;none&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot; opacity=&quot;0.08&quot;/&gt;
+    &lt;circle cx=&quot;1200&quot; cy=&quot;620&quot; r=&quot;120&quot; fill=&quot;none&quot; stroke=&quot;var(--accent)&quot; stroke-width=&quot;1&quot; opacity=&quot;0.06&quot;/&gt;
+    &lt;line x1=&quot;40&quot; y1=&quot;68&quot; x2=&quot;80&quot; y2=&quot;68&quot; stroke=&quot;var(--accent)&quot; stroke-width=&quot;3&quot;/&gt;
+  &lt;/svg&gt;
+  &lt;!-- Accent stripe --&gt;
+  &lt;div style=&quot;width:100%;height:4px;background:var(--accent);&quot;&gt;&lt;/div&gt;
+  &lt;!-- Page title — OLD: uses var(--primary) = dark on dark = INVISIBLE --&gt;
+  &lt;h1 style=&quot;color:var(--text);font-size:40px;font-weight:700;margin:32px 60px 0;letter-spacing:1px;&quot;&gt;季度产品安全性检测报告&lt;/h1&gt;
+  &lt;p style=&quot;color:var(--text);opacity:0.55;font-size:16px;margin:8px 60px 0;&quot;&gt;2026 Q2 质量与安全评估 · 麻香鸡系列&lt;/p&gt;
+  &lt;!-- Metric cards --&gt;
+  &lt;div style=&quot;display:flex;gap:24px;margin:36px 60px 0;&quot;&gt;
+    &lt;div style=&quot;flex:1;background:var(--card_bg);overflow:hidden;border-radius:8px;padding:24px;border-left:3px solid {{chart_0}};&quot;&gt;
+      &lt;div style=&quot;font-size:14px;color:var(--text);opacity:0.55;&quot;&gt;检测批次&lt;/div&gt;
+      &lt;div style=&quot;font-size:36px;font-weight:700;color:{{chart_0}};margin-top:8px;&quot;&gt;247&lt;/div&gt;
+      &lt;div style=&quot;font-size:14px;color:{{semantic_positive}};margin-top:12px;&quot;&gt;▲ 12% vs上季&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div style=&quot;flex:1;background:var(--card_bg);overflow:hidden;border-radius:8px;padding:24px;border-left:3px solid {{chart_1}};&quot;&gt;
+      &lt;div style=&quot;font-size:14px;color:var(--text);opacity:0.55;&quot;&gt;合格率&lt;/div&gt;
+      &lt;div style=&quot;font-size:36px;font-weight:700;color:{{chart_1}};margin-top:8px;&quot;&gt;98.7%&lt;/div&gt;
+      &lt;div style=&quot;font-size:14px;color:{{semantic_positive}};margin-top:12px;&quot;&gt;▲ 0.5% vs上季&lt;/div&gt;
+    &lt;/div&gt;
+    &lt;div style=&quot;flex:1;background:var(--card_bg);overflow:hidden;border-radius:8px;padding:24px;border-left:3px solid {{chart_2}};&quot;&gt;
+      &lt;div style=&quot;font-size:14px;color:var(--text);opacity:0.55;&quot;&gt;预警次数&lt;/div&gt;
+      &lt;div style=&quot;font-size:36px;font-weight:700;color:{{chart_2}};margin-top:8px;&quot;&gt;3&lt;/div&gt;
+      &lt;div style=&quot;font-size:14px;color:{{semantic_negative}};margin-top:12px;&quot;&gt;▼ 40% vs上季&lt;/div&gt;
+    &lt;/div&gt;
+  &lt;/div&gt;
+  &lt;!-- Card title — OLD: also uses var(--primary)  --&gt;
+  &lt;div style=&quot;background:var(--card_bg);overflow:hidden;border-radius:8px;margin:32px 60px 0;padding:24px;&quot;&gt;
+    &lt;h2 style=&quot;color:var(--text);font-size:24px;font-weight:600;margin: 0px;&quot;&gt;微生物指标检测明细&lt;/h2&gt;
+    &lt;p style=&quot;color:var(--text);font-size:16px;line-height:1.8;margin-top:12px;&quot;&gt;菌落总数、大肠菌群、沙门氏菌、金黄色葡萄球菌四项核心指标均符合 GB 2726-2016 标准。其中菌落总数中位数为 1.2×10⁴ CFU/g，远低于限量值 1.0×10⁵ CFU/g。&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;!-- Hero card — correct (dark bg + white text) --&gt;
+  &lt;div style=&quot;background:var(--primary);overflow:hidden;border-radius:8px;margin:24px 60px 0;padding:24px;&quot;&gt;
+    &lt;p style=&quot;color:#ffffff;font-size:16px;font-weight:600;margin: 0px;&quot;&gt;关键发现：2026 Q2 所有检测指标均达标，无重大质量事故&lt;/p&gt;
+  &lt;/div&gt;
+  &lt;!-- Page number --&gt;
+  &lt;div style=&quot;position:absolute;bottom:28px;right:60px;font-size:14px;color:var(--text);opacity:0.35;&quot;&gt;02 / 15&lt;/div&gt;
+&lt;/div&gt;"></iframe>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:24px;font-size:12px;color:#64748b;">
+  Pipeline: _fix_llm_html_errors → _fix_malformed_hex → _auto_fix_hardcoded_hex →
+  _auto_fix_white_on_light → <b>_auto_fix_dark_on_dark ★ NEW</b> → _strip_local_var_overrides →
+  _auto_fix_font_size → _resolve_color_vars
+</p>
+</body>
+</html>

@@ -1,0 +1,433 @@
+# Creative Bold — Vibrant Design Tokens
+# 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
+
+# 当前激活的色系（兼容字段）
+color_scheme: ocean-pop
+
+# 文档模板映射 — 从 chart_colors 引用，避免破坏13色码结构
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "30,27,75"
+  white: "#ffffff"
+
+color_schemes:
+  vivid-violet:
+    label: "活力紫粉"
+    primary: "#7c3aed"
+    secondary: "#ec4899"
+    accent: "#d97706"
+    background: "#faf5ff"
+    text: "#1e1b4b"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#d97706"
+      - "#7c3aed"
+      - "#ec4899"
+      - "#14b8a6"
+      - "#f43f5e"
+      - "#3b82f6"
+      - "#84cc16"
+      - "#f97316"
+    semantic:
+      positive: "#14b8a6"
+      negative: "#f43f5e"
+    persona_hint: "紫罗兰（#7c3aed）与粉红（#ec4899）在浅薰衣草底上碰撞出活力表现力。琥珀色强调装饰，8色全色谱图表，圆角大卡片加柔和阴影。"
+  rainbow-pop:
+    label: "彩虹波普"
+    primary: "#5b2d8e"
+    secondary: "#e8458b"
+    accent: "#ff6b35"
+    background: "#fef9f0"
+    text: "#1a1025"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#ff3b3b"
+      - "#ff8c00"
+      - "#ffd700"
+      - "#3ddc84"
+      - "#44bbff"
+      - "#7b5ea7"
+      - "#e8458b"
+    semantic:
+      positive: "#3ddc84"
+      negative: "#ff3b3b"
+    persona_hint: "波普艺术遇见彩虹光谱。纯白卡片在暖白画布上跳跃，七色霓虹（红橙黄绿蓝靛紫）点缀图表与色条，活力张扬却不刺眼。"
+  citrus-burst:
+    label: "柑橘爆发"
+    primary: "#e85d04"
+    secondary: "#faa307"
+    accent: "#dc2f02"
+    background: "#fffdf7"
+    text: "#1a0d00"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#dc2f02"
+      - "#f48c06"
+      - "#ffba08"
+      - "#52b788"
+      - "#40916c"
+      - "#95d5b2"
+      - "#2d6a4f"
+    semantic:
+      positive: "#52b788"
+      negative: "#dc2f02"
+    persona_hint: "柑橘果园的色彩爆发。从深橙到金黄再到翠绿，暖色调主导搭配清新绿色点缀，阳光活力扑面而来。"
+  ocean-pop:
+    label: "海洋波普"
+    primary: "#1e40af"
+    secondary: "#0284c7"
+    accent: "#f43f5e"
+    background: "#f0f9ff"
+    text: "#0c1929"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#f43f5e"
+      - "#0ea5e9"
+      - "#06b6d4"
+      - "#10b981"
+      - "#8b5cf6"
+      - "#f59e0b"
+      - "#ec4899"
+    semantic:
+      positive: "#10b981"
+      negative: "#f43f5e"
+    persona_hint: "深海蓝（#1e40af）与珊瑚粉（#f43f5e）的冷暖碰撞。天蓝画布上的白色卡片，海洋系蓝绿图表与珊瑚色强调，清爽而有冲击力。"
+typography:
+  heading_font: "Montserrat, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  body_font: "Plus Jakarta Sans, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  cover_title:
+    size: "58-65px"
+    weight: 700
+  page_title:
+    size: "36-44px"
+    weight: 700
+  card_title:
+    size: "22-24px"
+    weight: 600
+  body:
+    size: "16-18px"
+    weight: 400
+  caption:
+    size: "13-14px"
+    weight: 400
+  line_height:
+    heading: 1.15-1.25
+    body: 1.6-1.8
+  letter_spacing:
+    heading: "-0.3~-0.5px"
+
+card_style:
+  border_radius: 20
+  shadow: "0 4px 16px rgba(124,58,237,0.12)"
+  border: "1px solid rgba({{text_rgb}}, 0.06)"
+  gap: 24
+  left_stripe_width: 4
+
+gradients:
+  hero_bg: "linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)"
+  card_highlight: "linear-gradient(180deg, {{card_bg}} 0%, rgba({{primary_rgb}}, 0.04) 100%)"
+
+elevation:
+  shadow_sm: "0 1px 3px rgba({{primary_rgb}}, 0.06)"
+  shadow_md: "0 4px 16px rgba({{primary_rgb}}, 0.12)"
+  shadow_lg: "0 12px 40px rgba({{primary_rgb}}, 0.2)"
+
+slide_type_overrides:
+  cover:
+    card_bg: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.4
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "{{secondary}}"
+    text: "#ffffff"
+    body_font_style: "italic"
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "{{primary}}"
+    text: "#ffffff"
+    layout: full_bleed
+  summary:
+    background: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "© YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.4-0.5
+  content:
+    background: "{{background}}"
+    layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "1px solid rgba({{text_rgb}}, 0.12)"
+    cell_border: "1px solid rgba({{text_rgb}}, 0.06)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.03-0.05"
+    accent_stripe_height: 5
+
+layout_types:
+  - id: full_bleed
+    cards: "1-3"
+    description: "垂直居中，全屏"
+    use: "封面、章节分隔、总结"
+  - id: three_column
+    cards: 3
+    description: "水平等分，每栏 ~373px"
+    use: "并列要点、三大优势"
+  - id: two_column
+    cards: 2
+    description: "水平等分，每栏 ~550px"
+    use: "对比分析、优劣对比"
+  - id: two_column_asymmetric
+    cards: 2
+    description: "左宽 62% + 右窄 38%"
+    use: "主次内容、问题+方案"
+  - id: dashboard
+    cards: "3-5"
+    description: "顶行 metric 卡 + 底行 summary"
+    use: "数据总览、KPI 展示"
+  - id: mixed_grid
+    cards: "3-4"
+    description: "顶行 hero(全宽) + 底行 2-3 小卡"
+    use: "核心观点+支撑论据"
+  - id: hero_grid
+    cards: "2-4"
+    description: "左 hero 大卡 + 右 1-2 小卡堆叠"
+    use: "论点+数据佐证"
+  - id: single_focus
+    cards: 1
+    description: "居中大卡 ~900px"
+    use: "核心结论、金句"
+  - id: timeline
+    cards: "2-5"
+    description: "水平排列，步骤节点+连接线"
+    use: "流程步骤、时间线"
+  - id: horizontal_split
+    cards: "3-4"
+    description: "顶全宽 hero + 底行 2-3 小卡"
+    use: "标题+支撑指标"
+
+card_roles:
+  - role: hero
+    visual: "大卡，大面积，核心信息，hero_bg 渐变背景"
+    required: [title, body]
+    optional: [chart]
+  - role: metric
+    visual: "居中大数字/进度条，顶部短色条"
+    required: [chart]
+    optional: []
+  - role: card_0
+    visual: "标准卡，圆角 20px，左侧 4px 色条(chart_colors[0])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_1
+    visual: "标准卡，圆角 20px，左侧 4px 色条(chart_colors[1])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_2
+    visual: "标准卡，圆角 20px，左侧 4px 色条(chart_colors[2])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_3
+    visual: "标准卡，圆角 20px，左侧 4px 色条(chart_colors[3])"
+    required: [title or body]
+    optional: [chart]
+  - role: card_4
+    visual: "标准卡，圆角 20px，左侧 4px 色条(chart_colors[4])"
+    required: [title or body]
+    optional: [chart]
+  - role: left
+    visual: "绿色顶条 + ▲ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比左/正面/优势"
+  - role: right
+    visual: "红色顶条 + ▼ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比右/反面/劣势"
+  - role: summary
+    visual: "全宽浅色/半透明卡"
+    required: [title or body]
+    optional: [chart]
+    use: "数据总结、页面收尾"
+  - role: step_N
+    visual: "圆形编号 + 标题 + 描述"
+    required: [title, body]
+    optional: []
+    use: "时间线步骤 1~5"
+
+decoration:
+  accent_stripe: "4px solid {{accent}}"
+  title_underline: "40×3px {{accent}}"
+  page_dot: "6px {{accent}}"
+  layers: ["背景层", "点阵纹理层", "结构层", "内容层", "高光层"]
+  types:
+    - id: type_a
+      name: "波普圆点"
+      description: "点阵纹理 + 右上角渐变光晕 + 顶部色条 + 标题短线 + 页码"
+    - id: type_b
+      name: "几何拼贴"
+      description: "半透明三角/菱形 + 圆角矩形 + 渐变光斑"
+    - id: type_c
+      name: "液态流动"
+      description: "有机曲线 blob + 半透明重叠圆 + 柔和阴影"
+
+icons:
+  style: "duotone"
+  stroke_width: "2px"
+  card_size: 20
+  hero_size: 36
+  metric_size: 16
+  color_rule: "跟随所在卡片的 chart_color, opacity: 0.9"
+
+illustrations:
+  label_align: "text-anchor=middle, label_x=graphic_cx"
+  label_spacing: "≥22px from graphic bottom to label baseline"
+  guide_spacing: "≥20px"
+  min_stroke: "1px"
+  min_font: "14px"
+
+quality_checklist:
+  - "5 层结构完整"
+  - "≥3 个 SVG 元素"
+  - "≥4 种不同 chart_color"
+  - "≥1 个半透明几何装饰"
+  - "每卡: SVG图标 + 标题 + 正文"
+  - "数字→图表形态"
+  - "顶部 accent 色条(4px)"
+  - "标题短线(40×3px)"
+  - "页码(dot + 页号)"
+  - "标题 primary 色"
+  - "正文 text 色"
+  - "卡片 card_bg 色"
+  - "背景 background 色"
+  - "字体 typography token"
+  - "圆角 20px"
+  - "阴影 elevation token"
+  - "插图标签居中"
+  - "插图间距 ≥22px"
+  - "插图字号 ≥14px"
+  - "SVG描边 ≥1px"
+  - "封面/总结无卡片容器"
+  - "色条轮换"
+
+font_thresholds:
+  slide_title: { min: 28, max: 44 }
+  card_title: { min: 18, max: 32 }
+  body: { min: 14, max: 20 }
+  label: { min: 14, max: 14 }
+  absolute_min: 14
+
+safe_area:
+  x_min: 40
+  y_min: 28
+  y_max: 710
+
+visual_richness:
+  min_svg_elements: 3
+  min_colors: 4
+  min_cards: 3
+  min_decorations: 2
+  min_layers: 5
+
+block_types:
+  header:
+    description: "文档头部（LOGO/编号/日期），全宽合并，可选段落"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba({{text_rgb}}, 0.55)"
+    border_bottom: "1px solid rgba({{text_rgb}}, 0.08)"
+    columns: "2-4"
+  title:
+    description: "文档主标题，hero 渐变背景 + accent 下划线，必有段落"
+    colspan: full
+    background: "linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)"
+    color: "#ffffff"
+    font_size: "20-24px"
+    font_weight: 700
+    letter_spacing: "2-3px"
+    border_bottom: "3px solid {{accent}}"
+  info_block:
+    description: "键值对信息表，标签列 + 值列，可选图片占位区"
+    colspan: auto
+    label_bg: "{{card_bg}}"
+    label_color: "{{accent}}"
+    label_weight: 600
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "1.5px dashed rgba({{text_rgb}}, 0.15)"
+    image_placeholder_radius: 10
+  table_block:
+    description: "多列数据网格，含表头和交替行数据"
+    colspan: auto
+    header_bg_default: "{{chart_1}}"
+    header_bg_alt_0: "{{chart_0}}"
+    header_bg_alt_2: "{{chart_2}}"
+    header_color: "#ffffff"
+    header_weight: 600
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba({{text_rgb}}, 0.02)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "1px solid rgba({{text_rgb}}, 0.06)"
+    header_border_top: "2px solid rgba({{text_rgb}}, 0.1)"
+    header_rotation: "chart_1 → chart_0 → chart_2"
+  text_block:
+    description: "自由段落文字，全宽合并"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba({{text_rgb}}, 0.08)"
+  list_block:
+    description: "编号或项目符号列表"
+    colspan: full
+    number_color: "{{accent}}"
+    number_weight: 600
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba({{text_rgb}}, 0.08)"
+  closing:
+    description: "文档收束区域（结论/签名/落款），可选段落"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "1.5px solid rgba({{text_rgb}}, 0.1)"
+    layouts: ["center", "split"]
+  footer:
+    description: "文档底部声明区（版权/备注）"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba({{text_rgb}}, 0.45)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "1.5px solid rgba({{text_rgb}}, 0.1)"
+    align: center

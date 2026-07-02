@@ -1,0 +1,360 @@
+# 像素艺术 — Pixel Art Design Tokens
+# 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
+
+color_scheme: retro-pixel
+
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "255,255,255"
+  white: "#ffffff"
+
+color_schemes:
+  retro-pixel:
+    label: "复古像素"
+    primary: "#222034"
+    secondary: "#45283c"
+    accent: "#99e550"
+    background: "#222034"
+    text: "#ffffff"
+    card_bg: "#323c39"
+    chart_colors:
+      - "#99e550"
+      - "#6abe30"
+      - "#37946e"
+      - "#5fcde4"
+      - "#cbdbfc"
+      - "#d77bba"
+      - "#d95763"
+      - "#fbf236"
+    semantic:
+      positive: "#99e550"
+      negative: "#d95763"
+    persona_hint: "8-bit游戏美学，深紫黑底（#222034）+ 霓虹绿强调（#99e550）。零圆角，硬像素阴影（4px 4px 0），像素字体 VT323 / Press Start 2P。"
+  gameboy-dmg:
+    label: "Game Boy"
+    primary: "#0f380f"
+    secondary: "#306230"
+    accent: "#9bbc0f"
+    background: "#0f380f"
+    text: "#e0f8d0"
+    card_bg: "#1a4a1a"
+    chart_colors:
+      - "#9bbc0f"
+      - "#8bac0f"
+      - "#306230"
+      - "#e0f8d0"
+      - "#68a838"
+      - "#c0d860"
+      - "#489030"
+      - "#d8f0a8"
+    semantic:
+      positive: "#9bbc0f"
+      negative: "#d95763"
+    persona_hint: "Game Boy DMG 绿屏四色（#0f380f #306230 #8bac0f #9bbc0f）。零圆角+硬像素阴影，VT323像素字体，经典掌机怀旧风。"
+  cga-cyan:
+    label: "CGA青品"
+    primary: "#000000"
+    secondary: "#0000aa"
+    accent: "#00aaaa"
+    background: "#000000"
+    text: "#ffffff"
+    card_bg: "#151515"
+    chart_colors:
+      - "#00aaaa"
+      - "#aa00aa"
+      - "#ffffff"
+      - "#00aa00"
+      - "#aa5500"
+      - "#aaaaaa"
+      - "#5555ff"
+      - "#ff55ff"
+    semantic:
+      positive: "#00aaaa"
+      negative: "#aa00aa"
+    persona_hint: "IBM CGA 80年代调色板，纯黑底（#000000）+ 青色高亮（#00aaaa）+ 品红点缀（#aa00aa）。零圆角+硬像素阴影，VT323像素字体，IBM PC怀旧风。"
+  arcade-neon:
+    label: "街机霓虹"
+    primary: "#0a0a1a"
+    secondary: "#1a1a3a"
+    accent: "#ff6ec7"
+    background: "#0a0a1a"
+    text: "#e8e0f0"
+    card_bg: "#181830"
+    chart_colors:
+      - "#ff6ec7"
+      - "#00ffff"
+      - "#ffff00"
+      - "#00ff66"
+      - "#ff4444"
+      - "#4488ff"
+      - "#ff8800"
+      - "#aa44ff"
+    semantic:
+      positive: "#00ff66"
+      negative: "#ff4444"
+    persona_hint: "街机机台霓虹，深蓝黑底（#0a0a1a）+ 霓虹粉（#ff6ec7）+ 青色点缀（#00ffff）。零圆角+硬像素阴影，VT323像素字体，80年代街机厅风格。"
+  snes-sunset:
+    label: "超任夕阳"
+    primary: "#1a1030"
+    secondary: "#382050"
+    accent: "#f0a040"
+    background: "#1a1030"
+    text: "#f8e8d0"
+    card_bg: "#281a40"
+    chart_colors:
+      - "#f0a040"
+      - "#e06060"
+      - "#60b860"
+      - "#6090e0"
+      - "#e0e060"
+      - "#c060e0"
+      - "#60e0d0"
+      - "#e0a060"
+    semantic:
+      positive: "#60b860"
+      negative: "#e06060"
+    persona_hint: "SFC/SNES 16位时代暖色，深紫底（#1a1030）+ 落日橙（#f0a040）。零圆角+硬像素阴影，VT323像素字体，90年代日式RPG温暖色调。"
+
+typography:
+  heading_font: "VT323, 'Press Start 2P', 'PingFang SC', 'Microsoft YaHei', monospace"
+  body_font: "VT323, 'Press Start 2P', 'PingFang SC', 'Microsoft YaHei', monospace"
+  cover_title: { size: "48-56px", weight: 400 }
+  page_title: { size: "28-36px", weight: 400 }
+  card_title: { size: "18-22px", weight: 400 }
+  body: { size: "16-18px", weight: 400 }
+  caption: { size: "13-14px", weight: 400 }
+  line_height: { heading: 1.2-1.3, body: 1.5-1.7 }
+  letter_spacing: { heading: "1~2px" }
+
+card_style:
+  border_radius: 0
+  shadow: "4px 4px 0 rgba(0,0,0,0.4)"
+  border: "2px solid {{primary}}"
+  gap: 20
+  left_stripe_width: 4
+
+gradients:
+  hero_bg: "none"
+  card_highlight: "none"
+
+elevation:
+  shadow_sm: "2px 2px 0 rgba(0,0,0,0.3)"
+  shadow_md: "4px 4px 0 rgba(0,0,0,0.4)"
+  shadow_lg: "8px 8px 0 rgba(0,0,0,0.5)"
+
+slide_type_overrides:
+  cover:
+    card_bg: "{{primary}}"
+    text: "{{accent}}"
+    heading_scale: 1.3
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "{{card_bg}}"
+    text: "{{accent}}"
+    body_font_style: normal
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "{{primary}}"
+    text: "{{accent}}"
+    layout: full_bleed
+  summary:
+    background: "{{primary}}"
+    text: "{{accent}}"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "© YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.4-0.5
+  content:
+    background: "{{background}}"
+    layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "2px solid {{primary}}"
+    cell_border: "1px solid rgba({{text_rgb}}, 0.1)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.05-0.08"
+    accent_stripe_height: 5
+
+layout_types:
+  - { id: full_bleed, cards: "1-3", description: "垂直居中", use: "封面/章节/总结" }
+  - { id: three_column, cards: 3, description: "水平等分", use: "并列要点" }
+  - { id: two_column, cards: 2, description: "水平等分", use: "对比分析" }
+  - { id: two_column_asymmetric, cards: 2, description: "左62%+右38%", use: "主次内容" }
+  - { id: dashboard, cards: "3-5", description: "metric+summary", use: "数据总览" }
+  - { id: mixed_grid, cards: "3-4", description: "hero+小卡", use: "核心观点" }
+  - { id: hero_grid, cards: "2-4", description: "左hero+右小卡", use: "论点+数据" }
+  - { id: single_focus, cards: 1, description: "居中大卡", use: "核心结论" }
+  - { id: timeline, cards: "2-5", description: "水平步骤", use: "流程" }
+  - { id: horizontal_split, cards: "3-4", description: "顶hero+底卡", use: "标题+指标" }
+
+card_roles:
+  - { role: hero, visual: "大卡，硬像素边框+阴影", required: [title, body], optional: [chart] }
+  - { role: metric, visual: "居中大数字，像素风格", required: [chart], optional: [] }
+  - { role: card_0, visual: "标准卡，直角，2px边框", required: [title or body], optional: [chart] }
+  - { role: card_1, visual: "标准卡，直角，2px边框", required: [title or body], optional: [chart] }
+  - { role: card_2, visual: "标准卡，直角，2px边框", required: [title or body], optional: [chart] }
+  - { role: card_3, visual: "标准卡，直角，2px边框", required: [title or body], optional: [chart] }
+  - { role: card_4, visual: "标准卡，直角，2px边框", required: [title or body], optional: [chart] }
+  - { role: left, visual: "绿色顶条+▲", required: [title,body], optional: [chart], use: "双栏左" }
+  - { role: right, visual: "红色顶条+▼", required: [title,body], optional: [chart], use: "双栏右" }
+  - { role: summary, visual: "全宽半透明卡", required: [title or body], optional: [chart], use: "总结" }
+  - { role: step_N, visual: "方形编号", required: [title,body], optional: [], use: "步骤" }
+
+decoration:
+  accent_stripe: "4px solid {{accent}}"
+  title_underline: "40×4px {{accent}}"
+  page_dot: "6px {{accent}}"
+  layers: ["背景层", "像素网格层", "结构层", "内容层"]
+  types:
+    - { id: type_a, name: "8-bit经典", description: "零圆角+硬像素阴影+像素字体+2px实线边框" }
+    - { id: type_b, name: "复古游戏", description: "像素网格+粗边框+硬边缘阴影" }
+
+icons:
+  style: "filled"
+  stroke_width: "2px"
+  card_size: 20
+  hero_size: 36
+  metric_size: 16
+  color_rule: "跟随chart_color, opacity:1.0"
+
+illustrations:
+  label_align: "text-anchor=middle"
+  label_spacing: "≥22px"
+  guide_spacing: "≥20px"
+  min_stroke: "1px"
+  min_font: "14px"
+
+quality_checklist:
+  - "4层结构完整"
+  - "≥3个SVG元素"
+  - "≥4种chart_color"
+  - "≥1个像素化装饰"
+  - "每卡:标题+正文"
+  - "数字→图表形态"
+  - "标题primary色"
+  - "正文text色"
+  - "卡片card_bg色"
+  - "背景background色"
+  - "字体typography token"
+  - "圆角0px"
+  - "硬像素阴影"
+  - "禁止圆角"
+  - "禁止渐变"
+  - "禁止柔和阴影"
+
+font_thresholds:
+  slide_title: { min: 28, max: 44 }
+  card_title: { min: 18, max: 32 }
+  body: { min: 14, max: 20 }
+  label: { min: 14, max: 14 }
+  absolute_min: 14
+
+safe_area: { x_min: 40, y_min: 28, y_max: 710 }
+
+visual_richness:
+  min_svg_elements: 3
+  min_colors: 4
+  min_cards: 3
+  min_decorations: 2
+  min_layers: 4
+
+block_types:
+  header:
+    description: "文档头部"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba({{text_rgb}}, 0.55)"
+    border_bottom: "2px solid {{primary}}"
+    columns: "2-4"
+  title:
+    description: "文档主标题"
+    colspan: full
+    background: "{{primary}}"
+    color: "{{accent}}"
+    font_size: "20-24px"
+    font_weight: 400
+    letter_spacing: "2-3px"
+    border_bottom: "4px solid {{accent}}"
+  info_block:
+    description: "键值对信息表"
+    colspan: auto
+    label_bg: "{{card_bg}}"
+    label_color: "{{accent}}"
+    label_weight: 400
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "2px solid {{primary}}"
+    image_placeholder_radius: 0
+  table_block:
+    description: "多列数据网格"
+    colspan: auto
+    header_bg_default: "{{primary}}"
+    header_bg_alt_0: "{{chart_0}}"
+    header_bg_alt_2: "{{chart_2}}"
+    header_color: "#ffffff"
+    header_weight: 400
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba({{text_rgb}}, 0.05)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "2px solid {{primary}}"
+    header_border_top: "2px solid {{primary}}"
+    header_rotation: "primary → chart_0 → chart_2"
+  text_block:
+    description: "自由段落"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba({{text_rgb}}, 0.1)"
+  list_block:
+    description: "列表"
+    colspan: full
+    number_color: "{{accent}}"
+    number_weight: 400
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba({{text_rgb}}, 0.1)"
+  closing:
+    description: "收束区"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "2px solid {{primary}}"
+    layouts: ["center", "split"]
+  footer:
+    description: "底部声明"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba({{text_rgb}}, 0.45)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "2px solid {{primary}}"
+    align: center
