@@ -388,8 +388,18 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                 html_dir = os.path.join(html_dir, dir_name)
             os.makedirs(html_dir, exist_ok=True)
 
-            scheme_data = _load_scheme_data(style_id, color_scheme)
+            # ── Generate images for slides with {{image:...}} or {{IMAGE_URL}} placeholders ──
             gen_canvas_w, gen_canvas_h = _get_canvas_dimensions(column_id)
+            is_portrait = gen_canvas_h > gen_canvas_w
+            if not is_portrait:
+                try:
+                    slide_data = _safe_run_async(_generate_and_replace_images(
+                        slide_data, html_dir, provider_id=provider_id, model=model,
+                        style_id=style_id))
+                except Exception as _img_gen_e:
+                    _logger.warning(f"Image generation failed (non-critical): {_img_gen_e}")
+
+            scheme_data = _load_scheme_data(style_id, color_scheme)
             deck_html = _assemble_html_deck(slide_data, title, style_id, scheme_data, canvas_w=gen_canvas_w, canvas_h=gen_canvas_h)
             if scheme_data:
                 deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
@@ -4490,6 +4500,125 @@ def _build_root_vars(scheme_data: dict) -> str:
 
     lines.append("}")
     return "\n".join(lines)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# Image generation pipeline
+# ═══════════════════════════════════════════════════════════════════
+
+async def _generate_and_replace_images(slide_data: list, html_dir: str,
+                                        provider_id: str = "", model: str = "",
+                                        style_id: str = "business") -> list:
+    """Generate images for slides that have {{image:...}} or {{IMAGE_URL}} placeholders.
+
+    Two placeholder formats:
+      {{image:PROMPT_TEXT,SIZE_KEY}}  — explicit prompt + size
+      {{IMAGE_URL}}                   — auto-generate from slide heading
+
+    SIZE_KEY: full | hero | content | square | portrait (see image_service.SIZE_MAP)
+
+    Returns updated slide_data with images replaced.
+    """
+    import re as _re_img
+    from services.image_service import generate_image, download_image, SIZE_MAP
+
+    images_dir = os.path.join(html_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+
+    for s in slide_data:
+        seq = s.get("seq", 0)
+        html = s.get("html", "")
+        html_vars = s.get("html_vars", "")
+
+        if not html:
+            continue
+
+        # Collect all image placeholders
+        placeholders = []
+
+        # Pattern 1: {{image:PROMPT,SIZE_KEY}}
+        for m in _re_img.finditer(r'\{\{image:([^,}]+)(?:,(\w+))?\}\}', html):
+            prompt = m.group(1).strip()
+            size_key = m.group(2).strip() if m.group(2) else "full"
+            placeholders.append({
+                "full_match": m.group(0),
+                "prompt": prompt,
+                "size_key": size_key,
+            })
+
+        # Pattern 2: {{IMAGE_URL}} — auto-generate from heading
+        heading = s.get("heading", "")
+        body = s.get("body", "")
+        has_image_url = "{{IMAGE_URL}}" in html
+
+        if has_image_url and heading:
+            prompt = f"{heading}，{body[:80] if body else ''}".strip("，。")
+            placeholders.append({
+                "full_match": "{{IMAGE_URL}}",
+                "prompt": prompt,
+                "size_key": "full",
+            })
+
+        if not placeholders:
+            continue
+
+        _logger.info(f"Slide {seq}: generating {len(placeholders)} image(s)...")
+
+        for ph in placeholders:
+            size = SIZE_MAP.get(ph["size_key"], "1280*720")
+            try:
+                result = await generate_image(
+                    prompt=ph["prompt"],
+                    size=size,
+                    n=1,
+                    provider_id=provider_id,
+                    model=model,
+                )
+                if result.get("ok") and result.get("images"):
+                    img_url = result["images"][0]["url"]
+                    img_filename = f"slide-{seq:02d}-img-{placeholders.index(ph)+1:02d}.png"
+                    saved_path = download_image(img_url, img_filename, images_dir)
+                    rel_path = f"images/{img_filename}"
+
+                    if ph["full_match"] == "{{IMAGE_URL}}":
+                        html = html.replace("{{IMAGE_URL}}", rel_path)
+                        if html_vars:
+                            html_vars = html_vars.replace("{{IMAGE_URL}}", rel_path)
+                    else:
+                        img_tag = f'<img src="{rel_path}" style="width:100%;height:100%;object-fit:cover;" alt="{ph["prompt"]}">'
+                        html = html.replace(ph["full_match"], img_tag)
+                        if html_vars:
+                            html_vars = html_vars.replace(ph["full_match"], img_tag)
+
+                    _logger.info(f"Slide {seq}: image saved → {saved_path}")
+                else:
+                    error_msg = result.get("error", "unknown error")
+                    _logger.warning(f"Slide {seq}: image generation failed: {error_msg}")
+                    # Remove placeholder so it doesn't show as broken
+                    if ph["full_match"] == "{{IMAGE_URL}}":
+                        html = html.replace("{{IMAGE_URL}}", "")
+                        if html_vars:
+                            html_vars = html_vars.replace("{{IMAGE_URL}}", "")
+                    else:
+                        html = html.replace(ph["full_match"], "")
+                        if html_vars:
+                            html_vars = html_vars.replace(ph["full_match"], "")
+            except Exception as e:
+                _logger.warning(f"Slide {seq}: image generation exception: {e}")
+                if ph["full_match"] == "{{IMAGE_URL}}":
+                    html = html.replace("{{IMAGE_URL}}", "")
+                    if html_vars:
+                        html_vars = html_vars.replace("{{IMAGE_URL}}", "")
+                else:
+                    html = html.replace(ph["full_match"], "")
+                    if html_vars:
+                        html_vars = html_vars.replace(ph["full_match"], "")
+
+        s["html"] = html
+        if html_vars:
+            s["html_vars"] = html_vars
+
+    return slide_data
 
 
 # ═══════════════════════════════════════════════════════════════════
