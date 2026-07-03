@@ -3072,18 +3072,38 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
+        # Load VI section FIRST to detect HTML template mode
+        vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id)
+
+        # Detect HTML template mode (VI file contains ## HTML 模板 header)
+        # Only for PPT/landscape — A4/portrait keeps its existing pipeline
+        is_html_template = False
+        html_template = ""
+        if vi_section and "## HTML 模板" in vi_section and not is_a4:
+            is_html_template = True
+            tmpl_match = re.search(r'```html\s*\n(.*?)\n```', vi_section, re.DOTALL)
+            if tmpl_match:
+                html_template = tmpl_match.group(1).strip()
+            _logger.info(f"Slide {seq}: HTML template mode ({len(html_template)} chars template)")
+
         if is_a4:
             # A4 document: core system comes from design-system.md (loaded via _load_design_system)
             # Skip build_slide_prompt — PPT card/layout rules don't apply to documents
             core_system = ""
+        elif is_html_template:
+            # Template mode: minimal system prompt (identity + format-spec only).
+            # The HTML template already contains correct var(--xxx) colors, typography,
+            # layout structure, and decorations. AI only fills {{PLACEHOLDER}} content.
+            core_system = build_slide_prompt(stype, layout, has_chart,
+                                                  scheme=active_scheme, style_id=style_id,
+                                                  project_id=project_id, template_mode=True)
         else:
             core_system = build_slide_prompt(stype, layout, has_chart,
                                                   scheme=active_scheme, style_id=style_id,
                                                   project_id=project_id)
-        # Append VI section for this slide type (design instruction, not user content)
-        vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id)
+        # Append VI section for this slide type (only for non-template mode)
         vi_append = ""
-        if vi_section:
+        if vi_section and not is_html_template:
             vi_append = f"\n\n## {stype} 类型专属视觉规范\n{vi_section}"
 
         html_output_inst = _load_html_output_prompt(column_id)
@@ -3106,8 +3126,9 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         # ── Per-page-type color rules from tokens.yaml ──
         # These tell the AI the correct CSS variables, but code enforces
         # them deterministically via _enforce_slide_rules regardless.
+        # Skipped in template mode — template already has correct colors.
         slide_color_rules = ""
-        if active_scheme:
+        if active_scheme and not is_html_template:
             overrides = _load_page_overrides(style_id, stype)
             if overrides:
                 bg_var = _placeholder_to_css_var(overrides.get("card_bg") or overrides.get("background") or "")
@@ -3119,7 +3140,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         f"- 标题/主文字 `color` 必须是 `{text_val}` —— 严禁使用 hex 值\n"
                     )
         # Also include full WCAG cover rules for cover slides
-        if stype == "cover":
+        if stype == "cover" and not is_html_template:
             cover_extra = _build_cover_color_rules(style_id, color_scheme, active_scheme)
             if cover_extra:
                 slide_color_rules = (slide_color_rules + "\n" + cover_extra).strip()
@@ -3165,7 +3186,21 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             content_parts.append(
                 f"需要数据图表: {chart_hint or '根据内容中的数据选择合适的图表类型(big_number/donut/bar/progress_bar)'}")
 
-        user = "\n".join(content_parts)
+        # Build user message — template mode puts the HTML template in user message
+        if is_html_template and html_template:
+            tmpl_header = (
+                "请严格按照以下 HTML 模板生成幻灯片。\n"
+                "规则：只替换 {{占位符}} 为实际内容，不修改任何 CSS 样式/颜色/尺寸。\n"
+                "每张卡片使用不同的 var(--chart-N) 色条颜色（N 从 0 递增）。\n"
+                "如果卡片数量与模板不同，复制或删除卡片 div 块。\n"
+            )
+            user = (tmpl_header
+                    + "\n## HTML 模板（必须照抄结构）\n```html\n"
+                    + html_template
+                    + "\n```\n\n## 内容数据\n"
+                    + "\n".join(content_parts))
+        else:
+            user = "\n".join(content_parts)
 
         # ── DEBUG: monitor prompt for color hex leakage ──
         if idx == 0:
@@ -3771,7 +3806,7 @@ def _load_core_prompt(prompt_key: str, project_id: str = "") -> str:
 
 def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
                        scheme: dict | None = None, style_id: str = "",
-                       project_id: str = "") -> str:
+                       project_id: str = "", template_mode: bool = False) -> str:
     """Build tailored system prompt from modular core/ files — no regex, no full-document parse.
 
     File structure:
@@ -3781,6 +3816,10 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
         core/by_layout/  → per-layout file
 
     A typical content slide gets ~6-8K chars instead of the full 14K design-system.md.
+
+    When template_mode=True: only loads identity + format-spec. The template itself
+    provides all color, typography, structure, and decoration rules. AI only fills
+    {{PLACEHOLDER}} content — never chooses or sees hex color values.
     """
     import re
 
@@ -3794,6 +3833,41 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
         return _pcache[prompt_key]
 
     parts: list[str] = []
+
+    # ── Template mode: minimal prompt, template has all design rules baked in ──
+    if template_mode:
+        # Only identity + format-spec. No colors, typography, structure, or other
+        # design rules — the HTML template already contains correct var(--xxx) colors.
+        for name in ("identity", "format-spec"):
+            text = _read("always", f"{name}.md")
+            if text:
+                parts.append(text)
+        # Template-mode specific instruction: copy structure, fill placeholders only
+        parts.append("""## 模板填空模式 — 最高优先级
+
+你收到的是一个完整的 HTML 模板。你的**唯一任务**是替换内容占位符，不设计任何样式。
+
+### 必须做
+- 照抄 HTML 模板的全部结构、CSS 样式、布局尺寸
+- 将 `{{PLACEHOLDER}}` 替换为实际文字内容
+- 按卡片数量复制/删除卡片 div 块，为每张卡递增 `var(--chart-N)` 索引
+
+### 绝对禁止
+- 修改任何 `var(--xxx)` CSS 变量值
+- 修改任何 px 尺寸（width/height/font-size/padding/margin/left/top/inset）
+- 添加或删除装饰元素（SVG circle/pattern/gradient/rect）
+- 自创 hex 颜色值（如 `#1a365d`、`#333333`）
+- 修改背景渐变方向或色标
+- 修改卡片结构（border-left 色条、圆角、阴影）
+- 将 `var(--chart-N)` 改为 `var(--accent)` 或其他变量
+
+### 卡片处理
+- 模板中有 3 张卡片 → 实际 N 张卡片就保留/复制 N 个卡片 div
+- 每张卡片使用不同 `var(--chart-0)` / `var(--chart-1)` / `var(--chart-2)` ...
+- 如果卡片数量超过模板，复制最后一个卡片 div 并递增索引
+- 如果卡片数量少于模板，删除多余的卡片 div
+""")
+        return "\n\n".join(parts)
 
     # ── Always (7 files, ~3K chars total) ──
     for name in ("identity", "iron-laws", "colors", "color-semantics", "structure",
