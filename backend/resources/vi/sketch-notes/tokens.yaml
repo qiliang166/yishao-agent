@@ -160,12 +160,12 @@ slide_type_overrides:
     heading_scale: 0.9
     layout: dashboard
   section:
-    background: "{{primary}}"
-    text: "#ffffff"
+    background: "{{background}}"
+    text: "{{primary}}"
     layout: full_bleed
   summary:
-    background: "{{primary}}"
-    text: "#ffffff"
+    background: "{{background}}"
+    text: "{{primary}}"
     heading_scale: 1.1
     layout: full_bleed
     copyright: "© YYYY Company Name. All rights reserved."

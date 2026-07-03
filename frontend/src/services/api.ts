@@ -2,7 +2,7 @@ const BASE = ''
 const TOKEN_KEY = 'auth_token'
 
 function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = sessionStorage.getItem('settings_token') || localStorage.getItem(TOKEN_KEY)
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
@@ -111,6 +111,17 @@ export interface Project {
   storage_path?: string
   is_locked?: number
   copied_from_project_id?: string
+  workspace_id?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface Workspace {
+  id: string
+  name: string
+  status: string
+  description: string
+  logo: string
   created_at: string
   updated_at: string
 }
@@ -158,21 +169,41 @@ export interface StyleItem {
 }
 
 export const api = {
-  // Projects
-  listProjects: (page?: number, pageSize?: number) => {
+  // Workspaces
+  listWorkspaces: (page?: number, pageSize?: number) => {
     const params = new URLSearchParams()
     if (page) params.set('page', String(page))
     if (pageSize) params.set('page_size', String(pageSize))
+    const qs = params.toString()
+    return request(`/api/workspaces${qs ? '?' + qs : ''}`).then(d => d as { workspaces: Workspace[]; total: number; page: number; page_size: number })
+  },
+  getWorkspace: (id: string) => request(`/api/workspaces/${id}`) as Promise<Workspace>,
+  createWorkspace: (name: string, description?: string, logo?: string, status?: string) =>
+    request('/api/workspaces', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description: description || '', logo: logo || '', status: status || 'draft' }),
+    }) as Promise<Workspace>,
+  updateWorkspace: (id: string, data: {name?: string; status?: string; description?: string; logo?: string}) =>
+    request(`/api/workspaces/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  deleteWorkspace: (id: string) => request(`/api/workspaces/${id}`, { method: 'DELETE' }),
+
+  // Projects
+  listProjects: (page?: number, pageSize?: number, workspaceId?: string) => {
+    const params = new URLSearchParams()
+    if (page) params.set('page', String(page))
+    if (pageSize) params.set('page_size', String(pageSize))
+    if (workspaceId) params.set('workspace_id', workspaceId)
     const qs = params.toString()
     return request(`/api/projects${qs ? '?' + qs : ''}`).then(d => d as { projects: Project[]; total: number; page: number; page_size: number })
   },
   getProject: (id: string) => request(`/api/projects/${id}`),
   listProjectVideos: (id: string) => request(`/api/projects/${id}/videos`),
-  createProject: (name: string) =>
+  createProject: (name: string, workspaceId: string) =>
     request('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, source_type: 'text' }),
+      body: JSON.stringify({ name, workspace_id: workspaceId, source_type: 'text' }),
     }),
   updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number}) =>
     request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
@@ -292,6 +323,7 @@ export const api = {
 
   // Image Providers
   listImageProviders: () => request('/api/image/providers').then(d => d.providers as ImageProvider[]),
+  getImageProvider: (id: string) => request(`/api/image/providers/${id}`).then(d => d as ImageProvider),
   createImageProvider: (data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
     request('/api/image/providers', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   updateImageProvider: (id: string, data: { name: string; api_key: string; base_url: string; models: string[]; is_default?: number }) =>
@@ -707,13 +739,35 @@ export const api = {
     request('/api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) }),
 
   // Column Configs
-  listColumnConfigs: () => request('/api/column-configs').then(d => d.configs),
+  listColumnConfigs: (workspaceId?: string) => {
+    const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    return request(`/api/column-configs${qs}`).then(d => d.configs)
+  },
   updateColumnConfig: (id: string, data: { prompt?: string; skill?: string; rules?: string }) =>
     request(`/api/column-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   // Speech Configs (independent table)
-  listSpeechConfigs: () => request('/api/speech-configs').then(d => d.configs),
+  listSpeechConfigs: (workspaceId?: string) => {
+    const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    return request(`/api/speech-configs${qs}`).then(d => d.configs)
+  },
   updateSpeechConfig: (id: string, data: { prompt?: string; skill?: string }) =>
     request(`/api/speech-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  // TTS Configs (voice synthesis, independent from speech_configs)
+  listTtsConfigs: (workspaceId?: string) => {
+    const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    return request(`/api/tts-configs${qs}`).then(d => d.configs)
+  },
+  updateTtsConfig: (id: string, data: { prompt?: string; skill?: string }) =>
+    request(`/api/tts-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  // Core Prompt Configs (factory seed docs for 33 PPT generation prompts)
+  listCorePromptConfigs: (workspaceId?: string) => {
+    const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    return request(`/api/core-prompt-configs${qs}`).then(d => d.configs)
+  },
+  updateCorePromptConfig: (id: string, data: { content?: string; label?: string }) =>
+    request(`/api/core-prompt-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
+  copySeedConfigs: (workspaceId: string) =>
+    request(`/api/workspaces/${workspaceId}/copy-seed-configs`, { method: 'POST' }),
   analyzeTemplate: (templateId: string, stageType: string = 'daoPpt', providerId: string = '', model: string = '') => {
     const params = new URLSearchParams({ stage_type: stageType })
     if (providerId) params.set('provider_id', providerId)
@@ -749,8 +803,10 @@ export const api = {
     request(`/api/projects/${projectId}/materials/${materialId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
 
   // Project Items (dynamic output steps)
-  listProjectItems: (projectId: string) =>
-    request(`/api/projects/${projectId}/items`).then(d => d.items || []),
+  listProjectItems: (projectId: string, outputMode?: string) => {
+    const qs = outputMode ? `?output_mode=${encodeURIComponent(outputMode)}` : ''
+    return request(`/api/projects/${projectId}/items${qs}`).then(d => d.items || [])
+  },
   createProjectItem: (projectId: string, data: Record<string, any>) =>
     request(`/api/projects/${projectId}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   updateProjectItem: (projectId: string, itemId: string, data: Record<string, any>) =>
@@ -759,6 +815,8 @@ export const api = {
     request(`/api/projects/${projectId}/items/${itemId}`, { method: 'DELETE' }),
   copyProjectItems: (projectId: string, sourceProjectId: string) =>
     request(`/api/projects/${projectId}/items/copy-from/${sourceProjectId}`, { method: 'POST' }),
+  initProjectItemsFromFactory: (projectId: string) =>
+    request(`/api/projects/${projectId}/items/init-from-factory`, { method: 'POST' }),
 
   // Project Item Results
   listItemResults: (projectId: string, itemId: string) =>

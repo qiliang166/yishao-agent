@@ -21,7 +21,7 @@ export interface TeachingDocPanelProps {
 }
 
 const DOC_LABELS: Record<string, string> = {
-  sop: '标准文档', dao: '分析文档', yanxi: '手册文档',
+  sop: '标准文档', dao: '分析文档', yanxi: '综合文档',
 }
 const DOC_COLORS: Record<string, string> = {
   sop: 'var(--success)', dao: 'var(--purple)', yanxi: 'var(--warning)',

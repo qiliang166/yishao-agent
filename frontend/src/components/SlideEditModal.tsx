@@ -46,6 +46,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const newpageIframeRef = useRef<HTMLIFrameElement>(null)
+  const savedRangeRef = useRef<Range | null>(null)
 
   const modal = useModal()
 
@@ -142,9 +143,65 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
     }
   }
 
+  const saveIframeSelection = () => {
+    const iframe = iframeRef.current
+    if (!iframe?.contentDocument) return
+    const win = iframe.contentWindow
+    if (!win) return
+    const sel = win.getSelection()
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange()
+    }
+  }
+
+  const restoreIframeSelection = (): Range | null => {
+    const range = savedRangeRef.current
+    if (!range) return null
+    const iframe = iframeRef.current
+    if (!iframe?.contentDocument) return null
+    const win = iframe.contentWindow
+    if (!win) return null
+    const sel = win.getSelection()
+    if (sel) {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    return range
+  }
+
+  const applyColorToSelection = (type: 'foreground' | 'background', color: string) => {
+    const range = restoreIframeSelection()
+    if (!range || range.collapsed) {
+      // execCommand fallback for browsers where Range restore works implicitly
+      const iframe = iframeRef.current
+      if (iframe?.contentDocument) {
+        iframe.contentWindow?.focus()
+        try {
+          iframe.contentDocument.execCommand(
+            type === 'foreground' ? 'foreColor' : 'backColor', false, color
+          )
+        } catch { /* ignore */ }
+      }
+      return
+    }
+    const styleProp = type === 'foreground' ? 'color' : 'background-color'
+    const span = document.createElement('span')
+    span.style.setProperty(styleProp, color)
+    try {
+      range.surroundContents(span)
+    } catch {
+      // surroundContents fails when selection crosses element boundaries
+      // Fallback: extract contents, wrap in span, re-insert
+      const fragment = range.extractContents()
+      span.appendChild(fragment)
+      range.insertNode(span)
+    }
+    savedRangeRef.current = null
+  }
+
   const handleColorChange = (color: string) => {
     setTextColor(color)
-    execCmd('foreColor', color)
+    applyColorToSelection('foreground', color)
   }
 
   const handleRestore = async () => {
@@ -512,6 +569,17 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
                   style={{ fontSize: 13, textDecoration: 'line-through', minWidth: 28 }}
                   title="删除线">S</button>
                 <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
+                {/* Undo */}
+                <button onClick={() => execCmd('undo')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, minWidth: 28 }}
+                  title="撤销">↶</button>
+                {/* Redo */}
+                <button onClick={() => execCmd('redo')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, minWidth: 28 }}
+                  title="重做">↷</button>
+                <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
                 {/* Font size - */}
                 <button onClick={() => execCmd('decreaseFontSize')}
                   className="btn btn-ghost btn-sm"
@@ -526,6 +594,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
                 {/* Text color */}
                 <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                   <input type="color" value={textColor}
+                    onPointerDown={(e) => { e.preventDefault(); saveIframeSelection(); }}
                     onChange={e => handleColorChange(e.target.value)}
                     style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
                     title="字体颜色" />
@@ -538,7 +607,8 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
                 {/* Background color */}
                 <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                   <input type="color" value="#ffff00"
-                    onChange={e => execCmd('backColor', e.target.value)}
+                    onPointerDown={(e) => { e.preventDefault(); saveIframeSelection(); }}
+                    onChange={e => applyColorToSelection('background', e.target.value)}
                     style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
                     title="背景色" />
                   <span className="btn btn-ghost btn-sm" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, pointerEvents: 'none' }}>

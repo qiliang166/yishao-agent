@@ -2,8 +2,23 @@ from pydantic import BaseModel
 from typing import Optional
 
 
+class WorkspaceCreate(BaseModel):
+    name: str
+    description: Optional[str] = ''
+    logo: Optional[str] = ''
+    status: Optional[str] = 'draft'
+
+
+class WorkspaceUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
+    description: Optional[str] = None
+    logo: Optional[str] = None
+
+
 class ProjectCreate(BaseModel):
     name: str
+    workspace_id: str
     source_type: str = "text"
     storage_path: Optional[str] = None
     copied_from_project_id: Optional[str] = None
@@ -180,6 +195,17 @@ class PPTPlanRequest(BaseModel):
     temp_stage_outline: float = 0    # 覆盖 Tab1 全部温度
     temp_stage_generation: float = 0  # 覆盖 Tab2 全部温度
     temp_stage_review: float = 0     # 覆盖 Tab3 全部温度
+
+
+class HelpManualSection(BaseModel):
+    location: str
+    title: str
+    content: str = ""
+
+
+class HelpManualSectionUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
 
 
 class ImageGenerateRequest(BaseModel):

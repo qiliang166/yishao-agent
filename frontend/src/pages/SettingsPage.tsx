@@ -1,10 +1,70 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import { useAuth } from '../contexts/AuthContext'
 import { DEFAULT_THEMES, applyThemeToDOM, resetThemeToDefault } from '../services/theme'
 import type { ThemePreset } from '../services/theme'
 
-type SettingsTab = 'general' | 'appearance'
+type SettingsTab = 'general' | 'appearance' | 'manual'
+
+interface HelpSection {
+  location: string
+  title: string
+  content: string
+}
+
+const LOCATION_ORDER = [
+  'home',
+  'dashboard',
+  'project-stage-1a', 'project-stage-1b', 'project-stage-1c',
+  'project-stage-2a', 'project-stage-2b', 'project-stage-2c',
+  'project-stage-3a', 'project-stage-3b', 'project-stage-3c',
+  'project-stage-4a', 'project-stage-4b',
+  'project-stage-5',
+  'settings', 'proj-settings', 'templates', 'appendix',
+]
+
+/** 前台章节（展示在左侧栏目「操作说明」中，使用者可见） */
+const FRONT_LOCATIONS = new Set([
+  'home', 'dashboard',
+  'project-stage-1a', 'project-stage-1b', 'project-stage-1c',
+  'project-stage-2a', 'project-stage-2b', 'project-stage-2c',
+  'project-stage-3a', 'project-stage-3b', 'project-stage-3c',
+  'project-stage-4a', 'project-stage-4b',
+  'project-stage-5',
+])
+
+const LOCATION_LABELS: Record<string, string> = {
+  home: '项目管理首页',
+  dashboard: '项目明细列表',
+  'project-stage-1a': 'Stage 1 — 视频提取',
+  'project-stage-1b': 'Stage 1 — 文字输入',
+  'project-stage-1c': 'Stage 1 — 文件提取',
+  'project-stage-2a': 'Stage 2 — 标准文档',
+  'project-stage-2b': 'Stage 2 — 分析文档',
+  'project-stage-2c': 'Stage 2 — 综合文档',
+  'project-stage-3a': 'Stage 3 — 文档课件',
+  'project-stage-3b': 'Stage 3 — 分析PPT',
+  'project-stage-3c': 'Stage 3 — 综合PPT',
+  'project-stage-4a': 'Stage 4 — 演讲文案',
+  'project-stage-4b': 'Stage 4 — 演讲口播',
+  'project-stage-5': 'Stage 5 — 输出列表',
+  settings: '全局设置页',
+  'proj-settings': '项目配置页',
+  templates: '模板管理页',
+  appendix: '附录 — 常见问题与故障排除',
+}
+
+function defaultSections(): HelpSection[] {
+  return LOCATION_ORDER.map(loc => ({
+    location: loc,
+    title: LOCATION_LABELS[loc] || loc,
+    content: '',
+  }))
+}
 
 const COLOR_LABELS = [
   { key: 'primary', label: '主色调' },
@@ -22,6 +82,8 @@ const COLOR_LABELS = [
 
 function SettingsPage() {
   const modal = useModal()
+  const { logout } = useAuth()
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
   // -- 通用设置 state --
@@ -54,6 +116,14 @@ function SettingsPage() {
   const [editName, setEditName] = useState('')
   const [editColors, setEditColors] = useState<Record<string, string>>({})
 
+  // -- 操作说明 state --
+  const [helpSections, setHelpSections] = useState<HelpSection[]>(defaultSections())
+  const [activeEditSection, setActiveEditSection] = useState('')
+  const [editSectionTitle, setEditSectionTitle] = useState('')
+  const [editSectionContent, setEditSectionContent] = useState('')
+  const [manualMsg, setManualMsg] = useState('')
+  const [manualSaving, setManualSaving] = useState(false)
+
   useEffect(() => {
     Promise.all([api.getSettings(), api.getVersion()]).then(([data, ver]) => {
       const s = data.settings || {}
@@ -85,7 +155,70 @@ function SettingsPage() {
         } catch {}
       }
     }).catch(() => {})
+
+    // 加载操作说明（独立 API）
+    fetch('/api/help-manual/sections')
+      .then(r => r.json())
+      .then(data => {
+        const existing: HelpSection[] = data.sections || []
+        const merged = defaultSections().map(def => {
+          const saved = existing.find((e: HelpSection) => e.location === def.location)
+          return saved || def
+        })
+        setHelpSections(merged)
+        if (merged.length > 0) {
+          setActiveEditSection(merged[0].location)
+          setEditSectionTitle(merged[0].title)
+          setEditSectionContent(merged[0].content)
+        }
+      })
+      .catch(() => {})
   }, [])
+
+  // -- Section nav handler --
+  const selectSection = (sec: HelpSection) => {
+    const updated = helpSections.map(s =>
+      s.location === activeEditSection
+        ? { ...s, title: editSectionTitle, content: editSectionContent }
+        : s
+    )
+    setHelpSections(updated)
+    setActiveEditSection(sec.location)
+    setEditSectionTitle(sec.title)
+    setEditSectionContent(sec.content)
+  }
+
+  const handleManualSave = async () => {
+    setManualMsg('')
+    setManualSaving(true)
+    // Sync current edits into local state
+    const updated = helpSections.map(s =>
+      s.location === activeEditSection
+        ? { ...s, title: editSectionTitle, content: editSectionContent }
+        : s
+    )
+    setHelpSections(updated)
+
+    try {
+      const token = localStorage.getItem('auth_token')
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`/api/help-manual/sections/${encodeURIComponent(activeEditSection)}`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ title: editSectionTitle, content: editSectionContent }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: '保存失败' }))
+        throw new Error(err.detail || '保存失败')
+      }
+      setManualMsg('保存成功')
+    } catch (err: any) {
+      setManualMsg('保存失败: ' + err.message)
+    } finally {
+      setManualSaving(false)
+    }
+  }
 
   // -- 通用设置 handlers --
   const isImagePath = (v: string) => v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
@@ -114,7 +247,9 @@ function SettingsPage() {
       await api.updateSettings({ admin_password: newPassword, admin_password_enabled: '1' })
       setPasswordEnabled(true)
       setNewPassword(''); setConfirmPassword('')
+      logout()
       setPasswordMsg('密码已更新')
+      navigate('/', { replace: true })
     } catch (err: any) { setPasswordMsg('保存失败: ' + err.message) }
   }
 
@@ -122,7 +257,7 @@ function SettingsPage() {
     const ok = await modal.confirm('确定要关闭密码保护吗？关闭后无需密码即可访问系统。')
     if (!ok) return
     try {
-      await api.updateSettings({ admin_password_enabled: '0' })
+      await api.updateSettings({ admin_password: '', admin_password_enabled: '0' })
       setPasswordEnabled(false)
       setNewPassword(''); setConfirmPassword('')
       setPasswordMsg('密码保护已关闭')
@@ -253,6 +388,8 @@ function SettingsPage() {
             onClick={() => setActiveTab('general')}>通用设置</button>
           <button className={`mgmt-tab${activeTab === 'appearance' ? ' active' : ''}`}
             onClick={() => setActiveTab('appearance')}>网站风格</button>
+          <button className={`mgmt-tab${activeTab === 'manual' ? ' active' : ''}`}
+            onClick={() => setActiveTab('manual')}>操作说明</button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', marginRight: 50 }}>
           {saveMsg && (
@@ -260,9 +397,11 @@ function SettingsPage() {
               {saveMsg}
             </span>
           )}
-          <button className="btn btn-primary btn-sm" onClick={handleGlobalSave}>
-            全局保存
-          </button>
+          {activeTab !== 'manual' && (
+            <button className="btn btn-primary btn-sm" onClick={handleGlobalSave}>
+              全局保存
+            </button>
+          )}
         </div>
       </div>
       <div className="mgmt-content">
@@ -534,6 +673,180 @@ function SettingsPage() {
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ TAB: 操作说明 ═══ */}
+        {activeTab === 'manual' && (
+          <div style={{ display: 'flex', height: 'calc(100vh - 130px)', gap: 0 }}>
+            {/* Left: section list */}
+            <div style={{
+              width: 200, minWidth: 200,
+              borderRight: '1px solid var(--border)',
+              overflowY: 'auto',
+              background: 'var(--bg)',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              {/* 后台管理说明下载按钮 */}
+              <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ width: '100%', fontSize: 10 }}
+                  onClick={() => {
+                    const backSections = helpSections.filter(s => !FRONT_LOCATIONS.has(s.location))
+                    if (backSections.length === 0) return
+                    const cover = '\n# 智绘教案系统 Yishao Agent — 操作说明书 V1.0.0\n\n> **后台管理说明（管理员）**\n\n本手册面向系统管理员，覆盖全局设置、全局配置、模板管理以及常见问题与故障排除。\n'
+                    const md = cover + '\n---\n' + backSections.map(s => s.content).join('\n\n---\n\n')
+                    const html = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>Yishao Agent 后台管理说明</title>\n<style>\nbody{max-width:800px;margin:0 auto;padding:40px 24px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;font-size:15px;line-height:1.8;color:#333}\nh1{font-size:24px;border-bottom:2px solid #b22222;padding-bottom:8px;margin-top:32px}\nh2{font-size:19px;color:#b22222;margin-top:28px}\ntable{border-collapse:collapse;width:100%}\nth,td{border:1px solid #ddd;padding:8px 12px;font-size:14px}\nth{background:#f5f5f5}\nhr{border:none;border-top:1px solid #eee;margin:32px 0}\n</style>\n</head>\n<body>\n' + DOMPurify.sanitize(marked.parse(md) as string) + '\n</body>\n</html>'
+                    const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+                    const a = document.createElement('a')
+                    a.href = URL.createObjectURL(blob)
+                    a.download = 'YishaoAgent_后台管理说明.html'
+                    a.click()
+                  }}
+                >
+                  📥 下载后台管理说明
+                </button>
+              </div>
+
+              {(() => {
+                const frontSecs = helpSections.filter(s => FRONT_LOCATIONS.has(s.location))
+                const backSecs = helpSections.filter(s => !FRONT_LOCATIONS.has(s.location))
+                return (
+                  <>
+                    {/* 前台分组 */}
+                    <div style={{
+                      padding: '5px 12px', fontSize: 9, color: 'var(--text-secondary)',
+                      letterSpacing: 1, borderBottom: '1px solid var(--border)',
+                      background: 'var(--bg)',
+                    }}>
+                      前台操作说明（使用者可见）
+                    </div>
+                    {frontSecs.map(s => (
+                      <button
+                        key={s.location}
+                        onClick={() => selectSection(s)}
+                        style={{
+                          display: 'block', width: '100%', padding: '8px 12px',
+                          border: 'none', borderBottom: '1px solid var(--border)',
+                          background: activeEditSection === s.location ? 'var(--primary-light)' : 'transparent',
+                          color: activeEditSection === s.location ? 'var(--primary)' : 'var(--text)',
+                          fontWeight: activeEditSection === s.location ? 600 : 400,
+                          fontSize: 10, cursor: 'pointer', textAlign: 'left',
+                          fontFamily: 'var(--font)',
+                          transition: 'all .1s',
+                        }}
+                      >
+                        {s.title}
+                      </button>
+                    ))}
+
+                    {/* 后台分组 */}
+                    <div style={{
+                      padding: '5px 12px', fontSize: 9, color: 'var(--text-secondary)',
+                      letterSpacing: 1, borderBottom: '1px solid var(--border)',
+                      borderTop: '2px solid var(--border)',
+                      background: 'var(--bg)',
+                    }}>
+                      后台管理说明（仅管理员）
+                    </div>
+                    {backSecs.map(s => (
+                      <button
+                        key={s.location}
+                        onClick={() => selectSection(s)}
+                        style={{
+                          display: 'block', width: '100%', padding: '8px 12px',
+                          border: 'none', borderBottom: '1px solid var(--border)',
+                          background: activeEditSection === s.location ? 'var(--primary-light)' : 'transparent',
+                          color: activeEditSection === s.location ? 'var(--primary)' : 'var(--text)',
+                          fontWeight: activeEditSection === s.location ? 600 : 400,
+                          fontSize: 10, cursor: 'pointer', textAlign: 'left',
+                          fontFamily: 'var(--font)',
+                          transition: 'all .1s',
+                        }}
+                      >
+                        {s.title}
+                      </button>
+                    ))}
+                  </>
+                )
+              })()}
+            </div>
+
+            {/* Right: editor + preview */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* Toolbar */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '10px 16px', borderBottom: '1px solid var(--border)',
+                background: 'var(--bg)', flexShrink: 0,
+              }}>
+                <label style={{ fontSize: 10, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>章节标题：</label>
+                <input
+                  className="form-input"
+                  value={editSectionTitle}
+                  onChange={e => setEditSectionTitle(e.target.value)}
+                  style={{ maxWidth: 200, fontSize: 11 }}
+                />
+                <div style={{ flex: 1 }} />
+                {manualMsg && (
+                  <span style={{ fontSize: 10, color: manualMsg.includes('失败') ? 'var(--warning)' : 'var(--success)' }}>
+                    {manualMsg}
+                  </span>
+                )}
+                <button className="btn btn-primary btn-sm" onClick={handleManualSave} disabled={manualSaving}>
+                  {manualSaving ? '保存中...' : '保存当前章节'}
+                </button>
+              </div>
+
+              {/* Editor + Preview split */}
+              <div style={{ flex: 1, display: 'flex', gap: 0, minHeight: 0 }}>
+                {/* Editor */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border)' }}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)',
+                    padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--border)',
+                  }}>
+                    Markdown 编辑
+                  </div>
+                  <textarea
+                    className="form-textarea"
+                    value={editSectionContent}
+                    onChange={e => setEditSectionContent(e.target.value)}
+                    style={{
+                      flex: 1, minHeight: 0, border: 'none', borderRadius: 0,
+                      fontSize: 11, fontFamily: 'var(--mono)', lineHeight: 1.6,
+                      resize: 'none', padding: '10px 12px',
+                    }}
+                    placeholder="输入 Markdown 格式的操作说明..."
+                  />
+                </div>
+
+                {/* Preview */}
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div style={{
+                    fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)',
+                    padding: '6px 12px', background: 'var(--bg)', borderBottom: '1px solid var(--border)',
+                  }}>
+                    预览
+                  </div>
+                  <div style={{
+                    flex: 1, overflowY: 'auto', padding: '12px 16px',
+                  }}>
+                    {editSectionContent ? (
+                      <div
+                        className="prev-md"
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(editSectionContent) as string) }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'center', padding: 40 }}>
+                        输入内容后此处显示预览
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

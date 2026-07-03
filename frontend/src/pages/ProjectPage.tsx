@@ -5,11 +5,12 @@ import { useModal } from '../components/ModalProvider'
 import TeachingDocPanel from '../components/TeachingDocPanel'
 import SlideEditModal from '../components/SlideEditModal'
 import Stage3TempSettings, { StageTemps, DEFAULT_STAGE_TEMPS } from '../components/Stage3TempSettings'
+import HelpButton from '../components/HelpButton'
 
 // ── Types ──
 interface Project {
   id: string; name: string; status: string; source_type: string
-  storage_path?: string
+  storage_path?: string; workspace_id?: string
   created_at: string; updated_at: string
 }
 type StageId = 1 | 2 | 3 | 4 | 5
@@ -20,8 +21,8 @@ interface TemplateItem { id: string; name: string; isDefault: boolean; meta: str
 
 // ── Stage Definitions ──
 const STAGES: StageDef[] = [
-  { id: 1, label: '素材输入', subs: [{ id: '1a', label: '视频提取' }, { id: '1b', label: '文字输入' }, { id: '1c', label: '文件上传' }] },
-  { id: 2, label: '文档生成', subs: [{ id: '2a', label: '标准文档' }, { id: '2b', label: '分析文档' }, { id: '2c', label: '手册文档' }] },
+  { id: 1, label: '素材输入', subs: [{ id: '1a', label: '视频提取' }, { id: '1b', label: '文字输入' }, { id: '1c', label: '文件提取' }] },
+  { id: 2, label: '文档生成', subs: [{ id: '2a', label: '标准文档' }, { id: '2b', label: '分析文档' }, { id: '2c', label: '综合文档' }] },
   { id: 3, label: '课件输出', subs: [{ id: '3a', label: '文档课件' }, { id: '3b', label: '分析PPT' }, { id: '3c', label: '综合PPT' }] },
   { id: 4, label: '演讲课件', subs: [{ id: '4a', label: '演讲文案' }, { id: '4b', label: '演讲口播' }] },
   { id: 5, label: '输出列表', subs: [] },
@@ -200,7 +201,9 @@ function Stage2Controls({
 
   return (
     <>
-      <div className="card-title" style={{ color }}>{icon} {label}生成</div>
+      <div className="card-title" style={{ color }}>{icon} {label}生成
+        <HelpButton location={`project-stage-2${docType === 'sop' ? 'a' : docType === 'dao' ? 'b' : 'c'}`} />
+      </div>
       <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成{label}</div>
       <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
         <label className="form-label">数据来源</label>
@@ -208,7 +211,7 @@ function Stage2Controls({
           value={dataSource} onChange={e => onDataSourceChange(e.target.value)}>
           <option value="video">视频提取 — {sourceText.video}</option>
           <option value="text">文字输入 — {sourceText.text}</option>
-          <option value="file">文件上传 — {sourceText.file}</option>
+          <option value="file">文件提取 — {sourceText.file}</option>
         </select>
       </div>
       <label className="form-label">大模型</label>
@@ -231,7 +234,7 @@ function Stage2Controls({
       </button>
       {generating && (
         <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
-          onClick={() => { panelRef.current?.cancel(); modal.toast('生成已取消', 'success') }}>取消</button>
+          onClick={() => { panelRef.current?.cancel(); setGenerating(false); modal.toast('生成已取消', 'success') }}>取消</button>
       )}
       {((logEntries && logEntries.length > 0) || generating) && (
         <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
@@ -421,7 +424,7 @@ function ProjectOutputList({ projectId, projectName }: { projectId: string; proj
   return (
     <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <span>📦 {projectName} 输出列表</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>📦 {projectName} 输出列表<HelpButton location="project-stage-5" /></span>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-ghost btn-sm" onClick={loadFiles}
             style={{ fontSize: 11 }} title="刷新列表">🔄 刷新</button>
@@ -557,6 +560,7 @@ export default function ProjectPage() {
 
   const [project, setProject] = useState<Project | null>(null)
   const styleColorMap = useRef<Record<string, any>>({})
+  const workspaceIdRef = useRef<string | undefined>(undefined)
   const [stage, setStage] = useState<StageId>(1)
   const [sub, setSub] = useState<SubId>('1a')
   const [steps, setSteps] = useState<Record<string, string>>({})
@@ -691,7 +695,7 @@ export default function ProjectPage() {
   const S4_SOURCE_OPTS = [
     { key: 'step2_sop', label: '标准文档' },
     { key: 'step2_daoshuyi', label: '分析文档' },
-    { key: 'step2_yanxi', label: '手册文档' },
+    { key: 'step2_yanxi', label: '综合文档' },
   ]
   const [s4ActiveSpeechTab, setS4ActiveSpeechTab] = useState<'doc' | 'analysis' | 'comprehensive'>('doc')
   const [s4SpeechModels, setS4SpeechModels] = useState<Record<string, string>>({})
@@ -754,6 +758,7 @@ export default function ProjectPage() {
     api.getProject(id).then(p => {
       setProject(p)
       setProjStoragePath(p.storage_path || '')
+      workspaceIdRef.current = p.workspace_id
     }).catch(() => navigate('/'))
     let hasModelOverride = false
     api.getSteps(id).then((s: any[]) => {
@@ -854,11 +859,11 @@ export default function ProjectPage() {
         yanxi: map['_ds_s2_yanxi'] || prev.yanxi,
       }))
     })
-    api.listColumnConfigs().then((configs: any[]) => {
+    // Shared col1/col2 config parser — single source of truth for stage 1 & 2 prompts
+    const applyCol12Configs = (configs: any[]) => {
       const s1p: Record<string, string> = {}
       let s1s = ''
       const s2p: Record<string, { prompt: string; skill: string }> = {}
-      const s3p: Record<string, { prompt: string; skill: string }> = {}
       configs.forEach((c: any) => {
         if (c.column_id === 'col1') {
           const key = c.id === 'c1-text' ? 'text' : c.id === 'c1-video' ? 'video' : c.id === 'c1-file' ? 'file' : ''
@@ -868,30 +873,73 @@ export default function ProjectPage() {
           const key = c.id === 'c2-sop' ? 'sop' : c.id === 'c2-dao' ? 'dao' : c.id === 'c2-yanxi' ? 'yanxi' : ''
           if (key) s2p[key] = { prompt: c.prompt, skill: c.skill }
         }
-        if (c.column_id === 'col3') {
-          const key = c.id === 'c3-sop' ? 'sop' : ''
-          if (key) s3p[key] = { prompt: c.prompt, skill: c.skill }
-        }
-        if (c.column_id === 'col4') {
-          if (c.id === 'c4-dao') s3p['daoPpt'] = { prompt: c.prompt, skill: c.skill }
-        }
-        if (c.column_id === 'col5') {
-          if (c.id === 'c4-yanxi') s3p['yanxiPpt'] = { prompt: c.prompt, skill: c.skill }
-        }
       })
-      setStage1Prompts(s1p)
+      if (Object.keys(s1p).length > 0) setStage1Prompts(s1p)
       if (s1s) setStage1Skill(s1s)
-      setStage2Prompts(s2p)
-      setStage3Prompts(s3p)
-    }).catch(() => {})
-    api.listSpeechConfigs().then((configs: any[]) => {
-      const s4p: Record<string, { prompt: string; skill: string }> = {}
-      configs.forEach((c: any) => {
-        const key = c.id === 'speech-doc' ? 'doc' : c.id === 'speech-analysis' ? 'analysis' : c.id === 'speech-comprehensive' ? 'comprehensive' : ''
-        if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
-      })
-      setStage4Prompts(s4p)
-    }).catch(() => {})
+      if (Object.keys(s2p).length > 0) setStage2Prompts(s2p)
+    }
+
+    // Try project_items first (new per-project architecture)
+    api.listProjectItems(id).then((items: any[]) => {
+      if (items && items.length > 0) {
+        const s3p: Record<string, { prompt: string; skill: string }> = {}
+        const s4p: Record<string, { prompt: string; skill: string }> = {}
+        items.forEach((item: any) => {
+          const pid = item.id
+          if (pid.endsWith('-col3')) s3p['sop'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-col4')) s3p['daoPpt'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-col5')) s3p['yanxiPpt'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-tts-doc')) s4p['doc'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-tts-analysis')) s4p['analysis'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-tts-comprehensive')) s4p['comprehensive'] = { prompt: item.prompt, skill: item.skill }
+        })
+        setStage3Prompts(s3p)
+        if (Object.keys(s4p).length > 0) setStage4Prompts(s4p)
+        // col1 & col2 always loaded from column configs (shared parser, no duplication)
+        api.listColumnConfigs(workspaceIdRef.current).then(applyCol12Configs).catch(() => {})
+        return
+      }
+      loadWorkspaceConfigs(workspaceIdRef.current)
+    }).catch(() => { loadWorkspaceConfigs(workspaceIdRef.current) })
+
+    const loadWorkspaceConfigs = (wid?: string) => {
+      // Load column configs for the project's workspace (not global seed)
+      api.listColumnConfigs(wid).then((configs: any[]) => {
+        applyCol12Configs(configs)
+        const s3p: Record<string, { prompt: string; skill: string }> = {}
+        configs.forEach((c: any) => {
+          if (c.column_id === 'col3') {
+            const key = c.id === 'c3-sop' ? 'sop' : ''
+            if (key) s3p[key] = { prompt: c.prompt, skill: c.skill }
+          }
+          if (c.column_id === 'col4') {
+            if (c.id === 'c4-dao') s3p['daoPpt'] = { prompt: c.prompt, skill: c.skill }
+          }
+          if (c.column_id === 'col5') {
+            if (c.id === 'c4-yanxi') s3p['yanxiPpt'] = { prompt: c.prompt, skill: c.skill }
+          }
+        })
+        setStage3Prompts(s3p)
+      }).catch(() => {})
+      // Load speech configs (col6) from workspace
+      api.listSpeechConfigs(wid).then((configs: any[]) => {
+        const s4p: Record<string, { prompt: string; skill: string }> = {}
+        configs.forEach((c: any) => {
+          const key = c.id === 'speech-doc' ? 'doc' : c.id === 'speech-analysis' ? 'analysis' : c.id === 'speech-comprehensive' ? 'comprehensive' : ''
+          if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
+        })
+        if (Object.keys(s4p).length > 0) setStage4Prompts(prev => ({ ...prev, ...s4p }))
+      }).catch(() => {})
+      // Load TTS configs (col7) from workspace
+      api.listTtsConfigs(wid).then((configs: any[]) => {
+        const s4p: Record<string, { prompt: string; skill: string }> = {}
+        configs.forEach((c: any) => {
+          const key = c.id === 'tts-doc' ? 'doc' : c.id === 'tts-analysis' ? 'analysis' : c.id === 'tts-comprehensive' ? 'comprehensive' : ''
+          if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
+        })
+        if (Object.keys(s4p).length > 0) setStage4Prompts(prev => ({ ...prev, ...s4p }))
+      }).catch(() => {})
+    }
     // Load templates for Stage 3 PPT columns
     const loadTemplates = (stageType: string) =>
       api.listTemplatesForStage(stageType).then((items: any[]) => {
@@ -1132,7 +1180,7 @@ export default function ProjectPage() {
   // ── LLM Generate (streaming with progress) ──
   const doGenerate = async (stepKey: string, systemPrompt: string, userMessage: string, providerId?: string, model?: string, temperature: number = 0.3, signal?: AbortSignal) => {
     if (!id) return
-    const labelMap: Record<string, string> = { step2_sop: '标准文档', step2_daoshuyi: '分析文档', step2_yanxi: '手册文档', step3_sop_doc: '标准课件' }
+    const labelMap: Record<string, string> = { step2_sop: '标准文档', step2_daoshuyi: '分析文档', step2_yanxi: '综合文档', step3_sop_doc: '标准课件' }
     const label = labelMap[stepKey] || stepKey
     const subMap: Record<string, string> = { step2_sop: '2a', step2_daoshuyi: '2b', step2_yanxi: '2c' }
     const subKey = subMap[stepKey] || ''
@@ -1216,7 +1264,7 @@ export default function ProjectPage() {
   const STAGE2_CONFIGS = [
     { stepKey: 'step2_sop', modelKey: '_model_s2_sop', promptKey: 'sop', tempKey: '_temp_s2_sop', label: '标准文档', fallbackPrompt: '请将以下内容整理为标准文档格式。' },
     { stepKey: 'step2_daoshuyi', modelKey: '_model_s2_dao', promptKey: 'dao', tempKey: '_temp_s2_dao', label: '分析文档', fallbackPrompt: '请分析以下内容的原理与方法。' },
-    { stepKey: 'step2_yanxi', modelKey: '_model_s2_yanxi', promptKey: 'yanxi', tempKey: '_temp_s2_yanxi', label: '手册文档', fallbackPrompt: '请将以下内容整理为手册格式，包含背景知识和要点。' },
+    { stepKey: 'step2_yanxi', modelKey: '_model_s2_yanxi', promptKey: 'yanxi', tempKey: '_temp_s2_yanxi', label: '综合文档', fallbackPrompt: '请将以下内容整理为手册格式，包含背景知识和要点。' },
   ]
 
   const executeBatchGenerate = async (resolvedModels: Record<string, string>) => {
@@ -1343,7 +1391,7 @@ export default function ProjectPage() {
   const modelPickerAll = [
     { modelKey: '_model_s2_sop', label: '标准文档' },
     { modelKey: '_model_s2_dao', label: '分析文档' },
-    { modelKey: '_model_s2_yanxi', label: '手册文档' },
+    { modelKey: '_model_s2_yanxi', label: '综合文档' },
   ]
 
   // ── PPT / SOP Generation ──
@@ -2002,6 +2050,7 @@ export default function ProjectPage() {
             </div>
           </span>
         ))}
+        <span style={{ flex: 1 }} />
       </div>
 
       {/* ═══ Sub Nav ═══ */}
@@ -2048,7 +2097,7 @@ export default function ProjectPage() {
               {/* 1a: Video Link */}
               {mode1 === 'link' && <>
                 <div className="card">
-                  <div className="card-title">📺 视频提取</div>
+                  <div className="card-title">📺 视频提取<HelpButton location="project-stage-1a" /></div>
                   <div className="card-hint">粘贴视频链接 → 下载 + 语音识别 → 提取内容在下方编辑</div>
                   <input className="form-input" placeholder="粘贴视频链接（支持抖音/B站/YouTube等）"
                     value={videoUrl} onChange={e => setVideoUrl(e.target.value)} style={{ marginBottom: 6 }} />
@@ -2199,9 +2248,9 @@ export default function ProjectPage() {
               </>}
 
               {/* 1b: Text Input */}
-              {mode1 === 'text' && (
+              {mode1 === 'text' && (<>
                 <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  <div className="card-title">✏️ 文字输入</div>
+                  <div className="card-title">✏️ 文字输入<HelpButton location="project-stage-1b" /></div>
                   <div className="card-hint">直接粘贴或输入内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
                     placeholder="在此粘贴或输入内容..."
@@ -2221,12 +2270,50 @@ export default function ProjectPage() {
                     )}
                   </div>
                 </div>
-              )}
+                <div className="card">
+                  <div className="card-title">📁 项目保存路径</div>
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <input className="form-input" style={{ fontSize: 10, flex: 1 }}
+                      value={projStoragePath}
+                      onChange={e => setProjStoragePath(e.target.value)}
+                      placeholder={project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`} />
+                    <button className="btn btn-ghost btn-sm" title="打开文件夹"
+                      onClick={async () => {
+                        const p = (projStoragePath || project?.storage_path || '').replace(/\\/g, '/')
+                        if (p) {
+                          try { await api.openFolder(p) } catch { modal.toast('无法打开文件夹', 'error') }
+                        }
+                      }}>
+                      📂
+                    </button>
+                    <button className="btn btn-ghost btn-sm"
+                      disabled={savingPath}
+                      onClick={async () => {
+                        if (!id) return
+                        const p = projStoragePath.trim() || (project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`)
+                        setSavingPath(true)
+                        try {
+                          await api.updateProject(id, { storage_path: p })
+                          setProjStoragePath(p)
+                          setProject(prev => prev ? { ...prev, storage_path: p } : prev)
+                          modal.toast('保存路径已更新', 'success')
+                        } catch (e: any) {
+                          modal.toast('保存失败: ' + e.message, 'error')
+                        } finally { setSavingPath(false) }
+                      }}>
+                      {savingPath ? '...' : '保存'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    留空则使用全局默认路径
+                  </div>
+                </div>
+              </>)}
 
               {/* 1c: File Upload */}
               {mode1 === 'file' && <>
                 <div className="card">
-                  <div className="card-title">📄 文件上传</div>
+                  <div className="card-title">📄 文件提取<HelpButton location="project-stage-1c" /></div>
                   <div className="card-hint">支持 .txt / .md / .docx 文件，读取后内容在下方编辑</div>
                   <input type="file" accept=".txt,.md,.docx" style={{ fontSize: 10, marginBottom: 6 }}
                     onChange={async e => {
@@ -2253,7 +2340,7 @@ export default function ProjectPage() {
                 <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                   <div className="card-title">📝 文件原始内容</div>
                   <div className="card-hint">文件读取的原始内容，可编辑后重新生成</div>
-                  <textarea className="form-textarea" style={{ flex: 1, minHeight: 200 }}
+                  <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
                     value={fileText}
                     onChange={e => setFileText(e.target.value)}
                     placeholder="文件内容将显示在此..." />
@@ -2324,7 +2411,7 @@ export default function ProjectPage() {
                   placeholder="点击左侧「生成」按钮，AI 整理后的标准文档将显示在此..." />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                    {mode1 === 'link' ? '来源：视频提取' : mode1 === 'text' ? '来源：文字输入' : '来源：文件上传'}
+                    {mode1 === 'link' ? '来源：视频提取' : mode1 === 'text' ? '来源：文字输入' : '来源：文件提取'}
                   </span>
                   <span style={{ display: 'flex', gap: 5 }}>
                     <button className="btn btn-ghost btn-sm"
@@ -2332,7 +2419,7 @@ export default function ProjectPage() {
                       onClick={async () => {
                         if (!id) return
                         try {
-                          const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件上传'
+                          const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件提取'
                           const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_${label}_AI整理.txt`, steps[step1Key()] || '')
                           modal.toast(`已保存到 ${resp.path}`, 'success')
                         } catch (e: any) {
@@ -2409,7 +2496,7 @@ export default function ProjectPage() {
                     }} />
                 </div>
                 <div style={{ display: sub === '2c' ? 'contents' : 'none' }}>
-                  <Stage2Controls docType="yanxi" label="手册文档"
+                  <Stage2Controls docType="yanxi" label="综合文档"
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['yanxi'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('yanxi', v)}
                     generating={!!step2Generating['2c']}
@@ -2479,7 +2566,7 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2c': g })); if (g) { setS2Logs(prev => ({ ...prev, '2c': [] })); setS2Progress(prev => ({ ...prev, '2c': '' })) } }}
                     onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2c': [...(prev['2c'] || []), entry] }))}
-                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2c': p })); setDocGenProgress({ phase_label: '正在生成 手册文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_yanxi' }) }}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2c': p })); setDocGenProgress({ phase_label: '正在生成 综合文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_yanxi' }) }}
                     hideControls dataSource={s2DataSources['yanxi'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -2500,7 +2587,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">📄 生成课件</div>
+                <div className="card-title">📄 生成课件<HelpButton location="project-stage-3a" /></div>
                 <div className="card-hint">基于标准文档，选择模板生成课件</div>
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={sopTemplates} selectedId={sopSelected}
@@ -2547,13 +2634,9 @@ export default function ProjectPage() {
                     onClick={() => doGenerateOutline('step3_sop_doc', steps.step2_sop || '', sopSelected, s3SopModel, 'col3', s3SopTemp, s3SopTemps.outline, s3SopTemps.keyword, s3SopTemps.research, s3SopTemps.fill, s3SopTemps.stageOutline, s3SopTemps.stageGeneration, s3SopTemps.stageReview)}>
                     {pptOutlineLoading['step3_sop_doc'] ? '⏳ 生成中...' : '📋 生成大纲'}
                   </button>
-                  {pptOutlineLoading['step3_sop_doc'] && (
-                    <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff', flex: '0 0 auto' }}
-                      onClick={() => handleCancelGenerate('step3_sop_doc')}>取消</button>
-                  )}
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
-                    disabled={!sopSelected || !(steps.step2_sop || '') || !s3SopModel || pptGenerating['step3_sop_doc']}
+                    disabled={!sopSelected || !(steps.step2_sop || '') || !s3SopModel || !pptOutline['step3_sop_doc']?.outline_json?.length || pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']}
                     onClick={() => doGeneratePPT('step3_sop_doc',
                       steps.step2_sop || steps.step1_video || steps.step1_text || steps.step1_file || '',
                       sopSelected, '标准课件',
@@ -2566,11 +2649,9 @@ export default function ProjectPage() {
                     {pptGenerating['step3_sop_doc'] ? '⏳ 合成中...' : '📄 合成课件'}
                   </button>
                 </div>
-                {pptGenerating['step3_sop_doc'] && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', flex: 1 }}
-                      onClick={() => handleCancelGenerate('step3_sop_doc')}>取消生成</button>
-                  </div>
+                {(pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']) && (
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
+                    onClick={() => handleCancelGenerate('step3_sop_doc')}>取消</button>
                 )}
                 {!sopSelected || !(steps.step2_sop || '') || !s3SopModel ? (
                   <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
@@ -2579,6 +2660,10 @@ export default function ProjectPage() {
                       !(steps.step2_sop || '') ? '请先生成标准文档' : '',
                       !s3SopModel ? '请选择大模型' : '',
                     ].filter(Boolean).join(' | ')}
+                  </div>
+                ) : !pptOutline['step3_sop_doc']?.outline_json?.length ? (
+                  <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
+                    请先生成大纲
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']) && (
@@ -2817,7 +2902,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">📌 分析PPT</div>
+                <div className="card-title">📌 分析PPT<HelpButton location="project-stage-3b" /></div>
                 <div className="card-hint">基于分析文档，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={daoPptTemplates} selectedId={daoPptSelected}
@@ -2864,24 +2949,18 @@ export default function ProjectPage() {
                     onClick={() => doGenerateOutline('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, s3DaoPptModel, 'col4', s3DaoPptTemp, s3DaoTemps.outline, s3DaoTemps.keyword, s3DaoTemps.research, s3DaoTemps.fill, s3DaoTemps.stageOutline, s3DaoTemps.stageGeneration, s3DaoTemps.stageReview)}>
                     {pptOutlineLoading['step3_dao_ppt'] ? '⏳ 生成中...' : '📋 生成大纲'}
                   </button>
-                  {pptOutlineLoading['step3_dao_ppt'] && (
-                    <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff', flex: '0 0 auto' }}
-                      onClick={() => handleCancelGenerate('step3_dao_ppt')}>取消</button>
-                  )}
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
-                    disabled={!daoPptSelected || !(steps.step2_daoshuyi || '') || !s3DaoPptModel || pptGenerating['step3_dao_ppt']}
+                    disabled={!daoPptSelected || !(steps.step2_daoshuyi || '') || !s3DaoPptModel || !pptOutline['step3_dao_ppt']?.outline_json?.length || pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']}
                     onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '分析PPT',
                       stage3Prompts.daoPpt?.prompt || '请将分析文档内容转化为PPT大纲。',
                       s3DaoPptModel, 'col4', s3DaoPptTemp, s3DaoTemps.keyword, s3DaoTemps.research, s3DaoTemps.outline, s3DaoTemps.fill, s3DaoTemps.cards, s3DaoTemps.html, s3DaoTemps.svg_batch, s3DaoTemps.svg_single, s3DaoTemps.review, s3DaoTemps.fix, s3DaoTemps.holistic, s3DaoTemps.holistic_fix, s3DaoTemps.stageOutline, s3DaoTemps.stageGeneration, s3DaoTemps.stageReview)}>
                     {pptGenerating['step3_dao_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
-                {pptGenerating['step3_dao_ppt'] && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', flex: 1 }}
-                      onClick={() => handleCancelGenerate('step3_dao_ppt')}>取消生成</button>
-                  </div>
+                {(pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']) && (
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
+                    onClick={() => handleCancelGenerate('step3_dao_ppt')}>取消</button>
                 )}
                 {!daoPptSelected || !(steps.step2_daoshuyi || '') || !s3DaoPptModel ? (
                   <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
@@ -2890,6 +2969,10 @@ export default function ProjectPage() {
                       !(steps.step2_daoshuyi || '') ? '请先生成分析文档' : '',
                       !s3DaoPptModel ? '请选择大模型' : '',
                     ].filter(Boolean).join(' | ')}
+                  </div>
+                ) : !pptOutline['step3_dao_ppt']?.outline_json?.length ? (
+                  <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
+                    请先生成大纲
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']) && (
@@ -3129,8 +3212,8 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">📚 综合PPT</div>
-                <div className="card-hint">基于手册文档，选择模板合成PPT</div>
+                <div className="card-title">📚 综合PPT<HelpButton location="project-stage-3c" /></div>
+                <div className="card-hint">基于综合文档，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={yanxiPptTemplates} selectedId={yanxiPptSelected}
                   onSelect={t => { setYanxiPptSelected(t.id); saveStep('_tmpl_step3_yan_ppt', t.id) }} previewTarget="prev3c" />
@@ -3176,32 +3259,30 @@ export default function ProjectPage() {
                     onClick={() => doGenerateOutline('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, s3YanxiPptModel, 'col5', s3YanxiPptTemp, s3YanxiTemps.outline, s3YanxiTemps.keyword, s3YanxiTemps.research, s3YanxiTemps.fill, s3YanxiTemps.stageOutline, s3YanxiTemps.stageGeneration, s3YanxiTemps.stageReview)}>
                     {pptOutlineLoading['step3_yan_ppt'] ? '⏳ 生成中...' : '📋 生成大纲'}
                   </button>
-                  {pptOutlineLoading['step3_yan_ppt'] && (
-                    <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff', flex: '0 0 auto' }}
-                      onClick={() => handleCancelGenerate('step3_yan_ppt')}>取消</button>
-                  )}
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
-                    disabled={!yanxiPptSelected || !(steps.step2_yanxi || '') || !s3YanxiPptModel || pptGenerating['step3_yan_ppt']}
+                    disabled={!yanxiPptSelected || !(steps.step2_yanxi || '') || !s3YanxiPptModel || !pptOutline['step3_yan_ppt']?.outline_json?.length || pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']}
                     onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '综合PPT',
                       stage3Prompts.yanxiPpt?.prompt || '请将手册内容转化为PPT。',
                       s3YanxiPptModel, 'col5', s3YanxiPptTemp, s3YanxiTemps.keyword, s3YanxiTemps.research, s3YanxiTemps.outline, s3YanxiTemps.fill, s3YanxiTemps.cards, s3YanxiTemps.html, s3YanxiTemps.svg_batch, s3YanxiTemps.svg_single, s3YanxiTemps.review, s3YanxiTemps.fix, s3YanxiTemps.holistic, s3YanxiTemps.holistic_fix, s3YanxiTemps.stageOutline, s3YanxiTemps.stageGeneration, s3YanxiTemps.stageReview)}>
                     {pptGenerating['step3_yan_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
-                {pptGenerating['step3_yan_ppt'] && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', flex: 1 }}
-                      onClick={() => handleCancelGenerate('step3_yan_ppt')}>取消生成</button>
-                  </div>
+                {(pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']) && (
+                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
+                    onClick={() => handleCancelGenerate('step3_yan_ppt')}>取消</button>
                 )}
                 {!yanxiPptSelected || !(steps.step2_yanxi || '') || !s3YanxiPptModel ? (
                   <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
                     {[
                       !yanxiPptSelected ? '请选择模板' : '',
-                      !(steps.step2_yanxi || '') ? '请先生成手册文档' : '',
+                      !(steps.step2_yanxi || '') ? '请先生成综合文档' : '',
                       !s3YanxiPptModel ? '请选择大模型' : '',
                     ].filter(Boolean).join(' | ')}
+                  </div>
+                ) : !pptOutline['step3_yan_ppt']?.outline_json?.length ? (
+                  <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
+                    请先生成大纲
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']) && (
@@ -3441,7 +3522,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">演讲文案</div>
+                <div className="card-title">演讲文案<HelpButton location="project-stage-4a" /></div>
                 <div className="card-hint">基于文档内容，生成对应风格的演讲稿</div>
                 {/* ── Sub-tab bar ── */}
                 <div className="s4-speech-tabs" style={{ display: 'flex', gap: 2, marginBottom: 10, borderBottom: '1px solid var(--border)' }}>
@@ -3629,6 +3710,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
+                <div className="card-title">🎙 演讲口播<HelpButton location="project-stage-4b" /></div>
                 <div className="form-label">TTS 提供商</div>
                 <select className="form-select" style={{ marginBottom: 8 }}
                   value={ttsProviderId} onChange={e => {
@@ -4102,7 +4184,6 @@ export default function ProjectPage() {
         )}
         <span className="cb-sep">|</span>
         <span>项目路径</span> <span className="cb-val" style={{ color: 'var(--text-secondary)' }}>{projStoragePath || project?.storage_path || project?.name || '—'}</span>
-        <a className="cb-edit" onClick={() => navigate('/proj-settings')}>前往项目配置修改</a>
       </div>
 
       {/* ═══ Video Check Dialog ═══ */}
@@ -4206,13 +4287,13 @@ export default function ProjectPage() {
           onMouseDown={(e: any) => { overlayMouseDownRef.current = e.target === e.currentTarget }}
           onClick={() => { if (overlayMouseDownRef.current) setShowModelPicker(false) }}>
           <div className="dialog-box" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
-            <div className="dialog-title">选择 Stage 2 大模型</div>
-            <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              为以下栏目配置大模型，已选中的将自动沿用：
+            <div className="dialog-title">选择大模型</div>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              为以下栏目选择大模型，已选中的将自动沿用：
             </p>
             {modelPickerAll.map(c => (
               <div key={c.modelKey} style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
                   {c.label} {steps[c.modelKey] ? <span style={{ fontSize: 10, color: 'var(--success)', fontWeight: 400 }}>已配置</span> : <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 400 }}>未配置</span>}
                 </label>
                 <select

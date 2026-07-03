@@ -176,11 +176,11 @@ slide_type_overrides:
     layout: dashboard
   section:
     background: "{{primary}}"
-    text: "{{accent}}"
+    text: "#ffffff"
     layout: full_bleed
   summary:
     background: "{{primary}}"
-    text: "{{accent}}"
+    text: "#ffffff"
     heading_scale: 1.1
     layout: full_bleed
     copyright: "© YYYY Company Name. All rights reserved."

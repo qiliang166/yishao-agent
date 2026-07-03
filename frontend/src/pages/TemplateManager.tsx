@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, StyleItem } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import HelpButton from '../components/HelpButton'
 
 const VI_LABELS: Record<string, string> = {
   // 总纲
@@ -1015,24 +1016,24 @@ function genSlidePreview(section: string, styleName: string, schemeColors?: Sche
       ${H.topBar}
       ${H.deco('230,126,34')}
       <div style="position:relative;z-index:1;padding:40px 56px">
-        <h2>美食档案</h2>${H.shortLine}
+        <h2>产品档案</h2>${H.shortLine}
         <div class="flex-row" style="gap:24px">
           <div style="width:200px;height:200px;background:${M.noGradients?C.cb:`linear-gradient(135deg,${C.cb},${C.bg})`};border-radius:12px;border:2px dashed rgba(230,126,34,0.25);display:flex;align-items:center;justify-content:center;flex-shrink:0">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="${C.a}" stroke-width="1.2" opacity="0.4"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
           </div>
           <div class="flex-col" style="flex:1;gap:10px">
-            <div style="font:700 22px/1.3 ${H.fontH};color:${C.p}">菜品名称</div>
+            <div style="font:700 22px/1.3 ${H.fontH};color:${C.p}">产品名称</div>
             <div class="flex-row" style="gap:6px;flex-wrap:wrap">
-              ${['川菜','麻辣','主菜','30min'].map(t=>`<span class="tag accent">${t}</span>`).join('')}
+              ${['耐用','环保','标准品','30天'].map(t=>`<span class="tag accent">${t}</span>`).join('')}
             </div>
             <div class="card" style="padding:14px 16px">
               <div class="flex-row" style="gap:20px;font-size:12px">
-                <div><span style="color:var(--m)">温度</span><br/><span style="font:600 16px ${H.fontH};color:${C.p}">180°C</span></div>
-                <div><span style="color:var(--m)">时长</span><br/><span style="font:600 16px ${H.fontH};color:${C.cc[1]}">45min</span></div>
-                <div><span style="color:var(--m)">难度</span><br/><span style="font:600 16px ${H.fontH};color:${C.cc[2]}">★★★</span></div>
+                <div><span style="color:var(--m)">规格</span><br/><span style="font:600 16px ${H.fontH};color:${C.p}">A级</span></div>
+                <div><span style="color:var(--m)">周期</span><br/><span style="font:600 16px ${H.fontH};color:${C.cc[1]}">45天</span></div>
+                <div><span style="color:var(--m)">等级</span><br/><span style="font:600 16px ${H.fontH};color:${C.cc[2]}">★★★</span></div>
               </div>
             </div>
-            <p style="font-size:13px;color:var(--ts);line-height:1.7">详细描述文字，包含食材特征、风味特点、工艺要点等关键信息。支持多行展示，信息层级清晰。</p>
+            <p style="font-size:13px;color:var(--ts);line-height:1.7">详细描述文字，包含产品特征、规格参数、工艺要点等关键信息。支持多行展示，信息层级清晰。</p>
           </div>
         </div>
       </div>
@@ -1044,7 +1045,7 @@ function genSlidePreview(section: string, styleName: string, schemeColors?: Sche
       ${H.topBar}
       ${H.deco('230,126,34')}
       <div style="position:relative;z-index:1;padding:44px 56px">
-        <h2>技能卡片</h2>${H.shortLine}
+        <h2>能力卡片</h2>${H.shortLine}
         <div class="grid-3" style="margin-top:12px">
           ${[
             {t:'React',l:'精通',p:'95%',c:0,d:'前端框架，组件化开发，状态管理'},
@@ -1884,7 +1885,7 @@ function TemplateManager() {
     }).catch(() => {
       setPageTypeData(
         ['cover','toc','section','chapter','content','data','data_hero','technique','principle','process_flow','process_timeline','timeline','comparison','duo_compare','table','grid_cards','image_grid','quote','image_hero','food_archive','skill_card','troubleshoot','appendix','copyright','closing','summary','document'],
-        {cover:'封面',toc:'目录',section:'章节分隔',chapter:'章节页',content:'内容页',data:'数据页',data_hero:'数据突出',technique:'技法页',principle:'原则页',process_flow:'流程图',process_timeline:'流程时间线',timeline:'时间线',comparison:'对比页',duo_compare:'双项对比',table:'表格页',grid_cards:'网格卡片',image_grid:'图片网格',quote:'引言页',image_hero:'图片突出',food_archive:'美食档案',skill_card:'技能卡片',troubleshoot:'问题排查',appendix:'附录页',copyright:'版权页',closing:'结尾页',summary:'总结页',document:'A4文档'}
+        {cover:'封面',toc:'目录',section:'章节分隔',chapter:'章节页',content:'内容页',data:'数据页',data_hero:'数据突出',technique:'技法页',principle:'原则页',process_flow:'流程图',process_timeline:'流程时间线',timeline:'时间线',comparison:'对比页',duo_compare:'双项对比',table:'表格页',grid_cards:'网格卡片',image_grid:'图片网格',quote:'引言页',image_hero:'图片突出',food_archive:'产品档案',skill_card:'能力卡片',troubleshoot:'问题排查',appendix:'附录页',copyright:'版权页',closing:'结尾页',summary:'总结页',document:'A4文档'}
       )
     })
   }, [])
@@ -2076,6 +2077,8 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
             </button>
           )
         })}
+        <div style={{ flex: 1 }} />
+        <HelpButton location="templates" />
       </div>
 
       {/* Content */}

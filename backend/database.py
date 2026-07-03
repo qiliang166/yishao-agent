@@ -165,6 +165,17 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                status TEXT DEFAULT 'draft',
+                description TEXT DEFAULT '',
+                logo TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS step_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
@@ -221,6 +232,36 @@ def init_db():
             )
         """)
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS help_manual_sections (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                location TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Migrate help_manual data from settings table to help_manual_sections
+        try:
+            hm_row = conn.execute(
+                "SELECT value FROM settings WHERE key = 'help_manual'"
+            ).fetchone()
+            if hm_row and hm_row["value"]:
+                import json as _json_m
+                data = _json_m.loads(hm_row["value"])
+                sections = data.get("sections", [])
+                for i, s in enumerate(sections):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO help_manual_sections (location, title, content, sort_order) "
+                        "VALUES (?, ?, ?, ?)",
+                        (s["location"], s["title"], s["content"], i)
+                    )
+                conn.execute("DELETE FROM settings WHERE key = 'help_manual'")
+                conn.commit()
+        except Exception:
+            pass
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS llm_providers (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -254,6 +295,18 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS image_providers (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                api_key TEXT,
+                base_url TEXT NOT NULL,
+                models TEXT,
+                is_enabled INTEGER DEFAULT 1,
+                is_default INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         # Add storage_path column if missing (migration)
         try:
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()]
@@ -275,6 +328,37 @@ def init_db():
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(asr_providers)").fetchall()]
             if 'is_default' not in existing_cols:
                 conn.execute("ALTER TABLE asr_providers ADD COLUMN is_default INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        # Add is_default column to image_providers if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(image_providers)").fetchall()]
+            if 'is_default' not in existing_cols:
+                conn.execute("ALTER TABLE image_providers ADD COLUMN is_default INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
+        # Add workspace_id column to projects if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()]
+            if 'workspace_id' not in existing_cols:
+                conn.execute("ALTER TABLE projects ADD COLUMN workspace_id TEXT REFERENCES workspaces(id)")
+        except Exception:
+            pass
+
+        # Migrate: create default workspace "食谱培训" and assign all workspace_id-less projects
+        try:
+            ws_count = conn.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
+            if ws_count == 0:
+                import uuid as _uuid
+                ws_id = _uuid.uuid4().hex[:12]
+                conn.execute(
+                    "INSERT INTO workspaces (id, name, status) VALUES (?, ?, ?)",
+                    (ws_id, "食谱培训", "completed"))
+                conn.execute(
+                    "UPDATE projects SET workspace_id = ? WHERE workspace_id IS NULL OR workspace_id = ''",
+                    (ws_id,))
         except Exception:
             pass
 
@@ -511,6 +595,60 @@ def init_db():
         except Exception:
             pass
 
+        # ── Workspace config migration: add workspace_id to 4 config tables ──
+        # Seed data → workspace_id IS NULL; workspace copies → workspace_id = <wid>
+        _config_tables = ['column_configs', 'speech_configs', 'tts_configs', 'core_prompt_configs']
+        try:
+            for _tbl in _config_tables:
+                _existing_cols = [row[1] for row in conn.execute(f"PRAGMA table_info({_tbl})").fetchall()]
+                if 'workspace_id' not in _existing_cols:
+                    conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN workspace_id TEXT")
+            # Assign existing data to 食谱教案 workspace, then re-insert seed copies
+            _ws = conn.execute("SELECT id FROM workspaces WHERE name LIKE '%食谱%' LIMIT 1").fetchone()
+            if _ws:
+                _ws_id = _ws[0]
+                _migrated = conn.execute(
+                    "SELECT COUNT(*) FROM column_configs WHERE workspace_id IS NOT NULL").fetchone()[0]
+                if _migrated == 0:
+                    # Rebuild core_prompt_configs UNIQUE constraint: single-col → composite
+                    # so the same prompt_key can exist in different workspaces
+                    conn.execute("""CREATE TABLE IF NOT EXISTS _cpc_rebuild (
+                        id TEXT PRIMARY KEY, prompt_key TEXT NOT NULL, category TEXT NOT NULL,
+                        label TEXT NOT NULL, content TEXT, sort_order INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, workspace_id TEXT,
+                        UNIQUE(prompt_key, workspace_id))""")
+                    _cpc_rows = conn.execute("SELECT * FROM core_prompt_configs").fetchall()
+                    if _cpc_rows:
+                        _cpc_keys = _cpc_rows[0].keys()
+                        _cpc_vals = [[r[k] for k in _cpc_keys] for r in _cpc_rows]
+                        _cpc_ph = ', '.join(['?'] * len(_cpc_keys))
+                        _cpc_cn = ', '.join(_cpc_keys)
+                        conn.executemany(f"INSERT OR IGNORE INTO _cpc_rebuild ({_cpc_cn}) VALUES ({_cpc_ph})", _cpc_vals)
+                    conn.execute("DROP TABLE core_prompt_configs")
+                    conn.execute("ALTER TABLE _cpc_rebuild RENAME TO core_prompt_configs")
+                    for _tbl in _config_tables:
+                        conn.execute(f"UPDATE {_tbl} SET workspace_id = ?", (_ws_id,))
+                    # Re-insert seed rows (workspace_id = NULL) with 'seed-' prefixed IDs
+                    for _tbl in _config_tables:
+                        _rows = conn.execute(f"SELECT * FROM {_tbl}").fetchall()
+                        if not _rows:
+                            continue
+                        _keys = _rows[0].keys()
+                        for _row in _rows:
+                            _d = {k: _row[k] for k in _keys}
+                            _d['id'] = 'seed-' + str(_d['id'])
+                            _d['workspace_id'] = None
+                            if _tbl == 'core_prompt_configs' and 'prompt_key' in _d:
+                                _d['prompt_key'] = 'seed-' + str(_d['prompt_key'])
+                            _vals = [_d[k] for k in _keys]
+                            _ph = ', '.join(['?'] * len(_keys))
+                            _cn = ', '.join(_keys)
+                            conn.execute(f"INSERT OR IGNORE INTO {_tbl} ({_cn}) VALUES ({_ph})", _vals)
+                    conn.commit()
+        except Exception as _e:
+            print(f"[DB] Workspace config migration: {_e}")
+
         conn.execute("""
             CREATE TABLE IF NOT EXISTS tts_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -522,6 +660,16 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Add description and logo columns to workspaces (migration, 2026-07-02)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(workspaces)").fetchall()]
+            if 'description' not in existing_cols:
+                conn.execute("ALTER TABLE workspaces ADD COLUMN description TEXT DEFAULT ''")
+            if 'logo' not in existing_cols:
+                conn.execute("ALTER TABLE workspaces ADD COLUMN logo TEXT DEFAULT ''")
+        except Exception:
+            pass
+
         # Add name and voice_name columns to tts_history if missing (migration, 2026-07-01)
         try:
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(tts_history)").fetchall()]
@@ -613,13 +761,29 @@ def init_db():
         _migrate_legacy_data(conn)
 
         # Seed column configs if empty
-        existing = conn.execute("SELECT COUNT(*) FROM column_configs").fetchone()[0]
+        existing = conn.execute("SELECT COUNT(*) FROM column_configs WHERE workspace_id IS NULL").fetchone()[0]
         if existing == 0:
             defaults = [
-                ('c1-input', 'col1', '素材输入', '请根据用户提供的内容，整理为标准文档格式。', '', 0, '{}', 0),
-                ('c2-text', 'col2', '文档生成', '请根据素材内容生成一份完整的文档。', '', 0, '{}', 1),
-                ('c3-sop', 'col3', 'SOP 生成+导出', '你是文档大纲提取专家。请将食谱阅读笔记按下方 SKILL 模板定义的 block 结构提取为 JSON 幻灯片大纲。\n\n输入：Markdown 格式的食谱阅读笔记，包含菜肴信息、食材清单、操作步骤、出品标准四个章节。\n\n输出：JSON 幻灯片数组。每个 ## block 对应一个 slide，字段如下：\n- seq: 从 1 开始连续编号\n- heading: 从 ## 行提取标题文本（替换 {填入} 占位符为实际值）\n- page_type: 统一为 "document"\n- kicker: ## 行 · 后面的标识符（如 title、info_block、table_block、closing、footer）\n- lead: 该 block 的核心摘要（20字以内）\n- body: 从原文提取并填充模板占位符后的完整内容\n- key_points: 关键信息点列表\n- notes: 补充说明\n- layout_hint: 固定为 "single_focus"\n- visual_weight: 固定为 "medium"\n\n核心规则：\n1. 原样提取数据，不编造。原文缺失的信息保留空值或标注"原文未提及"。\n2. 食材清单表和操作步骤表的序号列均从 1 开始连续编号。\n3. 原文"说明"行填入 footer block 的备注字段。\n4. 关键技巧以编号列表形式逐条填入 closing block 的 body。\n5. 模板中的占位符行（{填入} 或 ...）必须全部替换为实际数据。',
-                 '# {菜名} — 标准作业文档\n\n## {菜名}学习笔记 · title\n- 编写日期：{填入} | 菜品类型：{填入} | 主材：{填入}\n\n## 菜肴信息 · info_block\n| 项目 | 内容 |\n|------|------|\n| 菜肴名称 | {填入} |\n| 菜肴类型 | {填入} |\n| 菜肴地域 | {填入} |\n| 成品特征 | {填入} |\n| 出品标准 | {填入} |\n| 特点 | {填入} |\n\n## 食材清单 · table_block\n| 序号 | 食材类型 | 食材名称 | 品牌 | 加工说明 | 加工要求 | 用量 | 单位 |\n|------|----------|----------|------|----------|----------|------|------|\n| 1 | {填入} | {填入} | {填入} | {填入} | {填入} | {填入} | {填入} |\n| 2 | {填入} | {填入} | {填入} | {填入} | {填入} | {填入} | {填入} |\n| ... | ... | ... | ... | ... | ... | ... | ... |\n\n## 操作步骤 · table_block\n| 序号 | 关键词 | 工具与器皿 | 操作说明 | 注意事项 |\n|------|--------|-----------|----------|----------|\n| 1 | {填入} | {填入} | {填入} | {填入} |\n| 2 | {填入} | {填入} | {填入} | {填入} |\n| ... | ... | ... | ... | ... |\n\n## 出品标准与关键控制点 · closing\n### 出品标准\n| 指标 | 要求 |\n|------|------|\n| 色泽 | {填入} |\n| 香气 | {填入} |\n| 口感 | {填入} |\n| 口味 | {填入} |\n| 温度 | {填入} |\n\n### 关键技巧总结\n- {填入}\n- {填入}\n...\n\n## 版权声明 · footer\n版权声明：本文档内容、知识产权均归原作者及版权方所有，笔记内容为个人学习心得，不代表权威观点，仅供参考交流使用。\n备注：{填入}',
+                ('seed-c1-input', 'col1', '素材输入',
+                 '【作用】Stage 1 — 用户输入素材后，此提示词定义 AI 如何处理和整理原始素材。\n'
+                 '【输入】用户提供的原始文本/文件内容\n'
+                 '【编写要点】指定输出格式（Markdown/纯文本）、内容组织方式、是否需要去噪/摘要/结构化。保持通用，不限定行业术语。',
+                 '【作用】定义 Stage 1 的输出格式模板，AI 按此模板组织整理后的素材。\n'
+                 '【编写要点】使用 Markdown 结构，用占位符标注需要填充的内容位置。模板越具体，输出越稳定。',
+                 0, '{}', 0),
+                ('seed-c2-text', 'col2', '文档生成',
+                 '【作用】Stage 2 — 基于素材输入（col1 输出），生成完整的培训文档。\n'
+                 '【输入】col1 整理后的素材内容\n'
+                 '【编写要点】定义文档结构（章节/段落/要点）、语言风格（正式/通俗/教学）、输出格式。可指定"金字塔原理"等结构化方法。',
+                 '【作用】定义 Stage 2 输出的文档结构模板。\n'
+                 '【编写要点】使用 Markdown 标题层级组织章节，表格定义结构化数据，占位符标注动态内容。',
+                 0, '{}', 1),
+                ('seed-c3-sop', 'col3', '文档课件',
+                 '【作用】Stage 3 — 将 Stage 2 的文档转为幻灯片大纲（JSON 格式），用于后续 PPT 生成。\n'
+                 '【输入】Stage 2 生成的培训文档（Markdown）\n'
+                 '【编写要点】定义 JSON 输出格式（slide 数组），指定每个 slide 的字段（seq/heading/page_type/body 等），给出提取规则（如何从 Markdown 标题/表格中提取内容）。page_type 需与 VI 风格模板的页面类型对应。',
+                 '【作用】定义 Stage 3 输出的幻灯片大纲模板（Markdown 格式），AI 参考此模板组织幻灯片内容。\n'
+                 '【编写要点】使用 ## 标题划分页面，用 · 标注页面类型标识符（title/info_block/table_block/closing/footer），表格定义结构化数据列，占位符 {填入} 标注待填充位置。',
                  1, '{"canvas": {"width": 794, "height": 1123}}', 2),
             ]
             for d in defaults:
@@ -678,24 +842,129 @@ def init_db():
             pass
         # Seed speech_configs if empty
         try:
-            sc_count = conn.execute("SELECT COUNT(*) FROM speech_configs").fetchone()[0]
+            sc_count = conn.execute("SELECT COUNT(*) FROM speech_configs WHERE workspace_id IS NULL").fetchone()[0]
             if sc_count == 0:
                 defaults = [
-                    ('speech-doc', '文档演讲',
-                     '你是一位专业的美食讲解员。请根据以下标准文档内容，生成一篇自然亲切的演讲稿，适合在烹饪教学场景中使用。要求：语言生动有趣，节奏感强，包含开场白、主体内容和结束语。',
-                     '', 1),
-                    ('speech-analysis', '分析演讲',
-                     '你是一位专业的美食评论家。请根据以下分析文档内容，生成一篇深度分析的演讲稿，适合在烹饪教学场景中使用。要求：突出原理与技法分析，逻辑清晰，让听众理解背后的"道"与"术"。',
-                     '', 2),
-                    ('speech-comprehensive', '综合演讲',
-                     '你是一位专业的美食教育家。请根据以下手册文档内容，生成一篇综合性的演讲稿，适合在烹饪教学场景中使用。要求：结合背景知识与实操要点，既有理论深度又有实践指导。',
-                     '', 3),
+                    ('seed-speech-doc', '文档演讲',
+                     '【作用】Stage 4 (col6) — 根据 Stage 2 生成的文档内容，撰写口播演讲稿。\n'
+                     '【输入】Stage 2 输出的培训文档\n'
+                     '【编写要点】定义演讲风格（亲切/正式/教学）、结构（开场白→主体→结束语）、语言特征（口语化/节奏感/停顿标记）。',
+                     '【作用】定义演讲稿的输出格式模板。\n'
+                     '【编写要点】用 Markdown 结构标注段落/停顿/强调，可指定字数范围或时长估算。',
+                     1),
+                    ('seed-speech-analysis', '分析演讲',
+                     '【作用】Stage 4 (col6) — 根据分析文档内容，撰写深度分析演讲稿。\n'
+                     '【输入】分析类文档（如技术分析、市场分析）\n'
+                     '【编写要点】侧重于逻辑清晰、层层递进、突出原理与要点，适合专业听众。',
+                     '【作用】定义分析类演讲稿的输出格式模板。\n'
+                     '【编写要点】标注逻辑层次（总→分→总）、关键数据强调方式、专业术语处理。',
+                     2),
+                    ('seed-speech-comprehensive', '综合演讲',
+                     '【作用】Stage 4 (col6) — 根据综合文档内容，撰写系统全面的演讲稿。\n'
+                     '【输入】综合类培训文档\n'
+                     '【编写要点】兼顾理论深度与实践指导，平衡专业性与可理解性，适合教学场景。',
+                     '【作用】定义综合类演讲稿的输出格式模板。\n'
+                     '【编写要点】标注理论与实践的交替节奏、案例引入方式、互动环节设计。',
+                     3),
                 ]
                 for d in defaults:
                     conn.execute(
                         "INSERT INTO speech_configs (id, label, prompt, skill, sort_order) VALUES (?, ?, ?, ?, ?)",
                         d
                     )
+        except Exception:
+            pass
+
+        # Create tts_configs table (voice synthesis role prompts, independent from speech_configs)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tts_configs (
+                id TEXT PRIMARY KEY,
+                label TEXT NOT NULL,
+                prompt TEXT,
+                skill TEXT,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        try:
+            tc_count = conn.execute("SELECT COUNT(*) FROM tts_configs WHERE workspace_id IS NULL").fetchone()[0]
+            if tc_count == 0:
+                tts_defaults = [
+                    ('seed-tts-doc', '文档语音',
+                     '【作用】Stage 4 (col7) — 将演讲稿转为语音播报的角色提示词，控制语音的语气和表达风格。\n'
+                     '【输入】Stage 4 生成的演讲稿文本\n'
+                     '【编写要点】定义语音角色（培训讲师/解说员等）、语气（亲切/专业/激昂）、语速/停顿等表达特征。此提示词直接影响 TTS 合成效果。',
+                     '', 1),
+                    ('seed-tts-analysis', '分析语音',
+                     '【作用】Stage 4 (col7) — 将分析类演讲稿转为语音播报的角色提示词。\n'
+                     '【输入】分析类演讲稿\n'
+                     '【编写要点】侧重于逻辑表达（语速适中、重音强调关键数据）、专业但不生硬。',
+                     '', 2),
+                    ('seed-tts-comprehensive', '综合语音',
+                     '【作用】Stage 4 (col7) — 将综合类演讲稿转为语音播报的角色提示词。\n'
+                     '【输入】综合类演讲稿\n'
+                     '【编写要点】平衡教学感与亲和力，适合长时间培训场景的语音表达。',
+                     '', 3),
+                ]
+                for d in tts_defaults:
+                    conn.execute(
+                        "INSERT INTO tts_configs (id, label, prompt, skill, sort_order) VALUES (?, ?, ?, ?, ?)",
+                        d
+                    )
+        except Exception:
+            pass
+
+        # Create core_prompt_configs table (seed documentation for PPT generation prompts)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS core_prompt_configs (
+                id TEXT PRIMARY KEY,
+                prompt_key TEXT NOT NULL,
+                category TEXT NOT NULL,
+                label TEXT NOT NULL,
+                content TEXT,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                workspace_id TEXT,
+                UNIQUE(prompt_key, workspace_id)
+            )
+        """)
+        try:
+            cpc_count = conn.execute("SELECT COUNT(*) FROM core_prompt_configs WHERE workspace_id IS NULL").fetchone()[0]
+            if cpc_count == 0:
+                import glob as _glob
+                _core_dir = os.path.join(BASE_DIR, "resources", "prompts", "core")
+                _categories = [
+                    ("root", "", ["research", "outline-rules", "fill-content", "text-to-json",
+                                  "cards-system", "structure-output", "html-output", "edit-agent"]),
+                    ("always", "always", ["identity", "iron-laws", "colors", "color-semantics",
+                                          "structure", "richness", "typography", "consistency",
+                                          "checklist", "format-spec"]),
+                    ("by_type", "by_type", ["cards", "card-roles", "decoration", "illustration"]),
+                    ("by_feature", "by_feature", ["charts"]),
+                    ("by_layout", "by_layout", ["full_bleed", "single_focus", "two_column",
+                                                "two_column_asymmetric", "three_column",
+                                                "hero_grid", "mixed_grid", "dashboard",
+                                                "timeline", "horizontal_split"]),
+                ]
+                _sort = 0
+                for _cat, _subdir, _keys in _categories:
+                    for _key in _keys:
+                        _filepath = os.path.join(_core_dir, _subdir, f"{_key}.md") if _subdir \
+                            else os.path.join(_core_dir, f"{_key}.md")
+                        _content = ""
+                        if os.path.exists(_filepath):
+                            with open(_filepath, "r", encoding="utf-8") as _f:
+                                _content = _f.read()
+                        _label = _key.replace("-", " ").replace("_", " ").title()
+                        _id = f"seed-core-{_key.replace('/', '-').replace('_', '-')}"
+                        conn.execute(
+                            "INSERT INTO core_prompt_configs (id, prompt_key, category, label, content, sort_order) "
+                            "VALUES (?, ?, ?, ?, ?, ?)",
+                            (_id, f"{_subdir}/{_key}" if _subdir else _key, _cat, _label, _content, _sort)
+                        )
+                        _sort += 1
         except Exception:
             pass
 

@@ -12,7 +12,7 @@ import bcrypt
 from jose import JWTError, jwt
 from database import init_db, get_db
 from services.cosyvoice_service import clone_voice, design_voice
-from models import (ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest,
+from models import (WorkspaceCreate, WorkspaceUpdate, ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest,
     LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest, PPTEditSlideRequest,
     PPTSlideSourceRequest, PPTRegenerateSlideRequest, TtsHistoryUpdate,
     ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
@@ -231,21 +231,40 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    # Public paths that never need auth (static assets, login, etc.)
-    _public_prefixes = (
-        "/api/login", "/api/auth/check", "/api/license/activate",
-        "/api/license/status", "/api/version",
-        "/api/logos/", "/api/exports/",
-        "/api/audio/", "/api/thumbnails/", "/api/download/",
+    method = request.method
+
+    # Only protect settings/config write endpoints when password is enabled
+    # Protected routes: (prefix, allowed_methods)
+    _protected = (
+        ("/api/settings", ("PUT",)),
+        ("/api/column-configs/", ("PUT", "POST", "DELETE")),
+        ("/api/core-prompt-configs/", ("PUT", "POST", "DELETE")),
+        ("/api/tts-configs/", ("PUT", "POST", "DELETE")),
+        ("/api/speech-configs/", ("PUT", "POST", "DELETE")),
+        ("/api/workspaces/", ("PUT", "DELETE")),
+        ("/api/projects/", ("PUT", "DELETE")),
+        ("/api/help-manual/", ("PUT", "POST", "DELETE")),
     )
-    if path.startswith("/api/") and not (
-        path in _public_prefixes[:5]
-        or any(path.startswith(p) for p in _public_prefixes[5:])
-        or (path == "/api/settings" and request.method == "GET")
-    ):
-        # If no admin password is configured, allow unauthenticated access
+    needs_auth = False
+    for prefix, methods in _protected:
+        if path.startswith(prefix) and method in methods:
+            # For /api/projects/ and /api/workspaces/, only protect the
+            # resource itself and its items (column configs). Sub-resources
+            # like steps, files, materials are user content — not settings.
+            if prefix in ("/api/projects/", "/api/workspaces/"):
+                rest = path[len(prefix):]
+                parts = rest.split("/")
+                if len(parts) > 1 and parts[1] != "items":
+                    continue
+            needs_auth = True
+            break
+
+    if needs_auth:
         stored_hash = _get_setting("admin_password")
         if not stored_hash:
+            return await call_next(request)
+        enabled = _get_setting("admin_password_enabled")
+        if enabled == "0":
             return await call_next(request)
 
         auth_header = request.headers.get("Authorization", "")
@@ -256,6 +275,7 @@ async def auth_middleware(request: Request, call_next):
             jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         except JWTError:
             return JSONResponse(status_code=401, content={"detail": "无效或过期的令牌"})
+
     return await call_next(request)
 
 
@@ -274,6 +294,7 @@ async def license_middleware(request: Request, call_next):
         or path in ("/api/login", "/api/auth/check", "/api/verify-password",
                     "/api/settings", "/api/version")
         or path.startswith("/api/logos/")
+        or path.startswith("/api/help-manual/")
         or path.startswith("/api/download/")
         or not path.startswith("/api/")):
         return await call_next(request)
@@ -334,19 +355,251 @@ def health():
     return {"status": "ok", "app": _get_site_name()}
 
 
+# ── Workspaces ──
+
+@app.get("/api/workspaces")
+def list_workspaces(page: int = 1, page_size: int = 20):
+    db = get_db()
+    try:
+        total = db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
+        offset = (page - 1) * page_size
+        rows = db.execute(
+            "SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            (page_size, offset)
+        ).fetchall()
+        return {"workspaces": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+    finally:
+        db.close()
+
+
+def _copy_seed_configs(db, workspace_id: str):
+    """Copy seed configs (workspace_id IS NULL) to a specific workspace."""
+    for table, id_col in [
+        ('column_configs', 'id'),
+        ('speech_configs', 'id'),
+        ('tts_configs', 'id'),
+        ('core_prompt_configs', 'id'),
+    ]:
+        seeds = db.execute(
+            f"SELECT * FROM {table} WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
+        for s in seeds:
+            d = dict(s)
+            d[id_col] = uuid.uuid4().hex[:20]
+            d['workspace_id'] = workspace_id
+            # Strip 'seed-' prefix from prompt_key for core_prompt_configs
+            if table == 'core_prompt_configs' and 'prompt_key' in d:
+                pk = d['prompt_key']
+                if pk and pk.startswith('seed-'):
+                    d['prompt_key'] = pk[5:]
+            cols = list(d.keys())
+            ph = ', '.join(['?'] * len(cols))
+            cn = ', '.join(cols)
+            db.execute(f"INSERT OR IGNORE INTO {table} ({cn}) VALUES ({ph})", list(d.values()))
+    db.commit()
+
+
+@app.post("/api/workspaces")
+def create_workspace(req: WorkspaceCreate):
+    wid = uuid.uuid4().hex[:12]
+    db = get_db()
+    try:
+        db.execute("INSERT INTO workspaces (id, name, description, logo, status) VALUES (?, ?, ?, ?, ?)",
+                   (wid, req.name, req.description or '', req.logo or '', req.status or 'draft'))
+        db.commit()
+        _copy_seed_configs(db, wid)
+        row = db.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.get("/api/workspaces/{workspace_id}")
+def get_workspace(workspace_id: str):
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "workspace not found")
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.put("/api/workspaces/{workspace_id}")
+def update_workspace(workspace_id: str, req: WorkspaceUpdate):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "workspace not found")
+        if req.name is not None:
+            db.execute("UPDATE workspaces SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                       (req.name, workspace_id))
+        if req.status is not None:
+            db.execute("UPDATE workspaces SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                       (req.status, workspace_id))
+        if req.description is not None:
+            db.execute("UPDATE workspaces SET description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                       (req.description, workspace_id))
+        if req.logo is not None:
+            db.execute("UPDATE workspaces SET logo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                       (req.logo, workspace_id))
+        db.commit()
+        row = db.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.delete("/api/workspaces/{workspace_id}")
+def delete_workspace(workspace_id: str):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "workspace not found")
+        # Cascade: delete all projects under this workspace
+        proj_rows = db.execute(
+            "SELECT id FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchall()
+        for proj in proj_rows:
+            _delete_project_files(proj["id"], db)
+        db.execute("DELETE FROM projects WHERE workspace_id = ?", (workspace_id,))
+        db.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.post("/api/workspaces/{workspace_id}/copy-seed-configs")
+def copy_seed_configs_to_workspace(workspace_id: str):
+    """Copy seed configs to a workspace (idempotent — skips if already exists)."""
+    db = get_db()
+    try:
+        existing = db.execute(
+            "SELECT COUNT(*) FROM column_configs WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
+        if existing > 0:
+            return {"ok": True, "message": "already has configs"}
+        _copy_seed_configs(db, workspace_id)
+        return {"ok": True, "message": "copied"}
+    finally:
+        db.close()
+
+
 # ── Projects ──
 
 @app.get("/api/projects")
-def list_projects(page: int = 1, page_size: int = 20):
+def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = ""):
     db = get_db()
     try:
-        total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
-        offset = (page - 1) * page_size
-        rows = db.execute(
-            "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-            (page_size, offset)
-        ).fetchall()
+        if workspace_id:
+            total = db.execute("SELECT COUNT(*) FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
+            offset = (page - 1) * page_size
+            rows = db.execute(
+                "SELECT * FROM projects WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                (workspace_id, page_size, offset)
+            ).fetchall()
+        else:
+            total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+            offset = (page - 1) * page_size
+            rows = db.execute(
+                "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                (page_size, offset)
+            ).fetchall()
         return {"projects": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+    finally:
+        db.close()
+
+
+def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
+    """Initialize project_items for a new project from its workspace's configs.
+
+    Copies from the project's workspace-specific column_configs, speech_configs,
+    tts_configs, and core_prompt_configs into project_items so the project owns
+    its independent copies of all prompts.
+    """
+    db = get_db()
+    try:
+        # Resolve workspace_id from project if not provided
+        if not workspace_id:
+            proj = db.execute("SELECT workspace_id FROM projects WHERE id = ?", (project_id,)).fetchone()
+            workspace_id = proj["workspace_id"] if proj else None
+
+        col_output_mode = {
+            "col1": "text", "col2": "text", "col3": "ppt",
+            "col4": "ppt", "col5": "ppt",
+        }
+
+        _ws = workspace_id  # shorthand
+
+        # 1. Column configs → project_items (col1-col5)
+        col_configs = db.execute(
+            "SELECT * FROM column_configs WHERE workspace_id = ? ORDER BY sort_order",
+            (_ws,)).fetchall() if _ws else []
+        for i, cc in enumerate(col_configs):
+            pi_id = f"pi-{project_id}-{cc['column_id']}"
+            existing = db.execute(
+                "SELECT id FROM project_items WHERE id = ?", (pi_id,)).fetchone()
+            if existing:
+                continue
+            output_mode = col_output_mode.get(cc["column_id"], "text")
+            db.execute(
+                "INSERT INTO project_items (id, project_id, name, prompt, skill, "
+                "output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (pi_id, project_id, cc["label"], cc["prompt"] or "", cc["skill"] or "",
+                 output_mode, cc["rules"] or "{}", i))
+
+        # 2. Speech configs → project_items
+        speech_configs = db.execute(
+            "SELECT * FROM speech_configs WHERE workspace_id = ? ORDER BY sort_order",
+            (_ws,)).fetchall() if _ws else []
+        for i, sc in enumerate(speech_configs):
+            pi_id = f"pi-{project_id}-speech-{sc['id'].replace('speech-', '')}"
+            existing = db.execute(
+                "SELECT id FROM project_items WHERE id = ?", (pi_id,)).fetchone()
+            if existing:
+                continue
+            db.execute(
+                "INSERT INTO project_items (id, project_id, name, prompt, skill, "
+                "output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (pi_id, project_id, sc["label"], sc["prompt"] or "", sc["skill"] or "",
+                 "speech_config", "{}", 10 + i))
+
+        # 3. TTS configs → project_items
+        tts_configs = db.execute(
+            "SELECT * FROM tts_configs WHERE workspace_id = ? ORDER BY sort_order",
+            (_ws,)).fetchall() if _ws else []
+        for i, tc in enumerate(tts_configs):
+            pi_id = f"pi-{project_id}-tts-{tc['id'].replace('tts-', '')}"
+            existing = db.execute(
+                "SELECT id FROM project_items WHERE id = ?", (pi_id,)).fetchone()
+            if existing:
+                continue
+            db.execute(
+                "INSERT INTO project_items (id, project_id, name, prompt, skill, "
+                "output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (pi_id, project_id, tc["label"], tc["prompt"] or "", tc["skill"] or "",
+                 "tts_config", "{}", 20 + i))
+
+        # 4. Core prompt configs → project_items
+        core_configs = db.execute(
+            "SELECT * FROM core_prompt_configs WHERE workspace_id = ? ORDER BY sort_order",
+            (_ws,)).fetchall() if _ws else []
+        for i, cpc in enumerate(core_configs):
+            safe_key = cpc["prompt_key"].replace("/", "-").replace("\\", "-")
+            pi_id = f"pi-{project_id}-core-{safe_key}"
+            existing = db.execute(
+                "SELECT id FROM project_items WHERE id = ?", (pi_id,)).fetchone()
+            if existing:
+                continue
+            db.execute(
+                "INSERT INTO project_items (id, project_id, name, prompt, skill, "
+                "output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (pi_id, project_id, cpc["label"], cpc["content"] or "", "",
+                 "core_prompt", "{}", 30 + i))
+
+        db.commit()
     finally:
         db.close()
 
@@ -356,6 +609,11 @@ def create_project(req: ProjectCreate):
     pid = uuid.uuid4().hex[:12]
     db = get_db()
     try:
+        # Verify workspace exists
+        ws = db.execute("SELECT id FROM workspaces WHERE id = ?", (req.workspace_id,)).fetchone()
+        if not ws:
+            raise HTTPException(404, "workspace not found")
+
         # Compute default storage path
         base = _get_global_save_path()
         folder = _sanitize_folder_name(req.name)
@@ -372,9 +630,11 @@ def create_project(req: ProjectCreate):
         project_code = f"KH{today}-{today_count + 1:04d}"
 
         db.execute(
-            "INSERT INTO projects (id, name, source_type, storage_path, project_code) VALUES (?, ?, ?, ?, ?)",
-            (pid, req.name, req.source_type, storage_path, project_code))
+            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id))
         db.commit()
+        # Initialize project_items from workspace configs
+        _init_project_items_from_factory(pid, req.workspace_id)
         row = db.execute("SELECT * FROM projects WHERE id = ?", (pid,)).fetchone()
         return dict(row)
     finally:
@@ -1062,14 +1322,21 @@ def update_material(project_id: str, material_id: str, req: SourceMaterialUpdate
 # ── Project Items (dynamic output steps) ──
 
 @app.get("/api/projects/{project_id}/items")
-def list_project_items(project_id: str):
+def list_project_items(project_id: str, output_mode: str = ""):
     db = get_db()
     try:
-        rows = db.execute(
-            "SELECT pi.*, "
-            "  (SELECT COUNT(*) FROM project_item_results WHERE project_item_id = pi.id) as result_count "
-            "FROM project_items pi WHERE pi.project_id = ? ORDER BY pi.sort_order",
-            (project_id,)).fetchall()
+        if output_mode:
+            rows = db.execute(
+                "SELECT pi.*, "
+                "  (SELECT COUNT(*) FROM project_item_results WHERE project_item_id = pi.id) as result_count "
+                "FROM project_items pi WHERE pi.project_id = ? AND pi.output_mode = ? ORDER BY pi.sort_order",
+                (project_id, output_mode)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT pi.*, "
+                "  (SELECT COUNT(*) FROM project_item_results WHERE project_item_id = pi.id) as result_count "
+                "FROM project_items pi WHERE pi.project_id = ? ORDER BY pi.sort_order",
+                (project_id,)).fetchall()
         return {"items": [dict(r) for r in rows]}
     finally:
         db.close()
@@ -1161,6 +1428,15 @@ def copy_project_items(project_id: str, source_project_id: str):
         return {"ok": True, "copied": count}
     finally:
         db.close()
+
+
+@app.post("/api/projects/{project_id}/items/init-from-factory")
+def init_project_items_from_factory(project_id: str):
+    """Initialize project_items from global factory configs for an existing project.
+    Skips items that already exist (based on standard ID pattern).
+    """
+    _init_project_items_from_factory(project_id)
+    return {"ok": True}
 
 
 # ── Project Item Results ──
@@ -1589,6 +1865,22 @@ def update_image_provider(provider_id: str, req: ImageProviderCreate):
             (req.name, req.api_key, req.base_url, json.dumps(req.models, ensure_ascii=False), req.is_default, provider_id))
         db.commit()
         return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.get("/api/image/providers/{provider_id}")
+def get_image_provider(provider_id: str):
+    """Get a single provider with full (unmasked) API key for editing."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM image_providers WHERE id = ?", (provider_id,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Provider not found")
+        p = dict(row)
+        models_str = p.get("models", "[]")
+        p["models"] = json.loads(models_str) if models_str else []
+        return p
     finally:
         db.close()
 
@@ -3464,7 +3756,7 @@ def api_ppt_outline_convert(req: PPTPlanRequest):
     if not req.provider_id or not req.model:
         raise HTTPException(status_code=400, detail="需要选择大模型才能转换")
     try:
-        result = _human_text_to_json(req.provider_id, req.model, req.content, req.slide_plan or [])
+        result = _human_text_to_json(req.provider_id, req.model, req.content, req.slide_plan or [], req.project_id or "")
         return {"outline_json": result or []}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -3527,7 +3819,8 @@ def api_ppt_plan(req: PPTPlanRequest):
         slide_plan = _generate_slides_staged(
             req.provider_id, req.model, rules, req.content,
             column_prompt, column_skill, temperature=req.temperature,
-            st=st
+            st=st, column_id=req.column_id or "",
+            project_id=req.project_id or ""
         )
         return {"slide_plan": slide_plan or []}
     except Exception as e:
@@ -3909,7 +4202,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
         _stage2_html_per_slide, _assemble_html_deck,
         _resolve_color_vars, _load_scheme_data,
         _auto_fix_hardcoded_hex, _auto_fix_font_size,
-        _get_canvas_dimensions,
+        _get_canvas_dimensions, _enforce_no_hardcoded_hex,
     )
     import datetime as _dt
 
@@ -4095,6 +4388,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
         html_v = s.get("html_vars", "") or s.get("html", "")
         if html_v and scheme_data:
             html_v = _resolve_color_vars(html_v, scheme_data, css_vars=True)
+            html_v, _enf_count = _enforce_no_hardcoded_hex(html_v, scheme_data, s.get("seq", 0))
         resolved_slides.append({**s, "html": html_v})
 
     # Fix cover slide: if background is primary (dark), text must be light
@@ -4130,6 +4424,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
     deck_html = _assemble_html_deck(resolved_slides, title, style_id, scheme_data, canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
     if scheme_data:
         deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
+        deck_html, _deck_enf = _enforce_no_hardcoded_hex(deck_html, scheme_data, 0)
     deck_vars = _assemble_html_deck(
         [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_plan],
         title, style_id, scheme_data, canvas_w=regen_canvas_w, canvas_h=regen_canvas_h
@@ -5202,6 +5497,63 @@ def update_settings(req: dict):
         db.close()
 
 
+# ── Help Manual Sections ──
+
+@app.get("/api/help-manual/sections")
+def list_help_sections():
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT location, title, content FROM help_manual_sections ORDER BY sort_order"
+        ).fetchall()
+        sections = [{"location": r["location"], "title": r["title"], "content": r["content"]} for r in rows]
+        return {"sections": sections}
+    finally:
+        db.close()
+
+
+@app.get("/api/help-manual/sections/{location}")
+def get_help_section(location: str):
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT location, title, content FROM help_manual_sections WHERE location = ?",
+            (location,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="章节未找到")
+        return {"location": row["location"], "title": row["title"], "content": row["content"]}
+    finally:
+        db.close()
+
+
+@app.put("/api/help-manual/sections/{location}")
+def upsert_help_section(location: str, req: dict):
+    db = get_db()
+    try:
+        title = req.get("title", "")
+        content = req.get("content", "")
+        existing = db.execute(
+            "SELECT id FROM help_manual_sections WHERE location = ?", (location,)
+        ).fetchone()
+        if existing:
+            db.execute(
+                "UPDATE help_manual_sections SET title = ?, content = ?, updated_at = CURRENT_TIMESTAMP "
+                "WHERE location = ?",
+                (title, content, location)
+            )
+        else:
+            max_sort = db.execute("SELECT COALESCE(MAX(sort_order), -1) FROM help_manual_sections").fetchone()[0]
+            db.execute(
+                "INSERT INTO help_manual_sections (location, title, content, sort_order) VALUES (?, ?, ?, ?)",
+                (location, title, content, max_sort + 1)
+            )
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
 @app.post("/api/login")
 def login(req: dict):
     plain = req.get("password", "")
@@ -5426,10 +5778,16 @@ def open_folder(req: OpenFolderRequest):
 # ── Column Configs ──
 
 @app.get("/api/column-configs")
-def list_column_configs():
+def list_column_configs(workspace_id: str = None):
     db = get_db()
     try:
-        rows = db.execute("SELECT * FROM column_configs ORDER BY sort_order").fetchall()
+        if workspace_id:
+            rows = db.execute(
+                "SELECT * FROM column_configs WHERE workspace_id = ? ORDER BY sort_order",
+                (workspace_id,)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM column_configs WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
         return {"configs": [dict(r) for r in rows]}
     finally:
         db.close()
@@ -5532,10 +5890,16 @@ def update_column_config(config_id: str, req: dict):
 
 
 @app.get("/api/speech-configs")
-def list_speech_configs():
+def list_speech_configs(workspace_id: str = None):
     db = get_db()
     try:
-        rows = db.execute("SELECT * FROM speech_configs ORDER BY sort_order").fetchall()
+        if workspace_id:
+            rows = db.execute(
+                "SELECT * FROM speech_configs WHERE workspace_id = ? ORDER BY sort_order",
+                (workspace_id,)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM speech_configs WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
         return {"configs": [dict(r) for r in rows]}
     finally:
         db.close()
@@ -5554,6 +5918,80 @@ def update_speech_config(config_id: str, req: dict):
             db.execute("UPDATE speech_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
         db.commit()
         row = db.execute("SELECT * FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+# ── TTS Configs (voice synthesis) ──
+
+@app.get("/api/tts-configs")
+def list_tts_configs(workspace_id: str = None):
+    db = get_db()
+    try:
+        if workspace_id:
+            rows = db.execute(
+                "SELECT * FROM tts_configs WHERE workspace_id = ? ORDER BY sort_order",
+                (workspace_id,)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM tts_configs WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
+        return {"configs": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.put("/api/tts-configs/{config_id}")
+def update_tts_config(config_id: str, req: dict):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM tts_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Config not found")
+        if 'prompt' in req:
+            db.execute("UPDATE tts_configs SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['prompt'], config_id))
+        if 'skill' in req:
+            db.execute("UPDATE tts_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
+        db.commit()
+        row = db.execute("SELECT * FROM tts_configs WHERE id = ?", (config_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+# ── Core Prompt Configs (seed documentation for 33 PPT generation prompts) ──
+
+@app.get("/api/core-prompt-configs")
+def list_core_prompt_configs(workspace_id: str = None):
+    db = get_db()
+    try:
+        if workspace_id:
+            rows = db.execute(
+                "SELECT * FROM core_prompt_configs WHERE workspace_id = ? ORDER BY sort_order",
+                (workspace_id,)).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT * FROM core_prompt_configs WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
+        return {"configs": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.put("/api/core-prompt-configs/{config_id}")
+def update_core_prompt_config(config_id: str, req: dict):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM core_prompt_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "Config not found")
+        if 'content' in req:
+            db.execute("UPDATE core_prompt_configs SET content = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                       (req['content'], config_id))
+        if 'label' in req:
+            db.execute("UPDATE core_prompt_configs SET label = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                       (req['label'], config_id))
+        db.commit()
+        row = db.execute("SELECT * FROM core_prompt_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)
     finally:
         db.close()

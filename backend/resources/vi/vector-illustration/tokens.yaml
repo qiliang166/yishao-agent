@@ -146,8 +146,8 @@ elevation:
 
 slide_type_overrides:
   cover:
-    card_bg: "{{primary}}"
-    text: "#ffffff"
+    card_bg: "{{background}}"
+    text: "{{primary}}"
     heading_scale: 1.3
     layout: full_bleed
     no_card_container: true
@@ -160,12 +160,12 @@ slide_type_overrides:
     heading_scale: 0.9
     layout: dashboard
   section:
-    background: "{{primary}}"
-    text: "#ffffff"
+    background: "{{background}}"
+    text: "{{primary}}"
     layout: full_bleed
   summary:
-    background: "{{primary}}"
-    text: "#ffffff"
+    background: "{{background}}"
+    text: "{{primary}}"
     heading_scale: 1.1
     layout: full_bleed
     copyright: "© YYYY Company Name. All rights reserved."

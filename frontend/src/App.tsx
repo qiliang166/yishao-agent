@@ -1,13 +1,18 @@
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import HomePage from './pages/HomePage'
+import ProjectDashboard from './pages/ProjectDashboard'
 import ProjectPage from './pages/ProjectPage'
 import SettingsPage from './pages/SettingsPage'
 import ProjSettingsPage from './pages/ProjSettingsPage'
+import ProjItemSettingsPage from './pages/ProjItemSettingsPage'
 import TemplateManager from './pages/TemplateManager'
+import ManualPage from './pages/ManualPage'
 import LoginPage from './pages/LoginPage'
+import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
 import { ModalProvider } from './components/ModalProvider'
 import ProtectedRoute from './components/ProtectedRoute'
+import SettingsLock from './components/SettingsLock'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { api } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
@@ -20,7 +25,15 @@ function Sidebar() {
   const [brandName, setBrandName] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
   const [projName, setProjName] = useState('')
-  const isWorkspace = location.pathname.startsWith('/project/')
+  const [sidebarWid, setSidebarWid] = useState('')
+  const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
+  const currentWid = (() => {
+    const parts = location.pathname.split('/')
+    const wsIdx = parts.indexOf('workspace')
+    if (wsIdx >= 0 && parts[wsIdx + 1]) return parts[wsIdx + 1]
+    return ''
+  })()
+  const effectiveWid = currentWid || sidebarWid
 
   useEffect(() => {
     Promise.all([api.getSettings(), api.getVersion()]).then(([data, ver]) => {
@@ -40,11 +53,21 @@ function Sidebar() {
 
   useEffect(() => {
     const parts = location.pathname.split('/')
-    const id = parts[1] === 'project' ? parts[2] : null
-    if (id) {
-      api.getProject(id).then((p: any) => setProjName(p.name || '')).catch(() => setProjName(''))
+    const wsIdx = parts.indexOf('workspace')
+    const projIdx = parts.indexOf('project')
+    if (wsIdx >= 0 && parts[wsIdx + 1]) {
+      api.getWorkspace(parts[wsIdx + 1]).then((ws: any) => {
+        setProjName(ws.name || '')
+        setSidebarWid(parts[wsIdx + 1])
+      }).catch(() => { setProjName(''); setSidebarWid('') })
+    } else if (projIdx >= 0 && parts[projIdx + 1]) {
+      api.getProject(parts[projIdx + 1]).then((p: any) => {
+        setProjName(p.name || '')
+        setSidebarWid(p.workspace_id || '')
+      }).catch(() => { setProjName(''); setSidebarWid('') })
     } else {
       setProjName('')
+      setSidebarWid('')
     }
   }, [location.pathname])
 
@@ -66,17 +89,30 @@ function Sidebar() {
         <button
           className={`sidebar-item ${location.pathname === '/' || isWorkspace ? 'active' : ''}`}
           onClick={() => navigate('/')}>
-          <span className="ico">📋</span> 项目列表
+          <span className="ico">📋</span> 项目管理
         </button>
-        <button
-          className={`sidebar-item ${location.pathname === '/proj-settings' ? 'active' : ''}`}
-          onClick={() => navigate('/proj-settings')}>
-          <span className="ico">🔧</span> 项目配置
-        </button>
+        {effectiveWid ? (
+          <button
+            className={`sidebar-item ${location.pathname.startsWith('/workspace/' + effectiveWid + '/settings') ? 'active' : ''}`}
+            onClick={() => navigate(`/workspace/${effectiveWid}/settings`)}>
+            <span className="ico">🔧</span> 项目配置
+          </button>
+        ) : (
+          <button
+            className={`sidebar-item ${location.pathname === '/proj-settings' ? 'active' : ''}`}
+            onClick={() => navigate('/proj-settings')}>
+            <span className="ico">🔧</span> 全局配置
+          </button>
+        )}
         <button
           className={`sidebar-item ${location.pathname === '/templates' ? 'active' : ''}`}
           onClick={() => navigate('/templates')}>
           <span className="ico">📄</span> 模板管理
+        </button>
+        <button
+          className={`sidebar-item ${location.pathname === '/manual' ? 'active' : ''}`}
+          onClick={() => navigate('/manual')}>
+          <span className="ico">📖</span> 操作说明
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/settings' ? 'active' : ''}`}
@@ -121,6 +157,7 @@ function LogoutButton() {
 
   const handleLogout = () => {
     logout()
+    sessionStorage.removeItem('settings_token')
     navigate('/login', { replace: true })
   }
 
@@ -178,7 +215,7 @@ function PhoneReminder() {
 
 function AppShell() {
   const location = useLocation()
-  const isWorkspace = location.pathname.startsWith('/project/')
+  const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
 
   return (
     <>
@@ -188,10 +225,14 @@ function AppShell() {
       <div className="main-area">
         <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
           <Routes>
-            <Route path="/project/:id" element={<ProjectPage />} />
+            <Route path="/workspace/:wid/settings" element={<SettingsLock><WorkspaceSettingsPage /></SettingsLock>} />
+            <Route path="/workspace/:wid" element={<ProjectDashboard />} />
+            <Route path="/project/:id/workspace" element={<ProjectPage />} />
+            <Route path="/project/:id/settings" element={<SettingsLock><ProjItemSettingsPage /></SettingsLock>} />
+            <Route path="/manual" element={<ManualPage />} />
             <Route path="/templates" element={<TemplateManager />} />
-            <Route path="/proj-settings" element={<ProjSettingsPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/proj-settings" element={<SettingsLock><ProjSettingsPage /></SettingsLock>} />
+            <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
             <Route path="/" element={<HomePage />} />
           </Routes>
         </div>
