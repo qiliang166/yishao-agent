@@ -1064,6 +1064,10 @@ export default function ProjectPage() {
   // Auto-load saved PPT results on mount (fallback for results not in step state)
   useEffect(() => {
     if (!id) return
+    setPptSlidePlans({})
+    setPptOutline({})
+    setPreviewHtml({})
+    setPreviewTab({})
     api.listPptResults(id).then((results: any[]) => {
       ;(results || []).forEach((r: any) => {
         const stepName = r._step_name || ''
