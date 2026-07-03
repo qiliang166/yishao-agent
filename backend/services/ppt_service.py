@@ -3842,8 +3842,12 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
             text = _read("always", f"{name}.md")
             if text:
                 parts.append(text)
-        # Template-mode specific instruction: copy structure, fill placeholders only
-        parts.append("""## 模板填空模式 — 最高优先级
+        # Template-mode specific instruction: copy structure, fill placeholders only.
+        # CRITICAL: these rules OVERRIDE format-spec.md section 7 (颜色不透明度的正确表达).
+        # The template already has the CORRECT colors for its page type (dark/light bg).
+        # format-spec's rule "rgba(255,255,255,N) → rgba(var(--text-rgb),N)" would
+        # make white text invisible on dark-background pages like cover/section/summary.
+        parts.append("""## 模板填空模式 — 最高优先级（覆盖 format-spec 颜色规则）
 
 你收到的是一个完整的 HTML 模板。你的**唯一任务**是替换内容占位符，不设计任何样式。
 
@@ -3852,7 +3856,7 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
 - 将 `{{PLACEHOLDER}}` 替换为实际文字内容
 - 按卡片数量复制/删除卡片 div 块，为每张卡递增 `var(--chart-N)` 索引
 
-### 绝对禁止
+### 绝对禁止（以下规则覆盖 format-spec.md 所有颜色替换规则）
 - 修改任何 `var(--xxx)` CSS 变量值
 - 修改任何 px 尺寸（width/height/font-size/padding/margin/left/top/inset）
 - 添加或删除装饰元素（SVG circle/pattern/gradient/rect）
@@ -3860,6 +3864,9 @@ def build_slide_prompt(page_type: str, layout: str, has_chart: bool,
 - 修改背景渐变方向或色标
 - 修改卡片结构（border-left 色条、圆角、阴影）
 - 将 `var(--chart-N)` 改为 `var(--accent)` 或其他变量
+- **将 `#ffffff` 改为 `var(--text)` 或任何其他颜色** — 模板中的白色文字是故意为深色背景页面设置的
+- **将 `rgba(255,255,255,N)` 改为 `rgba(var(--text-rgb),N)`** — 模板已根据页面背景类型设置了正确的文字颜色。深色背景页面的半透明白色文字不应被替换
+- **将 `var(--primary)` 或 `var(--secondary)` 改为其他变量** — 模板中的背景渐变和配色是设计好的
 
 ### 卡片处理
 - 模板中有 3 张卡片 → 实际 N 张卡片就保留/复制 N 个卡片 div
