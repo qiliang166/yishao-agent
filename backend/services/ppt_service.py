@@ -1840,7 +1840,15 @@ def _strip_local_var_overrides(html: str, slide_seq: int) -> str:
 
     fix_count = 0
 
-    for var_name in _PROTECTED_CSS_VARS:
+    # Build the full set of CSS var names: both underscore (text_rgb) and
+    # hyphen (text-rgb) forms — the LLM may output either in inline styles.
+    css_var_names = set(_PROTECTED_CSS_VARS)
+    for v in _PROTECTED_CSS_VARS:
+        hyphenated = v.replace('_', '-')
+        if hyphenated != v:
+            css_var_names.add(hyphenated)
+
+    for var_name in css_var_names:
         # Match: --varname: <anything up to ; or >
         # Pattern: --varname followed by optional whitespace, colon, then any non-empty value until ; or end of style attr
         pattern = rf'--{var_name}\s*:\s*[^;"]+(?:;\s*)?'
@@ -5175,8 +5183,9 @@ def _enforce_slide_rules(html: str, scheme_data: dict, style_id: str = "business
     # ── Layer 5: Force outermost background to token-defined value ──
     # AI may use var(--card_bg), var(--background), hardcoded hex, or any
     # other background. Tokens define the correct background unconditionally.
+    # Match both background: (shorthand) and background-color: (longhand)
     html = _re.sub(
-        r'(\bbackground\s*:\s*)(?:var\(--[^)]+\)|#[0-9a-fA-F]{3,8}|[^;"]+)',
+        r'(\bbackground(?:-color)?\s*:\s*)(?:var\(--[^)]+\)|#[0-9a-fA-F]{3,8}|[^;"]+)',
         rf'\g<1>{bg_var}',
         html, count=1
     )
