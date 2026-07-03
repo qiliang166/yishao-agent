@@ -1077,13 +1077,27 @@ export default function ProjectPage() {
         if (planMatch) {
           stepKey = planMatch[1]
         } else if (stepName.startsWith('_ppt_result_')) {
-          // Derive stepKey from column_id in saved result_meta
-          const cid = r.column_id
+          // Derive stepKey from column_id in saved result_meta.
+          // Fallback: parse from run_id (e.g. 鲍鱼一品煲_col5 → col5)
+          let cid = r.column_id
+          if (!cid) {
+            const rid = r.run_id || stepName
+            const colMatch = rid.match(/_(col\d+)$/)
+            if (colMatch) cid = colMatch[1]
+          }
           if (cid === 'col3') stepKey = 'step3_sop_doc'
           else if (cid === 'col5') stepKey = 'step3_yan_ppt'
-          else stepKey = 'step3_dao_ppt'  // col4 or unknown defaults to 分析PPT
+          else if (cid === 'col4') stepKey = 'step3_dao_ppt'
+          else stepKey = '' // unknown, skip
         }
-        if (!stepKey || pptSlidePlans[stepKey]) return // already loaded
+        if (!stepKey) return
+        // _ppt_result_ entries have priority over _ppt_plan_ entries.
+        // If a result entry already loaded data with a preview URL, keep it.
+        if (pptSlidePlans[stepKey] && stepName.startsWith('_ppt_result_')) {
+          // Replace with result data (has previewUrl, zipUrl etc.)
+        } else if (pptSlidePlans[stepKey]) {
+          return // plan entry, keep existing data
+        }
         // Build planData from result fields (handle both slides and slide_plan keys)
         const slides = r.slides || r.slide_plan
         if (!slides || !slides.length) return
