@@ -160,11 +160,11 @@ slide_type_overrides:
     heading_scale: 0.9
     layout: dashboard
   section:
-    background: "{{background}}"
+    background: "{{card_bg}}"
     text: "{{primary}}"
     layout: full_bleed
   summary:
-    background: "{{background}}"
+    background: "{{card_bg}}"
     text: "{{primary}}"
     heading_scale: 1.1
     layout: full_bleed
