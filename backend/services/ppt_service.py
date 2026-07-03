@@ -5,6 +5,7 @@ Uses PPT-Agent Bento Grid methodology: style YAML → AI outline → Bento Grid 
 import os
 import re
 import json
+import html as _html_mod
 import asyncio
 import logging
 from lxml import etree
@@ -391,6 +392,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             # ── Generate images for slides with {{image:...}} or {{IMAGE_URL}} placeholders ──
             gen_canvas_w, gen_canvas_h = _get_canvas_dimensions(column_id)
             is_portrait = gen_canvas_h > gen_canvas_w
+            _logger.info(f"[IMG-DBG] canvas={gen_canvas_w}x{gen_canvas_h} is_portrait={is_portrait} column_id={column_id}")
             if not is_portrait:
                 try:
                     slide_data = _safe_run_async(_generate_and_replace_images(
@@ -398,6 +400,12 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                         style_id=style_id))
                 except Exception as _img_gen_e:
                     _logger.warning(f"Image generation failed (non-critical): {_img_gen_e}")
+            else:
+                # Portrait/A4: skip image generation but strip {{IMAGE_URL}} to prevent 404
+                for s in slide_data:
+                    if "{{IMAGE_URL}}" in s.get("html", ""):
+                        s["html"] = s["html"].replace("{{IMAGE_URL}}", "")
+                        _logger.info(f"[IMG-DBG] Slide {s.get('seq',0)}: stripped {{IMAGE_URL}} (portrait mode, no image gen)")
 
             scheme_data = _load_scheme_data(style_id, color_scheme)
             deck_html = _assemble_html_deck(slide_data, title, style_id, scheme_data, canvas_w=gen_canvas_w, canvas_h=gen_canvas_h)
@@ -4522,9 +4530,12 @@ async def _generate_and_replace_images(slide_data: list, html_dir: str,
     import re as _re_img
     from services.image_service import generate_image, download_image, SIZE_MAP
 
+    _logger.info(f"[IMG-DBG] _generate_and_replace_images called, {len(slide_data)} slides")
+
     images_dir = os.path.join(html_dir, "images")
     os.makedirs(images_dir, exist_ok=True)
 
+    total_placeholders = 0
     for s in slide_data:
         seq = s.get("seq", 0)
         html = s.get("html", "")
@@ -4551,13 +4562,16 @@ async def _generate_and_replace_images(slide_data: list, html_dir: str,
         body = s.get("body", "")
         has_image_url = "{{IMAGE_URL}}" in html
 
-        if has_image_url and heading:
-            prompt = f"{heading}，{body[:80] if body else ''}".strip("，。")
-            placeholders.append({
-                "full_match": "{{IMAGE_URL}}",
-                "prompt": prompt,
-                "size_key": "full",
-            })
+        if has_image_url:
+            if heading:
+                prompt = f"{heading}，{body[:80] if body else ''}".strip("，。")
+                placeholders.append({
+                    "full_match": "{{IMAGE_URL}}",
+                    "prompt": prompt,
+                    "size_key": "full",
+                })
+            else:
+                _logger.warning(f"[IMG-DBG] Slide {seq}: has {{IMAGE_URL}} but heading is empty, skipping")
 
         if not placeholders:
             continue
@@ -4585,7 +4599,7 @@ async def _generate_and_replace_images(slide_data: list, html_dir: str,
                         if html_vars:
                             html_vars = html_vars.replace("{{IMAGE_URL}}", rel_path)
                     else:
-                        img_tag = f'<img src="{rel_path}" style="width:100%;height:100%;object-fit:cover;" alt="{ph["prompt"]}">'
+                        img_tag = f'<img src="{rel_path}" style="width:100%;height:100%;object-fit:cover;" alt="{_html_mod.escape(ph["prompt"])}">'
                         html = html.replace(ph["full_match"], img_tag)
                         if html_vars:
                             html_vars = html_vars.replace(ph["full_match"], img_tag)

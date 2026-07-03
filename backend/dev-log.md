@@ -1,3 +1,11 @@
+[2026-07-03 21:30:00] Image generation pipeline + template mode color fix:
+(1) _generate_and_replace_images() — scans slide HTML for {{image:PROMPT,SIZE}} and {{IMAGE_URL}} placeholders, calls image_service.generate_image(), downloads to html_dir/images/, replaces with <img> tag
+(2) Wired into generate_ppt() after HTML gen, before deck assembly (is_portrait guard)
+(3) Cover template: added optional {{IMAGE_URL}} background image layer, AI forbidden from modifying
+(4) Template mode system prompt: added explicit overrides for format-spec.md color rules — forbids converting rgba(255,255,255,N) to rgba(var(--text-rgb),N) on dark bg pages (was causing invisible text on cover)
+(5) Image gen failures are non-critical: placeholder replaced with empty string
+Backend syntax: pass. GitHub push: pending (network unreachable).
+
 [2026-07-03 21:00:00] PPT VI 模板 HTML 代码块改造 — AI 与颜色完全分离:
 (1) 5 个 business 样式核心页面类型改为 HTML 模板 + 填空模式：cover/section/summary/content/data
 (2) 所有颜色使用 var(--xxx) CSS 变量（var(--primary)/var(--accent)/var(--chart-0) 等），内容用 {{PLACEHOLDER}} 占位符
