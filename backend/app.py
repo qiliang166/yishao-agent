@@ -2293,6 +2293,8 @@ async def image_generate(req: ImageGenerateRequest):
                 "SELECT * FROM image_providers WHERE id = ? AND is_enabled = 1",
                 (req.provider_id,)).fetchone()
         else:
+            row = None
+        if not row:
             row = db.execute(
                 "SELECT * FROM image_providers WHERE is_default = 1 AND is_enabled = 1").fetchone()
             if not row:
@@ -2304,7 +2306,13 @@ async def image_generate(req: ImageGenerateRequest):
 
         # Resolve model: try exact match, then lowercase, then first configured
         saved_models = json.loads(provider["models"]) if provider["models"] else []
-        model = req.model or (saved_models[0] if saved_models else "qwen-image-2.0-pro")
+        saved_lower = [m.lower() for m in saved_models]
+        if req.model and req.model.lower() in saved_lower:
+            model = req.model
+        elif saved_models:
+            model = saved_models[0]
+        else:
+            model = "qwen-image-2.0-pro"
         # DashScope API expects lowercase model names
         model_lower = model.lower()
 

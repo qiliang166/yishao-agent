@@ -1,6 +1,8 @@
-import { useState, useEffect, forwardRef, useImperativeHandle, useCallback, useRef } from 'react'
+import { useState, useEffect, forwardRef, useImperativeHandle, useCallback, useRef, useMemo } from 'react'
 import { api } from '../services/api'
 import { useModal } from './ModalProvider'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 export interface TeachingDocPanelProps {
   docType: 'sop' | 'dao' | 'yanxi'
@@ -41,6 +43,28 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   yanxi: '请将以下内容整理为手册格式，包含背景知识和要点。',
 }
 
+// ── Preview tab CSS (scoped to .md-preview-container) ──
+const PREVIEW_CSS = `
+.md-preview { font-size:14px; line-height:1.8; color:#1a1a2e; }
+.md-preview h1 { font-size:1.6em; margin:0.8em 0 0.4em; border-bottom:2px solid #e0e0e0; padding-bottom:0.3em; }
+.md-preview h2 { font-size:1.35em; margin:0.7em 0 0.35em; border-bottom:1px solid #eee; padding-bottom:0.2em; }
+.md-preview h3 { font-size:1.15em; margin:0.6em 0 0.3em; }
+.md-preview h4 { font-size:1.05em; margin:0.5em 0 0.25em; }
+.md-preview p { margin:0.5em 0; }
+.md-preview ul,.md-preview ol { padding-left:1.6em; margin:0.4em 0; }
+.md-preview li { margin:0.2em 0; }
+.md-preview table { border-collapse:collapse; width:100%; margin:0.6em 0; }
+.md-preview th,.md-preview td { border:1px solid #d0d0d0; padding:6px 10px; text-align:left; }
+.md-preview th { background:#f5f5f5; font-weight:600; }
+.md-preview code { background:#f0f0f0; padding:1px 5px; border-radius:3px; font-size:0.9em; }
+.md-preview pre { background:#f8f8f8; border:1px solid #e0e0e0; border-radius:6px; padding:12px 16px; overflow-x:auto; }
+.md-preview pre code { background:none; padding:0; }
+.md-preview blockquote { border-left:3px solid #ddd; margin:0.6em 0; padding:0.4em 1em; color:#666; }
+.md-preview hr { border:none; border-top:1px solid #e0e0e0; margin:1em 0; }
+.md-preview img { max-width:100%; }
+.md-preview a { color:var(--primary,#4a6cf7); }
+`
+
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
   docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
   hideControls, dataSource: dataSourceProp, onDataSourceChange, temperature = 0.3,
@@ -72,6 +96,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   const [generating, setGenerating] = useState(false)
   const generatingRef = useRef(false)
   const [savedFlash, setSavedFlash] = useState(0)
+
+  // ── Preview tab state ──
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit')
 
   const stepKey = STEP_KEYS[docType]
   const propContent = steps[stepKey] || ''
@@ -113,6 +140,65 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       default: return ''
     }
   }
+
+  // ── Rendered markdown (memoised) ──
+  const renderedHtml = useMemo(() => {
+    if (!localContent) return ''
+    try {
+      const html = marked.parse(localContent) as string
+      return DOMPurify.sanitize(html)
+    } catch {
+      return ''
+    }
+  }, [localContent])
+
+  // ── Print ──
+  const handlePrint = useCallback(() => {
+    if (!renderedHtml) return
+    const doc = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>${DOC_LABELS[docType]}</title>
+<style>${PREVIEW_CSS}
+body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+@media print { body { max-width:none; padding:0; } }
+</style>
+</head>
+<body><div class="md-preview">${renderedHtml}</div></body>
+</html>`
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (w) {
+      w.document.write(doc)
+      w.document.close()
+      w.focus()
+      w.print()
+    }
+  }, [renderedHtml, docType])
+
+  // ── Download as self-contained HTML ──
+  const handleDownloadHtml = useCallback(() => {
+    if (!renderedHtml) return
+    const doc = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${DOC_LABELS[docType]}</title>
+<style>${PREVIEW_CSS}</style>
+</head>
+<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+<div class="md-preview">${renderedHtml}</div>
+</body>
+</html>`
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${DOC_LABELS[docType]}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [renderedHtml, docType])
 
   // ── Generate (streaming with progress) ──
   const handleGenerate = useCallback(async () => {
@@ -162,6 +248,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       if (fullText) {
         await api.saveStep(projectId, stepKey, fullText)
         await onRefresh()
+        setViewMode('preview')
       } else {
         modal.toast('生成失败: 模型未返回内容', 'error')
       }
@@ -183,18 +270,14 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
   // ── Save ──
   const handleSave = useCallback(async () => {
-    console.log('[TeachingDocPanel] handleSave called', { stepKey, contentLen: localContent?.length })
     try {
       await api.saveStep(projectId, stepKey, localContent)
-      console.log('[TeachingDocPanel] saveStep done')
       if (!mountedRef.current) return
       setSavedFlash(Date.now())
       setTimeout(() => { if (mountedRef.current) setSavedFlash(0) }, 1500)
       await onRefresh()
-      console.log('[TeachingDocPanel] save onRefresh done')
       modal.toast('已保存', 'success')
     } catch (e: any) {
-      console.error('[TeachingDocPanel] save error', e)
       if (mountedRef.current) modal.toast(`保存失败: ${e.message}`, 'error')
     }
   }, [projectId, stepKey, localContent, onRefresh])
@@ -290,17 +373,84 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     </>
   )
 
+  // ── Tab switcher (shared between editor & preview) ──
+  const tabBar = (
+    <div style={{ display: 'flex', gap: 0, marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
+      <button
+        onClick={() => setViewMode('edit')}
+        style={{
+          padding: '5px 14px', fontSize: 12, cursor: 'pointer',
+          background: 'none', border: 'none', borderRadius: 0,
+          color: viewMode === 'edit' ? 'var(--primary)' : 'var(--text-secondary)',
+          borderBottom: viewMode === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
+          fontWeight: viewMode === 'edit' ? 600 : 400,
+        }}>
+        ✏️ 编辑
+      </button>
+      <button
+        onClick={() => setViewMode('preview')}
+        style={{
+          padding: '5px 14px', fontSize: 12, cursor: 'pointer',
+          background: 'none', border: 'none', borderRadius: 0,
+          color: viewMode === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
+          borderBottom: viewMode === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
+          fontWeight: viewMode === 'preview' ? 600 : 400,
+        }}>
+        👁 预览
+      </button>
+      {viewMode === 'preview' && localContent && (
+        <>
+          <button
+            onClick={handleDownloadHtml}
+            style={{
+              marginLeft: 'auto', padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+              background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+            }}>
+            📥 下载 HTML
+          </button>
+          <button
+            onClick={handlePrint}
+            style={{
+              marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+              background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+            }}>
+            🖨 打印
+          </button>
+        </>
+      )}
+    </div>
+  )
+
   const editor = (
     <>
-      <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-        value={localContent}
-        onChange={e => {
-          const newVal = e.target.value
-          setLocalContent(newVal)
-          api.saveStep(projectId, stepKey, newVal)
-        }}
-        placeholder={`点击生成按钮，AI生成后在此编辑...`}
-      />
+      {tabBar}
+
+      {viewMode === 'edit' ? (
+        <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+          value={localContent}
+          onChange={e => {
+            const newVal = e.target.value
+            setLocalContent(newVal)
+            api.saveStep(projectId, stepKey, newVal)
+          }}
+          placeholder="点击生成按钮，AI生成后在此编辑..."
+        />
+      ) : (
+        <div style={{
+          flex: 1, minHeight: 120, overflow: 'auto',
+          background: '#fff', borderRadius: 6, padding: '16px 20px',
+          border: '1px solid var(--border)',
+        }}>
+          <style>{PREVIEW_CSS}</style>
+          {localContent ? (
+            <div className="md-preview" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+          ) : (
+            <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>
+              暂无内容，请先生成文档
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>

@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api, Voice, TTSProvider, LLMProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import TeachingDocPanel from '../components/TeachingDocPanel'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import SlideEditModal from '../components/SlideEditModal'
 import Stage3TempSettings, { StageTemps, DEFAULT_STAGE_TEMPS } from '../components/Stage3TempSettings'
 import HelpButton from '../components/HelpButton'
@@ -614,6 +616,7 @@ export default function ProjectPage() {
   const step1Model = step1Models[mode1Key] || ''
   const s1Temperature = s1Temperatures[mode1Key] || 0.3
   const [step1Generating, setStep1Generating] = useState<Record<string, boolean>>({})
+  const [s1ViewMode, setS1ViewMode] = useState<Record<string, 'edit' | 'preview'>>({})
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState<Record<string, boolean>>({})
@@ -652,6 +655,8 @@ export default function ProjectPage() {
   const [s3SopTemps, setS3SopTemps] = useState<StageTemps>({ ...DEFAULT_STAGE_TEMPS })
   const [globalBranding, setGlobalBranding] = useState<{ copyright: string; signature: string }>({ copyright: '', signature: '' })
   const [pptGenerating, setPptGenerating] = useState<Record<string, boolean>>({})
+  const [s3ViewMode, setS3ViewMode] = useState<Record<string, 'edit' | 'preview'>>({})
+  const [s4ViewMode, setS4ViewMode] = useState<string>('edit')
   const [pptProgress, setPptProgress] = useState<{ phase_label: string; message: string; slides_done?: number; slides_total?: number; preview_url?: string } | null>(null)
   const [pptLog, setPptLog] = useState<{ time: string; message: string }[]>([])
   const [docGenLog, setDocGenLog] = useState<{ time: string; message: string }[]>([])
@@ -678,7 +683,7 @@ export default function ProjectPage() {
   const [pptSavingOutline, setPptSavingOutline] = useState<Record<string, boolean>>({})
   const [previewHtml, setPreviewHtml] = useState<Record<string, string>>({})
   const [previewLoading, setPreviewLoading] = useState<Record<string, boolean>>({})
-  const [previewTab, setPreviewTab] = useState<Record<string, 'ppt' | 'html' | 'json'>>({})
+  const [previewTab, setPreviewTab] = useState<Record<string, 'ppt' | 'html' | 'json' | 'preview'>>({})
   const [editPanelOpen, setEditPanelOpen] = useState<Record<string, boolean>>({})
   const [pptEditMode, setPptEditMode] = useState<Record<string, boolean>>({})
   const [daoPptTemplates, setDaoPptTemplates] = useState<TemplateItem[]>([])
@@ -839,17 +844,14 @@ export default function ProjectPage() {
           // Has plan data but no HTML preview — show slide list tab by default
           setPreviewTab(prev => ({...prev, [sk]: 'ppt'}))
         }
-      })
-      // Restore saved PPT outlines (human-readable text + structured JSON)
-      ;['step3_sop_doc', 'step3_dao_ppt', 'step3_yan_ppt'].forEach(sk => {
-        const textKey = sk
-        const jsonKey = `_ppt_outline_json_${sk}`
-        const text = map[textKey]
-        const jsonStr = map[jsonKey]
-        if (text || jsonStr) {
-          let outline_json: any[] = []
-          try { if (jsonStr) outline_json = JSON.parse(jsonStr) } catch {}
-          setPptOutline(prev => ({...prev, [sk]: { outline_json, outline_text: text || '' }}))
+        // Restore saved PPT outlines
+        const outlineJsonKey = `_ppt_outline_json_${sk}`
+        const outlineText = map[sk] || ''
+        const outlineJsonStr = map[outlineJsonKey]
+        if (outlineJsonStr && outlineText) {
+          try {
+            setPptOutline(prev => ({...prev, [sk]: { outline_json: JSON.parse(outlineJsonStr), outline_text: outlineText }}))
+          } catch {}
         }
       })
       // Restore per-tab data source selections
@@ -1065,7 +1067,6 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!id) return
     setPptSlidePlans({})
-    setPptOutline({})
     setPreviewHtml({})
     setPreviewTab({})
     api.listPptResults(id).then((results: any[]) => {
@@ -1132,7 +1133,121 @@ export default function ProjectPage() {
   }, [id])
 
   const step1Key = () => sub === '1a' ? 'step1_video' : sub === '1b' ? 'step1_text' : 'step1_file'
+
+  // ── Stage 1 preview helpers ──
+  const s1Content = steps[step1Key()] || ''
+  const s1RenderedHtml = useMemo(() => {
+    if (!s1Content) return ''
+    try { return DOMPurify.sanitize(marked.parse(s1Content) as string) } catch { return '' }
+  }, [s1Content])
+
+  const s1View = s1ViewMode[sub] || 'edit'
+  const setS1View = (v: 'edit' | 'preview') => setS1ViewMode(prev => ({ ...prev, [sub]: v }))
+
+  const PREVIEW_CSS = `
+.md-preview{font-size:14px;line-height:1.8;color:#1a1a2e}
+.md-preview h1{font-size:1.6em;margin:.8em 0 .4em;border-bottom:2px solid #e0e0e0;padding-bottom:.3em}
+.md-preview h2{font-size:1.35em;margin:.7em 0 .35em;border-bottom:1px solid #eee;padding-bottom:.2em}
+.md-preview h3{font-size:1.15em;margin:.6em 0 .3em}
+.md-preview h4{font-size:1.05em;margin:.5em 0 .25em}
+.md-preview p{margin:.5em 0}
+.md-preview ul,.md-preview ol{padding-left:1.6em;margin:.4em 0}
+.md-preview li{margin:.2em 0}
+.md-preview table{border-collapse:collapse;width:100%;margin:.6em 0}
+.md-preview th,.md-preview td{border:1px solid #d0d0d0;padding:6px 10px;text-align:left}
+.md-preview th{background:#f5f5f5;font-weight:600}
+.md-preview code{background:#f0f0f0;padding:1px 5px;border-radius:3px;font-size:.9em}
+.md-preview pre{background:#f8f8f8;border:1px solid #e0e0e0;border-radius:6px;padding:12px 16px;overflow-x:auto}
+.md-preview pre code{background:none;padding:0}
+.md-preview blockquote{border-left:3px solid #ddd;margin:.6em 0;padding:.4em 1em;color:#666}
+.md-preview hr{border:none;border-top:1px solid #e0e0e0;margin:1em 0}
+.md-preview img{max-width:100%}
+.md-preview a{color:var(--primary,#4a6cf7)}
+`
+
+  const handleS1DownloadHtml = () => {
+    if (!s1RenderedHtml) return
+    const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件提取'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>AI生成结果 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + s1RenderedHtml + '</div>\n</body>\n</html>'
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `AI生成结果_${label}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleS1Print = () => {
+    if (!s1RenderedHtml) return
+    const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件提取'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>AI生成结果 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + s1RenderedHtml + '</div></body>\n</html>'
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (w) { w.document.write(doc); w.document.close(); w.focus(); w.print() }
+  }
   const step3Key = () => sub === '3a' ? 'step3_sop_doc' : sub === '3b' ? 'step3_dao_ppt' : 'step3_yan_ppt'
+
+  // ── Stage 3 preview helpers ──
+  const s3CurrentView = s3ViewMode[step3Key()] || 'edit'
+  const setS3CurrentView = (v: 'edit' | 'preview') => setS3ViewMode(prev => ({ ...prev, [step3Key()]: v }))
+  const s3OutlineText = pptOutline[step3Key()]?.outline_text || ''
+  const s3RenderedHtml = useMemo(() => {
+    if (!s3OutlineText) return ''
+    try { return DOMPurify.sanitize(marked.parse(s3OutlineText) as string) } catch { return '' }
+  }, [s3OutlineText])
+
+  const handleS3DownloadHtml = () => {
+    if (!s3RenderedHtml) return
+    const key = step3Key()
+    const label = key === 'step3_dao_ppt' ? '分析PPT' : key === 'step3_yan_ppt' ? '综合PPT' : '文档课件'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>PPT大纲 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + s3RenderedHtml + '</div>\n</body>\n</html>'
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'PPT大纲_' + label + '.html'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleS3Print = () => {
+    if (!s3RenderedHtml) return
+    const key = step3Key()
+    const label = key === 'step3_dao_ppt' ? '分析PPT' : key === 'step3_yan_ppt' ? '综合PPT' : '文档课件'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>PPT大纲 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + s3RenderedHtml + '</div></body>\n</html>'
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (w) { w.document.write(doc); w.document.close(); w.focus(); w.print() }
+  }
+
+  // ── Stage 4 preview helpers ──
+  const s4ActiveStepKey = (() => {
+    const tab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+    return tab?.stepKey || 'step4_speech_doc'
+  })()
+  const s4Content = steps[s4ActiveStepKey] || ''
+  const s4RenderedHtml = useMemo(() => {
+    if (!s4Content) return ''
+    try { return DOMPurify.sanitize(marked.parse(s4Content) as string) } catch { return '' }
+  }, [s4Content])
+
+  const handleS4DownloadHtml = () => {
+    if (!s4RenderedHtml) return
+    const tab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+    const label = tab?.label || '演讲稿'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + s4RenderedHtml + '</div>\n</body>\n</html>'
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = label + '.html'; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleS4Print = () => {
+    if (!s4RenderedHtml) return
+    const tab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+    const label = tab?.label || '演讲稿'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + s4RenderedHtml + '</div></body>\n</html>'
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (w) { w.document.write(doc); w.document.close(); w.focus(); w.print() }
+  }
 
   // Extract run_id, provider, model for the edit panel
   const editPanelProps = () => {
@@ -1510,6 +1625,10 @@ export default function ProjectPage() {
   }
 
   const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, _prompt: string, model: string, columnId: string, temperature: number = 0.3, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) => {
+    if (!pptOutline[stepKey]?.outline_json?.length) {
+      modal.confirm('请先生成大纲')
+      return
+    }
     setPptGenerating(prev => ({...prev, [stepKey]: true}))
     clearPptPolling()
     startPptLogPolling()
@@ -2422,11 +2541,54 @@ export default function ProjectPage() {
 
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="card-title">🤖 AI 生成结果</div>
-                <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
-                  value={steps[step1Key()] || ''}
-                  onChange={e => { setSteps(prev => ({ ...prev, [step1Key()]: e.target.value })) }}
-                  placeholder="点击左侧「生成」按钮，AI 整理后的标准文档将显示在此..." />
+                {/* Tab switcher */}
+                <div style={{ display: 'flex', gap: 0, marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
+                  <button onClick={() => setS1View('edit')} style={{
+                    padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                    color: s1View === 'edit' ? 'var(--primary)' : 'var(--text-secondary)',
+                    borderBottom: s1View === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
+                    fontWeight: s1View === 'edit' ? 600 : 400,
+                  }}>✏️ 编辑</button>
+                  <button onClick={() => setS1View('preview')} style={{
+                    padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                    color: s1View === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
+                    borderBottom: s1View === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
+                    fontWeight: s1View === 'preview' ? 600 : 400,
+                  }}>👁 预览</button>
+                  {s1View === 'preview' && s1Content && (
+                    <>
+                      <button onClick={handleS1DownloadHtml} style={{
+                        marginLeft: 'auto', padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>📥 下载 HTML</button>
+                      <button onClick={handleS1Print} style={{
+                        marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>🖨 打印</button>
+                    </>
+                  )}
+                </div>
+                {s1View === 'edit' ? (
+                  <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
+                    value={s1Content}
+                    onChange={e => { setSteps(prev => ({ ...prev, [step1Key()]: e.target.value })) }}
+                    placeholder="点击左侧「生成」按钮，AI 整理后的标准文档将显示在此..." />
+                ) : (
+                  <div style={{
+                    flex: 1, minHeight: 280, overflow: 'auto',
+                    background: '#fff', borderRadius: 6, padding: '16px 20px',
+                    border: '1px solid var(--border)',
+                  }}>
+                    <style>{PREVIEW_CSS}</style>
+                    {s1Content ? (
+                      <div className="md-preview" dangerouslySetInnerHTML={{ __html: s1RenderedHtml }} />
+                    ) : (
+                      <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>
+                        暂无内容，请先生成文档
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     {mode1 === 'link' ? '来源：视频提取' : mode1 === 'text' ? '来源：文字输入' : '来源：文件提取'}
@@ -2703,13 +2865,40 @@ export default function ProjectPage() {
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', marginBottom: 8, flexShrink: 0 }}>
                   <div style={{ display: 'flex', gap: 0 }}>
-                    <button className="btn btn-ghost btn-sm"
-                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'ppt' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 600 : 400 }}
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'ppt' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 600 : 400,
+                      }}
                       onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'ppt'}))}>大纲内容</button>
-                    <button className="btn btn-ghost btn-sm"
-                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'json' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'json' ? 600 : 400 }}
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'json' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'json' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'json' ? 600 : 400,
+                      }}
                       onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'json'}))}>JSON</button>
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'preview' ? 600 : 400,
+                      }}
+                      onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'preview'}))}>预览</button>
                   </div>
+                  {(previewTab[step3Key()] || 'ppt') === 'preview' && s3OutlineText && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button onClick={handleS3DownloadHtml} style={{
+                        padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>📥 下载 HTML</button>
+                      <button onClick={handleS3Print} style={{
+                        padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>🖨 打印</button>
+                    </div>
+                  )}
                 </div>
                 {((previewTab[step3Key()] || 'ppt') === 'ppt') ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -2876,19 +3065,41 @@ export default function ProjectPage() {
                       ) : null}
                     </div>
                   </div>
-                ) : (
+                ) : ((previewTab[step3Key()] || 'ppt') === 'json') ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <textarea
-                      style={{
-                        flex: 1, width: '100%', border: 'none', resize: 'none',
-                        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
-                        color: 'var(--text)', background: 'var(--bg)',
-                        outline: 'none', padding: 8, borderRadius: 4,
-                      }}
-                      value={pptOutline[step3Key()] ? JSON.stringify(pptOutline[step3Key()].outline_json, null, 2) : ''}
-                      readOnly
-                      placeholder="JSON 数据将显示在这里..."
-                    />
+                    {pptOutline[step3Key()] ? (
+                      <textarea
+                        style={{
+                          flex: 1, width: '100%', border: 'none', resize: 'none',
+                          fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+                          color: 'var(--text)', background: 'var(--bg)',
+                          outline: 'none', padding: 8, borderRadius: 4,
+                        }}
+                        value={JSON.stringify(pptOutline[step3Key()].outline_json, null, 2)}
+                        readOnly
+                      />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
+                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>生成大纲后才可合成课件</div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
+                    <style>{PREVIEW_CSS}</style>
+                    {s3OutlineText ? (
+                      <div className="md-preview" style={{ padding: '12px 16px', background: '#fff', borderRadius: 6, border: '1px solid var(--border)' }}
+                        dangerouslySetInnerHTML={{ __html: s3RenderedHtml }} />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}>👁</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>暂无大纲内容</div>
+                      </div>
+                    )}
                   </div>
                 )}
                 <SlideEditModal
@@ -3012,13 +3223,40 @@ export default function ProjectPage() {
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', marginBottom: 8, flexShrink: 0 }}>
                   <div style={{ display: 'flex', gap: 0 }}>
-                    <button className="btn btn-ghost btn-sm"
-                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'ppt' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 600 : 400 }}
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'ppt' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 600 : 400,
+                      }}
                       onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'ppt'}))}>大纲内容</button>
-                    <button className="btn btn-ghost btn-sm"
-                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'json' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'json' ? 600 : 400 }}
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'json' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'json' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'json' ? 600 : 400,
+                      }}
                       onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'json'}))}>JSON</button>
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'preview' ? 600 : 400,
+                      }}
+                      onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'preview'}))}>预览</button>
                   </div>
+                  {(previewTab[step3Key()] || 'ppt') === 'preview' && s3OutlineText && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button onClick={handleS3DownloadHtml} style={{
+                        padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>📥 下载 HTML</button>
+                      <button onClick={handleS3Print} style={{
+                        padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>🖨 打印</button>
+                    </div>
+                  )}
                 </div>
                 {((previewTab[step3Key()] || 'ppt') === 'ppt') ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -3188,18 +3426,39 @@ export default function ProjectPage() {
                   </div>
                 ) : (previewTab[step3Key()] === 'json') ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <pre style={{
-                      flex: 1, width: '100%', border: 'none', margin: 0,
-                      fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
-                      color: 'var(--text)', background: 'var(--bg)',
-                      overflow: 'auto', padding: 8, borderRadius: 4,
-                      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    }}>
-                      {pptOutline[step3Key()] ? JSON.stringify(pptOutline[step3Key()].outline_json, null, 2) : '暂无大纲数据'}
-                    </pre>
+                    {pptOutline[step3Key()] ? (
+                      <pre style={{
+                        flex: 1, width: '100%', border: 'none', margin: 0,
+                        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+                        color: 'var(--text)', background: 'var(--bg)',
+                        overflow: 'auto', padding: 8, borderRadius: 4,
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      }}>
+                        {JSON.stringify(pptOutline[step3Key()].outline_json, null, 2)}
+                      </pre>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
+                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>生成大纲后才可合成PPT</div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <></>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
+                    <style>{PREVIEW_CSS}</style>
+                    {s3OutlineText ? (
+                      <div className="md-preview" style={{ padding: '12px 16px', background: '#fff', borderRadius: 6, border: '1px solid var(--border)' }}
+                        dangerouslySetInnerHTML={{ __html: s3RenderedHtml }} />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}>👁</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>暂无大纲内容</div>
+                      </div>
+                    )}
+                  </div>
                 )}
                 <SlideEditModal
                   open={!!(editPanelOpen[step3Key()] && editPanelProps().runId)}
@@ -3322,13 +3581,40 @@ export default function ProjectPage() {
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', marginBottom: 8, flexShrink: 0 }}>
                   <div style={{ display: 'flex', gap: 0 }}>
-                    <button className="btn btn-ghost btn-sm"
-                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'ppt' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 600 : 400 }}
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'ppt' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'ppt' ? 600 : 400,
+                      }}
                       onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'ppt'}))}>大纲内容</button>
-                    <button className="btn btn-ghost btn-sm"
-                      style={{ borderBottom: (previewTab[step3Key()] || 'ppt') === 'json' ? '2px solid var(--primary)' : '2px solid transparent', borderRadius: 0, fontWeight: (previewTab[step3Key()] || 'ppt') === 'json' ? 600 : 400 }}
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'json' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'json' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'json' ? 600 : 400,
+                      }}
                       onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'json'}))}>JSON</button>
+                    <button
+                      style={{ padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                        color: (previewTab[step3Key()] || 'ppt') === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
+                        borderBottom: (previewTab[step3Key()] || 'ppt') === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
+                        fontWeight: (previewTab[step3Key()] || 'ppt') === 'preview' ? 600 : 400,
+                      }}
+                      onClick={() => setPreviewTab(prev => ({...prev, [step3Key()]: 'preview'}))}>预览</button>
                   </div>
+                  {(previewTab[step3Key()] || 'ppt') === 'preview' && s3OutlineText && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button onClick={handleS3DownloadHtml} style={{
+                        padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>📥 下载 HTML</button>
+                      <button onClick={handleS3Print} style={{
+                        padding: '3px 10px', fontSize: 11, cursor: 'pointer',
+                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                      }}>🖨 打印</button>
+                    </div>
+                  )}
                 </div>
                 {((previewTab[step3Key()] || 'ppt') === 'ppt') ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -3497,18 +3783,39 @@ export default function ProjectPage() {
                   </div>
                 ) : (previewTab[step3Key()] === 'json') ? (
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <pre style={{
-                      flex: 1, width: '100%', border: 'none', margin: 0,
-                      fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
-                      color: 'var(--text)', background: 'var(--bg)',
-                      overflow: 'auto', padding: 8, borderRadius: 4,
-                      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                    }}>
-                      {pptOutline[step3Key()] ? JSON.stringify(pptOutline[step3Key()].outline_json, null, 2) : '暂无大纲数据'}
-                    </pre>
+                    {pptOutline[step3Key()] ? (
+                      <pre style={{
+                        flex: 1, width: '100%', border: 'none', margin: 0,
+                        fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6,
+                        color: 'var(--text)', background: 'var(--bg)',
+                        overflow: 'auto', padding: 8, borderRadius: 4,
+                        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      }}>
+                        {JSON.stringify(pptOutline[step3Key()].outline_json, null, 2)}
+                      </pre>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
+                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span>
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>生成大纲后才可合成PPT</div>
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <></>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
+                    <style>{PREVIEW_CSS}</style>
+                    {s3OutlineText ? (
+                      <div className="md-preview" style={{ padding: '12px 16px', background: '#fff', borderRadius: 6, border: '1px solid var(--border)' }}
+                        dangerouslySetInnerHTML={{ __html: s3RenderedHtml }} />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}>👁</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>暂无大纲内容</div>
+                      </div>
+                    )}
+                  </div>
                 )}
                 <SlideEditModal
                   open={!!(editPanelOpen[step3Key()] && editPanelProps().runId)}
@@ -3658,22 +3965,59 @@ export default function ProjectPage() {
             </div>
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="tmpl-preview-header">
-                  📢 演讲稿预览 — {S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)?.label || '文档演讲'}
-                </div>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 8, overflow: 'auto' }}>
-                  {(() => {
-                    const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
-                    const content = steps[activeTab?.stepKey || 'step4_speech_doc'] || ''
-                    return (
-                      <textarea className="form-textarea"
-                        style={{ flex: 1, width: '100%', minHeight: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, border: '1px solid var(--border)', borderRadius: 4, padding: 8, background: 'var(--bg)', color: 'var(--text-primary)', resize: 'none', outline: 'none' }}
-                        value={content}
-                        placeholder="点击「生成演讲稿」生成..."
-                        onChange={e => setSteps(prev => ({ ...prev, [activeTab!.stepKey]: e.target.value }))}
-                      />
-                    )
-                  })()}
+                  <div style={{ display: 'flex', gap: 0, marginBottom: 4 }}>
+                    <button onClick={() => setS4ViewMode('edit')} style={{
+                      padding: '3px 10px', fontSize: 11, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                      color: s4ViewMode === 'edit' ? 'var(--primary)' : 'var(--text-secondary)',
+                      borderBottom: s4ViewMode === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
+                      fontWeight: s4ViewMode === 'edit' ? 600 : 400,
+                    }}>✏️ 编辑</button>
+                    <button onClick={() => setS4ViewMode('preview')} style={{
+                      padding: '3px 10px', fontSize: 11, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
+                      color: s4ViewMode === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
+                      borderBottom: s4ViewMode === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
+                      fontWeight: s4ViewMode === 'preview' ? 600 : 400,
+                    }}>👁 预览</button>
+                    {s4ViewMode === 'preview' && s4Content && (
+                      <>
+                        <button onClick={handleS4DownloadHtml} style={{
+                          marginLeft: 'auto', padding: '3px 10px', fontSize: 10, cursor: 'pointer',
+                          background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 3,
+                        }}>📥 下载 HTML</button>
+                        <button onClick={handleS4Print} style={{
+                          marginLeft: 4, padding: '3px 10px', fontSize: 10, cursor: 'pointer',
+                          background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 3,
+                        }}>🖨 打印</button>
+                      </>
+                    )}
+                  </div>
+                  {s4ViewMode === 'edit' ? (
+                    (() => {
+                      const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
+                      const content = steps[activeTab?.stepKey || 'step4_speech_doc'] || ''
+                      return (
+                        <textarea className="form-textarea"
+                          style={{ flex: 1, width: '100%', minHeight: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, border: '1px solid var(--border)', borderRadius: 4, padding: 8, background: 'var(--bg)', color: 'var(--text-primary)', resize: 'none', outline: 'none' }}
+                          value={content}
+                          placeholder="点击「生成演讲稿」生成..."
+                          onChange={e => setSteps(prev => ({ ...prev, [activeTab!.stepKey]: e.target.value }))}
+                        />
+                      )
+                    })()
+                  ) : (
+                    <div style={{
+                      flex: 1, overflow: 'auto', background: '#fff', borderRadius: 6,
+                      padding: '12px 16px', border: '1px solid var(--border)',
+                    }}>
+                      <style>{PREVIEW_CSS}</style>
+                      {s4Content ? (
+                        <div className="md-preview" dangerouslySetInnerHTML={{ __html: s4RenderedHtml }} />
+                      ) : (
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>暂无内容</div>
+                      )}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                     {(() => {
                       const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)

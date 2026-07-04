@@ -1,0 +1,19 @@
+<div style="width:1280px;height:720px;position:relative;overflow:hidden;background:var(--background);font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;">
+
+  <!-- 内容层：文字居中 -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);text-align:center;z-index:1;">
+
+    <!-- 可选 emoji 点缀 -->
+    {{#EMOJI}}<div style="font-size:52px;opacity:0.15;color:var(--primary);margin-bottom:32px;line-height:1;">{{EMOJI}}</div>{{/EMOJI}}
+
+    <!-- 主标题 -->
+    <h1 style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:52px;font-weight:700;letter-spacing:-0.5px;line-height:1.15;color:var(--primary);margin:0 0 24px 0;max-width:700px;">{{TITLE}}</h1>
+
+    <!-- 副标题 -->
+    {{#SUBTITLE}}<p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:19px;font-weight:400;line-height:1.5;color:var(--secondary);margin:0 0 40px 0;max-width:550px;">{{SUBTITLE}}</p>{{/SUBTITLE}}
+
+    <!-- 日期/作者 -->
+    {{#META_INFO}}<p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:13px;font-weight:400;color:var(--secondary);opacity:0.5;margin:0;">{{META_INFO}}</p>{{/META_INFO}}
+  </div>
+
+</div>

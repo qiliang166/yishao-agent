@@ -1542,6 +1542,20 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
     return html
 
 
+def _enforce_no_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> tuple[str, int]:
+    """Replace hardcoded hex colors with {{placeholder}} vars, return (html, count).
+
+    Wraps _auto_fix_hardcoded_hex with a diff-based change count for the
+    regenerate-slide workflow in app.py.
+    """
+    import re as _re_count
+    before = html
+    html = _auto_fix_hardcoded_hex(html, scheme, slide_seq)
+    changes = len(_re_count.findall(r'#[0-9a-fA-F]{6}', before)) - len(
+        _re_count.findall(r'#[0-9a-fA-F]{6}', html))
+    return html, max(0, changes)
+
+
 def _fix_malformed_hex(html: str, slide_seq: int) -> str:
     """Fix LLM-garbled hex values like #fffffffff → #ffffff.
 
@@ -3095,6 +3109,17 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         has_chart = slide.get("has_chart", False)
         chart_hint = slide.get("chart_hint", "")
         notes = slide.get("notes", "")
+
+        # ── Structural page template: code-filled, zero LLM involvement ──
+        if stype in STRUCTURAL_PAGE_TYPES and not is_a4 and active_scheme:
+            family = _detect_template_family(style_id, active_scheme)
+            template_html = _load_slide_template(family, stype)
+            if template_html:
+                html = _fill_slide_template(template_html, slide, total)
+                html_vars = html
+                html = _resolve_color_vars(html, active_scheme, css_vars=True)
+                _logger.info(f"Slide {seq}: template-filled ({family}/{stype}), {len(html)} chars")
+                return {**slide, "html": html, "html_vars": html_vars}
 
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
@@ -5009,6 +5034,182 @@ def _wcag_contrast_ratio(hex1: str, hex2: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# Structural page template system — code-filled, zero LLM involvement
+# ══════════════════════════════════════════════════════════════════════════════
+
+STRUCTURAL_PAGE_TYPES = frozenset({"cover", "section", "summary", "closing", "toc"})
+
+TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "..", "resources", "templates")
+
+
+def _detect_template_family(style_id: str, scheme_data: dict) -> str:
+    """Determine whether a style uses rich or clean templates.
+
+    Checks the cover page override's background color luminance:
+      - dark background (L < 0.4) → "rich" (dark bg, white text, SVG decor)
+      - light background (L >= 0.4) → "clean" (white/light bg, colored text)
+
+    Falls back to "clean" if tokens.yaml or overrides are missing.
+    """
+    overrides = _load_page_overrides(style_id, "cover")
+    if not overrides or not scheme_data:
+        return "clean"
+
+    bg_placeholder = overrides.get("card_bg") or overrides.get("background") or ""
+    if not bg_placeholder:
+        return "clean"
+
+    # Resolve {{primary}} / {{secondary}} / {{background}} → hex
+    m = re.match(r'\{\{(\w+)\}\}', bg_placeholder)
+    if m:
+        bg_hex = scheme_data.get(m.group(1), "")
+    else:
+        bg_hex = bg_placeholder
+
+    if not bg_hex or not bg_hex.startswith("#"):
+        return "clean"
+
+    luminance = _wcag_relative_luminance(bg_hex)
+    return "rich" if luminance < 0.4 else "clean"
+
+
+def _load_slide_template(family: str, page_type: str) -> str | None:
+    """Load an HTML template file for the given family and page type.
+
+    Returns the raw template HTML string, or None if the file is missing.
+    """
+    tmpl_path = os.path.join(TEMPLATE_DIR, family, f"{page_type}.html")
+    if not os.path.exists(tmpl_path):
+        return None
+    with open(tmpl_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> str:
+    """Fill a slide template with actual slide data. Pure code, no LLM.
+
+    Replaces simple {{PLACEHOLDER}} tags and handles conditional/loop blocks:
+      {{#SECTION}}...{{/SECTION}} — kept if placeholder inside has content
+      {{#KEY_POINTS}}...{{/KEY_POINTS}} — repeated per key_point
+      {{#CHAPTERS}}...{{/CHAPTERS}} — repeated per card (TOC chapters)
+    """
+    seq = slide.get("seq", 1)
+    heading = slide.get("heading", "")
+    body = slide.get("body", "")
+    kicker = slide.get("kicker", "")
+    lead = slide.get("lead", "")
+    notes = slide.get("notes", "")
+    key_points = slide.get("key_points", [])
+    cards = slide.get("cards", [])
+
+    # Extract sub-parts: subtitle = lead or body first line; brand = notes or ""
+    subtitle = lead or (body.split("\n")[0].strip() if body else "")
+    if subtitle == heading:
+        subtitle = ""
+    brand = notes.strip() if notes else ""
+    contact = lead.strip() if lead else ""
+    meta = kicker.strip() if kicker else ""
+
+    # ── Simple replacements (escape user text to prevent XSS in generated HTML) ──
+    esc = _html_mod.escape
+    html = template_html
+    html = html.replace("{{TITLE}}", esc(heading or ""))
+    html = html.replace("{{SUBTITLE}}", esc(subtitle))
+    html = html.replace("{{CHAPTER_TITLE}}", esc(heading or ""))
+    html = html.replace("{{CHAPTER_NUM}}", esc(kicker or ""))
+    html = html.replace("{{CHAPTER_SUBTITLE}}", esc(lead or ""))
+    html = html.replace("{{SUMMARY_TITLE}}", esc(heading or "总结"))
+    html = html.replace("{{THANKS}}", esc(heading or "谢谢"))
+    html = html.replace("{{CTA}}", esc(notes or ""))
+    html = html.replace("{{TOC_TITLE}}", esc(heading or "目录"))
+    html = html.replace("{{META_INFO}}", esc(meta))
+    html = html.replace("{{BRAND}}", esc(brand))
+    html = html.replace("{{CONTACT_INFO}}", esc(contact))
+    html = html.replace("{{COPYRIGHT}}", "© 2026 All rights reserved.")
+    html = html.replace("{{PAGE_NUM}}", str(seq))
+    html = html.replace("{{TOTAL_PAGES}}", str(total_pages))
+
+    # ── Conditional blocks: {{#SECTION}}...{{/SECTION}} ──
+    # If the placeholder inside has content, keep the inner content (strip tags).
+    # If empty, remove the entire block.
+    def _resolve_conditional(html_block: str, placeholder: str, value: str) -> str:
+        """Remove {{#TAG}}...{{/TAG}} if value is empty, else keep inner content."""
+        tag = placeholder  # e.g., "SUBTITLE", "EMOJI", "META_INFO", "CONTACT_INFO", "COPYRIGHT", "CTA"
+        pattern = re.compile(
+            r'\{\{#' + re.escape(tag) + r'\}\}(.*?)\{\{/' + re.escape(tag) + r'\}\}',
+            re.DOTALL
+        )
+        if value:
+            html_block = pattern.sub(r'\1', html_block)
+        else:
+            html_block = pattern.sub('', html_block)
+        return html_block
+
+    for cond_tag in ("SUBTITLE", "EMOJI", "META_INFO", "CONTACT_INFO", "COPYRIGHT", "CTA",
+                      "CHAPTER_SUBTITLE", "CHAPTER_NUM", "BRAND"):
+        val = ""
+        if cond_tag == "SUBTITLE":
+            val = subtitle
+        elif cond_tag == "EMOJI":
+            val = ""  # optional, filled if needed
+        elif cond_tag == "META_INFO":
+            val = meta
+        elif cond_tag == "CONTACT_INFO":
+            val = contact
+        elif cond_tag == "COPYRIGHT":
+            val = "© 2026 All rights reserved."
+        elif cond_tag == "CTA":
+            val = notes or ""
+        elif cond_tag == "CHAPTER_SUBTITLE":
+            val = lead or ""
+        elif cond_tag == "CHAPTER_NUM":
+            val = kicker or ""
+        elif cond_tag == "BRAND":
+            val = brand
+        html = _resolve_conditional(html, cond_tag, val)
+
+    # ── Loop blocks: {{#KEY_POINTS}}...{{/KEY_POINTS}} ──
+    kp_pattern = re.compile(
+        r'\{\{#KEY_POINTS\}\}(.*?)\{\{/KEY_POINTS\}\}', re.DOTALL
+    )
+    kp_match = kp_pattern.search(html)
+    if kp_match:
+        kp_template = kp_match.group(1)
+        if key_points:
+            kp_parts = []
+            for kp in key_points:
+                kp_text = (kp.get("text", "") or kp.get("heading", "") or str(kp)) if isinstance(kp, dict) else str(kp)
+                kp_parts.append(kp_template.replace("{{text}}", esc(kp_text)))
+            html = html[:kp_match.start()] + "\n".join(kp_parts) + html[kp_match.end():]
+        else:
+            html = html[:kp_match.start()] + html[kp_match.end():]
+
+    # ── Loop blocks: {{#CHAPTERS}}...{{/CHAPTERS}} (TOC) ──
+    ch_pattern = re.compile(
+        r'\{\{#CHAPTERS\}\}(.*?)\{\{/CHAPTERS\}\}', re.DOTALL
+    )
+    ch_match = ch_pattern.search(html)
+    if ch_match:
+        ch_template = ch_match.group(1)
+        if cards:
+            ch_parts = []
+            for i, card in enumerate(cards):
+                c_title = card.get("content_hint", "") or card.get("title", "") or f"章节 {i+1}"
+                ch_part = ch_template.replace("{{title}}", esc(c_title))
+                ch_part = ch_part.replace("{{num}}", f"{i+1:02d}")
+                # Replace chart_color with var(--chart-N) cycling through chart colors
+                chart_idx = i % 5
+                ch_part = ch_part.replace("{{chart_color}}", f"var(--chart-{chart_idx})")
+                ch_parts.append(ch_part)
+            html = html[:ch_match.start()] + "\n".join(ch_parts) + html[ch_match.end():]
+        else:
+            html = html[:ch_match.start()] + html[ch_match.end():]
+
+    return html
+
+
 def _load_page_overrides(style_id: str, page_type: str) -> dict:
     """Load slide_type_overrides for a specific page type from tokens.yaml.
 
@@ -5371,7 +5572,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     root_vars = _build_root_vars(scheme_data) if scheme_data else ""
 
     is_portrait = canvas_h > canvas_w
-    body_bg = "#ffffff" if is_portrait else "{{{{secondary}}}}"
+    body_bg = "#ffffff" if is_portrait else "{{secondary}}"
 
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">

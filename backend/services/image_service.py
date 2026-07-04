@@ -50,6 +50,8 @@ async def generate_image(
                 "SELECT * FROM image_providers WHERE id = ? AND is_enabled = 1",
                 (provider_id,)).fetchone()
         else:
+            row = None
+        if not row:
             row = db.execute(
                 "SELECT * FROM image_providers WHERE is_default = 1 AND is_enabled = 1").fetchone()
             if not row:
@@ -60,7 +62,13 @@ async def generate_image(
 
         provider = dict(row)
         saved_models = json.loads(provider["models"]) if provider["models"] else []
-        resolved_model = model or (saved_models[0] if saved_models else "qwen-image-2.0-pro")
+        saved_lower = [m.lower() for m in saved_models]
+        if model and model.lower() in saved_lower:
+            resolved_model = model
+        elif saved_models:
+            resolved_model = saved_models[0]
+        else:
+            resolved_model = "qwen-image-2.0-pro"
         model_lower = resolved_model.lower()
 
         host = _parse_host(provider["base_url"])
