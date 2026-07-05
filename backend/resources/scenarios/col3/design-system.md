@@ -31,17 +31,22 @@
 - 内容区 `flex:1`，靠上排列，不设 `margin-top:auto`
 - 页头页尾是模板结构的一部分，**代码不做注入**。代码仅替换 `{{BRAND_COPYRIGHT}}` 和 `{{BRAND_SIGNATURE}}` 两个品牌变量
 
-## 5 模块概览
+## 模块概览
 
-| 序号 | type | 页头 | 页尾 | 背景 | 核心结构 |
-|------|------|------|------|------|---------|
-| 1 | cover | 无 | 无 | 由封面模板定义（严格遵循 blocks/cover.md 的背景色） | absolute定位文字 + SVG圆圈装饰 + 底部品牌信息 |
-| 2 | product_definition | 有 | 有 | var(--background) | 标签-值表格(88+586) + 斜体副标题行 + 虚线图片占位行 |
-| 3 | materials_table | 有 | 有 | var(--background) | 8列表格(674px宽, chart_0表头) + {{TABLE_ROWS}} |
-| 4 | steps_table | 有 | 有 | var(--background) | 8列表格含colspan(674px宽, chart_1表头) + {{TABLE_ROWS}} |
-| 5 | quality_control | 有 | 有 | var(--background) | 2-section表格(120+554, chart_1+chart_0) + 版权声明文本块 |
+模块数量、type、页头页尾配置均以上方「文档结构」表为准，此处不再固定列举。以下是各 type 的通用核心结构参考：
 
-## 共享装饰元素（模块二~五通用）
+| type | 典型结构 |
+|------|---------|
+| cover | absolute定位文字 + SVG圆圈装饰 + 底部品牌信息，全页primary背景 |
+| toc | 编号条目列表，标题+虚线引导+页码 |
+| content | 段落文本+accent色条要点卡片+虚线图片占位 |
+| table | 674px宽居中数据表格，chart_0表头，交替行背景 |
+| chart | 大数字/进度条/柱状图/环形图，chart颜色序列 |
+| diagram | SVG插图区(674×420)+居中标题+圆点标注 |
+| flowchart | 步骤节点(card_bg+左accent色条)+SVG箭头连接 |
+| closing | absolute定位+感谢语+accent分隔线+品牌信息，全页primary背景 |
+
+## 共享装饰元素（非封面页通用）
 
 **SVG 背景圆圈：**
 ```html
@@ -86,7 +91,7 @@
 - 修改模板中的任何 width/height/font-size/padding/margin/position 数值
 - 添加模板中没有的额外 div/table/svg/装饰元素
 - 删除模板中已有的元素
-- 合并 quality_control 的维度行（必须 7 行独立：色泽/香气/口感/质地/口味/温度/形态）
+- 合并 quality_control 的维度行（维度数量以上方「文档结构」表中 key_points 为准，每维度独立一行）
 - 硬编码 hex 色值
 - 在非 cover 模块使用 position:absolute（仅 SVG 装饰圈可用）
 - ⛔ **禁止** 使用 `<section>` 标签

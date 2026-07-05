@@ -598,6 +598,21 @@ export const api = {
   saveScenarioFile: (columnId: string, filename: string, content: string) =>
     request(`/api/scenarios/${encodeURIComponent(columnId)}/files/${encodeURIComponent(filename)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) }),
 
+  // Workspace-level scenario file overrides (separate path: /api/scenarios/{wsId}/{colId}/{filename})
+  getWorkspaceScenarioFile: (wsId: string, colId: string, filename: string) =>
+    request(`/api/ws-scenarios/${encodeURIComponent(wsId)}/${encodeURIComponent(colId)}/${encodeURIComponent(filename)}`)
+      .then(d => d as { content: string; source: 'workspace' | 'shared' }),
+  saveWorkspaceScenarioFile: (wsId: string, colId: string, filename: string, content: string) =>
+    request(`/api/ws-scenarios/${encodeURIComponent(wsId)}/${encodeURIComponent(colId)}/${encodeURIComponent(filename)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    }).then(d => d as { ok: boolean }),
+  deleteWorkspaceScenarioFile: (wsId: string, colId: string, filename: string) =>
+    request(`/api/ws-scenarios/${encodeURIComponent(wsId)}/${encodeURIComponent(colId)}/${encodeURIComponent(filename)}`, {
+      method: 'DELETE',
+    }).then(d => d as { ok: boolean; deleted: boolean }),
+
   exportSvgZip: (runId: string) => `${BASE}/api/ppt/export-zip/${encodeURIComponent(runId)}`,
 
   // PPT Preview URL
@@ -764,7 +779,7 @@ export const api = {
     const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
     return request(`/api/core-prompt-configs${qs}`).then(d => d.configs)
   },
-  updateCorePromptConfig: (id: string, data: { content?: string; label?: string }) =>
+  updateCorePromptConfig: (id: string, data: { content?: string; label?: string; stage?: string }) =>
     request(`/api/core-prompt-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   copySeedConfigs: (workspaceId: string) =>
     request(`/api/workspaces/${workspaceId}/copy-seed-configs`, { method: 'POST' }),
@@ -852,4 +867,50 @@ export const api = {
     request('/api/license/status'),
   deactivateLicense: () =>
     request('/api/license/deactivate', { method: 'POST' }),
+
+  // Prompt Studio
+  getDefaultProvider: () =>
+    request('/api/prompt-studio/default-provider').then(d => d as { provider_id: string; model: string; name: string; available: boolean }),
+  generatePrompts: (data: { industry_topic: string; purpose_description: string; reference_workspace_id?: string; provider_id?: string; model?: string }) =>
+    request('/api/prompt-studio/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+      timeoutMs: 300000,
+    }).then(d => d as { configs: Record<string, any[]>; provider: { id: string; model: string } }),
+  applyPrompts: (data: { workspace_id: string; configs: Record<string, any[]> }) =>
+    request('/api/prompt-studio/apply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean; applied: Record<string, number> }),
+
+  // Prompt Studio saved configs
+  listPromptSaves: () =>
+    request('/api/prompt-studio/saves').then(d => d as { saves: { id: string; name: string; industry_topic: string; purpose_description: string; provider_info: any; created_at: string; updated_at: string }[] }),
+  getPromptSave: (id: string) =>
+    request(`/api/prompt-studio/saves/${encodeURIComponent(id)}`).then(d => d as { save: any }),
+  createPromptSave: (data: { name: string; industry_topic: string; purpose_description: string; configs: Record<string, any[]>; provider_info?: any }) =>
+    request('/api/prompt-studio/saves', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean; id: string }),
+  updatePromptSave: (id: string, data: { name?: string; configs?: Record<string, any[]> }) =>
+    request(`/api/prompt-studio/saves/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean }),
+  deletePromptSave: (id: string) =>
+    request(`/api/prompt-studio/saves/${encodeURIComponent(id)}`, { method: 'DELETE' }).then(d => d as { ok: boolean }),
+  getPromptStudioTemplates: () =>
+    request('/api/prompt-studio/templates').then(d => d as { system_prompt: string; user_message: string }),
+  updatePromptStudioTemplate: (name: string, content: string) =>
+    request(`/api/prompt-studio/templates/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content }),
+    }).then(d => d as { ok: boolean }),
+
 }

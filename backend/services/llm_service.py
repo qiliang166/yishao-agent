@@ -63,6 +63,7 @@ async def generate(
     user_message: str,
     temperature: float = 0.7,
     json_mode: bool = False,
+    max_tokens: int = 16384,
 ) -> str:
     provider = await get_provider(provider_id)
     if not provider:
@@ -81,7 +82,7 @@ async def generate(
 
         response = await client.messages.create(
             model=model,
-            max_tokens=16384,
+            max_tokens=max_tokens,
             system=system_prompt if system_prompt else None,
             messages=messages,
             temperature=temperature,
@@ -108,7 +109,7 @@ async def generate(
         model=model,
         messages=messages,
         temperature=temperature,
-        max_tokens=16384,
+        max_tokens=max_tokens,
     )
     if json_mode:
         kwargs["response_format"] = {"type": "json_object"}

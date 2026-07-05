@@ -10,6 +10,7 @@ import TemplateManager from './pages/TemplateManager'
 import ManualPage from './pages/ManualPage'
 import LoginPage from './pages/LoginPage'
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
+import PromptStudioPage from './pages/PromptStudioPage'
 import { ModalProvider } from './components/ModalProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import SettingsLock from './components/SettingsLock'
@@ -108,6 +109,11 @@ function Sidebar() {
           className={`sidebar-item ${location.pathname === '/templates' ? 'active' : ''}`}
           onClick={() => navigate('/templates')}>
           <span className="ico">📄</span> 模板管理
+        </button>
+        <button
+          className={`sidebar-item ${location.pathname === '/prompt-studio' ? 'active' : ''}`}
+          onClick={() => navigate('/prompt-studio')}>
+          <span className="ico">🎨</span> 提示词工作室
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/manual' ? 'active' : ''}`}
@@ -232,6 +238,7 @@ function AppShell() {
             <Route path="/manual" element={<ManualPage />} />
             <Route path="/templates" element={<TemplateManager />} />
             <Route path="/proj-settings" element={<SettingsLock><ProjSettingsPage /></SettingsLock>} />
+            <Route path="/prompt-studio" element={<PromptStudioPage />} />
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
             <Route path="/" element={<HomePage />} />
           </Routes>

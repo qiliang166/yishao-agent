@@ -23,15 +23,18 @@
 | `rgba(var(--accent-rgb), N)` | 半透明 accent |
 | `#ffffff` | 暗色背景上的文字（仅此例外） |
 
-## III. 5 模块结构
+## III. 8 模块结构
 
 | 模块 | type | 背景 | 页头 | 页尾 |
 |------|------|------|------|------|
 | 封面 | cover | `var(--primary)` | 禁止 | 禁止 |
-| 成品定义 | product_definition | `var(--background)` | 有 | 有 |
-| 食材清单 | materials_table | `var(--background)` | 有 | 有 |
-| 操作步骤 | steps_table | `var(--background)` | 有 | 有 |
-| 出品标准 | quality_control | `var(--background)` | 有 | 有 |
+| 目录 | toc | `var(--background)` | 有 | 有 |
+| 内容页 | content | `var(--background)` | 有 | 有 |
+| 表格页 | table | `var(--background)` | 有 | 有 |
+| 图表页 | chart | `var(--background)` | 有 | 有 |
+| 示意图 | diagram | `var(--background)` | 有 | 有 |
+| 流程图 | flowchart | `var(--background)` | 有 | 有 |
+| 结尾页 | closing | `var(--primary)` | 禁止 | 禁止 |
 
 ## IV. 禁止事项
 

@@ -313,17 +313,17 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                     col_skill = ""
                     try:
                         cfg2 = None
-                        if column_id:
+                        if column_id and project_id:
                             cfg2 = db.execute(
-                                "SELECT prompt, skill, rules FROM column_configs WHERE column_id = ?",
-                                (column_id,)
+                                "SELECT prompt, skill, config_json FROM project_items WHERE id = ?",
+                                (f"pi-{project_id}-{column_id}",)
                             ).fetchone()
                         if cfg2:
                             col_prompt = cfg2["prompt"] or ""
                             col_skill = cfg2["skill"] or ""
-                            # Merge column_configs rules into template rules (template wins)
+                            # Merge project config_json rules into template rules (template wins)
                             try:
-                                col_rules = json.loads(cfg2["rules"] or "{}")
+                                col_rules = json.loads(cfg2["config_json"] or "{}")
                                 if col_rules and isinstance(col_rules, dict):
                                     merged = dict(col_rules)
                                     merged.update(rules)
@@ -390,7 +390,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             os.makedirs(html_dir, exist_ok=True)
 
             # ── Generate images for slides with {{image:...}} or {{IMAGE_URL}} placeholders ──
-            gen_canvas_w, gen_canvas_h = _get_canvas_dimensions(column_id)
+            gen_canvas_w, gen_canvas_h = _get_canvas_dimensions(column_id, project_id=project_id)
             is_portrait = gen_canvas_h > gen_canvas_w
             _logger.info(f"[IMG-DBG] canvas={gen_canvas_w}x{gen_canvas_h} is_portrait={is_portrait} column_id={column_id}")
             if not is_portrait:
@@ -462,7 +462,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                                  slide_data, style_id=style_id,
                                                  rules=rules, temperature=temperature,
                                                  st=st, column_id=column_id,
-                                                 color_scheme=color_scheme)
+                                                 color_scheme=color_scheme,
+                                                 project_id=project_id)
                 except Exception as e:
                     print(f"[PPT-DBG] AI-SVG generation failed: {e}", flush=True)
 
@@ -782,7 +783,7 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
     # ── Two-Phase HTML Pipeline ──
     style_id = rules.get("style_id", "business")
 
-    cw, ch = _get_canvas_dimensions(column_id)
+    cw, ch = _get_canvas_dimensions(column_id, project_id=project_id)
     is_a4 = ch > cw
 
     # Phase 1: Structure planning (lightweight, one LLM call for all slides)
@@ -1020,16 +1021,24 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     if rules.get("outline_architect_prompt"):
         outline_spec = rules["outline_architect_prompt"]
     if not outline_spec:
-        outline_spec = _load_outline_spec(column_id)
+        outline_spec = _load_outline_spec(column_id, project_id=project_id)
 
     # Load cognitive design principles (referenced by outline-architect.md)
     cognitive_spec_stage1 = rules.get("cognitive_design_principles", "") if rules else ""
     if not cognitive_spec_stage1:
-        cognitive_spec_stage1 = _load_cognitive_spec(column_id)
+        cognitive_spec_stage1 = _load_cognitive_spec(column_id, project_id=project_id)
 
     # Always combine column role prompt + VI design rules (never discard either)
     role_block = system_prompt if system_prompt else ""
-    vi_block = f"""{outline_spec}
+
+    # Build a dynamic structure summary from the skill template, so the LLM
+    # always sees the current page count / page types / field labels rather
+    # than whatever is hardcoded in scenario files.
+    structure_summary = _build_structure_summary(skill_template)
+
+    vi_block = f"""{structure_summary}
+
+{outline_spec}
 
 ## 认知设计原则（必须遵守）
 {cognitive_spec_stage1}
@@ -1062,10 +1071,10 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
     # ── Phase 1: Generate outline (headings + page types + layout hints, lightweight) ──
     style_id = rules.get("style_id", "business")
-    page_type_prompt = _build_page_type_prompt(style_id, column_id)
+    page_type_prompt = _build_page_type_prompt(style_id, column_id, project_id=project_id)
 
     # Column-aware output requirements
-    cw_stage1, ch_stage1 = _get_canvas_dimensions(column_id) if column_id else (1280, 720)
+    cw_stage1, ch_stage1 = _get_canvas_dimensions(column_id, project_id=project_id) if column_id else (1280, 720)
     is_a4_stage1 = ch_stage1 > cw_stage1
     if is_a4_stage1:
         output_reqs = """## 输出要求
@@ -1191,15 +1200,36 @@ SCENARIO_FILES = [
 ]
 
 
-def _load_scenario_file(filename: str, column_id: str = "", canvas_w: int = 0, canvas_h: int = 0) -> str:
+def _load_scenario_file(filename: str, column_id: str = "", canvas_w: int = 0, canvas_h: int = 0, project_id: str = "") -> str:
     """Load a scenario prompt file with fallback chain.
 
-    Priority: scenarios/{column_id}/ → scenarios/_default/ → prompts/ (legacy)
+    Priority when project_id is given:
+      1. scenarios/{workspace_id}/{column_id}/  (per-workspace override)
+      2. scenarios/{column_id}/                  (per-column custom)
+      3. scenarios/_default/                     (global default)
+      4. prompts/                                (legacy)
+    Without project_id, steps 2→3→4 are used.
     If canvas_w/canvas_h are provided, substitute {{canvas_w}} and {{canvas_h}} placeholders.
     """
     content = ""
-    # 1) Per-column custom file
-    if column_id:
+    # 0) Resolve workspace_id from project if available
+    ws_id = ""
+    if project_id:
+        try:
+            db = get_db()
+            row = db.execute("SELECT workspace_id FROM projects WHERE id = ?", (project_id,)).fetchone()
+            db.close()
+            ws_id = row["workspace_id"] if row else ""
+        except Exception:
+            pass
+    # 1a) Per-workspace custom file (highest priority)
+    if ws_id and column_id:
+        p = os.path.join(SCENARIOS_DIR, ws_id, column_id, filename)
+        if os.path.exists(p):
+            with open(p, "r", encoding="utf-8") as f:
+                content = f.read()
+    # 1b) Per-column custom file
+    if not content and column_id:
         p = os.path.join(SCENARIOS_DIR, column_id, filename)
         if os.path.exists(p):
             with open(p, "r", encoding="utf-8") as f:
@@ -1223,25 +1253,25 @@ def _load_scenario_file(filename: str, column_id: str = "", canvas_w: int = 0, c
     return content
 
 
-def _load_svg_prompt_specs(column_id: str = "") -> tuple[str, str]:
+def _load_svg_prompt_specs(column_id: str = "", project_id: str = "") -> tuple[str, str]:
     """Load svg-generator.md and bento-grid-layout.md from scenario files."""
-    cw, ch = _get_canvas_dimensions(column_id)
+    cw, ch = _get_canvas_dimensions(column_id, project_id=project_id)
     return (
-        _load_scenario_file("svg-generator.md", column_id, cw, ch),
-        _load_scenario_file("bento-grid-layout.md", column_id, cw, ch),
+        _load_scenario_file("svg-generator.md", column_id, cw, ch, project_id=project_id),
+        _load_scenario_file("bento-grid-layout.md", column_id, cw, ch, project_id=project_id),
     )
 
 
-def _load_outline_spec(column_id: str = "") -> str:
+def _load_outline_spec(column_id: str = "", project_id: str = "") -> str:
     """Load outline-architect.md from scenario files."""
-    return _load_scenario_file("outline-architect.md", column_id)
+    return _load_scenario_file("outline-architect.md", column_id, project_id=project_id)
 
 
-def _get_canvas_dimensions(column_id: str = "") -> tuple[int, int]:
-    """Get canvas dimensions from column_configs.rules JSON.
+def _get_canvas_dimensions(column_id: str = "", project_id: str = "") -> tuple[int, int]:
+    """Get canvas dimensions from project_items.config_json or column_configs.rules JSON.
 
-    Looks for {"canvas": {"width": W, "height": H}} in the column's rules.
-    Falls back to 1280x720 (16:9 presentation default).
+    When project_id is provided, reads from project_items (per-project override).
+    Falls back to column_configs (workspace default). Defaults to 1280x720.
     """
     default_w, default_h = 1280, 720
     column_id = _validate_column_id(column_id)
@@ -1249,13 +1279,38 @@ def _get_canvas_dimensions(column_id: str = "") -> tuple[int, int]:
         return (default_w, default_h)
     try:
         db = get_db()
-        row = db.execute(
-            "SELECT rules FROM column_configs WHERE column_id = ?",
-            (column_id,)
-        ).fetchone()
+        rules_json = None
+        if project_id:
+            row = db.execute(
+                "SELECT config_json FROM project_items WHERE id = ?",
+                (f"pi-{project_id}-{column_id}",)
+            ).fetchone()
+            if row and row["config_json"]:
+                rules_json = row["config_json"]
+        if not rules_json:
+            if project_id:
+                ws_row = db.execute("SELECT workspace_id FROM projects WHERE id = ?", (project_id,)).fetchone()
+                ws_id = ws_row["workspace_id"] if ws_row else None
+                if ws_id:
+                    row = db.execute(
+                        "SELECT rules FROM column_configs WHERE column_id = ? AND workspace_id = ?",
+                        (column_id, ws_id)
+                    ).fetchone()
+                    if row and row["rules"]:
+                        rules_json = row["rules"]
+                # When project_id is available, do NOT fall back to unfiltered query.
+                # Return defaults if neither project_items nor workspace-filtered config found.
+            else:
+                # No project_id: legacy fallback — unfiltered query
+                row = db.execute(
+                    "SELECT rules FROM column_configs WHERE column_id = ?",
+                    (column_id,)
+                ).fetchone()
+                if row and row["rules"]:
+                    rules_json = row["rules"]
         db.close()
-        if row and row["rules"]:
-            rules = json.loads(row["rules"])
+        if rules_json:
+            rules = json.loads(rules_json) if isinstance(rules_json, str) else rules_json
             canvas = rules.get("canvas", {})
             if isinstance(canvas, dict):
                 w = canvas.get("width")
@@ -2238,7 +2293,7 @@ def _load_scheme_data(style_id: str, color_scheme: str = "deep-blue") -> dict:
     return {}
 
 
-def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "deep-blue", resolve_vars: bool = True, column_id: str = "") -> str:
+def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "deep-blue", resolve_vars: bool = True, column_id: str = "", project_id: str = "") -> str:
     """Load a specific VI sub-file from data/vi/{style_id}/.
 
     section: 'cover', 'content', 'data', or 'summary'.
@@ -2260,17 +2315,18 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
         section_file = os.path.join(vi_dir, f"{section}.md")
         # Also check blocks/ and templates/ subdirectories (document blocks/templates)
         blocks_file = os.path.join(vi_dir, "blocks", f"{section}.md")
+        common_blocks_file = os.path.join(BASE_DIR, "resources", "vi", "_common", "blocks", f"{section}.md")
         templates_file = os.path.join(vi_dir, "templates", f"{section}.md")
         # Priority depends on column type:
-        # - A4/portrait (col3): column > blocks/ > templates/ ONLY
+        # - A4/portrait (col3): column > blocks/ > _common/blocks/ > templates/ ONLY
         #   (NEVER load PPT page type files like content.md/data.md for A4)
-        # - PPT/landscape (col4/col5): column > style top-level > blocks/ > templates/
-        cw_prio, ch_prio = _get_canvas_dimensions(column_id) if column_id else (1280, 720)
+        # - PPT/landscape (col4/col5): column > style top-level > blocks/ > _common/blocks/ > templates/
+        cw_prio, ch_prio = _get_canvas_dimensions(column_id, project_id=project_id) if column_id else (1280, 720)
         is_a4_prio = ch_prio > cw_prio
         if is_a4_prio:
-            candidates = (col_section_file, blocks_file, templates_file)
+            candidates = (col_section_file, blocks_file, common_blocks_file, templates_file)
         else:
-            candidates = (col_section_file, section_file, blocks_file, templates_file)
+            candidates = (col_section_file, section_file, blocks_file, common_blocks_file, templates_file)
         chosen = None
         for candidate in candidates:
             if candidate and os.path.exists(candidate):
@@ -2454,31 +2510,38 @@ def _scan_vi_document_blocks(style_id: str) -> list[dict]:
 
     if not blocks:
         return _fallback_document_blocks()
+    # Merge generic page types so new types (toc, chart, diagram, flowchart)
+    # are always available without modifying 18 style index.md files
+    generic = _fallback_document_blocks()
+    existing_types = {b["type"] for b in blocks}
+    for g in generic:
+        if g["type"] not in existing_types:
+            blocks.append(g)
     return blocks
 
 
 def _fallback_document_blocks() -> list[dict]:
-    """Minimal document blocks when VI directory doesn't exist."""
+    """Generic A4 document page types (full-page templates, not section fragments)."""
     return [
-        {"type": "header", "label": "页头", "purpose": "文档页头区域"},
-        {"type": "title", "label": "标题", "purpose": "主标题行"},
-        {"type": "info_block", "label": "基本信息块", "purpose": "标签-值对+图片占位"},
-        {"type": "table_block", "label": "表格块", "purpose": "多列数据网格"},
-        {"type": "text_block", "label": "文字块", "purpose": "自由段落文字"},
-        {"type": "list_block", "label": "列表块", "purpose": "编号或项目符号列表"},
-        {"type": "closing", "label": "结尾块", "purpose": "文档结尾区"},
-        {"type": "footer", "label": "页脚", "purpose": "文档页脚"},
+        {"type": "cover", "label": "封面", "purpose": "封面页，全页primary背景，主标题+元数据+品牌信息", "section": "blocks"},
+        {"type": "toc", "label": "目录", "purpose": "目录页，编号章节列表及页码", "section": "blocks"},
+        {"type": "content", "label": "内容页", "purpose": "通用内容页，正文段落+要点列表+可选图片占位", "section": "blocks"},
+        {"type": "table", "label": "表格页", "purpose": "结构化数据表格，可配置列数", "section": "blocks"},
+        {"type": "chart", "label": "图表页", "purpose": "数据可视化：数字指标/进度条/柱状图/环形图", "section": "blocks"},
+        {"type": "diagram", "label": "示意图", "purpose": "SVG示意图/插图+标注说明", "section": "blocks"},
+        {"type": "flowchart", "label": "流程图", "purpose": "流程步骤节点+箭头连接+描述", "section": "blocks"},
+        {"type": "closing", "label": "结尾页", "purpose": "结尾页，深色背景+感谢语+品牌信息，与封面书挡效应", "section": "blocks"},
     ]
 
 
-def _build_page_type_prompt(style_id: str, column_id: str = "") -> str:
+def _build_page_type_prompt(style_id: str, column_id: str = "", project_id: str = "") -> str:
     """Generate the page_type selection prompt block from VI index.md.
 
     For A4/portrait columns (col3): returns document building blocks (B01-B08)
     and document templates (T01). PPT page types are explicitly forbidden.
     For PPT/landscape columns (col4, col5): returns PPT page types (P01-P26).
     """
-    cw, ch = _get_canvas_dimensions(column_id) if column_id else (1280, 720)
+    cw, ch = _get_canvas_dimensions(column_id, project_id=project_id) if column_id else (1280, 720)
     is_a4 = ch > cw
 
     if is_a4:
@@ -2534,21 +2597,68 @@ def _build_page_type_prompt(style_id: str, column_id: str = "") -> str:
         ])
     return "\n".join(lines)
 
-def _load_cognitive_spec(column_id: str = "") -> str:
+def _load_cognitive_spec(column_id: str = "", project_id: str = "") -> str:
     """Load cognitive-design-principles.md from scenario files."""
-    return _load_scenario_file("cognitive-design-principles.md", column_id)
+    return _load_scenario_file("cognitive-design-principles.md", column_id, project_id=project_id)
 
 
-def _load_reviewer_spec(column_id: str = "") -> str:
+def _build_structure_summary(skill_template: str) -> str:
+    """Parse skill JSON template and generate a human-readable structure summary.
+
+    Replaces the hardcoded page mapping in outline-architect.md with a
+    dynamic summary derived from the user's skill template.  Used to tell
+    the LLM exactly what pages and fields the current configuration expects.
+    """
+    if not skill_template or not skill_template.strip():
+        return ""
+    try:
+        pages = json.loads(skill_template)
+        if not isinstance(pages, list):
+            # Skill may be wrapped in {"slides": [...]} or just a list
+            if isinstance(pages, dict):
+                pages = pages.get("slides", [])
+        if not isinstance(pages, list) or len(pages) == 0:
+            return ""
+    except (json.JSONDecodeError, TypeError):
+        return ""
+
+    total = len(pages)
+    page_types_seen = []
+    lines = [f"## 文档结构（从 SKILL 模板自动提取）", "",
+             f"本文档固定 **{total} 页**，不可多不可少。页序：", ""]
+
+    for i, p in enumerate(pages):
+        ptype = p.get("page_type", "unknown")
+        heading = p.get("heading", "无标题")
+        kps = p.get("key_points", [])
+
+        page_types_seen.append(ptype)
+
+        detail = ""
+        if isinstance(kps, list) and kps:
+            kp_list = "、".join(str(k) for k in kps[:10])
+            detail = f"（{len(kps)} 项：{kp_list}）"
+
+        lines.append(f"| {i+1} | {ptype} | {heading} {detail} |")
+
+    lines.append("")
+    lines.append(f"可用的 page_type 值：{', '.join(page_types_seen)}")
+    lines.append("key_points 必须使用上表中对应的维度名/列名，不可自行增减或修改。")
+    lines.append("仅输出 JSON，不输出其他文字。")
+
+    return "\n".join(lines)
+
+
+def _load_reviewer_spec(column_id: str = "", project_id: str = "") -> str:
     """Load reviewer.md from scenario files."""
-    cw, ch = _get_canvas_dimensions(column_id)
-    return _load_scenario_file("reviewer.md", column_id, cw, ch)
+    cw, ch = _get_canvas_dimensions(column_id, project_id=project_id)
+    return _load_scenario_file("reviewer.md", column_id, cw, ch, project_id=project_id)
 
 
-def _load_design_system(column_id: str = "") -> str:
+def _load_design_system(column_id: str = "", project_id: str = "") -> str:
     """Load design-system.md — the HTML slide design guide for LLM."""
-    cw, ch = _get_canvas_dimensions(column_id)
-    return _load_scenario_file("design-system.md", column_id, cw, ch)
+    cw, ch = _get_canvas_dimensions(column_id, project_id=project_id)
+    return _load_scenario_file("design-system.md", column_id, cw, ch, project_id=project_id)
 
 
 def _resolve_font_range(style_yaml_text: str) -> dict:
@@ -2652,9 +2762,9 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
     Includes validation loop: generate → validate → if issues → fix (max 2 rounds).
     On generation failure, converts raw zones as fallback.
     """
-    design_system = _load_design_system(column_id)
+    design_system = _load_design_system(column_id, project_id=project_id)
     style_yaml = _load_style_yaml_text(style_id, color_scheme)
-    cognitive_spec = _load_cognitive_spec(column_id)
+    cognitive_spec = _load_cognitive_spec(column_id, project_id=project_id)
 
     spec_version = rules.get("spec_version", "2.2.1")
 
@@ -2709,7 +2819,7 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
 
 铁律：
 - 只输出此批次的幻灯片，按 seq 顺序
-{_build_page_type_prompt(style_id, column_id)}
+{_build_page_type_prompt(style_id, column_id, project_id=project_id)}
 - layout 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
 - ⛔ layout=single_focus 仅限 cover/quote/section 页使用。summary/closing/content/data/comparison/process/timeline 等所有其余类型一律禁止 single_focus
 - 每卡必有 role (hero/metric/card_0/card_1/left/right/cell_0_0 等)
@@ -2897,7 +3007,7 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 
     This is intentionally lightweight — no JSON card filling, just structure decisions.
     """
-    design_system = _load_design_system(column_id)
+    design_system = _load_design_system(column_id, project_id=project_id)
     style_yaml = _load_style_yaml_text(style_id, color_scheme, resolve_vars=False)
     style_vi = _load_style_vi(style_id, color_scheme, resolve_vars=False)
     style_prompt = _load_style_prompt(style_id, color_scheme)
@@ -2931,7 +3041,7 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
 ## 输出格式要求
 
 为每页输出结构决策：
-{_build_page_type_prompt(style_id, column_id)}
+{_build_page_type_prompt(style_id, column_id, project_id=project_id)}
 {struct_output}"""
 
     # ── DEBUG: monitor structure prompt for hex ──
@@ -3046,7 +3156,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     from concurrent.futures import ThreadPoolExecutor, as_completed
     import re
 
-    canvas_w, canvas_h = _get_canvas_dimensions(column_id)
+    canvas_w, canvas_h = _get_canvas_dimensions(column_id, project_id=project_id)
 
     # resolve_vars=False: LLM gets {{primary}} placeholders, not hex values
     style_yaml = _load_style_yaml_text(style_id, color_scheme, resolve_vars=False)
@@ -3079,7 +3189,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     # but that stage is skipped for col3)
     doc_design_system = ""
     if is_a4:
-        doc_design_system = _load_design_system(column_id)
+        doc_design_system = _load_design_system(column_id, project_id=project_id)
         if doc_design_system:
             doc_design_system = f"\n{doc_design_system}\n"
 
@@ -3124,7 +3234,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
         # Load VI section FIRST to detect HTML template mode
-        vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id)
+        vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id, project_id=project_id)
 
         # Detect HTML template mode (VI file contains ## HTML 模板 header)
         # Only for PPT/landscape — A4/portrait keeps its existing pipeline
@@ -3157,7 +3267,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         if vi_section and not is_html_template:
             vi_append = f"\n\n## {stype} 类型专属视觉规范\n{vi_section}"
 
-        html_output_inst = _load_html_output_prompt(column_id)
+        html_output_inst = _load_html_output_prompt(column_id, project_id=project_id)
         if html_output_inst:
             # Substitute template variables — {{canvas_w}} and {{canvas_h}} are
             # placeholders in scenarios/_default/html-output.md. Column-specific
@@ -5705,7 +5815,7 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
                  style_id: str = "business", rules: dict = None,
                  batch_size: int = 2, temperature: float = 0.3,
                  st: dict = None, column_id: str = "",
-                 color_scheme: str = "deep-blue") -> list | None:
+                 color_scheme: str = "deep-blue", project_id: str = "") -> list | None:
     """Phase 6 (AI-SVG): AI generates complete SVG XML per slide — PPT-Agent quality.
 
     Unlike the code-rendered path (AI→JSON→Code→SVG), this has AI write SVG directly,
@@ -5736,9 +5846,9 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
     rt_holistic = st.get('holistic', temperature)
     rt_holistic_fix = st.get('holistic_fix', temperature)
 
-    svg_spec, bento_spec = _load_svg_prompt_specs(column_id)
-    cognitive_spec = _load_cognitive_spec(column_id)
-    reviewer_spec = _load_reviewer_spec(column_id)
+    svg_spec, bento_spec = _load_svg_prompt_specs(column_id, project_id=project_id)
+    cognitive_spec = _load_cognitive_spec(column_id, project_id=project_id)
+    reviewer_spec = _load_reviewer_spec(column_id, project_id=project_id)
     style_yaml = _load_style_yaml_text(style_id, color_scheme)
 
     if not svg_spec:
@@ -5947,7 +6057,7 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
                                         style_yaml, style_id, svg_system,
                                         review_mode=review_mode,
                                         temp_review=rt_review, temp_fix=rt_fix,
-                                        column_id=column_id)
+                                        column_id=column_id, project_id=project_id)
 
     # ── Phase 6c: Holistic deck review (cross-slide consistency) ──
     if provider_id and model and result and len(result) >= 3:
@@ -5956,7 +6066,7 @@ def _stage3_svg(provider_id, model, llm_generate, slide_data,
                                   review_mode=review_mode,
                                   temp_holistic=rt_holistic,
                                   temp_holistic_fix=rt_holistic_fix,
-                                  column_id=column_id)
+                                  column_id=column_id, project_id=project_id)
 
     return result
 
@@ -5966,7 +6076,7 @@ def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
                            review_mode: str = "self_review",
                            temperature: float = 0.3,
                            temp_review: float = 0, temp_fix: float = 0,
-                           column_id: str = ""):
+                           column_id: str = "", project_id: str = ""):
     """PPT-Agent review-core equivalent: review each slide, fix if score < 7.
 
     Uses the same LLM (DeepSeek/Moonshot) with PPT-Agent's reviewer.md prompt.
@@ -5974,7 +6084,7 @@ def _review_and_fix_slides(provider_id, model, llm_generate, slides, style_yaml,
     """
     import re, json
 
-    reviewer_spec = _load_reviewer_spec(column_id)
+    reviewer_spec = _load_reviewer_spec(column_id, project_id=project_id)
     if not reviewer_spec:
         _logger.info("Reviewer spec not available, skipping review loop")
         return slides
@@ -6135,7 +6245,7 @@ def _holistic_review(provider_id, model, llm_generate, slides, slide_data,
                      review_mode: str = "self_review",
                      temperature: float = 0.3,
                      temp_holistic: float = 0, temp_holistic_fix: float = 0,
-                     column_id: str = ""):
+                     column_id: str = "", project_id: str = ""):
     """Phase 6c: Holistic deck review — cross-slide consistency evaluation.
 
     PPT-Agent review-core holistic mode (reviewer.md:286-331): reads ALL slide
@@ -6146,7 +6256,7 @@ def _holistic_review(provider_id, model, llm_generate, slides, slide_data,
     """
     import re, json, yaml
 
-    reviewer_spec = _load_reviewer_spec(column_id)
+    reviewer_spec = _load_reviewer_spec(column_id, project_id=project_id)
     if not reviewer_spec:
         _logger.info("Reviewer spec not available, skipping holistic review")
         return slides

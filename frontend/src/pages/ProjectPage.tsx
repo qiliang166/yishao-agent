@@ -1029,7 +1029,6 @@ export default function ProjectPage() {
     }).catch(() => {})
     api.listProviders().then((providers: LLMProvider[]) => {
       setLlmProviders(providers)
-      if (hasModelOverride) return  // persisted models already loaded, skip defaults
       const def = providers.find(p => p.is_enabled) || providers[0]
       const defModels = Array.isArray(def?.models) ? def.models : []
       const defVal = def && defModels.length > 0 ? `${def.id}:${defModels[0]}` : ''
@@ -1402,7 +1401,7 @@ export default function ProjectPage() {
 
   const executeBatchGenerate = async (resolvedModels: Record<string, string>) => {
     const stage2Source = STAGE2_CONFIGS.reduce((acc, c) => acc || steps[c.stepKey] || '', '')
-    const stage1Source = steps.raw_video || steps.raw_text || steps.raw_file || ''
+    const stage1Source = steps.raw_video || steps.raw_text || steps.raw_file || steps.step1_video || steps.step1_text || steps.step1_file || ''
     const source = stage2Source || stage1Source
 
     if (!source) {
@@ -2607,7 +2606,7 @@ export default function ProjectPage() {
                         }
                       }}>📥 保存到项目</button>
                     <button className="btn btn-outline btn-sm"
-                      disabled={!!Object.values(step2Generating).some(Boolean) || (!steps.raw_video && !steps.raw_text && !steps.raw_file && !steps.step2_sop && !steps.step2_daoshuyi && !steps.step2_yanxi)}
+                      disabled={!!Object.values(step2Generating).some(Boolean) || (!steps.raw_video && !steps.raw_text && !steps.raw_file && !steps.step1_video && !steps.step1_text && !steps.step1_file && !steps.step2_sop && !steps.step2_daoshuyi && !steps.step2_yanxi)}
                       onClick={doBatchGenerate}>
                       {Object.values(step2Generating).some(Boolean) ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>

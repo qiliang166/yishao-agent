@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import HelpButton from '../components/HelpButton'
+import Col3StructureEditor from '../components/Col3StructureEditor'
 
 type MainTab = 'models' | 'defaults'
 type SeedSubTab = 'columns' | 'core'
@@ -16,6 +17,8 @@ const COLUMN_GROUPS = [
   { id: 'col7', label: '语音合成', hasTemplate: false, summary: '角色提示词 | SKILL' },
 ]
 
+const RULES_COLUMNS = ['col3', 'col4', 'col5'] as const
+
 interface ColumnConfig {
   id: string
   column_id: string
@@ -25,6 +28,7 @@ interface ColumnConfig {
   has_template: number
   template_path: string | null
   sort_order: number
+  rules?: string
 }
 
 interface SpeechConfig { id: string; label: string; prompt: string; skill: string; sort_order: number }
@@ -36,6 +40,7 @@ interface CorePromptConfig {
   label: string
   content: string
   sort_order: number
+  stage: string
 }
 
 const CORE_CATEGORIES = [
@@ -46,6 +51,48 @@ const CORE_CATEGORIES = [
   { key: 'by_feature', label: '按功能' },
   { key: 'by_layout', label: '按布局' },
 ]
+
+const STAGE_LABELS: Record<string, { label: string; color: string }> = {
+  'stage1-outline': { label: '阶段1 大纲', color: '#3b82f6' },
+  'stage2-structure': { label: '阶段2 结构', color: '#8b5cf6' },
+  'stage3-html': { label: '阶段3 HTML', color: '#22c55e' },
+  'aux': { label: '辅助', color: '#9ca3af' },
+}
+
+const FIELD_HINTS: Record<string, { prompt: string; skill: string }> = {
+  col1: { prompt: '角色定义 — 文本处理阶段', skill: '输出格式模板 — 文本处理阶段' },
+  col2: { prompt: '角色定义 — 文本处理阶段', skill: '输出格式模板 — 文本处理阶段' },
+  col3: { prompt: '角色定义 — Stage 1 大纲生成', skill: '输出格式模板 — Stage 1 大纲生成' },
+  col4: { prompt: '角色定义 — Stage 1 大纲生成，定义 AI 身份和任务口吻', skill: '幻灯片结构模板 — Stage 1 大纲生成，定义输出 JSON 字段' },
+  col5: { prompt: '角色定义 — Stage 1 大纲生成，定义 AI 身份和任务口吻', skill: '幻灯片结构模板 — Stage 1 大纲生成，定义输出 JSON 字段' },
+  col6: { prompt: '演讲角色定义 — 演讲稿生成阶段', skill: '演讲输出格式 — 演讲稿生成阶段' },
+  col7: { prompt: '语音角色定义 — 语音合成阶段', skill: '语音输出格式 — 语音合成阶段' },
+}
+
+const hintStyle = { fontSize: 9, color: 'var(--text-secondary)', marginBottom: 4 }
+
+function splitRules(rulesJson: string): { typographySpec: string; outlinePrompt: string; cognitivePrinciples: string } {
+  try {
+    const obj = JSON.parse(rulesJson || '{}')
+    return {
+      typographySpec: JSON.stringify(obj.design_rules || {}, null, 2),
+      outlinePrompt: obj.outline_architect_prompt || '',
+      cognitivePrinciples: obj.cognitive_design_principles || ''
+    }
+  } catch {
+    return { typographySpec: '{}', outlinePrompt: '', cognitivePrinciples: '' }
+  }
+}
+
+function mergeRules(typographySpec: string, outlinePrompt: string, cognitivePrinciples: string): string {
+  let designRules = {}
+  try { designRules = JSON.parse(typographySpec || '{}') } catch { /* keep {} */ }
+  return JSON.stringify({
+    design_rules: designRules,
+    outline_architect_prompt: outlinePrompt,
+    cognitive_design_principles: cognitivePrinciples
+  }, null, 2)
+}
 
 export default function ProjSettingsPage() {
   const modal = useModal()
@@ -65,6 +112,12 @@ export default function ProjSettingsPage() {
   const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([])
   const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
   const [colSaving, setColSaving] = useState<Record<string, boolean>>({})
+  const [colTypographySpec, setColTypographySpec] = useState<Record<string, string>>({})
+  const [colOutlinePrompt, setColOutlinePrompt] = useState<Record<string, string>>({})
+  const [colCognitivePrinciples, setColCognitivePrinciples] = useState<Record<string, string>>({})
+  const [colRulesOpen, setColRulesOpen] = useState<Set<string>>(new Set())
+  const [colRulesSaving, setColRulesSaving] = useState<Record<string, boolean>>({})
+  const [colVisualEdit, setColVisualEdit] = useState<Set<string>>(new Set())
 
   // Speech configs
   const [speechConfigs, setSpeechConfigs] = useState<SpeechConfig[]>([])
@@ -174,8 +227,20 @@ export default function ProjSettingsPage() {
     api.listColumnConfigs().then((configs: ColumnConfig[]) => {
       setColumnConfigs(configs)
       const vals: Record<string, { prompt: string; skill: string }> = {}
-      configs.forEach(c => { vals[c.id] = { prompt: c.prompt, skill: c.skill } })
+      const typo: Record<string, string> = {}
+      const outline: Record<string, string> = {}
+      const cognitive: Record<string, string> = {}
+      configs.forEach(c => {
+        vals[c.id] = { prompt: c.prompt, skill: c.skill }
+        const { typographySpec, outlinePrompt, cognitivePrinciples } = splitRules(c.rules || '{}')
+        typo[c.column_id] = typographySpec
+        outline[c.column_id] = outlinePrompt
+        cognitive[c.column_id] = cognitivePrinciples
+      })
       setColValues(vals)
+      setColTypographySpec(typo)
+      setColOutlinePrompt(outline)
+      setColCognitivePrinciples(cognitive)
     }).catch(() => {})
     api.listSpeechConfigs().then((configs: SpeechConfig[]) => {
       setSpeechConfigs(configs)
@@ -207,7 +272,7 @@ export default function ProjSettingsPage() {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else {
         next.add(id)
-        if ((id === 'col4' || id === 'col5') && !scenarioFiles[id]) {
+        if (RULES_COLUMNS.includes(id as any) && !scenarioFiles[id]) {
           loadScenarioFiles(id)
         }
       }
@@ -414,6 +479,28 @@ export default function ProjSettingsPage() {
     finally { setCoreSaving(prev => ({ ...prev, [id]: false })) }
   }
 
+  // Rules save — merge 3 editors into one rules JSON
+  const saveColRules = async (columnId: string, cfgId: string) => {
+    const typographySpec = colTypographySpec[columnId] || '{}'
+    try {
+      JSON.parse(typographySpec)
+    } catch {
+      modal.toast('排版提取规则 JSON 格式错误', 'error')
+      return
+    }
+    const rulesText = mergeRules(
+      typographySpec,
+      colOutlinePrompt[columnId] || '',
+      colCognitivePrinciples[columnId] || ''
+    )
+    setColRulesSaving(prev => ({ ...prev, [columnId]: true }))
+    try {
+      await api.updateColumnConfig(cfgId, { rules: rulesText })
+      modal.toast('规则已保存', 'success')
+    } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
+    finally { setColRulesSaving(prev => ({ ...prev, [columnId]: false })) }
+  }
+
   const filteredCoreConfigs = coreCategory
     ? coreConfigs.filter(c => c.category === coreCategory)
     : coreConfigs
@@ -590,6 +677,7 @@ export default function ProjSettingsPage() {
                             <div className="ac-field-row">
                               <div className="ac-field">
                                 <label>角色提示词</label>
+                                <div style={hintStyle}>{FIELD_HINTS.col7.prompt}</div>
                                 <textarea
                                   value={ttsValues[config.id]?.prompt || ''}
                                   onChange={e => setTtsValues(prev => ({ ...prev, [config.id]: { ...prev[config.id], prompt: e.target.value } }))}
@@ -597,6 +685,7 @@ export default function ProjSettingsPage() {
                               </div>
                               <div className="ac-field">
                                 <label>SKILL 输出格式</label>
+                                <div style={hintStyle}>{FIELD_HINTS.col7.skill}</div>
                                 <textarea
                                   value={ttsValues[config.id]?.skill || ''}
                                   onChange={e => setTtsValues(prev => ({ ...prev, [config.id]: { ...prev[config.id], skill: e.target.value } }))}
@@ -630,6 +719,7 @@ export default function ProjSettingsPage() {
                             <div className="ac-field-row">
                               <div className="ac-field">
                                 <label>提示词</label>
+                                <div style={hintStyle}>{FIELD_HINTS.col6.prompt}</div>
                                 <textarea
                                   value={speechValues[config.id]?.prompt || ''}
                                   onChange={e => setSpeechValues(prev => ({ ...prev, [config.id]: { ...prev[config.id], prompt: e.target.value } }))}
@@ -637,6 +727,7 @@ export default function ProjSettingsPage() {
                               </div>
                               <div className="ac-field">
                                 <label>SKILL 输出格式</label>
+                                <div style={hintStyle}>{FIELD_HINTS.col6.skill}</div>
                                 <textarea
                                   value={speechValues[config.id]?.skill || ''}
                                   onChange={e => setSpeechValues(prev => ({ ...prev, [config.id]: { ...prev[config.id], skill: e.target.value } }))}
@@ -669,6 +760,7 @@ export default function ProjSettingsPage() {
                           <div className="ac-field-row">
                             <div className="ac-field">
                               <label>提示词</label>
+                              <div style={hintStyle}>{FIELD_HINTS[col.id]?.prompt || ''}</div>
                               <textarea
                                 value={colValues[config.id]?.prompt || ''}
                                 onChange={e => setColValues(prev => ({ ...prev, [config.id]: { ...prev[config.id], prompt: e.target.value } }))}
@@ -676,12 +768,40 @@ export default function ProjSettingsPage() {
                             </div>
                             <div className="ac-field">
                               <label>SKILL 输出格式</label>
+                              <div style={hintStyle}>{FIELD_HINTS[col.id]?.skill || ''}</div>
                               <textarea
                                 value={colValues[config.id]?.skill || ''}
                                 onChange={e => setColValues(prev => ({ ...prev, [config.id]: { ...prev[config.id], skill: e.target.value } }))}
                               />
                             </div>
                           </div>
+                          {/* col3 visual structure editor toggle */}
+                          {col.id === 'col3' && (
+                            <div style={{ marginTop: 8 }}>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ fontSize: 11 }}
+                                onClick={() => setColVisualEdit(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(config.id)) next.delete(config.id)
+                                  else next.add(config.id)
+                                  return next
+                                })}
+                              >
+                                {colVisualEdit.has(config.id) ? '收起可视化编辑器' : '可视化编辑结构'}
+                              </button>
+                              {colVisualEdit.has(config.id) && (
+                                <div style={{ marginTop: 8, padding: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-primary)' }}>
+                                  <Col3StructureEditor
+                                    initialSkill={colValues[config.id]?.skill || '[]'}
+                                    onSaved={(skill) => {
+                                      setColValues(prev => ({ ...prev, [config.id]: { ...prev[config.id], skill } }))
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                             <button className="btn btn-primary btn-sm" disabled={colSaving[config.id]}
                               onClick={async () => {
@@ -697,8 +817,60 @@ export default function ProjSettingsPage() {
                           </div>
                         </div>
                       ))}
-                      {(col.id === 'col4' || col.id === 'col5') && (
+                      {RULES_COLUMNS.includes(col.id as any) && (() => {
+                        const cfgId = columnConfigs.filter(c => c.column_id === col.id)[0]?.id || ''
+                        const isCol3 = col.id === 'col3'
+                        return (
                         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+                          <div
+                            style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)', cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                            onClick={() => setColRulesOpen(prev => { const next = new Set(prev); if (next.has(col.id)) next.delete(col.id); else next.add(col.id); return next })}>
+                            <span>{colRulesOpen.has(col.id) ? '▼' : '▶'}</span> {isCol3 ? '导出规则设置 — 控制文档画布尺寸、页边距等' : '生成规则设置 — 控制页面类型、版式定义、提示词、质量检查清单'}
+                          </div>
+                          {colRulesOpen.has(col.id) && (
+                            <div style={{ marginBottom: 8 }}>
+                              {/* Editor 1: typography spec (always) */}
+                              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                                {isCol3 ? '导出规则（JSON）' : '排版提取规则（JSON）— 从上传的 PPTX 模板中自动提取字体、行高参数'}
+                              </div>
+                              <textarea
+                                value={colTypographySpec[col.id] || '{}'}
+                                onChange={e => setColTypographySpec(prev => ({ ...prev, [col.id]: e.target.value }))}
+                                style={{ width: '100%', minHeight: isCol3 ? 120 : 100, fontFamily: 'monospace', fontSize: 11, resize: 'vertical', tabSize: 2 }}
+                                placeholder='{"typography_spec": {...}}'
+                              />
+                              {!isCol3 && (
+                                <>
+                                  {/* Editor 2: outline architect prompt */}
+                                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, marginTop: 10 }}>
+                                    大纲结构师提示词（Markdown）— Stage 1 大纲生成，优先级高于磁盘场景文件
+                                  </div>
+                                  <textarea
+                                    value={colOutlinePrompt[col.id] || ''}
+                                    onChange={e => setColOutlinePrompt(prev => ({ ...prev, [col.id]: e.target.value }))}
+                                    style={{ width: '100%', minHeight: 220, fontFamily: 'monospace', fontSize: 11, resize: 'vertical', tabSize: 2 }}
+                                    placeholder="# PPT Structure Architect..."
+                                  />
+                                  {/* Editor 3: cognitive design principles */}
+                                  <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, marginTop: 10 }}>
+                                    认知设计原则（Markdown）— Stage 1 大纲生成，优先级高于磁盘场景文件
+                                  </div>
+                                  <textarea
+                                    value={colCognitivePrinciples[col.id] || ''}
+                                    onChange={e => setColCognitivePrinciples(prev => ({ ...prev, [col.id]: e.target.value }))}
+                                    style={{ width: '100%', minHeight: 140, fontFamily: 'monospace', fontSize: 11, resize: 'vertical', tabSize: 2 }}
+                                    placeholder="# Cognitive Design Principles..."
+                                  />
+                                </>
+                              )}
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                                <button className="btn btn-primary btn-sm" disabled={colRulesSaving[col.id]}
+                                  onClick={() => saveColRules(col.id, cfgId)}>
+                                  {colRulesSaving[col.id] ? '保存中...' : '保存规则'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>
                             设计规则文件 — 当前栏目独立副本，修改不影响其他栏目
                           </div>
@@ -731,7 +903,7 @@ export default function ProjSettingsPage() {
                             </div>
                           )}
                         </div>
-                      )}
+                        )})()}
                     </>)}
                   </div>
                 </div>
@@ -764,6 +936,11 @@ export default function ProjSettingsPage() {
                                       {config.category}
                                     </span>
                                     {config.label}
+                                    {config.stage && STAGE_LABELS[config.stage] && (
+                                      <span style={{ fontSize: 9, color: STAGE_LABELS[config.stage].color, background: STAGE_LABELS[config.stage].color + '18', padding: '1px 6px', borderRadius: 3, marginLeft: 6 }}>
+                                        {STAGE_LABELS[config.stage].label}
+                                      </span>
+                                    )}
                                   </span>
                                   <span style={{ fontSize: 9, color: 'var(--text-secondary)', marginRight: 8 }}>
                                     {config.content ? `${(config.content.length / 1024).toFixed(1)}KB` : '空'}

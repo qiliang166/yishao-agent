@@ -519,21 +519,11 @@ def init_db():
             import os as _os
             _prompts_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
                                         "data", "prompts")
-            _svg_gen_path = _os.path.join(_prompts_dir, "svg-generator.md")
-            _bento_path = _os.path.join(_prompts_dir, "bento-grid-layout.md")
             _outline_path = _os.path.join(_prompts_dir, "outline-architect.md")
             _cognitive_path = _os.path.join(_prompts_dir, "cognitive-design-principles.md")
 
-            _svg_gen_content = ""
-            _bento_content = ""
             _outline_content = ""
             _cognitive_content = ""
-            if _os.path.exists(_svg_gen_path):
-                with open(_svg_gen_path, "r", encoding="utf-8") as _f:
-                    _svg_gen_content = _f.read()
-            if _os.path.exists(_bento_path):
-                with open(_bento_path, "r", encoding="utf-8") as _f:
-                    _bento_content = _f.read()
             if _os.path.exists(_outline_path):
                 with open(_outline_path, "r", encoding="utf-8") as _f:
                     _outline_content = _f.read()
@@ -541,7 +531,7 @@ def init_db():
                 with open(_cognitive_path, "r", encoding="utf-8") as _f:
                     _cognitive_content = _f.read()
 
-            if _svg_gen_content or _bento_content or _outline_content or _cognitive_content:
+            if _outline_content or _cognitive_content:
                 for _col_id in ("col4", "col5"):
                     _row = conn.execute(
                         "SELECT id, rules FROM column_configs WHERE column_id = ? LIMIT 1",
@@ -554,12 +544,6 @@ def init_db():
                             except Exception:
                                 _rules = {}
                             _updated = False
-                            if _svg_gen_content and "svg_generator_prompt" not in _rules:
-                                _rules["svg_generator_prompt"] = _svg_gen_content
-                                _updated = True
-                            if _bento_content and "bento_layout_prompt" not in _rules:
-                                _rules["bento_layout_prompt"] = _bento_content
-                                _updated = True
                             if _outline_content and "outline_architect_prompt" not in _rules:
                                 _rules["outline_architect_prompt"] = _outline_content
                                 _updated = True
@@ -779,11 +763,41 @@ def init_db():
                  '【编写要点】使用 Markdown 标题层级组织章节，表格定义结构化数据，占位符标注动态内容。',
                  0, '{}', 1),
                 ('seed-c3-sop', 'col3', '文档课件',
-                 '【作用】Stage 3 — 将 Stage 2 的文档转为幻灯片大纲（JSON 格式），用于后续 PPT 生成。\n'
+                 '【作用】Stage 3 — 将 Stage 2 的文档转为 A4 文档大纲（JSON 格式），用于后续 PPT 生成。\n'
                  '【输入】Stage 2 生成的培训文档（Markdown）\n'
-                 '【编写要点】定义 JSON 输出格式（slide 数组），指定每个 slide 的字段（seq/heading/page_type/body 等），给出提取规则（如何从 Markdown 标题/表格中提取内容）。page_type 需与 VI 风格模板的页面类型对应。',
-                 '【作用】定义 Stage 3 输出的幻灯片大纲模板（Markdown 格式），AI 参考此模板组织幻灯片内容。\n'
-                 '【编写要点】使用 ## 标题划分页面，用 · 标注页面类型标识符（title/info_block/table_block/closing/footer），表格定义结构化数据列，占位符 {填入} 标注待填充位置。',
+                 '【编写要点】定义 JSON 输出格式（slide 数组），指定每个 slide 的字段（seq/heading/page_type/key_points）。\n'
+                 '支持的 page_type 共 8 种：cover（封面）、toc（目录）、content（内容页）、table（表格页）、chart（图表页）、diagram（示意图）、flowchart（流程图）、closing（结尾页）。\n'
+                 'page_type 需与 VI 通用块（vi/_common/blocks/）对应。',
+                 '## 文档结构（固定 8 页，不可增减）\n\n'
+                 '| 章节 | page_type | 页数 | 说明 |\n'
+                 '|------|-----------|------|------|\n'
+                 '| 封面 | cover | 1 | 文档标题 + 副标题 + 元数据（日期/分类/标签/版本）+ 品牌信息 |\n'
+                 '| 目录 | toc | 1 | 各章节标题及对应页码 |\n'
+                 '| 概述 | content | 1 | 正文段落 + 要点列表 |\n'
+                 '| 数据表格 | table | 1 | 结构化数据表格，列数由内容决定 |\n'
+                 '| 数据图表 | chart | 1 | 可视化图表（大数字/进度条/柱状图/环形图） |\n'
+                 '| 结构示意 | diagram | 1 | SVG 示意图 + 标注说明 |\n'
+                 '| 流程步骤 | flowchart | 1 | 步骤节点 + 连接箭头 + 描述 |\n'
+                 '| 结尾 | closing | 1 | 感谢语 + 行动号召 + 品牌信息 |\n\n'
+                 '硬约束：\n'
+                 '- 共 8 页，不可多不可少\n'
+                 '- seq 从 1 开始连续编号\n'
+                 '- page_type 必须是上述 8 个值之一\n'
+                 '- JSON 输出格式：\n'
+                 '```json\n'
+                 '{"slides":[\n'
+                 '  {"seq":1,"heading":"...","page_type":"cover","key_points":["日期","分类","标签","版本"]},\n'
+                 '  {"seq":2,"heading":"目录","page_type":"toc","key_points":[]},\n'
+                 '  {"seq":3,"heading":"...","page_type":"content","key_points":["要点1","要点2","要点3"]},\n'
+                 '  {"seq":4,"heading":"...","page_type":"table","key_points":["列1","列2","列3"]},\n'
+                 '  {"seq":5,"heading":"...","page_type":"chart","key_points":["指标1","指标2"]},\n'
+                 '  {"seq":6,"heading":"...","page_type":"diagram","key_points":["标注1","标注2"]},\n'
+                 '  {"seq":7,"heading":"...","page_type":"flowchart","key_points":["步骤1","步骤2","步骤3"]},\n'
+                 '  {"seq":8,"heading":"感谢聆听","page_type":"closing","key_points":[]}\n'
+                 ']}\n'
+                 '```\n'
+                 '- key_points 为字符串数组，对应各页面的维度/列名/标签\n'
+                 '- heading 不超过 20 字符',
                  1, '{"canvas": {"width": 794, "height": 1123}}', 2),
             ]
             for d in defaults:
@@ -930,6 +944,13 @@ def init_db():
                 UNIQUE(prompt_key, workspace_id)
             )
         """)
+        # Migration: add stage column (2026-07-04)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(core_prompt_configs)").fetchall()]
+            if 'stage' not in existing_cols:
+                conn.execute("ALTER TABLE core_prompt_configs ADD COLUMN stage TEXT DEFAULT ''")
+        except Exception:
+            pass
         try:
             cpc_count = conn.execute("SELECT COUNT(*) FROM core_prompt_configs WHERE workspace_id IS NULL").fetchone()[0]
             if cpc_count == 0:
@@ -937,7 +958,7 @@ def init_db():
                 _core_dir = os.path.join(BASE_DIR, "resources", "prompts", "core")
                 _categories = [
                     ("root", "", ["research", "outline-rules", "fill-content", "text-to-json",
-                                  "cards-system", "structure-output", "html-output", "edit-agent"]),
+                                  "structure-output", "html-output", "edit-agent"]),
                     ("always", "always", ["identity", "iron-laws", "colors", "color-semantics",
                                           "structure", "richness", "typography", "consistency",
                                           "checklist", "format-spec"]),
@@ -948,6 +969,22 @@ def init_db():
                                                 "hero_grid", "mixed_grid", "dashboard",
                                                 "timeline", "horizontal_split"]),
                 ]
+                _stage_map = {
+                    "research": "stage1-outline", "outline-rules": "stage1-outline", "fill-content": "stage1-outline",
+                    "text-to-json": "aux", "structure-output": "stage2-structure",
+                    "html-output": "stage3-html", "edit-agent": "aux",
+                    "identity": "stage3-html", "iron-laws": "stage3-html", "colors": "stage3-html",
+                    "color-semantics": "stage3-html", "structure": "stage3-html", "richness": "stage3-html",
+                    "typography": "stage3-html", "consistency": "stage3-html", "checklist": "stage3-html",
+                    "format-spec": "stage3-html",
+                    "cards": "stage3-html", "card-roles": "stage3-html", "decoration": "stage3-html",
+                    "illustration": "stage3-html",
+                    "charts": "stage3-html",
+                    "full_bleed": "stage3-html", "single_focus": "stage3-html", "two_column": "stage3-html",
+                    "two_column_asymmetric": "stage3-html", "three_column": "stage3-html",
+                    "hero_grid": "stage3-html", "mixed_grid": "stage3-html", "dashboard": "stage3-html",
+                    "timeline": "stage3-html", "horizontal_split": "stage3-html",
+                }
                 _sort = 0
                 for _cat, _subdir, _keys in _categories:
                     for _key in _keys:
@@ -959,14 +996,29 @@ def init_db():
                                 _content = _f.read()
                         _label = _key.replace("-", " ").replace("_", " ").title()
                         _id = f"seed-core-{_key.replace('/', '-').replace('_', '-')}"
+                        _stage = _stage_map.get(_key, "")
                         conn.execute(
-                            "INSERT INTO core_prompt_configs (id, prompt_key, category, label, content, sort_order) "
-                            "VALUES (?, ?, ?, ?, ?, ?)",
-                            (_id, f"{_subdir}/{_key}" if _subdir else _key, _cat, _label, _content, _sort)
+                            "INSERT INTO core_prompt_configs (id, prompt_key, category, label, content, sort_order, stage) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (_id, f"{_subdir}/{_key}" if _subdir else _key, _cat, _label, _content, _sort, _stage)
                         )
                         _sort += 1
         except Exception:
             pass
+
+        # Create prompt_studio_saves table (saved generated configs for Prompt Studio)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS prompt_studio_saves (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                industry_topic TEXT NOT NULL,
+                purpose_description TEXT NOT NULL,
+                configs TEXT NOT NULL,
+                provider_info TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
 
         conn.commit()
     finally:
