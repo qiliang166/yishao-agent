@@ -261,6 +261,21 @@ def init_db():
                 conn.commit()
         except Exception:
             pass
+
+        # Seed help manual sections if empty (first-time init)
+        try:
+            existing = conn.execute("SELECT COUNT(*) FROM help_manual_sections").fetchone()[0]
+            if existing == 0:
+                from seed_manual import SECTIONS
+                for i, s in enumerate(SECTIONS):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO help_manual_sections (location, title, content, sort_order) "
+                        "VALUES (?, ?, ?, ?)",
+                        (s["location"], s["title"], s["content"], i)
+                    )
+                conn.commit()
+        except Exception as e:
+            print(f"[DB] Help manual seed skipped: {e}")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS llm_providers (
                 id TEXT PRIMARY KEY,

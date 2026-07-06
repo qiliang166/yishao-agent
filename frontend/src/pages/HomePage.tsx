@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { api, Workspace } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import HelpButton from '../components/HelpButton'
+import SetupWizard from '../components/SetupWizard'
 
 const PAGE_SIZE = 16
 
@@ -22,6 +23,7 @@ function HomePage() {
   const [createLogoUploading, setCreateLogoUploading] = useState(false)
   const [createStatus, setCreateStatus] = useState('draft')
   const [creating, setCreating] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
 
   const loadWorkspaces = (p: number) => {
     setLoading(true)
@@ -98,8 +100,11 @@ function HomePage() {
         <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-secondary)' }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
           <div style={{ fontSize: 14, marginBottom: 8 }}>暂无项目</div>
-          <div style={{ fontSize: 12, marginBottom: 16 }}>点击「新建项目」创建第一个项目（如：食谱培训、门店培训）</div>
-          <button className="btn btn-primary" onClick={openCreateDialog}>+ 新建项目</button>
+          <div style={{ fontSize: 12, marginBottom: 16 }}>点击「快速上手」跟随向导完成第一个培训项目</div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+            <button className="btn btn-primary" onClick={() => setShowWizard(true)}>快速上手</button>
+            <button className="btn btn-ghost" onClick={openCreateDialog}>+ 新建项目</button>
+          </div>
         </div>
       ) : (
         <>
@@ -246,6 +251,7 @@ function HomePage() {
           </div>
         </div>
       )}
+      {showWizard && <SetupWizard onDone={() => { setShowWizard(false); loadWorkspaces(1) }} />}
     </div>
   )
 }

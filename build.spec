@@ -63,6 +63,7 @@ a = Analysis(
         'cryptography.hazmat.backends',
         # Backend modules
         'database',
+        'seed_manual',
         'backend.routers',
         'backend.routers.prompt_studio',
         'backend.routers.prompts',
