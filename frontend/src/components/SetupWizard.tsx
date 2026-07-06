@@ -21,27 +21,54 @@ const STEPS: { key: WizardStep; label: string }[] = [
   { key: 'done', label: '完成' },
 ]
 
-const SAMPLE_TEXT = `食品安全培训是餐饮行业的基础要求。所有从业人员必须掌握以下核心内容：
+function appendModel(current: string, model: string): string {
+  const parts = current.split(',').map(s => s.trim()).filter(Boolean)
+  if (!parts.includes(model)) parts.push(model)
+  return parts.join(', ')
+}
 
-一、个人卫生规范
-1. 工作前必须洗手消毒，穿戴清洁工作服
-2. 不得佩戴首饰，指甲修剪整齐
-3. 患有传染性疾病者不得从事食品加工
+const RECOMMENDED_MODELS: Record<string, string[]> = {
+  llm: ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5', 'qwen3-max', 'qwen3-plus', 'glm-4-plus'],
+  tts: ['cosyvoice-v3-flash', 'cosyvoice-v3-plus', 'speech-1.0'],
+}
 
-二、食品储存要求
-1. 生熟食品分开存放，避免交叉污染
-2. 冷藏食品温度保持在0-4°C，冷冻食品-18°C以下
-3. 食品原料遵循"先进先出"原则
+function ModelTags({ models, onAdd }: { models: string[]; onAdd: (m: string) => void }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+      <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginRight: 2 }}>推荐模型：</span>
+      {models.map(m => (
+        <span key={m} onClick={() => onAdd(m)}
+          style={{ cursor: 'pointer', fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--primary)', userSelect: 'none' }}
+          title={`点击添加 ${m}`}>{m}</span>
+      ))}
+    </div>
+  )
+}
 
-三、清洁消毒流程
-1. 加工区域每日清洁消毒不少于2次
-2. 刀具砧板按色标分类使用：红-生肉，蓝-海鲜，绿-蔬菜
-3. 消毒液浓度符合国家标准
+const SAMPLE_TEXT = `餐饮服务培训是新员工入职的必修课程。所有服务人员必须掌握以下核心技能：
 
-四、食品安全法律法规
-1. 严格遵守《食品安全法》相关规定
-2. 建立食品采购索证索票制度
-3. 定期参加食品安全知识培训考核`
+一、迎宾接待规范
+1. 顾客进店3秒内主动问候，使用标准欢迎语"欢迎光临"
+2. 引导顾客入座，先女士后男士，先长辈后晚辈
+3. 15秒内递上菜单，同时呈上热毛巾或茶水
+
+二、点餐服务流程
+1. 熟悉所有菜品的主料、口味、烹饪方式和推荐搭配
+2. 主动询问顾客忌口和过敏信息，做好记录
+3. 复述订单确认，避免错漏
+4. 推荐当日特色菜和畅销品，提升客单价
+
+三、上菜服务标准
+1. 冷菜8分钟内上桌，热菜15分钟内上桌
+2. 上菜时报菜名，说明食用方法
+3. 注意上菜顺序：冷菜→汤→热菜→主食→甜品
+4. 随时关注餐桌状况，及时撤空盘、换骨碟
+
+四、顾客关怀与投诉处理
+1. 用餐中至少巡台2次，主动询问口味是否满意
+2. 遇到投诉先道歉再处理，不推诿不争辩
+3. 顾客离店时致谢送别，提醒带好随身物品
+4. 收集顾客反馈，记录偏好信息建立客户档案`
 
 export default function SetupWizard({ embedded, onDone }: WizardProps) {
   const navigate = useNavigate()
@@ -61,16 +88,16 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
   const [qlName, setQlName] = useState('')
   const [qlKey, setQlKey] = useState('')
   const [qlUrl, setQlUrl] = useState('https://api.deepseek.com/v1')
-  const [qlModels, setQlModels] = useState('deepseek-chat, deepseek-reasoner')
+  const [qlModels, setQlModels] = useState('')
 
   // Step: quick-tts
   const [qtName, setQtName] = useState('')
   const [qtKey, setQtKey] = useState('')
   const [qtUrl, setQtUrl] = useState('')
-  const [qtModels, setQtModels] = useState('cosyvoice-v3-flash, cosyvoice-v3-plus')
+  const [qtModels, setQtModels] = useState('')
 
   // Step: create
-  const [projName, setProjName] = useState('我的第一个项目')
+  const [projName, setProjName] = useState('餐饮食品安全培训')
   const [sourceText, setSourceText] = useState(SAMPLE_TEXT)
   const [workspaceId, setWorkspaceId] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -156,7 +183,6 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
     setLoading(true)
     setError('')
     try {
-      // Find or create workspace
       const wsList = await api.listWorkspaces().catch(() => ({ workspaces: [] as any[] }))
       let wsId = ''
       if (wsList.workspaces.length > 0) {
@@ -233,7 +259,6 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
     try {
       const p = providers[0]
       const model = (Array.isArray(p.models) ? p.models[0] : 'deepseek-chat') || 'deepseek-chat'
-      // Get first available template
       const templates = await api.listTemplates().catch(() => [] as any[])
       const pptTemplates = (templates as any[]).filter((t: any) => t.type === 'ppt')
       const templateId = pptTemplates.length > 0 ? pptTemplates[0].id : ''
@@ -311,7 +336,8 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
           <div className="form-label" style={{ marginTop: 12 }}>Base URL</div>
           <input className="form-input" value={qlUrl} onChange={e => setQlUrl(e.target.value)} placeholder="https://api.deepseek.com/v1" />
           <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div>
-          <input className="form-input" value={qlModels} onChange={e => setQlModels(e.target.value)} placeholder="deepseek-chat, deepseek-reasoner" />
+          <input className="form-input" value={qlModels} onChange={e => setQlModels(e.target.value)} placeholder="输入模型名或点击下方推荐模型" />
+          <ModelTags models={RECOMMENDED_MODELS.llm} onAdd={m => setQlModels(prev => appendModel(prev, m))} />
           {error && <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
             <button className="btn btn-ghost btn-sm" onClick={() => { setStep('check'); setError('') }}>返回</button>
@@ -338,7 +364,8 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
           <div className="form-label" style={{ marginTop: 12 }}>Base URL</div>
           <input className="form-input" value={qtUrl} onChange={e => setQtUrl(e.target.value)} placeholder="https://api.example.com/v1" />
           <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div>
-          <input className="form-input" value={qtModels} onChange={e => setQtModels(e.target.value)} placeholder="cosyvoice-v3-flash, cosyvoice-v3-plus" />
+          <input className="form-input" value={qtModels} onChange={e => setQtModels(e.target.value)} placeholder="输入模型名或点击下方推荐模型" />
+          <ModelTags models={RECOMMENDED_MODELS.tts} onAdd={m => setQtModels(prev => appendModel(prev, m))} />
           {error && <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
             <button className="btn btn-ghost btn-sm" onClick={() => { setStep('check'); setError('') }}>返回</button>
@@ -522,7 +549,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
             <div>
               <h3 style={{ margin: '0 0 16px 0' }}>创建第一个项目</h3>
               <div className="form-label">项目名称</div>
-              <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} placeholder="我的第一个项目" />
+              <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} placeholder="餐饮食品安全培训" />
               <div className="form-label" style={{ marginTop: 16 }}>素材内容（可直接使用示例）</div>
               <textarea className="form-input" value={sourceText} onChange={e => setSourceText(e.target.value)}
                 rows={12} style={{ fontSize: 12, fontFamily: 'monospace', resize: 'vertical' }} />
