@@ -1086,7 +1086,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 1. 页面数量、seq 顺序、page_type 必须与上方「文档结构模板」完全一致，不可增删改任何页面
 2. 每个页面的 key_points 标签必须完整保留模板中定义的所有标签，不可增删改，不可合并，不可重命名
 3. 封面页特殊规则：
-   - title_format 中的 {菜名} 替换为实际菜名，其余文字原样保留
+   - title_format 中的 {项目名称} 替换为实际项目名称，其余文字原样保留
    - subtitle 中的占位符替换为实际内容，其余文字原样保留
    - key_points 的所有标签必须逐一填充对应值
    - description 从正文提炼一段内容概述（若模板为空则输出空字符串）
@@ -3159,6 +3159,79 @@ def _fallback_single_slide_html(slide: dict, style_id: str,
     return {**slide, "html": html, "html_vars": html}
 
 
+def _build_cover_info_table(skill_json: str, vi_section: str) -> str:
+    """Build the info table HTML rows for a cover slide from SKILL key_points labels.
+
+    Reads the cover page's key_points labels from the SKILL JSON (editor-defined
+    structure), then generates <tr> rows matching the VI theme's color approach
+    (dark theme = rgba(255,255,255,…), light theme = rgba(var(--text-rgb),…)).
+
+    Returns empty string if no cover page found or no key_points defined.
+    """
+    import json as _json_info
+
+    if not skill_json or not skill_json.strip():
+        return ""
+
+    try:
+        pages = _json_info.loads(skill_json)
+    except Exception:
+        return ""
+
+    if not isinstance(pages, list) or len(pages) == 0:
+        return ""
+
+    # Find the cover page
+    cover = None
+    for p in pages:
+        if isinstance(p, dict) and p.get("page_type") == "cover":
+            cover = p
+            break
+    if not cover:
+        return ""
+
+    labels = cover.get("key_points", [])
+    if not labels or len(labels) == 0:
+        return ""
+
+    # Detect dark vs light theme from the vi_section's title color
+    is_dark = "#ffffff" in vi_section
+
+    if is_dark:
+        label_color = "rgba(255,255,255,0.35)"
+        value_color = "rgba(255,255,255,0.6)"
+    else:
+        label_color = "rgba(var(--text-rgb),0.35)"
+        value_color = "rgba(var(--text-rgb),0.6)"
+
+    rows = []
+    last_idx = len(labels) - 1
+    for i, label in enumerate(labels):
+        label_text = str(label).strip()
+        if not label_text:
+            continue
+        var_name = f"{{{{KP_{i}}}}}"
+
+        if i == 0:
+            label_pad = "padding:0 12px 12px 0"
+            value_pad = "padding:0 0 12px 12px"
+        elif i == last_idx:
+            label_pad = "padding:12px 12px 0 0"
+            value_pad = "padding:12px 0 0 12px"
+        else:
+            label_pad = "padding:12px 12px 12px 0"
+            value_pad = "padding:12px 0 12px 12px"
+
+        rows.append(
+            f'      <tr>\n'
+            f'        <td style="font-size:12px;color:{label_color};{label_pad};text-align:right;white-space:nowrap;">{label_text}</td>\n'
+            f'        <td style="font-size:14px;color:{value_color};{value_pad};text-align:left;">{var_name}</td>\n'
+            f'      </tr>'
+        )
+
+    return "\n".join(rows)
+
+
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
                            temperature: float = 0.3, column_id: str = "",
@@ -3254,6 +3327,23 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         # Build a tailored system prompt: core rules + slide-type-specific sections
         # Load VI section FIRST to detect HTML template mode
         vi_section = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id, project_id=project_id)
+
+        # ── Dynamic cover info table (A4 only) ──
+        # Replace {{INFO_TABLE}} in cover.md with table rows built from the
+        # editor-defined key_points labels, matching the VI theme's color approach.
+        if is_a4 and stype == "cover" and vi_section and "{{INFO_TABLE}}" in vi_section:
+            try:
+                _db = get_db()
+                _row = _db.execute(
+                    "SELECT skill FROM column_configs WHERE column_id = ? AND (workspace_id = ? OR workspace_id IS NULL) ORDER BY workspace_id DESC LIMIT 1",
+                    (column_id, project_id)
+                ).fetchone()
+                if _row and _row[0]:
+                    _rows_html = _build_cover_info_table(_row[0], vi_section)
+                    if _rows_html:
+                        vi_section = vi_section.replace("{{INFO_TABLE}}", _rows_html)
+            except Exception:
+                pass
 
         # Detect HTML template mode (VI file contains ## HTML 模板 header)
         # Only for PPT/landscape — A4/portrait keeps its existing pipeline
@@ -3355,7 +3445,13 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         if body:
             content_parts.append(f"正文内容: {body[:1000]}")
         if key_points:
-            content_parts.append(f"关键点: {'; '.join(str(kp) for kp in key_points[:5])}")
+            if is_a4 and stype == "cover":
+                # A4 cover: key_points values correspond to {{KP_0}}, {{KP_1}}, ...
+                # in the dynamically-built info table. Make mapping explicit.
+                kp_list = "; ".join(f"{{{{KP_{i}}}}}={str(kp)}" for i, kp in enumerate(key_points[:10]))
+                content_parts.append(f"关键点（按顺序填入模板变量）: {kp_list}")
+            else:
+                content_parts.append(f"关键点: {'; '.join(str(kp) for kp in key_points[:5])}")
         if not is_a4 and cards:
             cards_desc = "; ".join(
                 f"[{c.get('role','card')}] {c.get('content_hint','')}" for c in cards)
