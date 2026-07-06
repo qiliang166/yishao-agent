@@ -21,7 +21,7 @@ import { api } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
 
-function Sidebar({ onOpenWizard, wizardDone }: { onOpenWizard?: () => void; wizardDone?: boolean }) {
+function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [brandLogo, setBrandLogo] = useState('⚡')
@@ -147,7 +147,7 @@ function Sidebar({ onOpenWizard, wizardDone }: { onOpenWizard?: () => void; wiza
           }} />
           {brandName} {sidebarVersion}
         </div>
-        {onOpenWizard && !wizardDone && (
+        {onOpenWizard && (
           <button onClick={onOpenWizard} style={{
             display: 'block', width: '100%', padding: '6px 0', marginTop: 8,
             fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer',
@@ -236,7 +236,6 @@ function AppShell() {
   const { isAuthenticated, passwordRequired, loading: authLoading } = useAuth()
   const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
   const [showWizard, setShowWizard] = useState(false)
-  const [wizardDone, setWizardDone] = useState(() => localStorage.getItem('setup_wizard_done') === '1')
 
   if (!authLoading && passwordRequired && !isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -245,9 +244,9 @@ function AppShell() {
   return (
     <>
       <PhoneReminder />
-      {showWizard && <SetupWizard onDone={() => { setShowWizard(false); setWizardDone(true) }} />}
+      {showWizard && <SetupWizard onDone={() => setShowWizard(false)} />}
     <div className="app-layout">
-      <Sidebar onOpenWizard={() => setShowWizard(true)} wizardDone={wizardDone} />
+      <Sidebar onOpenWizard={() => setShowWizard(true)} />
       <div className="main-area">
         <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
           <Routes>
