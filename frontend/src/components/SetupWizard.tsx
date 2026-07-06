@@ -97,7 +97,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
   const [qtModels, setQtModels] = useState('')
 
   // Step: create
-  const [projName, setProjName] = useState('餐饮食品安全培训')
+  const [projName, setProjName] = useState('一勺笔录')
   const [sourceText, setSourceText] = useState(SAMPLE_TEXT)
   const [workspaceId, setWorkspaceId] = useState('')
   const [projectId, setProjectId] = useState('')
@@ -549,7 +549,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
             <div>
               <h3 style={{ margin: '0 0 16px 0' }}>创建第一个项目</h3>
               <div className="form-label">项目名称</div>
-              <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} placeholder="餐饮食品安全培训" />
+              <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} placeholder="一勺笔录" />
               <div className="form-label" style={{ marginTop: 16 }}>素材内容（可直接使用示例）</div>
               <textarea className="form-input" value={sourceText} onChange={e => setSourceText(e.target.value)}
                 rows={12} style={{ fontSize: 12, fontFamily: 'monospace', resize: 'vertical' }} />
