@@ -9,7 +9,7 @@ interface WizardProps {
   onDone?: () => void
 }
 
-type WizardStep = 'check' | 'quick-llm' | 'create' | 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'done'
+type WizardStep = 'check' | 'quick-llm' | 'quick-tts' | 'create' | 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'done'
 
 const STEPS: { key: WizardStep; label: string }[] = [
   { key: 'check', label: '环境检查' },
@@ -53,6 +53,8 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
   const [checking, setChecking] = useState(true)
   const [hasProviders, setHasProviders] = useState(false)
   const [hasSeeds, setHasSeeds] = useState(false)
+  const [hasTemplates, setHasTemplates] = useState(false)
+  const [hasTtsProviders, setHasTtsProviders] = useState(false)
   const [providers, setProviders] = useState<any[]>([])
 
   // Step: quick-llm
@@ -60,6 +62,12 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
   const [qlKey, setQlKey] = useState('')
   const [qlUrl, setQlUrl] = useState('https://api.deepseek.com/v1')
   const [qlModels, setQlModels] = useState('deepseek-chat, deepseek-reasoner')
+
+  // Step: quick-tts
+  const [qtName, setQtName] = useState('')
+  const [qtKey, setQtKey] = useState('')
+  const [qtUrl, setQtUrl] = useState('')
+  const [qtModels, setQtModels] = useState('cosyvoice-v3-flash, cosyvoice-v3-plus')
 
   // Step: create
   const [projName, setProjName] = useState('我的第一个项目')
@@ -77,7 +85,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
 
   // Step navigation helpers
   const stepIndex = STEPS.findIndex(s => s.key === step)
-  const visibleSteps = STEPS.filter(s => s.key !== 'quick-llm')
+  const visibleSteps = STEPS.filter(s => s.key !== 'quick-llm' && s.key !== 'quick-tts')
 
   useEffect(() => { if (!dismissed) document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' } }, [dismissed])
@@ -90,11 +98,15 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
     Promise.all([
       api.listProviders().catch(() => []),
       api.listColumnConfigs().catch(() => []),
-    ]).then(([p, seeds]) => {
+      api.listTemplates('ppt').catch(() => []),
+      api.listTtsProviders().catch(() => []),
+    ]).then(([p, seeds, tmpls, tts]) => {
       if (cancelled) return
       setProviders(p)
       setHasProviders(p.length > 0)
       setHasSeeds(Array.isArray(seeds) && seeds.length > 0)
+      setHasTemplates(Array.isArray(tmpls) && tmpls.length > 0)
+      setHasTtsProviders(Array.isArray(tts) && tts.length > 0)
       setChecking(false)
     })
     return () => { cancelled = true }
@@ -118,6 +130,25 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
       setLoading(false)
     }
   }, [qlName, qlKey, qlUrl, qlModels])
+
+  const handleFixTTS = useCallback(async () => {
+    if (!qtName.trim() || !qtKey.trim() || !qtUrl.trim() || !qtModels.trim()) {
+      setError('请填写完整的 TTS 提供商信息')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const models = qtModels.split(',').map((s: string) => s.trim()).filter(Boolean)
+      await api.createTtsProvider({ name: qtName.trim(), api_key: qtKey.trim(), base_url: qtUrl.trim(), models })
+      setHasTtsProviders(true)
+      setStep('check')
+    } catch (e: any) {
+      setError(e.message || '添加失败')
+    } finally {
+      setLoading(false)
+    }
+  }, [qtName, qtKey, qtUrl, qtModels])
 
   // ── Step: Create Project ──
   const handleCreateProject = useCallback(async () => {
@@ -291,6 +322,33 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
     )
   }
 
+  // ── Quick TTS form ──
+  if (step === 'quick-tts') {
+    return (
+      <div className="dialog-overlay" style={{ zIndex: 10000 }}>
+        <div className="dialog-box" style={{ minWidth: 480 }}>
+          <div className="dialog-title">添加 TTS 提供商</div>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+            需要一个 TTS（语音合成）提供商才能为课件生成配音。
+          </p>
+          <div className="form-label">名称</div>
+          <input className="form-input" value={qtName} onChange={e => setQtName(e.target.value)} placeholder="如 CosyVoice" autoFocus />
+          <div className="form-label" style={{ marginTop: 12 }}>API Key</div>
+          <input className="form-input" value={qtKey} onChange={e => setQtKey(e.target.value)} placeholder="sk-..." />
+          <div className="form-label" style={{ marginTop: 12 }}>Base URL</div>
+          <input className="form-input" value={qtUrl} onChange={e => setQtUrl(e.target.value)} placeholder="https://api.example.com/v1" />
+          <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div>
+          <input className="form-input" value={qtModels} onChange={e => setQtModels(e.target.value)} placeholder="cosyvoice-v3-flash, cosyvoice-v3-plus" />
+          {error && <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10 }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => { setStep('check'); setError('') }}>返回</button>
+            <button className="btn btn-primary btn-sm" onClick={handleFixTTS} disabled={loading}>{loading ? '保存中...' : '保存并继续'}</button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // ── Main wizard ──
   return (
     <div className="dialog-overlay" style={{ zIndex: 9999 }}>
@@ -358,6 +416,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                 <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)' }}>检测中...</div>
               ) : (
                 <div>
+                  {/* LLM Provider */}
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '12px 16px', background: 'var(--card-bg)', borderRadius: 8, marginBottom: 8,
@@ -366,13 +425,57 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                       <strong>LLM 提供商</strong>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>AI 生成功能的核心引擎</div>
                     </div>
-                    <span style={{ color: hasProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
-                      {hasProviders ? '✓ 已配置' : '✗ 未配置'}
-                    </span>
-                    {!hasProviders && (
-                      <button className="btn btn-primary btn-sm" onClick={() => setStep('quick-llm')}>去配置</button>
-                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ color: hasProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
+                        {hasProviders ? '✓ 已配置' : '✗ 未配置'}
+                      </span>
+                      {!hasProviders && (
+                        <button className="btn btn-primary btn-sm" onClick={() => setStep('quick-llm')}>去配置</button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* PPT Template */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '12px 16px', background: 'var(--card-bg)', borderRadius: 8, marginBottom: 8,
+                  }}>
+                    <div>
+                      <strong>PPT 模板</strong>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>课件生成所需的设计模板（需上传 PPTX 文件）</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ color: hasTemplates ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
+                        {hasTemplates ? '✓ 已配置' : '✗ 未配置'}
+                      </span>
+                      {!hasTemplates && (
+                        <button className="btn btn-outline btn-sm" onClick={() => { handleClose(); navigate('/templates') }}>
+                          去模板管理
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* TTS Provider */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '12px 16px', background: 'var(--card-bg)', borderRadius: 8, marginBottom: 8,
+                  }}>
+                    <div>
+                      <strong>TTS 提供商</strong>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>语音合成引擎，用于生成课件配音</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ color: hasTtsProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
+                        {hasTtsProviders ? '✓ 已配置' : '✗ 未配置'}
+                      </span>
+                      {!hasTtsProviders && (
+                        <button className="btn btn-primary btn-sm" onClick={() => setStep('quick-tts')}>去配置</button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Seed prompts */}
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '12px 16px', background: 'var(--card-bg)', borderRadius: 8, marginBottom: 8,
@@ -385,15 +488,25 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                       {hasSeeds ? '✓ 已加载' : '✗ 未加载'}
                     </span>
                   </div>
+
                   {!hasProviders ? (
                     <div style={{
                       marginTop: 16, padding: 12, background: '#fef3c7', borderRadius: 8,
                       fontSize: 12, color: '#92400e',
                     }}>
-                      请先配置 LLM 提供商后再继续。点击「去配置」按钮快速添加。
+                      LLM 提供商是必须项。请先点击「去配置」添加一个 LLM 提供商后再继续。
+                      {!hasTemplates && ' PPT 模板可在流程中跳过，之后可随时在「模板管理」中上传。'}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'right', marginTop: 20 }}>
+                      {!hasTemplates && (
+                        <div style={{
+                          fontSize: 11, color: '#92400e', marginBottom: 10,
+                          padding: '8px 12px', background: '#fef3c7', borderRadius: 6, textAlign: 'left',
+                        }}>
+                          尚未配置 PPT 模板，第 3 步（生成课件）将跳过。可随时前往「模板管理」上传。
+                        </div>
+                      )}
                       <button className="btn btn-primary" onClick={() => setStep('create')} disabled={!hasProviders}>
                         下一步：创建项目
                       </button>
