@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import Col3StructureEditor from '../components/Col3StructureEditor'
 
 type MainTab = 'project' | 'columns' | 'core'
 
@@ -61,6 +62,9 @@ export default function ProjItemSettingsPage() {
   const [coreSaving, setCoreSaving] = useState<Record<string, boolean>>({})
   const [coreCategory, setCoreCategory] = useState('')
   const [editingCoreId, setEditingCoreId] = useState<string | null>(null)
+
+  // Visual editor toggle per item
+  const [colVisualEdit, setColVisualEdit] = useState<Set<string>>(new Set())
 
   // Accordion
   const [openCols, setOpenCols] = useState<Set<string>>(new Set(['col1']))
@@ -317,6 +321,36 @@ export default function ProjItemSettingsPage() {
                               />
                             </div>
                           </div>
+                          {/* col3 visual structure editor */}
+                          {col.id === 'col3' && (
+                            <div style={{ marginTop: 8 }}>
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ fontSize: 11 }}
+                                onClick={() => setColVisualEdit(prev => {
+                                  const next = new Set(prev)
+                                  if (next.has(item.id)) next.delete(item.id)
+                                  else next.add(item.id)
+                                  return next
+                                })}
+                              >
+                                {colVisualEdit.has(item.id) ? '收起可视化编辑器' : '可视化编辑结构'}
+                              </button>
+                              {colVisualEdit.has(item.id) && (
+                                <div style={{ marginTop: 8, padding: 12, border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg-primary)' }}>
+                                  <Col3StructureEditor
+                                    initialSkill={colValues[item.id]?.skill || '[]'}
+                                    onSaved={(skill) => {
+                                      setColValues(prev => ({
+                                        ...prev,
+                                        [item.id]: { ...prev[item.id], skill }
+                                      }))
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                             <button className="btn btn-primary btn-sm"
                               disabled={colSaving[item.id]}

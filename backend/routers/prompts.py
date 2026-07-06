@@ -1,8 +1,11 @@
 """Prompt & config management routes — prompts, column-configs, speech-configs, tts-configs, core-prompt-configs."""
 import os
 import json
+import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel
+
+logger = logging.getLogger("prompts_router")
 from database import get_db
 from services.prompt_service import (
     list_prompts, get_prompt, create_prompt, update_prompt, delete_prompt,
@@ -196,7 +199,7 @@ def list_column_configs(workspace_id: str = None):
 def update_column_config(config_id: str, req: dict):
     db = get_db()
     try:
-        existing = db.execute("SELECT id, column_id FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+        existing = db.execute("SELECT id, column_id, workspace_id FROM column_configs WHERE id = ?", (config_id,)).fetchone()
         if not existing:
             raise HTTPException(404, "Config not found")
         if 'prompt' in req:
@@ -214,6 +217,38 @@ def update_column_config(config_id: str, req: dict):
                 rules_val = json.dumps(rules_val, ensure_ascii=False)
             db.execute("UPDATE column_configs SET rules = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (rules_val, config_id))
         db.commit()
+
+        # Sync prompt/skill/rules to all project_items in the same workspace
+        col_id = existing["column_id"]
+        ws_id = existing["workspace_id"]
+        if ws_id and any(k in req for k in ("prompt", "skill", "rules")):
+            keys = [k for k in ('prompt','skill','rules') if k in req]
+            print(f"[SYNC] workspace={ws_id} col={col_id} fields={keys}", flush=True)
+            projects = db.execute("SELECT id FROM projects WHERE workspace_id = ?", (ws_id,)).fetchall()
+            print(f"[SYNC] found {len(projects)} projects to sync", flush=True)
+            for p in projects:
+                item_id = f"pi-{p['id']}-{col_id}"
+                item = db.execute("SELECT id FROM project_items WHERE id = ?", (item_id,)).fetchone()
+                if not item:
+                    print(f"[SYNC] skip {item_id} - not found", flush=True)
+                    continue
+                if 'prompt' in req:
+                    db.execute("UPDATE project_items SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                               (req['prompt'], item_id))
+                if 'skill' in req:
+                    db.execute("UPDATE project_items SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                               (req['skill'], item_id))
+                if 'rules' in req:
+                    db.execute("UPDATE project_items SET config_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                               (req['rules'], item_id))
+                print(f"[SYNC] updated {item_id}", flush=True)
+            db.commit()
+            print(f"[SYNC] committed {len(projects)} projects sync", flush=True)
+        elif not ws_id:
+            print(f"[SYNC] skipped - no workspace_id (seed config, no sync needed)", flush=True)
+        else:
+            print(f"[SYNC] skipped - no synced fields in request keys={list(req.keys())}", flush=True)
+
         row = db.execute("SELECT * FROM column_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)
     finally:

@@ -136,27 +136,62 @@ function hexToRgbStr(hex: string): string {
 }
 
 function renderBlockPreview(htmlTemplate: string, scheme: SchemeColors | null, C: ReturnType<typeof makeColors>): string {
-  // Replace {{INFO_TABLE}} with sample rows so the table renders visually
+  const trgb = hexToRgbStr(C.tp)
   const isDark = htmlTemplate.includes('#ffffff')
-  const labelColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(var(--text-rgb),0.35)'
-  const valueColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(var(--text-rgb),0.6)'
-  const sampleRows = [
+  const labelColor = isDark ? 'rgba(255,255,255,0.35)' : `rgba(${trgb},0.35)`
+  const valueColor = isDark ? 'rgba(255,255,255,0.6)' : `rgba(${trgb},0.6)`
+
+  // ── {{INFO_TABLE}} sample rows ──
+  const sampleInfoRows = [
     `      <tr><td style="font-size:12px;color:${labelColor};padding:0 12px 12px 0;text-align:right;white-space:nowrap;">标签1</td><td style="font-size:14px;color:${valueColor};padding:0 0 12px 12px;text-align:left;">示例值</td></tr>`,
     `      <tr><td style="font-size:12px;color:${labelColor};padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">标签2</td><td style="font-size:14px;color:${valueColor};padding:12px 0 12px 12px;text-align:left;">示例值</td></tr>`,
     `      <tr><td style="font-size:12px;color:${labelColor};padding:12px 12px 0 0;text-align:right;white-space:nowrap;">标签3</td><td style="font-size:14px;color:${valueColor};padding:12px 0 0 12px;text-align:left;">示例值</td></tr>`,
   ]
-  let html = htmlTemplate.replace('{{INFO_TABLE}}', sampleRows.join('\n'))
-  // Replace content placeholders with visible sample text
+  let html = htmlTemplate.replace('{{INFO_TABLE}}', sampleInfoRows.join('\n'))
+
+  // ── {{TABLE_ROWS}} sample rows — auto-detect col count from <thead> ──
+  const thMatch = html.match(/<thead>([\s\S]*?)<\/thead>/)
+  const thCount = thMatch ? (thMatch[1].match(/<th/g) || []).length : 5
+  const sampleTableRows: string[] = []
+  for (let i = 0; i < 3; i++) {
+    const cells: string[] = []
+    for (let j = 0; j < thCount; j++) {
+      if (j === 0) {
+        cells.push(`<td style="font-size:12px;color:${valueColor};padding:8px 6px;border:1px solid rgba(${trgb},0.15);text-align:center;">${i + 1}</td>`)
+      } else if (thCount > 5 && (j === 3 || j === 5)) {
+        // colspan cells (e.g. steps_table has colspan=3 for desc, colspan=2 for cautions)
+        const colspan = j === 3 ? 3 : 2
+        cells.push(`<td colspan="${colspan}" style="font-size:12px;color:${valueColor};padding:8px 6px;border:1px solid rgba(${trgb},0.15);">示例说明内容</td>`)
+        j += colspan - 1
+      } else {
+        cells.push(`<td style="font-size:12px;color:${valueColor};padding:8px 6px;border:1px solid rgba(${trgb},0.15);${j === 1 ? 'text-align:center;' : ''}">示例</td>`)
+      }
+    }
+    sampleTableRows.push(`<tr style="background:${i % 2 === 0 ? `rgba(${trgb},0.02)` : 'transparent'};">${cells.join('')}</tr>`)
+  }
+  html = html.replace('{{TABLE_ROWS}}', sampleTableRows.join('\n'))
+
+  // ── Common placeholders ──
   html = html.replace(/\{\{TITLE\}\}/g, '项目名称')
   html = html.replace(/\{\{SUBTITLE\}\}/g, '副标题示例')
-  // Resolve color variables
+  html = html.replace(/\{\{DATE\}\}/g, '2026-07')
+  html = html.replace(/\{\{PAGE_NUM\}\}/g, '1')
+  html = html.replace(/\{\{TOTAL_PAGES\}\}/g, '8')
+  html = html.replace(/\{\{BRAND_COPYRIGHT\}\}/g, '© 2026 品牌名称')
+  html = html.replace(/\{\{BRAND_SIGNATURE\}\}/g, '品牌签名')
+  html = html.replace(/\{\{ROW_BG\}\}/g, `rgba(${trgb},0.02)`)
+
+  // ── Resolve CSS variable placeholders ──
   html = html.replace(/\{\{primary\}\}/g, C.p)
   html = html.replace(/\{\{primary_rgb\}\}/g, hexToRgbStr(C.p))
   html = html.replace(/\{\{accent\}\}/g, C.a)
-  html = html.replace(/\{\{text_rgb\}\}/g, hexToRgbStr(C.tp))
-  // Wrap in full document
+  html = html.replace(/\{\{text_rgb\}\}/g, trgb)
+
+  // ── Any remaining {{...}} placeholders → sample filler ──
+  html = html.replace(/\{\{[A-Z_]+\}\}/g, '—')
+
+  // ── Add CSS variables for the template ──
   const prgb = hexToRgbStr(C.p)
-  const trgb = hexToRgbStr(C.tp)
   return `<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -172,10 +207,13 @@ function renderBlockPreview(htmlTemplate: string, scheme: SchemeColors | null, C
   --text-rgb: ${trgb};
   --text-secondary: ${C.ts};
   --text-muted: ${C.tm};
+  --background: ${C.bg};
   --bg: ${C.bg};
   --card-bg: ${C.cb};
   --border: ${C.b};
   --border-light: ${C.bl};
+  --chart-0: ${C.cc[0] || C.p};
+  --chart-1: ${C.cc[1] || C.a};
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {

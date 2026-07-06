@@ -3,7 +3,7 @@
 # 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
 
 # 当前激活的色系（兼容字段）
-color_scheme: chinese-red
+color_scheme: deep-blue
 
 # 文档模板映射 — 从 chart_colors 引用，避免破坏13色码结构
 document_colors:

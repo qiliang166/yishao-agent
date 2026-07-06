@@ -14,9 +14,10 @@ interface PageDef {
   dimensions?: Dimension[]   // content / chart / diagram
   columns?: string[]         // table / flowchart
   titleFormat?: string       // cover
-  subtitle?: string          // cover — 副标题模板
-  description?: string       // cover — 内容简述
-  metaFields?: string[]      // cover
+  subtitle?: string          // cover
+  description?: string       // cover
+  metaFields?: string[]      // cover — key_point labels
+  metaExamples?: string[]    // cover — hints/examples for each metaField
 }
 
 type PageType = 'cover' | 'toc' | 'content' | 'table' | 'chart' | 'diagram' | 'flowchart' | 'closing'
@@ -40,7 +41,6 @@ const PAGE_HINT_MAP: Record<PageType, string> = Object.fromEntries(
   PAGE_TYPES.map(t => [t.type, t.hint])
 ) as Record<PageType, string>
 
-// Old → new type migration
 const TYPE_MIGRATE: Record<string, PageType> = {
   definition: 'content',
   quality: 'content',
@@ -61,6 +61,7 @@ function emptyPage(type: PageType): PageDef {
     base.subtitle = ''
     base.description = ''
     base.metaFields = ['']
+    base.metaExamples = ['']
   }
   return base
 }
@@ -85,7 +86,6 @@ interface Props {
 export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
   const [pages, setPages] = useState<PageDef[]>(() => parseSkill(initialSkill))
 
-  // Auto-sync skill JSON to parent on every change
   useEffect(() => {
     onSaved(buildSkill())
   }, [pages])
@@ -106,6 +106,10 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
           def.columns = (p.key_points || []).length > 0 ? p.key_points : ['']
         } else if (t === 'cover') {
           def.metaFields = (p.key_points || []).length > 0 ? p.key_points : ['']
+          def.metaExamples = p.examples || []
+          // Pad/trim metaExamples to match metaFields length
+          while (def.metaExamples!.length < def.metaFields!.length) def.metaExamples!.push('')
+          if (def.metaExamples!.length > def.metaFields!.length) def.metaExamples = def.metaExamples!.slice(0, def.metaFields!.length)
           def.titleFormat = p.title_format || ''
           def.subtitle = p.subtitle || ''
           def.description = p.description || ''
@@ -126,6 +130,8 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
         s.key_points = (p.columns || []).filter(c => c.trim()).map(c => c.trim())
       } else if (p.type === 'cover') {
         s.key_points = (p.metaFields || []).filter(f => f.trim()).map(f => f.trim())
+        const examples = (p.metaExamples || []).map(e => e.trim()).filter(e => e !== '')
+        if (examples.length > 0) s.examples = examples
         if (p.titleFormat) s.title_format = p.titleFormat
         if (p.subtitle) s.subtitle = p.subtitle
         if (p.description) s.description = p.description
@@ -170,7 +176,7 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
   const removeCol = (id: string, idx: number) =>
     setPages(prev => prev.map(p => p.id === id ? { ...p, columns: (p.columns || []).filter((_, i) => i !== idx) } : p))
 
-  // ── Styles matching other settings UI ──
+  // ── Styles ──
   const pageNumStyle: React.CSSProperties = { fontWeight: 600, fontSize: 11, minWidth: 36, color: 'var(--text-secondary)' }
   const inputStyle: React.CSSProperties = { fontSize: 11, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)' }
   const selectStyle: React.CSSProperties = { fontSize: 11, padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg)' }
@@ -250,10 +256,9 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
             </div>
           )}
 
-          {/* cover: 4-part structure — 标题 / 副标题 / 基础信息 / 内容简述 */}
+          {/* cover: 标题 / 副标题 / 基础信息(标签+说明) / 内容简述 */}
           {p.type === 'cover' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {/* 1. 标题格式 */}
               <div>
                 <div className="form-hint" style={{ marginBottom: 2 }}>标题格式</div>
                 <input value={p.titleFormat || ''}
@@ -261,7 +266,6 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
                   placeholder="标题模板（如：{菜名} — 标准作业文档）" style={{ ...inputStyle, width: '100%' }} />
               </div>
 
-              {/* 2. 副标题 */}
               <div>
                 <div className="form-hint" style={{ marginBottom: 2 }}>副标题</div>
                 <input value={p.subtitle || ''}
@@ -269,7 +273,6 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
                   placeholder="副标题模板（如：{工艺特征} 的精要解析）" style={{ ...inputStyle, width: '100%' }} />
               </div>
 
-              {/* 3. 基础信息 */}
               <div>
                 <div className="form-hint" style={{ marginBottom: 2 }}>基础信息</div>
                 {(p.metaFields || []).map((f, fi) => (
@@ -277,21 +280,31 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
                     <span style={dimLabelStyle}>标签{fi + 1}</span>
                     <input value={f}
                       onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: _strArrChange(pp.metaFields || [], fi, e.target.value) } : pp))}
-                      placeholder="信息标签（如：版本说明）" style={{ ...inputStyle, flex: 1 }} />
+                      placeholder="标签（如：版本说明）" style={{ ...inputStyle, flex: 1 }} />
+                    <input value={(p.metaExamples || [])[fi] || ''}
+                      onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaExamples: _strArrChange(pp.metaExamples || [], fi, e.target.value) } : pp))}
+                      placeholder="说明（可选）" style={{ ...inputStyle, flex: 2 }} />
                     <button
-                      onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: (pp.metaFields || []).filter((_, i) => i !== fi) } : pp))}
+                      onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? {
+                        ...pp,
+                        metaFields: (pp.metaFields || []).filter((_, i) => i !== fi),
+                        metaExamples: (pp.metaExamples || []).filter((_, i) => i !== fi)
+                      } : pp))}
                       style={{ fontSize: 11, padding: '1px 4px', color: 'var(--danger)', border: 'none', background: 'transparent', cursor: 'pointer' }}>
                       ×
                     </button>
                   </div>
                 ))}
-                <button onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: [...(pp.metaFields || []), ''] } : pp))}
+                <button onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? {
+                  ...pp,
+                  metaFields: [...(pp.metaFields || []), ''],
+                  metaExamples: [...(pp.metaExamples || []), '']
+                } : pp))}
                   style={{ fontSize: 10, padding: '2px 6px', alignSelf: 'flex-start', marginTop: 2 }}>
                   + 添加标签
                 </button>
               </div>
 
-              {/* 4. 内容简述 */}
               <div>
                 <div className="form-hint" style={{ marginBottom: 2 }}>内容简述</div>
                 <textarea value={p.description || ''}
@@ -303,14 +316,12 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
             </div>
           )}
 
-          {/* toc / closing: no extra config */}
           {(p.type === 'toc' || p.type === 'closing') && (
             <div className="form-hint">此页面类型仅需标题，无需额外配置字段。</div>
           )}
         </div>
       ))}
 
-      {/* Add page row */}
       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
         {PAGE_TYPES.map(t => (
           <button key={t.type} onClick={() => addPage(t.type)}

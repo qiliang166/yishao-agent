@@ -1058,6 +1058,8 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 下方 JSON 定义了文档的完整结构。每一项（seq、page_type、key_points 标签、title_format、subtitle、description）都是不可变的约束。你唯一的工作：根据 SOP 内容填充每个字段的值。
 
+**若模板中包含 "examples" 字段**：examples 是与 key_points 标签一一对应的填写指导。请仔细阅读每个 example 的描述，确保填充的 key_points 值符合该指导方向。examples 本身不出现在最终输出中。
+
 {skill_template}
 
 """
@@ -1084,20 +1086,23 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 **绝对硬约束（违反即错误）：**
 1. 页面数量、seq 顺序、page_type 必须与上方「文档结构模板」完全一致，不可增删改任何页面
-2. 每个页面的 key_points 标签必须完整保留模板中定义的所有标签，不可增删改，不可合并，不可重命名
+2. key_points 的数量和顺序必须与模板一致（不可增删改、合并、重排）。但模板中的标签文字是占位符，你需要将它们替换为从 SOP 提取的实际内容值。例如模板标签"编写日期"应替换为"2026年6月"，而不是保留"编写日期"原文
 3. 封面页特殊规则：
    - title_format 中的 {项目名称} 替换为实际项目名称，其余文字原样保留
    - subtitle 中的占位符替换为实际内容，其余文字原样保留
-   - key_points 的所有标签必须逐一填充对应值
+   - key_points 的每个位置必须填入从 SOP 提取的实际值（不是保留模板标签原文）
+   - 若模板包含 examples 数组，对照每个 example 的说明来填充对应位置的 key_points 值
    - description 从正文提炼一段内容概述（若模板为空则输出空字符串）
 4. heading 根据模板的 page_type 和页面用途填写描述性标题，不超过 20 字符
-5. 你唯一的工作：根据 SOP 内容，按模板格式填值
+5. 你唯一的工作：根据 SOP 内容，按模板格式填空（将占位标签替换为实际内容值）
 
 **禁止行为：**
-- 禁止因为"内容匹配不上"而删除 key_points 标签
+- 禁止在 key_points 中保留模板标签原文（如"编写日期""内容分类"等），必须替换为实际值
+- 禁止因为"内容匹配不上"而跳过或删除 key_points 条目
 - 禁止因为"看起来不合理"而修改 page_type
 - 禁止合并或拆分页面
 - 禁止自行添加模板中没有的字段
+- 禁止忽略 examples 中的指导信息
 
 仅输出 JSON，不输出其他文字"""
     else:
@@ -2658,6 +2663,18 @@ def _build_structure_summary(skill_template: str) -> str:
             kp_list = "、".join(str(k) for k in kps[:10])
             detail = f"（{len(kps)} 项：{kp_list}）"
 
+        # Surface examples for cover pages
+        if ptype == "cover":
+            examples = p.get("examples", [])
+            if isinstance(examples, list) and examples:
+                ex_lines = []
+                for j, kp in enumerate(kps[:10]):
+                    ex = examples[j] if j < len(examples) else ""
+                    if ex and str(ex).strip():
+                        ex_lines.append(f"  - {str(kp).strip()} → 要求：{str(ex).strip()}")
+                if ex_lines:
+                    detail += "\n" + "\n".join(ex_lines)
+
         lines.append(f"| {i+1} | {ptype} | {heading} {detail} |")
 
     lines.append("")
@@ -3330,16 +3347,17 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
         # ── Dynamic cover info table (A4 only) ──
         # Replace {{INFO_TABLE}} in cover.md with table rows built from the
-        # editor-defined key_points labels, matching the VI theme's color approach.
+        # editor-defined key_points labels. Reads from project_items (same source
+        # as outline generation at line 317).
         if is_a4 and stype == "cover" and vi_section and "{{INFO_TABLE}}" in vi_section:
             try:
                 _db = get_db()
-                _row = _db.execute(
-                    "SELECT skill FROM column_configs WHERE column_id = ? AND (workspace_id = ? OR workspace_id IS NULL) ORDER BY workspace_id DESC LIMIT 1",
-                    (column_id, project_id)
+                _pi = _db.execute(
+                    "SELECT skill FROM project_items WHERE id = ?",
+                    (f"pi-{project_id}-{column_id}",)
                 ).fetchone()
-                if _row and _row[0]:
-                    _rows_html = _build_cover_info_table(_row[0], vi_section)
+                if _pi and _pi[0]:
+                    _rows_html = _build_cover_info_table(_pi[0], vi_section)
                     if _rows_html:
                         vi_section = vi_section.replace("{{INFO_TABLE}}", _rows_html)
             except Exception:
