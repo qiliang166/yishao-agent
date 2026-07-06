@@ -1054,7 +1054,10 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
     skill_block = ""
     if skill_template and not skill_template.strip().startswith('|'):
-        skill_block = f"""## 幻灯片结构模板（必须严格遵循的页面结构和字段）
+        skill_block = f"""## 文档结构模板（绝对不可修改 — 你只做填空）
+
+下方 JSON 定义了文档的完整结构。每一项（seq、page_type、key_points 标签、title_format、subtitle、description）都是不可变的约束。你唯一的工作：根据 SOP 内容填充每个字段的值。
+
 {skill_template}
 
 """
@@ -1077,10 +1080,26 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     cw_stage1, ch_stage1 = _get_canvas_dimensions(column_id, project_id=project_id) if column_id else (1280, 720)
     is_a4_stage1 = ch_stage1 > cw_stage1
     if is_a4_stage1:
-        output_reqs = """## 输出要求
-- 严格遵循上方「文档结构模板」的栏目章节结构和 JSON 格式
-- 栏目结构、构建块类型、硬约束均以模板为准，不得自行增删章节
-- 仅输出 JSON，不输出其他文字"""
+        output_reqs = """## 输出要求 — 你只做填空，不做裁量
+
+**绝对硬约束（违反即错误）：**
+1. 页面数量、seq 顺序、page_type 必须与上方「文档结构模板」完全一致，不可增删改任何页面
+2. 每个页面的 key_points 标签必须完整保留模板中定义的所有标签，不可增删改，不可合并，不可重命名
+3. 封面页特殊规则：
+   - title_format 中的 {菜名} 替换为实际菜名，其余文字原样保留
+   - subtitle 中的占位符替换为实际内容，其余文字原样保留
+   - key_points 的所有标签必须逐一填充对应值
+   - description 从正文提炼一段内容概述（若模板为空则输出空字符串）
+4. heading 根据模板的 page_type 和页面用途填写描述性标题，不超过 20 字符
+5. 你唯一的工作：根据 SOP 内容，按模板格式填值
+
+**禁止行为：**
+- 禁止因为"内容匹配不上"而删除 key_points 标签
+- 禁止因为"看起来不合理"而修改 page_type
+- 禁止合并或拆分页面
+- 禁止自行添加模板中没有的字段
+
+仅输出 JSON，不输出其他文字"""
     else:
         output_reqs = """## 输出要求
 - 严格遵循上方「幻灯片结构模板」的栏目章节结构和 JSON 格式

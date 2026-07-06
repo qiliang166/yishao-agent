@@ -14,13 +14,15 @@ interface PageDef {
   dimensions?: Dimension[]   // content / chart / diagram
   columns?: string[]         // table / flowchart
   titleFormat?: string       // cover
+  subtitle?: string          // cover — 副标题模板
+  description?: string       // cover — 内容简述
   metaFields?: string[]      // cover
 }
 
 type PageType = 'cover' | 'toc' | 'content' | 'table' | 'chart' | 'diagram' | 'flowchart' | 'closing'
 
 const PAGE_TYPES: { type: PageType; label: string; hint: string }[] = [
-  { type: 'cover', label: '封面', hint: '文档标题、副标题、元信息' },
+  { type: 'cover', label: '封面', hint: '标题 / 副标题 / 基础信息 / 内容简述' },
   { type: 'toc', label: '目录', hint: '内容导航与章节概览' },
   { type: 'content', label: '内容页', hint: '通用自由内容，多维度属性描述' },
   { type: 'table', label: '表格', hint: '多列结构化数据表格' },
@@ -56,6 +58,8 @@ function emptyPage(type: PageType): PageDef {
     base.columns = ['']
   } else if (type === 'cover') {
     base.titleFormat = ''
+    base.subtitle = ''
+    base.description = ''
     base.metaFields = ['']
   }
   return base
@@ -103,6 +107,8 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
         } else if (t === 'cover') {
           def.metaFields = (p.key_points || []).length > 0 ? p.key_points : ['']
           def.titleFormat = p.title_format || ''
+          def.subtitle = p.subtitle || ''
+          def.description = p.description || ''
         }
         return def
       })
@@ -121,6 +127,8 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
       } else if (p.type === 'cover') {
         s.key_points = (p.metaFields || []).filter(f => f.trim()).map(f => f.trim())
         if (p.titleFormat) s.title_format = p.titleFormat
+        if (p.subtitle) s.subtitle = p.subtitle
+        if (p.description) s.description = p.description
       }
       return s
     })
@@ -242,29 +250,56 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
             </div>
           )}
 
-          {/* cover */}
+          {/* cover: 4-part structure — 标题 / 副标题 / 基础信息 / 内容简述 */}
           {p.type === 'cover' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <input value={p.titleFormat || ''}
-                onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, titleFormat: e.target.value } : pp))}
-                placeholder="标题格式（如：{菜名} — 标准作业文档）" style={inputStyle} />
-              {(p.metaFields || []).map((f, fi) => (
-                <div key={fi} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                  <span style={dimLabelStyle}>元信息{fi + 1}</span>
-                  <input value={f}
-                    onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: _strArrChange(pp.metaFields || [], fi, e.target.value) } : pp))}
-                    placeholder="字段名（如：版本说明）" style={{ ...inputStyle, flex: 1 }} />
-                  <button
-                    onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: (pp.metaFields || []).filter((_, i) => i !== fi) } : pp))}
-                    style={{ fontSize: 11, padding: '1px 4px', color: 'var(--danger)', border: 'none', background: 'transparent', cursor: 'pointer' }}>
-                    ×
-                  </button>
-                </div>
-              ))}
-              <button onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: [...(pp.metaFields || []), ''] } : pp))}
-                style={{ fontSize: 10, padding: '2px 6px', alignSelf: 'flex-start', marginTop: 2 }}>
-                + 添加元信息
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* 1. 标题格式 */}
+              <div>
+                <div className="form-hint" style={{ marginBottom: 2 }}>标题格式</div>
+                <input value={p.titleFormat || ''}
+                  onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, titleFormat: e.target.value } : pp))}
+                  placeholder="标题模板（如：{菜名} — 标准作业文档）" style={{ ...inputStyle, width: '100%' }} />
+              </div>
+
+              {/* 2. 副标题 */}
+              <div>
+                <div className="form-hint" style={{ marginBottom: 2 }}>副标题</div>
+                <input value={p.subtitle || ''}
+                  onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, subtitle: e.target.value } : pp))}
+                  placeholder="副标题模板（如：{工艺特征} 的精要解析）" style={{ ...inputStyle, width: '100%' }} />
+              </div>
+
+              {/* 3. 基础信息 */}
+              <div>
+                <div className="form-hint" style={{ marginBottom: 2 }}>基础信息</div>
+                {(p.metaFields || []).map((f, fi) => (
+                  <div key={fi} style={{ display: 'flex', gap: 4, alignItems: 'center', marginBottom: 3 }}>
+                    <span style={dimLabelStyle}>标签{fi + 1}</span>
+                    <input value={f}
+                      onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: _strArrChange(pp.metaFields || [], fi, e.target.value) } : pp))}
+                      placeholder="信息标签（如：版本说明）" style={{ ...inputStyle, flex: 1 }} />
+                    <button
+                      onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: (pp.metaFields || []).filter((_, i) => i !== fi) } : pp))}
+                      style={{ fontSize: 11, padding: '1px 4px', color: 'var(--danger)', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+                <button onClick={() => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, metaFields: [...(pp.metaFields || []), ''] } : pp))}
+                  style={{ fontSize: 10, padding: '2px 6px', alignSelf: 'flex-start', marginTop: 2 }}>
+                  + 添加标签
+                </button>
+              </div>
+
+              {/* 4. 内容简述 */}
+              <div>
+                <div className="form-hint" style={{ marginBottom: 2 }}>内容简述</div>
+                <textarea value={p.description || ''}
+                  onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, description: e.target.value } : pp))}
+                  placeholder="内容简述模板或空（AI 自动从正文提炼）"
+                  rows={2}
+                  style={{ ...inputStyle, width: '100%', resize: 'vertical' }} />
+              </div>
             </div>
           )}
 
