@@ -1,6 +1,12 @@
 const BASE = ''
 const TOKEN_KEY = 'auth_token'
 
+let _onLicenseRequired: (() => void) | null = null
+
+export function setOnLicenseRequired(fn: (() => void) | null) {
+  _onLicenseRequired = fn
+}
+
 function getAuthHeaders(): Record<string, string> {
   const token = sessionStorage.getItem('settings_token') || localStorage.getItem(TOKEN_KEY)
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -35,7 +41,12 @@ async function request(path: string, options?: RequestInit & { timeoutMs?: numbe
 
     const res = await fetch(BASE + path, { ...fetchOpts, headers, signal: ctrl.signal })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.detail || `服务器错误 (${res.status})`)
+    if (!res.ok) {
+      if (res.status === 403 && data.code === 'LICENSE_REQUIRED' && _onLicenseRequired) {
+        _onLicenseRequired()
+      }
+      throw new Error(data.detail || `服务器错误 (${res.status})`)
+    }
     return data
   } catch (e: any) {
     if (e.name === 'AbortError') {

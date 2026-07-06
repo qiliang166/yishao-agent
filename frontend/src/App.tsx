@@ -15,6 +15,7 @@ import { ModalProvider } from './components/ModalProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import SettingsLock from './components/SettingsLock'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { LicenseProvider } from './contexts/LicenseContext'
 import { api } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
@@ -277,16 +278,18 @@ function App() {
 
   return (
     <AuthProvider>
-      <ModalProvider>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="*" element={
-            <ProtectedRoute>
-              <AppShell />
-            </ProtectedRoute>
-          } />
-        </Routes>
-      </ModalProvider>
+      <LicenseProvider>
+        <ModalProvider>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="*" element={
+              <ProtectedRoute>
+                <AppShell />
+              </ProtectedRoute>
+            } />
+          </Routes>
+        </ModalProvider>
+      </LicenseProvider>
     </AuthProvider>
   )
 }

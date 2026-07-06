@@ -695,6 +695,7 @@ def init_db():
                 template_path TEXT,
                 rules TEXT DEFAULT '{}',
                 sort_order INTEGER DEFAULT 0,
+                workspace_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -845,6 +846,7 @@ def init_db():
                 prompt TEXT,
                 skill TEXT,
                 sort_order INTEGER DEFAULT 0,
+                workspace_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -897,6 +899,7 @@ def init_db():
                 prompt TEXT,
                 skill TEXT,
                 sort_order INTEGER DEFAULT 0,
+                workspace_id TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )

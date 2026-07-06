@@ -4,14 +4,19 @@ PyInstaller spec for Yishao Agent desktop application.
 Build: pyinstaller build.spec
 """
 
+backend_datas = [
+    ('frontend/dist', 'frontend/dist'),
+    ('backend/resources', 'backend/resources'),
+    ('backend/deps', 'backend/deps'),
+]
+
 a = Analysis(
     ['desktop_main.py'],
-    pathex=['.'],
+    pathex=['.', 'backend'],
     binaries=[],
-    datas=[
-        ('frontend/dist', 'frontend/dist'),
-    ],
+    datas=backend_datas,
     hiddenimports=[
+        # Web framework
         'fastapi',
         'uvicorn',
         'uvicorn.loops',
@@ -22,22 +27,33 @@ a = Analysis(
         'uvicorn.protocols.websockets',
         'uvicorn.protocols.websockets.auto',
         'uvicorn.logging',
+        'starlette',
+        'starlette.middleware',
+        'starlette.middleware.cors',
+        # Database
         'sqlite3',
+        # Auth
         'bcrypt',
         'jose',
+        'jwt',
+        # HTTP
         'python_multipart',
         'openai',
         'httpx',
         'requests',
+        'aiohttp',
+        # YAML / JSON
         'yaml',
         'json',
+        # Async
         'asyncio',
         'aiofiles',
-        'starlette',
         'anyio',
+        # Validation
         'email_validator',
         'pydantic',
         'pydantic_core',
+        # Crypto (license)
         'cryptography',
         'cryptography.hazmat',
         'cryptography.hazmat.primitives',
@@ -45,10 +61,45 @@ a = Analysis(
         'cryptography.hazmat.primitives.ciphers.aead',
         'cryptography.hazmat.primitives.ciphers.modes',
         'cryptography.hazmat.backends',
+        # Backend modules
+        'database',
+        'backend.routers',
+        'backend.routers.prompt_studio',
+        'backend.routers.prompts',
+        'backend.routers.scenarios',
+        'backend.services',
+        'backend.services.license_service',
+        'backend.services.llm_service',
+        'backend.services.ppt_service',
+        'backend.services.ppt_designer',
+        'backend.services.html_designer',
+        'backend.services.svg_designer',
+        'backend.services.svg_renderer',
+        'backend.services.prompt_service',
+        'backend.services.export_service',
+        'backend.services.file_parser',
+        'backend.services.video_service',
+        'backend.services.image_service',
+        'backend.services.cosyvoice_service',
+        'backend.services.verify_ppt_output',
+        # WebSocket
+        'websockets',
+        # Other
+        'PIL',
+        'numpy',
+        're',
     ],
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'torch',
+        'torchvision',
+        'funasr',
+        'modelscope',
+        'playwright',
+        'setuptools',
+        'pip',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=None,

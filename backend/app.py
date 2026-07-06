@@ -302,7 +302,11 @@ async def license_middleware(request: Request, call_next):
         or not path.startswith("/api/")):
         return await call_next(request)
 
-    # Check license activation for all other /api/* routes
+    # Demo mode: allow all GET requests without license (read-only preview)
+    if request.method == "GET":
+        return await call_next(request)
+
+    # Check license activation for POST/PUT/DELETE
     activation = check_activation()
     if not activation.get("activated"):
         return JSONResponse(

@@ -7,6 +7,32 @@ import Col3StructureEditor from '../components/Col3StructureEditor'
 type MainTab = 'models' | 'defaults'
 type SeedSubTab = 'columns' | 'core'
 
+function appendModel(current: string, model: string): string {
+  const parts = current.split(',').map(s => s.trim()).filter(Boolean)
+  if (!parts.includes(model)) parts.push(model)
+  return parts.join(', ')
+}
+
+const RECOMMENDED_MODELS: Record<string, string[]> = {
+  llm: ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5', 'qwen3-max', 'qwen3-plus', 'glm-4-plus'],
+  tts: ['cosyvoice-v3-flash', 'cosyvoice-v3-plus', 'speech-1.0'],
+  asr: ['fun-asr', 'qwen3-asr-flash', 'whisper-1'],
+  image: ['wanx-v1', 'flux-dev', 'flux-schnell'],
+}
+
+function ModelTags({ models, onAdd }: { models: string[]; onAdd: (m: string) => void }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+      <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginRight: 2 }}>推荐模型：</span>
+      {models.map(m => (
+        <span key={m} onClick={() => onAdd(m)}
+          style={{ cursor: 'pointer', fontSize: 10, padding: '1px 6px', borderRadius: 3, background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--primary)', userSelect: 'none' }}
+          title={`点击添加 ${m}`}>{m}</span>
+      ))}
+    </div>
+  )
+}
+
 const COLUMN_GROUPS = [
   { id: 'col1', label: '素材输入', hasTemplate: false, summary: '输入配置' },
   { id: 'col2', label: '文档生成', hasTemplate: false, summary: '文档配置' },
@@ -1003,6 +1029,7 @@ export default function ProjSettingsPage() {
             <div className="form-label" style={{ marginTop: 12 }}>API Key</div><input className="form-input" value={pvKey} onChange={e => setPvKey(e.target.value)} placeholder="sk-..." />
             <div className="form-label" style={{ marginTop: 12 }}>Base URL</div><input className="form-input" value={pvUrl} onChange={e => setPvUrl(e.target.value)} placeholder="https://api.deepseek.com/v1" />
             <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div><input className="form-input" value={pvModels} onChange={e => setPvModels(e.target.value)} placeholder="deepseek-chat, deepseek-reasoner" />
+            <ModelTags models={RECOMMENDED_MODELS.llm} onAdd={m => setPvModels(prev => appendModel(prev, m))} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowProviderForm(false)}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={saveProvider} disabled={pvSaving}>{pvSaving ? '保存中...' : '保存'}</button>
@@ -1019,6 +1046,7 @@ export default function ProjSettingsPage() {
             <div className="form-label" style={{ marginTop: 12 }}>API Key</div><input className="form-input" value={tpvKey} onChange={e => setTpvKey(e.target.value)} placeholder="sk-..." />
             <div className="form-label" style={{ marginTop: 12 }}>Base URL</div><input className="form-input" value={tpvUrl} onChange={e => setTpvUrl(e.target.value)} placeholder="https://dashscope.aliyuncs.com/api/v1" />
             <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div><input className="form-input" value={tpvModels} onChange={e => setTpvModels(e.target.value)} placeholder="cosyvoice-v3-flash, cosyvoice-v3-plus" />
+            <ModelTags models={RECOMMENDED_MODELS.tts} onAdd={m => setTpvModels(prev => appendModel(prev, m))} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, cursor: 'pointer' }}>
               <input type="checkbox" checked={tpvDefault} onChange={e => setTpvDefault(e.target.checked)} />
               <span style={{ fontSize: 12 }}>设为默认提供商</span>
@@ -1039,6 +1067,7 @@ export default function ProjSettingsPage() {
             <div className="form-label" style={{ marginTop: 12 }}>API Key</div><input className="form-input" value={apvKey} onChange={e => setApvKey(e.target.value)} placeholder="sk-..." />
             <div className="form-label" style={{ marginTop: 12 }}>Base URL</div><input className="form-input" value={apvUrl} onChange={e => setApvUrl(e.target.value)} placeholder="https://dashscope.aliyuncs.com" />
             <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div><input className="form-input" value={apvModels} onChange={e => setApvModels(e.target.value)} placeholder="fun-asr, qwen3-asr-flash" />
+            <ModelTags models={RECOMMENDED_MODELS.asr} onAdd={m => setApvModels(prev => appendModel(prev, m))} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, cursor: 'pointer' }}>
               <input type="checkbox" checked={apvDefault} onChange={e => setApvDefault(e.target.checked)} />
               <span style={{ fontSize: 12 }}>设为默认提供商</span>
@@ -1059,6 +1088,7 @@ export default function ProjSettingsPage() {
             <div className="form-label" style={{ marginTop: 12 }}>API Key</div><input className="form-input" value={ipvKey} onChange={e => setIpvKey(e.target.value)} placeholder="sk-..." />
             <div className="form-label" style={{ marginTop: 12 }}>Base URL</div><input className="form-input" value={ipvUrl} onChange={e => setIpvUrl(e.target.value)} placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" />
             <div className="form-label" style={{ marginTop: 12 }}>模型列表（逗号分隔）</div><input className="form-input" value={ipvModels} onChange={e => setIpvModels(e.target.value)} placeholder="wanx-v1" />
+            <ModelTags models={RECOMMENDED_MODELS.image} onAdd={m => setIpvModels(prev => appendModel(prev, m))} />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 12, cursor: 'pointer' }}>
               <input type="checkbox" checked={ipvDefault} onChange={e => setIpvDefault(e.target.checked)} />
               <span style={{ fontSize: 12 }}>设为默认提供商</span>
