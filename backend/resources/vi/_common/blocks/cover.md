@@ -24,23 +24,8 @@
   <!-- 元数据信息表 -->
   <div style="position:absolute;top:560px;left:0;width:100%;text-align:center;">
     <table style="margin:0 auto;border-collapse:collapse;">
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:0 16px 14px 0;text-align:right;white-space:nowrap;">{{META_LABEL_1}}</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:0 0 14px 16px;text-align:left;">{{META_VALUE_1}}</td>
-      </tr>
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:14px 16px 14px 0;text-align:right;white-space:nowrap;">{{META_LABEL_2}}</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:14px 0 14px 16px;text-align:left;">{{META_VALUE_2}}</td>
-      </tr>
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:14px 16px 14px 0;text-align:right;white-space:nowrap;">{{META_LABEL_3}}</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:14px 0 14px 16px;text-align:left;">{{META_VALUE_3}}</td>
-      </tr>
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:14px 16px 0 0;text-align:right;white-space:nowrap;">{{META_LABEL_4}}</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:14px 0 0 16px;text-align:left;">{{META_VALUE_4}}</td>
-      </tr>
-    </table>
+{{INFO_TABLE}}
+        </table>
   </div>
 
   <!-- 底部品牌信息 -->
@@ -56,26 +41,20 @@
 
 | 变量 | 说明 | 来源 |
 |------|------|------|
-| `{{TITLE}}` | 文档主标题 | heading |
-| `{{SUBTITLE}}` | 副标题/简述，1-2 句说明文档性质与用途 | lead 字段或 body 首句提炼 |
-| `{{META_LABEL_1}}` | 元信息标签 1（如"日期"） | key_points[0] |
-| `{{META_VALUE_1}}` | 元信息值 1 | key_points[0] 对应内容 |
-| `{{META_LABEL_2}}` | 元信息标签 2（如"分类"） | key_points[1] |
-| `{{META_VALUE_2}}` | 元信息值 2 | key_points[1] 对应内容 |
-| `{{META_LABEL_3}}` | 元信息标签 3（如"关键词"） | key_points[2] |
-| `{{META_VALUE_3}}` | 元信息值 3 | key_points[2] 对应内容 |
-| `{{META_LABEL_4}}` | 元信息标签 4（如"版本"） | key_points[3] |
-| `{{META_VALUE_4}}` | 元信息值 4 | key_points[3] 对应内容 |
-| `{{BRAND_SIGNATURE}}` | 品牌签名 | 系统占位符，严禁替换为实际文字 |
-| `{{BRAND_COPYRIGHT}}` | 版权信息 | 系统占位符，严禁替换为实际文字 |
+| `{{TITLE}}` | 项目/文档标题 | heading |
+| `{{SUBTITLE}}` | 副标题。**字数限定：10-12 字符（含标点）。** | body 首句提炼 |
+| `{{KP_0}}`, `{{KP_1}}`, ... | 信息表各字段的值（标签名由编辑器 key_points 定义，动态生成） | key_points 数组，按序填入 |
+| `{{BRAND_SIGNATURE}}` | 品牌签名 | 来自系统通用设置，严禁替换为实际文字 |
+| `{{BRAND_COPYRIGHT}}` | 版权信息 | 来自系统通用设置，严禁替换为实际文字 |
 
 ## 硬性规则
 
-- **三段 flex 列布局不适用于封面。封面使用绝对定位。**
-- **`{{BRAND_SIGNATURE}}` 和 `{{BRAND_COPYRIGHT}}` 为系统占位符，必须原样保留，严禁替换为实际文字。**
-- 纯色 `var(--primary)` 背景，禁止渐变。
-- 禁止卡片容器（card_bg + border-radius + shadow）。
-- 仅保留模板中的单个 SVG 装饰圆，禁止添加额外圆圈。
-- 元数据表格无边框。
-- 禁止页头页尾。
-- 禁止 hex 色值（`#ffffff` 除外）。
+- **信息表标签和行数由编辑器 key_points 定义，不可自行增删改。**
+- **`{{KP_N}}` 按顺序填入 key_points 对应的值，不可跳过或重排。**
+- **`{{SUBTITLE}}` 字数限定 10-12 字符（含标点），超出或不足均为不合格输出。**
+- **{{BRAND_SIGNATURE}} 和 {{BRAND_COPYRIGHT}} 是系统占位符，严禁替换为实际文字。必须原样保留。**
+- 禁止渐变背景（使用纯色 `var(--primary)`）
+- 禁止卡片容器（card_bg + border-radius + shadow）
+- 禁止页头/页尾 div
+- 禁止多个 SVG 圆圈（仅保留模板中的单个 circle）
+- 禁止为表格添加边框（无边框表格）

@@ -22,27 +22,8 @@
 
   <div style="position:absolute;top:560px;left:0;width:100%;text-align:center;">
     <table style="margin:0 auto;border-collapse:collapse;">
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:0 12px 12px 0;text-align:right;white-space:nowrap;">编写日期</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:0 0 12px 12px;text-align:left;">{{DATE}}</td>
-      </tr>
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">内容分类</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 12px 12px;text-align:left;">{{DISH_TYPE}}</td>
-      </tr>
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">核心食材</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 12px 12px;text-align:left;">{{CORE_INGREDIENTS}}</td>
-      </tr>
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">工艺特征</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 12px 12px;text-align:left;">{{PROCESS_FEATURES}}</td>
-      </tr>
-      <tr>
-        <td style="font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 0 0;text-align:right;white-space:nowrap;">版本说明</td>
-        <td style="font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 0 12px;text-align:left;">{{VERSION_NOTE}}</td>
-      </tr>
-    </table>
+{{INFO_TABLE}}
+        </table>
   </div>
 
   <div style="position:absolute;bottom:50px;left:0;width:100%;text-align:center;font-size:12px;color:rgba(255,255,255,0.35);">
@@ -57,21 +38,20 @@
 
 | 变量 | 说明 | 来源 |
 |------|------|------|
-| `{{TITLE}}` | 菜品名称 | heading |
-| `{{SUBTITLE}}` | 副标题（核心食材口感描述） | body 首句提炼 |
-| `{{DATE}}` | 编写日期 | key_points[0] |
-| `{{DISH_TYPE}}` | 内容分类（热菜砂锅煲 / 粤式 等） | key_points[1] |
-| `{{CORE_INGREDIENTS}}` | 核心食材（· 分隔） | key_points[2] |
-| `{{PROCESS_FEATURES}}` | 工艺特征 | key_points[3] |
-| `{{VERSION_NOTE}}` | 版本说明 | key_points[4] |
+| `{{TITLE}}` | 项目/文档标题 | heading |
+| `{{SUBTITLE}}` | 副标题。**字数限定：10-12 字符（含标点）。** | body 首句提炼 |
+| `{{KP_0}}`, `{{KP_1}}`, ... | 信息表各字段的值（标签名由编辑器 key_points 定义，动态生成） | key_points 数组，按序填入 |
 | `{{BRAND_SIGNATURE}}` | 品牌签名 | 来自系统通用设置，严禁替换为实际文字 |
 | `{{BRAND_COPYRIGHT}}` | 版权信息 | 来自系统通用设置，严禁替换为实际文字 |
 
 ## 硬性规则
 
+- **信息表标签和行数由编辑器 key_points 定义，不可自行增删改。**
+- **`{{KP_N}}` 按顺序填入 key_points 对应的值，不可跳过或重排。**
+- **`{{SUBTITLE}}` 字数限定 10-12 字符（含标点），超出或不足均为不合格输出。**
 - **{{BRAND_SIGNATURE}} 和 {{BRAND_COPYRIGHT}} 是系统占位符，严禁替换为实际文字。必须原样保留。**
-- 渐变背景（使用纯色 `var(--primary)`）
-- 卡片容器（card_bg + border-radius + shadow）
-- 页头/页尾 div
-- 多个 SVG 圆圈（仅保留模板中的单个 circle）
-- 为表格添加边框（无边框表格）
+- 禁止渐变背景（使用纯色 `var(--primary)`）
+- 禁止卡片容器（card_bg + border-radius + shadow）
+- 禁止页头/页尾 div
+- 禁止多个 SVG 圆圈（仅保留模板中的单个 circle）
+- 禁止为表格添加边框（无边框表格）

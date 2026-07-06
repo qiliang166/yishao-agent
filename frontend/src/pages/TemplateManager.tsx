@@ -130,6 +130,67 @@ function resolveColorVarsInText(text: string, schemeColors: SchemeColors | null,
   })
 }
 
+function hexToRgbStr(hex: string): string {
+  const [r,g,b] = hexToRgb(hex)
+  return `${r},${g},${b}`
+}
+
+function renderBlockPreview(htmlTemplate: string, scheme: SchemeColors | null, C: ReturnType<typeof makeColors>): string {
+  // Replace {{INFO_TABLE}} with sample rows so the table renders visually
+  const isDark = htmlTemplate.includes('#ffffff')
+  const labelColor = isDark ? 'rgba(255,255,255,0.35)' : 'rgba(var(--text-rgb),0.35)'
+  const valueColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(var(--text-rgb),0.6)'
+  const sampleRows = [
+    `      <tr><td style="font-size:12px;color:${labelColor};padding:0 12px 12px 0;text-align:right;white-space:nowrap;">标签1</td><td style="font-size:14px;color:${valueColor};padding:0 0 12px 12px;text-align:left;">示例值</td></tr>`,
+    `      <tr><td style="font-size:12px;color:${labelColor};padding:12px 12px 12px 0;text-align:right;white-space:nowrap;">标签2</td><td style="font-size:14px;color:${valueColor};padding:12px 0 12px 12px;text-align:left;">示例值</td></tr>`,
+    `      <tr><td style="font-size:12px;color:${labelColor};padding:12px 12px 0 0;text-align:right;white-space:nowrap;">标签3</td><td style="font-size:14px;color:${valueColor};padding:12px 0 0 12px;text-align:left;">示例值</td></tr>`,
+  ]
+  let html = htmlTemplate.replace('{{INFO_TABLE}}', sampleRows.join('\n'))
+  // Replace content placeholders with visible sample text
+  html = html.replace(/\{\{TITLE\}\}/g, '项目名称')
+  html = html.replace(/\{\{SUBTITLE\}\}/g, '副标题示例')
+  // Resolve color variables
+  html = html.replace(/\{\{primary\}\}/g, C.p)
+  html = html.replace(/\{\{primary_rgb\}\}/g, hexToRgbStr(C.p))
+  html = html.replace(/\{\{accent\}\}/g, C.a)
+  html = html.replace(/\{\{text_rgb\}\}/g, hexToRgbStr(C.tp))
+  // Wrap in full document
+  const prgb = hexToRgbStr(C.p)
+  const trgb = hexToRgbStr(C.tp)
+  return `<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root {
+  --primary: ${C.p};
+  --primary-rgb: ${prgb};
+  --secondary: ${C.s};
+  --accent: ${C.a};
+  --text: ${C.tp};
+  --text-rgb: ${trgb};
+  --text-secondary: ${C.ts};
+  --text-muted: ${C.tm};
+  --bg: ${C.bg};
+  --card-bg: ${C.cb};
+  --border: ${C.b};
+  --border-light: ${C.bl};
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; background: #e2e8f0;
+  font-family: Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+</style>
+</head>
+<body>
+${html}
+</body>
+</html>`
+}
+
 function mdToHtml(md: string, title: string, schemeColors?: SchemeColors | null, meta?: StyleMeta | null): string {
   const C = makeColors(schemeColors || null)
   // Minimal markdown → styled HTML for preview
@@ -2028,9 +2089,20 @@ function TemplateManager() {
     const C = makeColors(scheme)
     let html: string
     if (isMeta || isBlock) {
-      // meta / doc-block tabs: render raw content as HTML (or convert md)
-      const isHtml = /<html|<body|<div|<table|<svg|<!DOCTYPE/i.test(raw.trim().slice(0, 200))
-      html = isHtml ? resolveColorVarsInText(raw, scheme, C.p) : mdToHtml(raw, `${editorStyleName} · ${section}`, scheme, meta)
+      // For block files: extract HTML from ```html fenced code block and render
+      // it as a live preview (with CSS variables set from the active scheme).
+      // Fall back to markdown rendering if no HTML template found.
+      let blockHtml: string | null = null
+      if (isBlock) {
+        const m = raw.match(/```html\s*\n([\s\S]*?)\n```/)
+        if (m && m[1].trim()) blockHtml = m[1].trim()
+      }
+      if (blockHtml) {
+        html = renderBlockPreview(blockHtml, scheme, C)
+      } else {
+        const isHtml = /<html|<body|<div|<table|<svg|<!DOCTYPE/i.test(raw.trim().slice(0, 200))
+        html = isHtml ? resolveColorVarsInText(raw, scheme, C.p) : mdToHtml(raw, `${editorStyleName} · ${section}`, scheme, meta)
+      }
     } else if (isTemplate) {
       // template tabs: render as A4 document visual preview (same as P27 document)
       html = genSlidePreview('document', editorStyleName, scheme, meta)
