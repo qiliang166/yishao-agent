@@ -90,7 +90,10 @@ function HomePage() {
           value={search} onChange={e => setSearch(e.target.value)} />
         <HelpButton location="home" />
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowWizard(true)}>快速上手</button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowWizard(true)}
+            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', fontWeight: 600 }}>
+            🚀 快速上手
+          </button>
           <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建项目</button>
         </div>
       </div>

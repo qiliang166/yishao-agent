@@ -14,13 +14,14 @@ import PromptStudioPage from './pages/PromptStudioPage'
 import { ModalProvider } from './components/ModalProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import SettingsLock from './components/SettingsLock'
+import SetupWizard from './components/SetupWizard'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LicenseProvider } from './contexts/LicenseContext'
 import { api } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
 
-function Sidebar() {
+function Sidebar({ onOpenWizard, wizardDone }: { onOpenWizard?: () => void; wizardDone?: boolean }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [brandLogo, setBrandLogo] = useState('⚡')
@@ -146,7 +147,17 @@ function Sidebar() {
           }} />
           {brandName} {sidebarVersion}
         </div>
-        <div style={{ fontSize: 10, display: 'flex', gap: 8 }}>
+        {onOpenWizard && !wizardDone && (
+          <button onClick={onOpenWizard} style={{
+            display: 'block', width: '100%', padding: '6px 0', marginTop: 8,
+            fontSize: 11, fontWeight: 600, color: '#fff', cursor: 'pointer',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            border: 'none', borderRadius: 6, textAlign: 'center',
+          }}>
+            🚀 快速上手
+          </button>
+        )}
+        <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 8 }}>
           <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
           <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
@@ -224,6 +235,8 @@ function AppShell() {
   const location = useLocation()
   const { isAuthenticated, passwordRequired, loading: authLoading } = useAuth()
   const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
+  const [showWizard, setShowWizard] = useState(false)
+  const [wizardDone, setWizardDone] = useState(() => localStorage.getItem('setup_wizard_done') === '1')
 
   if (!authLoading && passwordRequired && !isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -232,8 +245,9 @@ function AppShell() {
   return (
     <>
       <PhoneReminder />
+      {showWizard && <SetupWizard onDone={() => { setShowWizard(false); setWizardDone(true) }} />}
     <div className="app-layout">
-      <Sidebar />
+      <Sidebar onOpenWizard={() => setShowWizard(true)} wizardDone={wizardDone} />
       <div className="main-area">
         <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
           <Routes>
