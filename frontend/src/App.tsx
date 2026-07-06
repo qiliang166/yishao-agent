@@ -1,4 +1,4 @@
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import HomePage from './pages/HomePage'
 import ProjectDashboard from './pages/ProjectDashboard'
@@ -222,7 +222,12 @@ function PhoneReminder() {
 
 function AppShell() {
   const location = useLocation()
+  const { isAuthenticated, passwordRequired, loading: authLoading } = useAuth()
   const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
+
+  if (!authLoading && passwordRequired && !isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
 
   return (
     <>
