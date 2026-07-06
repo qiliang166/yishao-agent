@@ -7,7 +7,10 @@ Build: pyinstaller build.spec
 backend_datas = [
     ('frontend/dist', 'frontend/dist'),
     ('backend/resources', 'backend/resources'),
-    ('backend/deps', 'backend/deps'),
+    # Only include static assets that don't get created at runtime
+    ('backend/data/styles', 'backend/data/styles'),
+    ('backend/data/templates', 'backend/data/templates'),
+    ('backend/data/logos', 'backend/data/logos'),
 ]
 
 a = Analysis(

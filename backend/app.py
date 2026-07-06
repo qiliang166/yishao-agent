@@ -540,10 +540,21 @@ def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
 
         _ws = workspace_id  # shorthand
 
+        # Helper: fetch configs with workspace fallback (ws-specific → NULL/global)
+        def _fetch_configs(table: str, ws_id):
+            if ws_id:
+                rows = db.execute(
+                    f"SELECT * FROM {table} WHERE workspace_id = ? ORDER BY sort_order",
+                    (ws_id,)).fetchall()
+                if not rows:
+                    rows = db.execute(
+                        f"SELECT * FROM {table} WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
+                return rows
+            return db.execute(
+                f"SELECT * FROM {table} WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
+
         # 1. Column configs → project_items (col1-col5)
-        col_configs = db.execute(
-            "SELECT * FROM column_configs WHERE workspace_id = ? ORDER BY sort_order",
-            (_ws,)).fetchall() if _ws else []
+        col_configs = _fetch_configs("column_configs", _ws)
         for i, cc in enumerate(col_configs):
             pi_id = f"pi-{project_id}-{cc['column_id']}"
             existing = db.execute(
@@ -558,9 +569,7 @@ def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
                  output_mode, cc["rules"] or "{}", i))
 
         # 2. Speech configs → project_items
-        speech_configs = db.execute(
-            "SELECT * FROM speech_configs WHERE workspace_id = ? ORDER BY sort_order",
-            (_ws,)).fetchall() if _ws else []
+        speech_configs = _fetch_configs("speech_configs", _ws)
         for i, sc in enumerate(speech_configs):
             pi_id = f"pi-{project_id}-speech-{sc['id'].replace('speech-', '')}"
             existing = db.execute(
@@ -574,9 +583,7 @@ def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
                  "speech_config", "{}", 10 + i))
 
         # 3. TTS configs → project_items
-        tts_configs = db.execute(
-            "SELECT * FROM tts_configs WHERE workspace_id = ? ORDER BY sort_order",
-            (_ws,)).fetchall() if _ws else []
+        tts_configs = _fetch_configs("tts_configs", _ws)
         for i, tc in enumerate(tts_configs):
             pi_id = f"pi-{project_id}-tts-{tc['id'].replace('tts-', '')}"
             existing = db.execute(
@@ -590,9 +597,7 @@ def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
                  "tts_config", "{}", 20 + i))
 
         # 4. Core prompt configs → project_items
-        core_configs = db.execute(
-            "SELECT * FROM core_prompt_configs WHERE workspace_id = ? ORDER BY sort_order",
-            (_ws,)).fetchall() if _ws else []
+        core_configs = _fetch_configs("core_prompt_configs", _ws)
         for i, cpc in enumerate(core_configs):
             safe_key = cpc["prompt_key"].replace("/", "-").replace("\\", "-")
             pi_id = f"pi-{project_id}-core-{safe_key}"

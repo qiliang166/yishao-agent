@@ -1,9 +1,13 @@
 """Style loader — reads PPT-Agent style YAMLs and exposes metadata for the frontend."""
 import os
+import sys
 import json
 import yaml
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 _STYLE_GROUPS = {
     "blueprint": "Tech / Dark",
