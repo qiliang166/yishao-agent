@@ -3258,7 +3258,7 @@ def _build_cover_info_table(skill_json: str, vi_section: str) -> str:
 
         rows.append(
             f'      <tr>\n'
-            f'        <td style="font-size:12px;color:{label_color};{label_pad};text-align:right;white-space:nowrap;">{label_text}</td>\n'
+            f'        <td style="font-size:12px;color:{label_color};{label_pad};text-align:right;white-space:nowrap;">{_html_mod.escape(label_text)}</td>\n'
             f'        <td style="font-size:14px;color:{value_color};{value_pad};text-align:left;">{var_name}</td>\n'
             f'      </tr>'
         )
@@ -3313,7 +3313,7 @@ def _build_toc_rows(skill_json: str, vi_section: str) -> str:
         rows.append(
             f'      <tr>\n'
             f'        <td style="padding:10px 0;color:var(--primary);font-weight:600;font-size:14px;vertical-align:top;width:40px;">{num}</td>\n'
-            f'        <td style="padding:10px 0;color:var(--text);vertical-align:top;border-bottom:1px dotted rgba(var(--text-rgb),0.15);">{label}</td>\n'
+            f'        <td style="padding:10px 0;color:var(--text);vertical-align:top;border-bottom:1px dotted rgba(var(--text-rgb),0.15);">{_html_mod.escape(label)}</td>\n'
             f'        <td style="padding:10px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:top;width:40px;">{page}</td>\n'
             f'      </tr>'
         )
