@@ -187,6 +187,20 @@ function renderBlockPreview(htmlTemplate: string, scheme: SchemeColors | null, C
   html = html.replace(/\{\{accent\}\}/g, C.a)
   html = html.replace(/\{\{text_rgb\}\}/g, trgb)
 
+  // ── {{TOC_ROWS}} sample rows ──
+  const sampleTocRows: string[] = []
+  for (let i = 0; i < 4; i++) {
+    const num = String(i + 1).padStart(2, '0')
+    sampleTocRows.push(
+      `<tr>` +
+      `<td style="padding:10px 0;color:var(--primary);font-weight:600;font-size:14px;vertical-align:top;width:40px;">${num}</td>` +
+      `<td style="padding:10px 0;color:var(--text);vertical-align:top;border-bottom:1px dotted rgba(${trgb},0.15);">章节${i + 1}标题示例</td>` +
+      `<td style="padding:10px 0;color:rgba(${trgb},0.45);text-align:right;vertical-align:top;width:40px;">${i + 2}</td>` +
+      `</tr>`
+    )
+  }
+  html = html.replace('{{TOC_ROWS}}', sampleTocRows.join('\n'))
+
   // ── Any remaining {{...}} placeholders → sample filler ──
   html = html.replace(/\{\{[A-Z_]+\}\}/g, '—')
 

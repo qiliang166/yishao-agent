@@ -7,6 +7,11 @@ interface Dimension {
   desc: string
 }
 
+interface Chapter {
+  label: string
+  example: string
+}
+
 interface PageDef {
   id: string
   type: PageType
@@ -18,13 +23,14 @@ interface PageDef {
   description?: string       // cover
   metaFields?: string[]      // cover — key_point labels
   metaExamples?: string[]    // cover — hints/examples for each metaField
+  chapters?: Chapter[]       // toc — chapter entries
 }
 
 type PageType = 'cover' | 'toc' | 'content' | 'table' | 'chart' | 'diagram' | 'flowchart' | 'closing'
 
 const PAGE_TYPES: { type: PageType; label: string; hint: string }[] = [
   { type: 'cover', label: '封面', hint: '标题 / 副标题 / 基础信息 / 内容简述' },
-  { type: 'toc', label: '目录', hint: '内容导航与章节概览' },
+  { type: 'toc', label: '目录', hint: '章节条目列表，带标签和说明引导 LLM 填空' },
   { type: 'content', label: '内容页', hint: '通用自由内容，多维度属性描述' },
   { type: 'table', label: '表格', hint: '多列结构化数据表格' },
   { type: 'chart', label: '图表', hint: '数据图表、统计可视化' },
@@ -62,6 +68,8 @@ function emptyPage(type: PageType): PageDef {
     base.description = ''
     base.metaFields = ['']
     base.metaExamples = ['']
+  } else if (type === 'toc') {
+    base.chapters = [{ label: '', example: '' }]
   }
   return base
 }
@@ -74,6 +82,10 @@ function _dimChange(dims: Dimension[], idx: number, field: 'label' | 'desc', val
 
 function _strArrChange(arr: string[], idx: number, val: string): string[] {
   return arr.map((s, i) => (i === idx ? val : s))
+}
+
+function _chapterChange(chapters: Chapter[], idx: number, field: 'label' | 'example', val: string): Chapter[] {
+  return chapters.map((c, i) => (i === idx ? { ...c, [field]: val } : c))
 }
 
 // ── Component ──
@@ -107,12 +119,21 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
         } else if (t === 'cover') {
           def.metaFields = (p.key_points || []).length > 0 ? p.key_points : ['']
           def.metaExamples = p.examples || []
-          // Pad/trim metaExamples to match metaFields length
           while (def.metaExamples!.length < def.metaFields!.length) def.metaExamples!.push('')
           if (def.metaExamples!.length > def.metaFields!.length) def.metaExamples = def.metaExamples!.slice(0, def.metaFields!.length)
           def.titleFormat = p.title_format || ''
           def.subtitle = p.subtitle || ''
           def.description = p.description || ''
+        } else if (t === 'toc') {
+          const chapters = p.chapters || []
+          if (chapters.length > 0) {
+            def.chapters = chapters.map((ch: any) => ({
+              label: ch.label || '',
+              example: ch.example || ''
+            }))
+          } else {
+            def.chapters = [{ label: '', example: '' }]
+          }
         }
         return def
       })
@@ -135,6 +156,12 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
         if (p.titleFormat) s.title_format = p.titleFormat
         if (p.subtitle) s.subtitle = p.subtitle
         if (p.description) s.description = p.description
+      } else if (p.type === 'toc') {
+        const chapters = (p.chapters || []).filter(c => c.label.trim()).map(c => ({
+          label: c.label.trim(),
+          example: (c.example || '').trim()
+        }))
+        if (chapters.length > 0) s.chapters = chapters
       }
       return s
     })
@@ -175,6 +202,13 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
     setPages(prev => prev.map(p => p.id === id ? { ...p, columns: _strArrChange(p.columns || [], idx, v) } : p))
   const removeCol = (id: string, idx: number) =>
     setPages(prev => prev.map(p => p.id === id ? { ...p, columns: (p.columns || []).filter((_, i) => i !== idx) } : p))
+
+  const addChapter = (id: string) => setPages(prev => prev.map(p =>
+    p.id === id ? { ...p, chapters: [...(p.chapters || []), { label: '', example: '' }] } : p))
+  const setChapter = (id: string, idx: number, field: 'label' | 'example', v: string) =>
+    setPages(prev => prev.map(p => p.id === id ? { ...p, chapters: _chapterChange(p.chapters || [], idx, field, v) } : p))
+  const removeChapter = (id: string, idx: number) =>
+    setPages(prev => prev.map(p => p.id === id ? { ...p, chapters: (p.chapters || []).filter((_, i) => i !== idx) } : p))
 
   // ── Styles ──
   const pageNumStyle: React.CSSProperties = { fontWeight: 600, fontSize: 11, minWidth: 36, color: 'var(--text-secondary)' }
@@ -316,7 +350,32 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
             </div>
           )}
 
-          {(p.type === 'toc' || p.type === 'closing') && (
+          {/* toc: 章节条目列表 */}
+          {p.type === 'toc' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {(p.chapters || []).map((c, ci) => (
+                <div key={ci} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <span style={dimLabelStyle}>章节{ci + 1}</span>
+                  <input value={c.label}
+                    onChange={e => setChapter(p.id, ci, 'label', e.target.value)}
+                    placeholder="章节标题（如：原料准备与预处理）" style={{ ...inputStyle, flex: 1 }} />
+                  <input value={c.example || ''}
+                    onChange={e => setChapter(p.id, ci, 'example', e.target.value)}
+                    placeholder="说明（可选，如：食材采购、验收与储存流程）" style={{ ...inputStyle, flex: 2 }} />
+                  <button onClick={() => removeChapter(p.id, ci)}
+                    style={{ fontSize: 11, padding: '1px 4px', color: 'var(--danger)', border: 'none', background: 'transparent', cursor: 'pointer' }}>
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => addChapter(p.id)}
+                style={{ fontSize: 10, padding: '2px 6px', alignSelf: 'flex-start', marginTop: 2 }}>
+                + 添加章节
+              </button>
+            </div>
+          )}
+
+          {p.type === 'closing' && (
             <div className="form-hint">此页面类型仅需标题，无需额外配置字段。</div>
           )}
         </div>

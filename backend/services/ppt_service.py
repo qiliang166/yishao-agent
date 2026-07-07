@@ -2332,33 +2332,32 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
     parts = []
 
     # Section-specific file FIRST — guaranteed included before truncation
-    if section != "toc":
-        col_section_file = None
-        if column_id:
-            col_section_file = os.path.join(vi_dir, column_id, f"{section}.md")
-        section_file = os.path.join(vi_dir, f"{section}.md")
-        # Also check blocks/ and templates/ subdirectories (document blocks/templates)
-        blocks_file = os.path.join(vi_dir, "blocks", f"{section}.md")
-        common_blocks_file = os.path.join(BASE_DIR, "resources", "vi", "_common", "blocks", f"{section}.md")
-        templates_file = os.path.join(vi_dir, "templates", f"{section}.md")
-        # Priority depends on column type:
-        # - A4/portrait (col3): column > blocks/ > _common/blocks/ > templates/ ONLY
-        #   (NEVER load PPT page type files like content.md/data.md for A4)
-        # - PPT/landscape (col4/col5): column > style top-level > blocks/ > _common/blocks/ > templates/
-        cw_prio, ch_prio = _get_canvas_dimensions(column_id, project_id=project_id) if column_id else (1280, 720)
-        is_a4_prio = ch_prio > cw_prio
-        if is_a4_prio:
-            candidates = (col_section_file, blocks_file, common_blocks_file, templates_file)
-        else:
-            candidates = (col_section_file, section_file, blocks_file, common_blocks_file, templates_file)
-        chosen = None
-        for candidate in candidates:
-            if candidate and os.path.exists(candidate):
-                chosen = candidate
-                break
-        if chosen:
-            with open(chosen, "r", encoding="utf-8") as f:
-                parts.append(f.read())
+    col_section_file = None
+    if column_id:
+        col_section_file = os.path.join(vi_dir, column_id, f"{section}.md")
+    section_file = os.path.join(vi_dir, f"{section}.md")
+    # Also check blocks/ and templates/ subdirectories (document blocks/templates)
+    blocks_file = os.path.join(vi_dir, "blocks", f"{section}.md")
+    common_blocks_file = os.path.join(BASE_DIR, "resources", "vi", "_common", "blocks", f"{section}.md")
+    templates_file = os.path.join(vi_dir, "templates", f"{section}.md")
+    # Priority depends on column type:
+    # - A4/portrait (col3): column > blocks/ > _common/blocks/ > templates/ ONLY
+    #   (NEVER load PPT page type files like content.md/data.md for A4)
+    # - PPT/landscape (col4/col5): column > style top-level > blocks/ > _common/blocks/ > templates/
+    cw_prio, ch_prio = _get_canvas_dimensions(column_id, project_id=project_id) if column_id else (1280, 720)
+    is_a4_prio = ch_prio > cw_prio
+    if is_a4_prio:
+        candidates = (col_section_file, blocks_file, common_blocks_file, templates_file)
+    else:
+        candidates = (col_section_file, section_file, blocks_file, common_blocks_file, templates_file)
+    chosen = None
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            chosen = candidate
+            break
+    if chosen:
+        with open(chosen, "r", encoding="utf-8") as f:
+            parts.append(f.read())
 
     # General vi.md second — fills remaining space after section rules
     vi_md_path = os.path.join(vi_dir, "vi.md")
@@ -2674,6 +2673,24 @@ def _build_structure_summary(skill_template: str) -> str:
                         ex_lines.append(f"  - {str(kp).strip()} → 要求：{str(ex).strip()}")
                 if ex_lines:
                     detail += "\n" + "\n".join(ex_lines)
+
+        # Surface chapters for toc pages
+        if ptype == "toc":
+            chapters = p.get("chapters", [])
+            if isinstance(chapters, list) and chapters:
+                ch_lines = []
+                for j, ch in enumerate(chapters[:15]):
+                    if isinstance(ch, dict):
+                        label = str(ch.get("label", "")).strip()
+                        example = str(ch.get("example", "")).strip()
+                        if label:
+                            ch_lines.append(f"  - 章节{j+1}：{label}" + (f"（说明：{example}）" if example else ""))
+                if ch_lines:
+                    detail = f"（{len(chapters)} 个章节）" + "\n" + "\n".join(ch_lines)
+            elif isinstance(kps, list) and kps:
+                # Fallback: old format with key_points (backward compat)
+                kp_list = "、".join(str(k) for k in kps[:10])
+                detail = f"（{len(kps)} 项：{kp_list}）"
 
         lines.append(f"| {i+1} | {ptype} | {heading} {detail} |")
 
@@ -3249,6 +3266,61 @@ def _build_cover_info_table(skill_json: str, vi_section: str) -> str:
     return "\n".join(rows)
 
 
+def _build_toc_rows(skill_json: str, vi_section: str) -> str:
+    """Build the TOC table rows for a toc slide from SKILL chapters.
+
+    Reads the toc page's chapters from the SKILL JSON (editor-defined structure),
+    then generates <tr> rows with placeholder entry titles and page numbers.
+    Format matches _common/blocks/toc.md: 编号 | 标题(dotted line) | 页码.
+
+    Returns empty string if no toc page found or no chapters defined.
+    """
+    import json as _json_toc
+
+    if not skill_json or not skill_json.strip():
+        return ""
+
+    try:
+        pages = _json_toc.loads(skill_json)
+    except Exception:
+        return ""
+
+    if not isinstance(pages, list) or len(pages) == 0:
+        return ""
+
+    toc = None
+    for p in pages:
+        if isinstance(p, dict) and p.get("page_type") == "toc":
+            toc = p
+            break
+    if not toc:
+        return ""
+
+    chapters = toc.get("chapters", [])
+    if not chapters or len(chapters) == 0:
+        return ""
+
+    rows = []
+    for i, ch in enumerate(chapters):
+        if not isinstance(ch, dict):
+            continue
+        label = str(ch.get("label", "")).strip()
+        if not label:
+            continue
+        num = str(i + 1).zfill(2)
+        page = f"{{{{ENTRY_{i}_PAGE}}}}"
+
+        rows.append(
+            f'      <tr>\n'
+            f'        <td style="padding:10px 0;color:var(--primary);font-weight:600;font-size:14px;vertical-align:top;width:40px;">{num}</td>\n'
+            f'        <td style="padding:10px 0;color:var(--text);vertical-align:top;border-bottom:1px dotted rgba(var(--text-rgb),0.15);">{label}</td>\n'
+            f'        <td style="padding:10px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:top;width:40px;">{page}</td>\n'
+            f'      </tr>'
+        )
+
+    return "\n".join(rows)
+
+
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
                            temperature: float = 0.3, column_id: str = "",
@@ -3360,6 +3432,23 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     _rows_html = _build_cover_info_table(_pi[0], vi_section)
                     if _rows_html:
                         vi_section = vi_section.replace("{{INFO_TABLE}}", _rows_html)
+            except Exception:
+                pass
+
+        # ── Dynamic TOC rows (A4 only) ──
+        # Replace {{TOC_ROWS}} in toc.md with table rows built from the
+        # editor-defined chapters. Reads from project_items.
+        if is_a4 and stype == "toc" and vi_section and "{{TOC_ROWS}}" in vi_section:
+            try:
+                _db_toc = get_db()
+                _pi_toc = _db_toc.execute(
+                    "SELECT skill FROM project_items WHERE id = ?",
+                    (f"pi-{project_id}-{column_id}",)
+                ).fetchone()
+                if _pi_toc and _pi_toc[0]:
+                    _toc_html = _build_toc_rows(_pi_toc[0], vi_section)
+                    if _toc_html:
+                        vi_section = vi_section.replace("{{TOC_ROWS}}", _toc_html)
             except Exception:
                 pass
 
