@@ -187,19 +187,31 @@ function renderBlockPreview(htmlTemplate: string, scheme: SchemeColors | null, C
   html = html.replace(/\{\{accent\}\}/g, C.a)
   html = html.replace(/\{\{text_rgb\}\}/g, trgb)
 
-  // ── {{TOC_ROWS}} sample rows ──
+  // ── {{TOC_ROWS}} sample rows (matches col3/toc.md circle style) ──
+  const circleColors = [C.p, C.s, C.a, C.p, C.s]
   const sampleTocRows: string[] = []
   for (let i = 0; i < 4; i++) {
     const num = String(i + 1).padStart(2, '0')
+    const circleColor = circleColors[i] || C.p
     sampleTocRows.push(
       `<tr>` +
-      `<td style="padding:10px 0;color:var(--primary);font-weight:600;font-size:14px;vertical-align:top;width:40px;">${num}</td>` +
-      `<td style="padding:10px 0;color:var(--text);vertical-align:top;border-bottom:1px dotted rgba(${trgb},0.15);">章节${i + 1}标题示例</td>` +
-      `<td style="padding:10px 0;color:rgba(${trgb},0.45);text-align:right;vertical-align:top;width:40px;">${i + 2}</td>` +
+      `<td style="padding:12px 0;vertical-align:middle;width:48px;">` +
+      `<div style="width:32px;height:32px;border-radius:50%;background:${circleColor};color:#ffffff;font-size:14px;font-weight:600;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;align-items:center;justify-content:center;">${num}</div>` +
+      `</td>` +
+      `<td style="padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(${trgb},0.15);font-weight:600;font-size:16px;">章节${i + 1}标题示例</td>` +
+      `<td style="padding:12px 0;color:rgba(${trgb},0.45);text-align:right;vertical-align:middle;width:40px;font-size:13px;">${i + 2}</td>` +
       `</tr>`
     )
   }
   html = html.replace('{{TOC_ROWS}}', sampleTocRows.join('\n'))
+
+  // ── Chart color placeholders (used in TOC circle numbers) ──
+  html = html.replace(/\{\{CHART_0\}\}/g, C.cc[0] || C.p)
+  html = html.replace(/\{\{CHART_1\}\}/g, C.cc[1] || C.a)
+  html = html.replace(/\{\{CHART_2\}\}/g, C.cc[2] || C.s)
+  html = html.replace(/\{\{CHART_3\}\}/g, C.cc[3] || C.p)
+  html = html.replace(/\{\{CHART_4\}\}/g, C.cc[4] || C.a)
+  html = html.replace(/\{\{CHART_COLOR\}\}/g, C.a)
 
   // ── Any remaining {{...}} placeholders → sample filler ──
   html = html.replace(/\{\{[A-Z_]+\}\}/g, '—')
@@ -228,6 +240,9 @@ function renderBlockPreview(htmlTemplate: string, scheme: SchemeColors | null, C
   --border-light: ${C.bl};
   --chart-0: ${C.cc[0] || C.p};
   --chart-1: ${C.cc[1] || C.a};
+  --chart-2: ${C.cc[2] || C.s};
+  --chart-3: ${C.cc[3] || C.p};
+  --chart-4: ${C.cc[4] || C.a};
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {

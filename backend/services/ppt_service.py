@@ -3310,11 +3310,15 @@ def _build_toc_rows(skill_json: str, vi_section: str) -> str:
         num = str(i + 1).zfill(2)
         page = f"{{{{ENTRY_{i}_PAGE}}}}"
 
+        chart_idx = i % 5
+        chart_color = f"{{{{CHART_{chart_idx}}}}}"
         rows.append(
             f'      <tr>\n'
-            f'        <td style="padding:10px 0;color:var(--primary);font-weight:600;font-size:14px;vertical-align:top;width:40px;">{num}</td>\n'
-            f'        <td style="padding:10px 0;color:var(--text);vertical-align:top;border-bottom:1px dotted rgba(var(--text-rgb),0.15);">{_html_mod.escape(label)}</td>\n'
-            f'        <td style="padding:10px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:top;width:40px;">{page}</td>\n'
+            f'        <td style="padding:12px 0;vertical-align:middle;width:48px;">\n'
+            f'          <div style="width:32px;height:32px;border-radius:50%;background:{chart_color};color:#ffffff;font-size:14px;font-weight:600;font-family:\'DM Sans\',Inter,\'PingFang SC\',\'Microsoft YaHei\',sans-serif;display:flex;align-items:center;justify-content:center;">{num}</div>\n'
+            f'        </td>\n'
+            f'        <td style="padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(var(--text-rgb),0.15);font-weight:600;font-size:16px;">{_html_mod.escape(label)}</td>\n'
+            f'        <td style="padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:13px;">{page}</td>\n'
             f'      </tr>'
         )
 
