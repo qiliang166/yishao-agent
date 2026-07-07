@@ -85,7 +85,7 @@ async def generate_image(
             "parameters": {
                 "size": size,
                 "n": n,
-                "prompt_extend": True,
+                "prompt_extend": False,
                 "watermark": False,
             },
         }

@@ -54,7 +54,109 @@ def _clean_json_response(response: str) -> str:
     # Remove PPT-Agent [PPT_OUTLINE] markers
     text = re.sub(r'\[PPT_OUTLINE\]\s*', '', text)
     text = re.sub(r'\[/PPT_OUTLINE\]\s*', '', text)
+    text = text.strip()
+    if not text:
+        return text
+    # Find the first JSON structure character (may be after some text)
+    start = -1
+    opener = closer = ''
+    for i, ch in enumerate(text):
+        if ch in ('[', '{'):
+            start = i
+            opener = ch
+            closer = ']' if ch == '[' else '}'
+            break
+    if start < 0:
+        return text
+    if start > 0:
+        text = text[start:]
+    # Bracket matching to extract just the JSON (skip trailing text)
+    depth = 0
+    end = 0
+    for i, ch in enumerate(text):
+        if ch == opener:
+            depth += 1
+        elif ch == closer:
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                break
+    if end > 0:
+        text = text[:end]
     return text.strip()
+
+
+def _convert_outline_to_slides(data: dict) -> list:
+    """Convert outline-architect format (parts+cover) to flat slides array.
+
+    Input:  {"title":..., "cover":{...}, "table_of_contents":{...},
+             "parts":[{"pages":[{...},...]}], "end_page":{...}}
+    Output: [{"seq":1,"heading":...,"page_type":"cover",...}, ...]
+    """
+    slides = []
+    seq = 0
+
+    # 1. Cover page
+    cover = data.get("cover", {})
+    if cover:
+        seq += 1
+        cover_heading = cover.get("heading", "") or cover.get("title", "")
+        slides.append({
+            "seq": seq,
+            "heading": cover_heading or data.get("title", ""),
+            "page_type": "cover",
+            "subtitle": cover.get("subtitle", "") or data.get("subtitle", ""),
+            "description": cover.get("description", ""),
+            "title_format": cover.get("title_format", "") or cover_heading or data.get("title", ""),
+            "key_points": cover.get("key_points", []),
+            "images": cover.get("images", []),
+            "cards": cover.get("cards", []),
+        })
+
+    # 2. TOC page
+    toc = data.get("table_of_contents", {})
+    sections = toc.get("sections", []) if isinstance(toc, dict) else []
+    if sections:
+        seq += 1
+        slides.append({
+            "seq": seq,
+            "heading": "目录",
+            "page_type": "toc",
+            "key_points": sections,
+            "body": "",
+        })
+
+    # 3. Content pages from parts
+    for part in data.get("parts", []):
+        for page in part.get("pages", []):
+            seq += 1
+            ptype = page.get("type", "content")
+            slides.append({
+                "seq": seq,
+                "heading": page.get("title", ""),
+                "page_type": ptype,
+                "key_points": page.get("key_points", []),
+                "body": page.get("transition_cue", ""),
+                "layout_hint": page.get("layout_hint", ""),
+                "visual_weight": page.get("visual_weight", "medium"),
+                "kicker": part.get("title", ""),
+                "lead": part.get("key_message", ""),
+            })
+
+    # 4. End/closing page
+    end_page = data.get("end_page", {})
+    if end_page:
+        seq += 1
+        etype = end_page.get("type", "closing")
+        slides.append({
+            "seq": seq,
+            "heading": end_page.get("title", "谢谢"),
+            "page_type": etype if etype in ("closing", "thank_you", "summary") else "closing",
+            "body": end_page.get("content", ""),
+            "key_points": [],
+        })
+
+    return slides
 
 
 def _safe_run_async(coro):
@@ -330,6 +432,53 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                     rules = merged
                             except Exception:
                                 pass
+                        # ── column_configs fallback (systemic fix for ALL fields) ──
+                        # column_configs is the source of truth for workspace-level config.
+                        # project_items is a project-level snapshot, stale when:
+                        #   - user edits config in a different workspace than the project
+                        #   - project was created before config was updated
+                        # Fallback: project_items → project's ws column_configs → newest any ws.
+                        # Covers prompt, skill, rules — not just one field.
+                        if column_id:
+                            try:
+                                ws_id = None
+                                if project_id:
+                                    ws_row = db.execute(
+                                        "SELECT workspace_id FROM projects WHERE id = ?",
+                                        (project_id,)
+                                    ).fetchone()
+                                    if ws_row:
+                                        ws_id = ws_row["workspace_id"]
+
+                                # skill: always use newest from any workspace (structural
+                                # definition, user edits in WorkspaceSettingsPage).
+                                # prompt/rules: prefer project's own workspace.
+                                cc_skill = db.execute(
+                                    "SELECT skill FROM column_configs WHERE column_id = ? AND skill IS NOT NULL AND skill != '' ORDER BY updated_at DESC LIMIT 1",
+                                    (column_id,)
+                                ).fetchone()
+                                if cc_skill and cc_skill["skill"]:
+                                    col_skill = cc_skill["skill"]
+
+                                if ws_id:
+                                    cc_ws = db.execute(
+                                        "SELECT prompt, rules FROM column_configs WHERE column_id = ? AND workspace_id = ?",
+                                        (column_id, ws_id)
+                                    ).fetchone()
+                                    if cc_ws:
+                                        if not col_prompt and cc_ws["prompt"]:
+                                            col_prompt = cc_ws["prompt"]
+                                        if cc_ws["rules"]:
+                                            try:
+                                                cc_rules = json.loads(cc_ws["rules"])
+                                                if cc_rules and isinstance(cc_rules, dict):
+                                                    merged = dict(cc_rules)
+                                                    merged.update(rules)
+                                                    rules = merged
+                                            except Exception:
+                                                pass
+                            except Exception:
+                                pass
                     except Exception:
                         pass
                     slide_data = _generate_slides_staged(provider_id, model, rules, content,
@@ -411,6 +560,14 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             deck_html = _assemble_html_deck(slide_data, title, style_id, scheme_data, canvas_w=gen_canvas_w, canvas_h=gen_canvas_h)
             if scheme_data:
                 deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
+            # Final safeguard: resolve BRAND placeholders with actual DB values.
+            # _assemble_html_deck does per-slide replacement, but vars_slide_data
+            # below may use pre-fix html_vars copies that still contain placeholders.
+            if is_portrait:
+                _copyright_str, _sig_str = _load_branding()
+                import html as _html_esc
+                deck_html = deck_html.replace('{{BRAND_COPYRIGHT}}', _html_esc.escape(_copyright_str))
+                deck_html = deck_html.replace('{{BRAND_SIGNATURE}}', _html_esc.escape(_sig_str))
             html_path = os.path.join(html_dir, "index.html")
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(deck_html)
@@ -419,6 +576,11 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             # Save unresolved variable version for future color scheme switching
             vars_slide_data = [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_data]
             deck_vars = _assemble_html_deck(vars_slide_data, title, style_id, scheme_data, canvas_w=gen_canvas_w, canvas_h=gen_canvas_h)
+            if is_portrait:
+                _copyright_str, _sig_str = _load_branding()
+                import html as _html_esc2
+                deck_vars = deck_vars.replace('{{BRAND_COPYRIGHT}}', _html_esc2.escape(_copyright_str))
+                deck_vars = deck_vars.replace('{{BRAND_SIGNATURE}}', _html_esc2.escape(_sig_str))
             vars_path = os.path.join(html_dir, "index_vars.html")
             with open(vars_path, "w", encoding="utf-8") as f:
                 f.write(deck_vars)
@@ -775,6 +937,7 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                              column_id=column_id, project_id=project_id)
     if not stage1:
         return None
+    stage1 = _fix_stage1_table_keypoints(stage1, skill_template)
     _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
     if project_id:
         _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在规划布局...", "message": f"已提取 {len(stage1)} 页大纲"}
@@ -876,6 +1039,7 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
         if project_id:
             _ppt_status.pop(project_id, None)
         return None, ""
+    stage1 = _fix_stage1_table_keypoints(stage1, skill_template)
 
     outline_text = _slides_to_human_text(stage1)
     if project_id:
@@ -996,6 +1160,32 @@ def _human_text_to_json(provider_id, model, human_text: str, original_json: list
                 # Validate: every slide must have at least heading or body
                 valid = [s for s in data if isinstance(s, dict) and (s.get("heading") or s.get("body"))]
                 if len(valid) > 0:
+                    # ── Merge structured fields from original JSON ──
+                    # LLM only extracts text fields (heading, body, key_points, etc.).
+                    # Structured/config fields that aren't in free text must be preserved
+                    # from the original JSON so they survive the edit→save→regenerate cycle.
+                    if original_json and isinstance(original_json, list):
+                        _orig_by_seq = {}
+                        for orig in original_json:
+                            if isinstance(orig, dict) and orig.get("seq"):
+                                _orig_by_seq[orig["seq"]] = orig
+                        # Fields always copied from original (never in free text)
+                        _always_preserve = ("images", "cards", "examples",
+                                           "layout_hint", "visual_weight",
+                                           "page_type", "charts")
+                        # Fields copied from original only when LLM didn't produce them
+                        _fallback_preserve = ("description", "subtitle", "title_format")
+                        for s in valid:
+                            seq = s.get("seq")
+                            orig = _orig_by_seq.get(seq, {})
+                            if not orig:
+                                continue
+                            for field in _always_preserve:
+                                if field in orig and not s.get(field):
+                                    s[field] = orig[field]
+                            for field in _fallback_preserve:
+                                if field in orig and not s.get(field):
+                                    s[field] = orig[field]
                     _logger.info(f"Human text → JSON: {len(valid)} slides converted (attempt {attempt+1})")
                     return valid
             _logger.warning(f"Human text → JSON attempt {attempt+1}: invalid output structure")
@@ -1089,10 +1279,10 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 2. key_points 的数量和顺序必须与模板一致（不可增删改、合并、重排）。但模板中的标签文字是占位符，你需要将它们替换为从 SOP 提取的实际内容值。例如模板标签"编写日期"应替换为"2026年6月"，而不是保留"编写日期"原文
 3. 封面页特殊规则：
    - title_format 中的 {项目名称} 替换为实际项目名称，其余文字原样保留
-   - subtitle 中的占位符替换为实际内容，其余文字原样保留
+   - subtitle 从正文提炼一句话概述（≤30字），不可为空
    - key_points 的每个位置必须填入从 SOP 提取的实际值（不是保留模板标签原文）
    - 若模板包含 examples 数组，对照每个 example 的说明来填充对应位置的 key_points 值
-   - description 从正文提炼一段内容概述（若模板为空则输出空字符串）
+   - description 从正文提炼一段内容概述（≤150字），不可为空
 4. heading 根据模板的 page_type 和页面用途填写描述性标题，不超过 20 字符
 5. 你唯一的工作：根据 SOP 内容，按模板格式填空（将占位标签替换为实际内容值）
 
@@ -1106,12 +1296,34 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 仅输出 JSON，不输出其他文字"""
     else:
-        output_reqs = """## 输出要求
-- 严格遵循上方「幻灯片结构模板」的栏目章节结构和 JSON 格式
-- 栏目结构、页面类型、硬约束均以模板为准，不得自行增删章节
-- layout_hint 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
-- visual_weight 从以下选择: low, medium, high
-- 仅输出 JSON，不输出其他文字"""
+        output_reqs = """## 输出要求 — 你只做填空，不做裁量
+
+**绝对硬约束（违反即错误）：**
+1. 输出格式必须与上方「幻灯片结构模板」完全一致：模板是 JSON 数组 [{...}]，你就输出 JSON 数组 [{...}]，禁止在外面包一层 { "page_outline": [...] } 或任何其他包装
+2. 页面数量、seq 顺序、page_type 必须与模板完全一致，不可增删改任何页面
+3. key_points 的数量和顺序必须与模板一致（不可增删改、合并、重排）。但模板中的标签文字是占位符，你需要将它们替换为从 SOP 提取的实际内容值。例如模板标签"编写日期"应替换为"2026年7月"，而不是保留"编写日期"原文
+4. layout_hint 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
+5. visual_weight 从以下选择: low, medium, high
+6. 封面页特殊规则：
+   - heading 填入从 title_format 替换占位符后的实际标题（不超过30字符），不可填"封面"等类型名
+   - title_format 中的 {占位符} 替换为 SOP 实际值后填入 title_format 字段
+   - subtitle 从正文提炼一句话概述（≤30字）填入 subtitle 字段，不可为空
+   - description 从正文提炼一段内容概述（≤150字），不可为空
+   - key_points 每个位置必须填入从 SOP 提取的实际内容值，不可保留模板标签原文
+   - 若模板包含 examples 数组，对照每个 example 的说明来填充对应位置的 key_points 值
+7. 若模板中某页包含 images 或 charts 字段，必须原样保留在输出中，不可修改、增删或忽略
+
+**禁止行为：**
+- 禁止在 JSON 数组外包裹对象包装（如 { "page_outline": [...] }），必须直接输出 [{...}]
+- 禁止在 key_points 中保留模板标签原文（如"编写日期""内容分类"等），必须替换为实际值
+- 禁止因为"内容匹配不上"而跳过或删除 key_points 条目
+- 禁止因为"看起来不合理"而修改 page_type
+- 禁止合并或拆分页面
+- 禁止自行添加模板中没有的字段
+- 禁止删除模板中已有的字段（images、cards、charts、title_format、subtitle、description、examples 等必须全部保留在输出中）
+- 禁止忽略 examples 中的指导信息
+
+仅输出 JSON 数组 [{...}]，不输出其他文字"""
 
     outline_user = f"""{research_block}{skill_block}## SOP 文章（唯一内容来源）
 {sop_content}
@@ -1125,9 +1337,33 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
         try:
             response = _safe_run_async(llm_generate(provider_id, model,
                 base_system, outline_user, temperature=temp_outline or temperature))
+            # DEBUG: save outline response for diagnosis
+            debug_dir = os.path.join(BASE_DIR, "data", "debug")
+            os.makedirs(debug_dir, exist_ok=True)
+            with open(os.path.join(debug_dir, "last_outline_response.txt"), "w", encoding="utf-8") as _df:
+                _df.write(response)
+            with open(os.path.join(debug_dir, "last_outline_prompt.txt"), "w", encoding="utf-8") as _df2:
+                _df2.write(outline_user)
             response = _clean_json_response(response)
             data = json.loads(response)
-            slides = data.get("slides", data) if isinstance(data, dict) else data
+            if isinstance(data, list):
+                slides = data
+            elif isinstance(data, dict):
+                # Try all known keys for flat slide arrays
+                slides = (data.get("slides") or data.get("pages")
+                       or data.get("page_outline") or [])
+                # Legacy outline-architect format: {cover, parts, end_page}
+                if not slides and "parts" in data:
+                    slides = _convert_outline_to_slides(data)
+                # Fallback: find any top-level array whose items look like slides
+                if not slides:
+                    for _key, _val in data.items():
+                        if isinstance(_val, list) and _val and isinstance(_val[0], dict):
+                            if any(k in _val[0] for k in ("heading", "page_type", "seq")):
+                                slides = _val
+                                break
+            else:
+                slides = []
             if isinstance(slides, list) and len(slides) > 0:
                 outline = slides
                 break
@@ -1210,6 +1446,62 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
                 _logger.warning(f"Stage 1 fill batch failed: {e}")
 
     return outline
+
+
+def _fix_stage1_table_keypoints(stage1, skill_template):
+    """Restore key_points/examples/images/charts from SKILL template.
+
+    The Stage1 prompt instructs LLM to replace all key_points labels with
+    actual SOP values. For table/flowchart/chart/diagram pages, key_points are
+    column/step/dimension names that must be preserved — data belongs in body.
+
+    Images and charts are code-level control fields that the LLM should not
+    modify; they are restored from the template for all page types as a safety net.
+    """
+    if not skill_template or not stage1:
+        return stage1
+    try:
+        template = json.loads(skill_template)
+        tmpl_map = {}
+        for p in template:
+            pt = p.get("page_type", "")
+            entry = {}
+            if pt in ("table", "flowchart", "chart", "diagram"):
+                entry["key_points"] = p.get("key_points", [])
+                entry["examples"] = p.get("examples", [])
+            # Restore images, charts, cards for all page types (code-level control fields)
+            if "images" in p:
+                entry["images"] = p["images"]
+            if "charts" in p:
+                entry["charts"] = p["charts"]
+            if "cards" in p:
+                entry["cards"] = p["cards"]
+            if entry:
+                tmpl_map[p.get("seq")] = entry
+        if not tmpl_map:
+            return stage1
+        for s in stage1:
+            seq = s.get("seq")
+            if seq in tmpl_map:
+                entry = tmpl_map[seq]
+                if "key_points" in entry and not s.get("key_points"):
+                    s["key_points"] = entry["key_points"]
+                if "examples" in entry and entry["examples"]:
+                    s["examples"] = entry["examples"]
+                # Restore code-level control fields from template only when
+                # LLM output is missing them. Images and charts carry user
+                # settings (hint, opacity) that must not be hallucinated away.
+                if "images" in entry and not s.get("images"):
+                    s["images"] = entry["images"]
+                if "charts" in entry and not s.get("charts"):
+                    s["charts"] = entry["charts"]
+                # Cards: only use template as fallback. LLM fills content_hint
+                # values; template placeholders would overwrite them.
+                if "cards" in entry and not s.get("cards"):
+                    s["cards"] = entry["cards"]
+    except Exception:
+        pass
+    return stage1
 
 
 # ── Scenario prompt files ──
@@ -2416,9 +2708,33 @@ def _page_type_sort_key(ptype: str) -> int:
     if ptype.startswith('templates/'):
         return 300
     # 列专属覆写
-    if ptype.startswith('col3/') or ptype.startswith('col4/') or ptype.startswith('col5/'):
-        return 400
+    _col_prefix = re.match(r'^col(\d+)/', ptype)
+    if _col_prefix:
+        return 400 + int(_col_prefix.group(1))
     return 999
+
+
+def _extract_h1_label(filepath: str) -> str | None:
+    """Extract Chinese label from the H1 title of a VI .md file.
+
+    Pattern: '# {Label} — {description}' or '# {Label} · {description}'
+    Returns None if no usable label is found (caller should fall back).
+    """
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            first_line = f.readline().strip()
+        if first_line.startswith("# "):
+            title = first_line[2:].strip()
+            for sep in (" — ", " · ", " | "):
+                idx = title.find(sep)
+                if idx > 0:
+                    title = title[:idx].strip()
+                    break
+            if title and any('一' <= c <= '鿿' for c in title):
+                return title
+    except Exception:
+        pass
+    return None
 
 
 def _scan_vi_page_types(style_id: str) -> list[dict]:
@@ -2692,11 +3008,50 @@ def _build_structure_summary(skill_template: str) -> str:
                 kp_list = "、".join(str(k) for k in kps[:10])
                 detail = f"（{len(kps)} 项：{kp_list}）"
 
+        # Surface images config
+        images = p.get("images", [])
+        if isinstance(images, list) and images:
+            img_lines = []
+            for img in images:
+                if isinstance(img, dict):
+                    role = img.get("role", "content")
+                    hint = str(img.get("hint", "")).strip()
+                    img_lines.append(f"  - {role}" + (f"：{hint}" if hint else ""))
+            if img_lines:
+                detail += "\n图片配置：\n" + "\n".join(img_lines)
+
+        # Surface charts config
+        charts = p.get("charts", [])
+        if isinstance(charts, list) and charts:
+            ch_lines = []
+            for ch in charts:
+                if isinstance(ch, dict):
+                    chtype = ch.get("type", "bar")
+                    chtitle = str(ch.get("title", "")).strip()
+                    chhint = str(ch.get("hint", "")).strip()
+                    label = chtitle or chtype
+                    ch_lines.append(f"  - {label}" + (f"：{chhint}" if chhint else ""))
+            if ch_lines:
+                detail += "\n图表配置：\n" + "\n".join(ch_lines)
+
+        # Surface cards config
+        cards = p.get("cards", [])
+        if isinstance(cards, list) and cards:
+            cd_lines = []
+            for c in cards:
+                if isinstance(c, dict):
+                    role = c.get("role", "hero")
+                    hint = str(c.get("content_hint", "")).strip()
+                    cd_lines.append(f"  - [{role}] {hint}" if hint else f"  - [{role}]")
+            if cd_lines:
+                detail += "\n卡片结构：\n" + "\n".join(cd_lines)
+
         lines.append(f"| {i+1} | {ptype} | {heading} {detail} |")
 
     lines.append("")
     lines.append(f"可用的 page_type 值：{', '.join(page_types_seen)}")
     lines.append("key_points 必须使用上表中对应的维度名/列名，不可自行增减或修改。")
+    lines.append("若模板中包含 images 或 charts 字段，必须原样保留在输出中，不可修改或删除。")
     lines.append("仅输出 JSON，不输出其他文字。")
 
     return "\n".join(lines)
@@ -3031,7 +3386,7 @@ def _fallback_stage1_structure(stage1_slides: list) -> list:
         cards = [{"role": "hero", "content_hint": heading}]
         has_chart = any(kw in (heading + s.get("body", ""))
                        for kw in ["%", "数据", "指标", "占比", "率", "值", "量"])
-        result.append({
+        entry = {
             "seq": seq,
             "type": ptype,
             "layout": s.get("layout_hint") or fallback_layouts[layout_idx],
@@ -3044,7 +3399,13 @@ def _fallback_stage1_structure(stage1_slides: list) -> list:
             "cards": cards,
             "has_chart": has_chart,
             "chart_hint": "big_number" if has_chart else "",
-        })
+        }
+        for pass_thru in ("title_format", "subtitle", "description", "images", "charts"):
+            if pass_thru in s:
+                entry[pass_thru] = s[pass_thru]
+        if "cards" in s:
+            entry["cards"] = s["cards"]
+        result.append(entry)
     return result
 
 
@@ -3130,20 +3491,32 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
             data = json.loads(response)
             slides = data.get("slides", data) if isinstance(data, dict) else data
             if isinstance(slides, list) and len(slides) > 0:
-                # Merge with stage1 content
+                # Merge stage1 content into LLM structure decisions.
+                # stage1 (outline) is the source of truth for content fields;
+                # LLM output provides type/layout/cards/has_chart structure.
+                merged_slides = []
                 for s in slides:
                     seq = s.get("seq", 0)
                     s1 = next((x for x in stage1_slides if x.get("seq") == seq), None)
                     if s1:
-                        s["heading"] = s1.get("heading", "")
-                        s["body"] = s1.get("body", "")
-                        s["key_points"] = s1.get("key_points", [])
-                        s["kicker"] = s1.get("kicker", "")
-                        s["lead"] = s1.get("lead", "")
-                        s["notes"] = s1.get("notes", "")
-                _logger.info(f"Stage 2 structure: {len(slides)} slides planned "
-                           f"({sum(1 for s in slides if s.get('has_chart'))} with charts)")
-                return slides
+                        # Start from stage1 (preserves all content fields)
+                        merged = dict(s1)
+                        # Overlay LLM structure decisions
+                        merged["type"] = s.get("type") or s1.get("page_type", "content")
+                        merged["layout"] = s.get("layout") or s1.get("layout_hint", "")
+                        merged["has_chart"] = s.get("has_chart", False)
+                        merged["chart_hint"] = s.get("chart_hint", "")
+                        merged["lead"] = s1.get("subtitle") or s1.get("lead", "")
+                        # LLM cards only override if they add meaningful structure
+                        llm_cards = s.get("cards")
+                        if llm_cards and len(llm_cards) > 1:
+                            merged["cards"] = llm_cards
+                        merged_slides.append(merged)
+                    else:
+                        merged_slides.append(s)
+                _logger.info(f"Stage 2 structure: {len(merged_slides)} slides planned "
+                           f"({sum(1 for s in merged_slides if s.get('has_chart'))} with charts)")
+                return merged_slides
         except Exception as e:
             _logger.warning(f"Stage 2 structure attempt {attempt+1} failed: {e}")
 
@@ -3404,17 +3777,30 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         has_chart = slide.get("has_chart", False)
         chart_hint = slide.get("chart_hint", "")
         notes = slide.get("notes", "")
+        description = slide.get("description", "")
+        title_format = slide.get("title_format", "")
 
-        # ── Structural page template: code-filled, zero LLM involvement ──
+        # ── Structural page template: VI-first, code-fill fallback ──
         if stype in STRUCTURAL_PAGE_TYPES and not is_a4 and active_scheme:
-            family = _detect_template_family(style_id, active_scheme)
-            template_html = _load_slide_template(family, stype)
+            # VI-first, code-fill: extract HTML template from VI and do deterministic
+            # string replacement. LLM is NOT involved — placeholder filling is mechanical.
+            vi_cover = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id, project_id=project_id)
+            template_html = ""
+            if vi_cover and "## HTML 模板" in vi_cover:
+                tmpl_match = re.search(r'```html\s*\n(.*?)\n```', vi_cover, re.DOTALL)
+                if tmpl_match:
+                    template_html = tmpl_match.group(1).strip()
+            if not template_html:
+                # Fallback: old-style HTML template file (backward compat)
+                family = _detect_template_family(style_id, active_scheme)
+                template_html = _load_slide_template(family, stype) or ""
             if template_html:
                 html = _fill_slide_template(template_html, slide, total)
                 html_vars = html
                 html = _resolve_color_vars(html, active_scheme, css_vars=True)
-                _logger.info(f"Slide {seq}: template-filled ({family}/{stype}), {len(html)} chars")
+                _logger.info(f"Slide {seq}: code-filled ({style_id}/{stype}), {len(html)} chars")
                 return {**slide, "html": html, "html_vars": html_vars}
+            # No template available → fall through to LLM generation below
 
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
@@ -3440,21 +3826,30 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 pass
 
         # ── Dynamic TOC rows (A4 only) ──
-        # Replace {{TOC_ROWS}} in toc.md with table rows built from the
-        # editor-defined chapters. Reads from project_items.
-        if is_a4 and stype == "toc" and vi_section and "{{TOC_ROWS}}" in vi_section:
-            try:
-                _db_toc = get_db()
-                _pi_toc = _db_toc.execute(
-                    "SELECT skill FROM project_items WHERE id = ?",
-                    (f"pi-{project_id}-{column_id}",)
-                ).fetchone()
-                if _pi_toc and _pi_toc[0]:
-                    _toc_html = _build_toc_rows(_pi_toc[0], vi_section)
-                    if _toc_html:
-                        vi_section = vi_section.replace("{{TOC_ROWS}}", _toc_html)
-            except Exception:
-                pass
+        # Preserve {{TOC_ROWS}} placeholder in the prompt for post-processing.
+        # The VI template already contains the circle-badge row format in its
+        # rules section — AI should keep {{TOC_ROWS}} untouched so code can
+        # inject deterministic rows after generation.
+        #
+        # Priority 1: chapters from stage1 slide data (always available after
+        #             outline generation — no DB dependency).
+        # Priority 2: SKILL JSON from project_items (fallback).
+        _toc_skill_json = ""
+        if is_a4 and stype == "toc":
+            chapters = slide.get("chapters", [])
+            if chapters:
+                _toc_skill_json = json.dumps([{"page_type": "toc", "chapters": chapters}], ensure_ascii=False)
+            else:
+                try:
+                    _db_toc = get_db()
+                    _pi_toc = _db_toc.execute(
+                        "SELECT skill FROM project_items WHERE id = ?",
+                        (f"pi-{project_id}-{column_id}",)
+                    ).fetchone()
+                    if _pi_toc and _pi_toc[0]:
+                        _toc_skill_json = _pi_toc[0]
+                except Exception:
+                    pass
 
         # Detect HTML template mode (VI file contains ## HTML 模板 header)
         # Only for PPT/landscape — A4/portrait keeps its existing pipeline
@@ -3553,6 +3948,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             content_parts.append(f"章节标签: {kicker}")
         if lead:
             content_parts.append(f"副标题: {lead}")
+        if description:
+            content_parts.append(f"内容简述: {description[:200]}")
         if body:
             content_parts.append(f"正文内容: {body[:1000]}")
         if key_points:
@@ -3562,29 +3959,110 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 kp_list = "; ".join(f"{{{{KP_{i}}}}}={str(kp)}" for i, kp in enumerate(key_points[:10]))
                 content_parts.append(f"关键点（按顺序填入模板变量）: {kp_list}")
             else:
-                content_parts.append(f"关键点: {'; '.join(str(kp) for kp in key_points[:5])}")
+                limit = 20 if (is_a4 and stype in ("table", "flowchart")) else 5
+                content_parts.append(f"关键点: {'; '.join(str(kp) for kp in key_points[:limit])}")
         if not is_a4 and cards:
             cards_desc = "; ".join(
                 f"[{c.get('role','card')}] {c.get('content_hint','')}" for c in cards)
             content_parts.append(f"卡片分配: {cards_desc}")
+        chapters = slide.get("chapters", [])
+        if chapters and is_a4 and stype == "toc":
+            ch_lines = []
+            for i, ch in enumerate(chapters):
+                if isinstance(ch, dict):
+                    lbl = ch.get("label", "").strip()
+                    ex = ch.get("example", "").strip()
+                    if lbl:
+                        line = f"  {i+1}. {lbl}"
+                        if ex:
+                            line += f"（{ex}）"
+                        ch_lines.append(line)
+            if ch_lines:
+                content_parts.append(f"目录章节（必须按此列表生成，不得增删改）:\n" + "\n".join(ch_lines))
         if notes:
             content_parts.append(f"备注: {notes[:300]}")
         if not is_a4 and has_chart:
             content_parts.append(
                 f"需要数据图表: {chart_hint or '根据内容中的数据选择合适的图表类型(big_number/donut/bar/progress_bar)'}")
 
+        # ── Image hints from SKILL template ──
+        images = slide.get("images", [])
+        if images and not is_a4:
+            img_lines = []
+            for img in images:
+                if isinstance(img, dict):
+                    role = img.get("role", "content")
+                    hint = str(img.get("hint", "")).strip()
+                    if role == "background":
+                        img_lines.append(f"背景图片: 使用 {{IMAGE_URL}} 占位符（{hint}）" if hint else "背景图片: 使用 {{IMAGE_URL}} 占位符")
+                    else:
+                        size = "hero" if role == "hero" else "square" if role == "grid" else "content"
+                        img_lines.append(f"插图({role}/{size}): {{image:{hint},{size}}}" if hint else f"插图({role}/{size})")
+            if img_lines:
+                content_parts.append("图片配置:\n" + "\n".join(img_lines))
+
+        # ── Chart config from SKILL template ──
+        charts = slide.get("charts", [])
+        if charts and not is_a4:
+            ch_lines = []
+            for ch in charts:
+                if isinstance(ch, dict):
+                    chtype = ch.get("type", "bar")
+                    chtitle = str(ch.get("title", "")).strip()
+                    chhint = str(ch.get("hint", "")).strip()
+                    label = chtitle or f"{chtype} 图表"
+                    ch_lines.append(f"- {label}" + (f"：{chhint}" if chhint else ""))
+            if ch_lines:
+                content_parts.append("图表配置（按此生成 SVG 图表）:\n" + "\n".join(ch_lines))
+
+        # ── Card hints from SKILL template ──
+        cards = slide.get("cards", [])
+        if cards and not is_a4:
+            card_lines = []
+            for c in cards:
+                if isinstance(c, dict):
+                    role = c.get("role", "hero")
+                    hint = str(c.get("content_hint", "")).strip()
+                    card_lines.append(f"- [{role}] {hint}" if hint else f"- [{role}]")
+            if card_lines:
+                content_parts.append("卡片结构（必须严格按此角色和提示生成，不可自行增删卡片）:\n" + "\n".join(card_lines))
+
         # Build user message — template mode puts the HTML template in user message
         if is_html_template and html_template:
             tmpl_header = (
                 "请严格按照以下 HTML 模板生成幻灯片。\n"
-                "规则：只替换 {{占位符}} 为实际内容，不修改任何 CSS 样式/颜色/尺寸。\n"
+                "【铁律】只能替换 {{占位符}}，不修改任何 CSS 样式/颜色/尺寸。\n"
+                "【铁律】占位符替换内容必须从下方「占位符映射」原样复制，一字不改。\n"
+                "        禁止改写、缩写、扩展、添加编号、添加列表符号。\n"
+                "【铁律】占位符映射中如果没有列出某个占位符，该占位符替换为空字符串。\n"
                 "每张卡片使用不同的 var(--chart-N) 色条颜色（N 从 0 递增）。\n"
                 "如果卡片数量与模板不同，复制或删除卡片 div 块。\n"
+                "【重要】{{IMAGE_URL}}、{{IMAGE_OPACITY}}、{{BRAND}} 是系统占位符，必须原样保留，禁止替换。\n"
             )
+            # Build explicit placeholder mapping for common cover/template placeholders
+            ph_map_lines = []
+            if title_format or heading:
+                ph_map_lines.append(f"  {{{{TITLE}}}} = {title_format or heading}")
+            if lead:
+                ph_map_lines.append(f"  {{{{SUBTITLE}}}} = {lead}")
+            if description:
+                ph_map_lines.append(f"  {{{{DESCRIPTION}}}} = {description[:200]}")
+            if key_points:
+                kp_spans = "".join(
+                    f'<span style="white-space:nowrap;">{str(kp)}</span>'
+                    for kp in key_points[:8]
+                )
+                ph_map_lines.append(f"  {{{{META_INFO}}}} = {kp_spans}")
+            ph_block = ""
+            if ph_map_lines:
+                ph_block = ("\n## 占位符映射 —— 每个占位符必须用下方对应值原样替换，禁止任何修改\n"
+                            + "\n".join(ph_map_lines) + "\n")
             user = (tmpl_header
                     + "\n## HTML 模板（必须照抄结构）\n```html\n"
                     + html_template
-                    + "\n```\n\n## 内容数据\n"
+                    + "\n```\n"
+                    + ph_block
+                    + "\n## 内容数据\n"
                     + "\n".join(content_parts))
         else:
             user = "\n".join(content_parts)
@@ -3636,6 +4114,44 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
                     # Post-process: fix common LLM HTML errors
                     html = _fix_llm_html_errors(html, is_a4=is_a4)
+                    # Post-process: replace {{IMAGE_OPACITY}} if still present
+                    # (LLM template-filling path keeps it as placeholder; code-fill
+                    #  handles it in _fill_slide_template. This catches the LLM path.)
+                    if "{{IMAGE_OPACITY}}" in html:
+                        images = slide.get("images", [])
+                        image_opacity = "0.3"
+                        for img in images:
+                            if isinstance(img, dict) and img.get("role") == "background":
+                                op = img.get("opacity", 30)
+                                image_opacity = str(op / 100) if isinstance(op, (int, float)) else "0.3"
+                                break
+                        html = html.replace("{{IMAGE_OPACITY}}", image_opacity)
+                    # Post-process: inject deterministic TOC rows (A4 only)
+                    # Code-generated circle-badge rows replace {{TOC_ROWS}} or
+                    # LLM-generated tbody. LLM is unreliable at producing exact
+                    # 32px colored-circle format, so code does it post-hoc.
+                    if is_a4 and stype == "toc" and _toc_skill_json:
+                        _toc_html = _build_toc_rows(_toc_skill_json, vi_section)
+                        _logger.info(f"[TOC-DBG] Slide {seq}: _toc_skill_json={len(_toc_skill_json)} chars, _toc_html={len(_toc_html)} chars, has_TOC_ROWS={'{{TOC_ROWS}}' in html}")
+                        if _toc_html:
+                            if "{{TOC_ROWS}}" in html:
+                                html = html.replace("{{TOC_ROWS}}", _toc_html)
+                                _logger.info(f"[TOC-DBG] Slide {seq}: injected via {{TOC_ROWS}} placeholder")
+                            else:
+                                html_before = html
+                                html = re.sub(
+                                    r'(<table[^>]*width:\s*100%[^>]*border-collapse:\s*collapse[^>]*>\s*)<tbody>.*?</tbody>',
+                                    r'\1<tbody>\n' + _toc_html + '\n</tbody>',
+                                    html, flags=re.DOTALL
+                                )
+                                _logger.info(f"[TOC-DBG] Slide {seq}: regex sub changed={html_before != html}")
+                    elif is_a4 and stype == "toc":
+                        _logger.warning(f"[TOC-DBG] Slide {seq}: is_a4=True stype=toc but _toc_skill_json EMPTY (slide keys: {list(slide.keys())})")
+                    # Post-process: restore BRAND placeholders in A4 footer
+                    # LLM replaces {{BRAND_COPYRIGHT}}/{{BRAND_SIGNATURE}} with
+                    # real company/author names despite explicit prohibition.
+                    if is_a4:
+                        html = _fix_brand_placeholders(html)
                     # Post-process: enforce slide overrides from tokens.yaml
                     # Must run BEFORE _auto_fix_hardcoded_hex (which skips #ffffff)
                     # and BEFORE _resolve_color_vars (which destroys CSS variable info).
@@ -4742,6 +5258,63 @@ def _fix_llm_html_errors(html: str, is_a4: bool = False) -> str:
     return html
 
 
+def _fix_brand_placeholders(html: str) -> str:
+    """Restore {{BRAND_COPYRIGHT}} and {{BRAND_SIGNATURE}} in A4 slide footer.
+
+    LLM replaces these system placeholders with real brand text (company name,
+    author name) despite explicit prohibition in every col3 template.
+    Code deterministically restores them post-generation.
+
+    Targets the A4 footer structure:
+      flex-shrink:0;border-top → 3 flex:1 children
+      Child 1 → {{BRAND_COPYRIGHT}}
+      Child 2 → {{BRAND_SIGNATURE}}
+      Child 3 → 第 N 页 or bare number (anchor, left untouched)
+
+    Multiple patterns are tried in sequence to handle LLM variations.
+    All matching patterns are applied (not just the first match).
+    """
+    import re
+
+    # Pattern 1: standard — padding-left:60px on child-1, anchor "第" in child-3
+    html = re.sub(
+        r'(<div\s[^>]*?flex-shrink:\s*0[^>]*?height:\s*45px[^>]*?border-top[^>]*?>\s*)'
+        r'<div\s[^>]*?flex:\s*1[^>]*?padding-left:\s*60px[^>]*?>[^<]*</div>'
+        r'(\s*)<div\s[^>]*?flex:\s*1[^>]*?>[^<]*</div>'
+        r'(\s*<div\s[^>]*?flex:\s*1[^>]*?>)第',
+        r'\1<div style="flex:1;text-align:center;">{{BRAND_COPYRIGHT}}</div>'
+        r'\2<div style="flex:1;text-align:center;">{{BRAND_SIGNATURE}}</div>'
+        r'\3第',
+        html, flags=re.DOTALL
+    )
+
+    # Pattern 2: child-1 lacks padding-left, anchor "第" in child-3
+    html = re.sub(
+        r'(<div\s[^>]*?flex-shrink:\s*0[^>]*?height:\s*45px[^>]*?border-top[^>]*?>\s*)'
+        r'<div\s[^>]*?flex:\s*1[^>]*?>[^<]*</div>'
+        r'(\s*)<div\s[^>]*?flex:\s*1[^>]*?>[^<]*</div>'
+        r'(\s*<div\s[^>]*?flex:\s*1[^>]*?>)第',
+        r'\1<div style="flex:1;text-align:center;">{{BRAND_COPYRIGHT}}</div>'
+        r'\2<div style="flex:1;text-align:center;">{{BRAND_SIGNATURE}}</div>'
+        r'\3第',
+        html, flags=re.DOTALL
+    )
+
+    # Pattern 3: padding on container (not child), child-3 = bare number "N" or "N / M"
+    html = re.sub(
+        r'(<div\s[^>]*?padding:\s*0(?:px)?\s+60(?:px)?[^>]*?flex-shrink:\s*0[^>]*?border-top[^>]*?>\s*)'
+        r'<div\s[^>]*?flex:\s*1[^>]*?>[^<]*</div>'
+        r'(\s*)<div\s[^>]*?flex:\s*1[^>]*?>[^<]*</div>'
+        r'(\s*<div\s[^>]*?flex:\s*1[^>]*?>)\s*\d+',
+        r'\1<div style="flex:1;text-align:center;">{{BRAND_COPYRIGHT}}</div>'
+        r'\2<div style="flex:1;text-align:center;">{{BRAND_SIGNATURE}}</div>'
+        r'\3',
+        html, flags=re.DOTALL
+    )
+
+    return html
+
+
 # ═══════════════════════════════════════════════════════════════════
 # Per-slide file storage — eliminates fragile HTML string splicing
 # ═══════════════════════════════════════════════════════════════════
@@ -4926,21 +5499,28 @@ async def _generate_and_replace_images(slide_data: list, html_dir: str,
                 "size_key": size_key,
             })
 
-        # Pattern 2: {{IMAGE_URL}} — auto-generate from heading
+        # Pattern 2: {{IMAGE_URL}} — auto-generate from images hint or heading
         heading = s.get("heading", "")
         body = s.get("body", "")
+        images_hints = s.get("images", [])
         has_image_url = "{{IMAGE_URL}}" in html
+        _logger.info(f"[IMG-DBG] Slide {seq}: has_image_url={has_image_url}, heading={heading[:30]!r}, hint={images_hints[0].get('hint','') if images_hints else ''!r}")
 
         if has_image_url:
-            if heading:
-                prompt = f"{heading}，{body[:80] if body else ''}".strip("，。")
+            # Only use user-written image hint — never auto-generate from heading
+            hint = ""
+            if images_hints:
+                hint = images_hints[0].get("hint", "") or images_hints[0].get("prompt", "")
+            prompt = hint
+
+            if prompt:
                 placeholders.append({
                     "full_match": "{{IMAGE_URL}}",
                     "prompt": prompt,
                     "size_key": "full",
                 })
             else:
-                _logger.warning(f"[IMG-DBG] Slide {seq}: has {{IMAGE_URL}} but heading is empty, skipping")
+                _logger.warning(f"[IMG-DBG] Slide {seq}: has {{IMAGE_URL}} but no heading or hint, skipping")
 
         if not placeholders:
             continue
@@ -4960,7 +5540,7 @@ async def _generate_and_replace_images(slide_data: list, html_dir: str,
                 if result.get("ok") and result.get("images"):
                     img_url = result["images"][0]["url"]
                     img_filename = f"slide-{seq:02d}-img-{placeholders.index(ph)+1:02d}.png"
-                    saved_path = download_image(img_url, img_filename, images_dir)
+                    saved_path = await download_image(img_url, img_filename, images_dir)
                     rel_path = f"images/{img_filename}"
 
                     if ph["full_match"] == "{{IMAGE_URL}}":
@@ -5439,20 +6019,28 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
     notes = slide.get("notes", "")
     key_points = slide.get("key_points", [])
     cards = slide.get("cards", [])
+    description = slide.get("description", "")
 
-    # Extract sub-parts: subtitle = lead or body first line; brand = notes or ""
+    # Extract sub-parts: subtitle = lead or body first line
     subtitle = lead or (body.split("\n")[0].strip() if body else "")
     if subtitle == heading:
         subtitle = ""
-    brand = notes.strip() if notes else ""
+    brand = ""  # Brand comes from project config, not slide data
     contact = lead.strip() if lead else ""
     meta = kicker.strip() if kicker else ""
+    meta_html = ""  # pre-escaped HTML spans from key_points (do NOT re-escape)
+    if not meta and key_points:
+        meta_html = "".join(
+            f'<span style="white-space:nowrap;">{_html_mod.escape(str(kp))}</span>'
+            for kp in key_points[:8]
+        )
 
     # ── Simple replacements (escape user text to prevent XSS in generated HTML) ──
     esc = _html_mod.escape
     html = template_html
-    html = html.replace("{{TITLE}}", esc(heading or ""))
-    html = html.replace("{{SUBTITLE}}", esc(subtitle))
+    html = html.replace("{{TITLE}}", esc(slide.get("title_format", "") or heading or ""))
+    html = html.replace("{{SUBTITLE}}", esc(slide.get("subtitle", "") or subtitle))
+    html = html.replace("{{DESCRIPTION}}", esc(description))
     html = html.replace("{{CHAPTER_TITLE}}", esc(heading or ""))
     html = html.replace("{{CHAPTER_NUM}}", esc(kicker or ""))
     html = html.replace("{{CHAPTER_SUBTITLE}}", esc(lead or ""))
@@ -5460,12 +6048,36 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
     html = html.replace("{{THANKS}}", esc(heading or "谢谢"))
     html = html.replace("{{CTA}}", esc(notes or ""))
     html = html.replace("{{TOC_TITLE}}", esc(heading or "目录"))
-    html = html.replace("{{META_INFO}}", esc(meta))
+    html = html.replace("{{META_INFO}}", meta_html if meta_html else esc(meta))
     html = html.replace("{{BRAND}}", esc(brand))
     html = html.replace("{{CONTACT_INFO}}", esc(contact))
     html = html.replace("{{COPYRIGHT}}", "© 2026 All rights reserved.")
     html = html.replace("{{PAGE_NUM}}", str(seq))
     html = html.replace("{{TOTAL_PAGES}}", str(total_pages))
+
+    # ── Image opacity: from SKILL images[0].opacity (background role), default 0.3 ──
+    # If no images defined, remove the image div entirely (avoid broken <img src="">).
+    image_opacity = "0.3"
+    images = slide.get("images", [])
+    has_images = bool(images) and any(
+        isinstance(img, dict) and (img.get("hint") or img.get("prompt"))
+        for img in images
+    )
+    if has_images:
+        for img in images:
+            if isinstance(img, dict) and img.get("role") == "background":
+                op = img.get("opacity", 30)
+                image_opacity = str(op / 100) if isinstance(op, (int, float)) else "0.3"
+                break
+    else:
+        # Remove the image div: <!-- 第0层：配图 --> block
+        import re as _re_img
+        html = _re_img.sub(
+            r'<!-- 第0层：配图[^>]*-->[\s\S]*?<!-- 第1层：',
+            '<!-- 第1层：',
+            html, count=1
+        )
+    html = html.replace("{{IMAGE_OPACITY}}", image_opacity)
 
     # ── Conditional blocks: {{#SECTION}}...{{/SECTION}} ──
     # If the placeholder inside has content, keep the inner content (strip tags).
@@ -5689,7 +6301,7 @@ def _enforce_slide_rules(html: str, scheme_data: dict, style_id: str = "business
 
     # ── Layer 1: Fix hardcoded white text → correct value from tokens ──
     if text_val:
-        for hardcoded in ('#ffffff', '#FFFFFF', '#fff', '#FFF', '#fffffff', '#FFFFFFF'):
+        for hardcoded in ('#ffffff', '#FFFFFF', '#fff', '#FFF', '#fffffff', '#FFFFFFF', '#ffffffff', '#FFFFFFFF'):
             html = html.replace(f'color:{hardcoded}', f'color:{text_val}')
             html = html.replace(f'color: {hardcoded}', f'color: {text_val}')
             html = html.replace(f'color:{hardcoded};', f'color:{text_val};')
@@ -5718,14 +6330,18 @@ def _enforce_slide_rules(html: str, scheme_data: dict, style_id: str = "business
         html = html.replace('color: var(--text);', f'color: {new};')
 
     # ── Layer 5: Force outermost background to token-defined value ──
-    # AI may use var(--card_bg), var(--background), hardcoded hex, or any
-    # other background. Tokens define the correct background unconditionally.
-    # Match both background: (shorthand) and background-color: (longhand)
-    html = _re.sub(
-        r'(\bbackground(?:-color)?\s*:\s*)(?:var\(--[^)]+\)|#[0-9a-fA-F]{3,8}|[^;"]+)',
-        rf'\g<1>{bg_var}',
-        html, count=1
-    )
+    # Skip if the current background is a gradient — gradients are intentional
+    # design choices from VI templates, not hardcoded hex mistakes.
+    current_bg = ""
+    bg_match = _re.search(r'\bbackground(?:-color)?\s*:\s*([^;"]+)', html)
+    if bg_match:
+        current_bg = bg_match.group(1).strip()
+    if "gradient" not in current_bg:
+        html = _re.sub(
+            r'(\bbackground(?:-color)?\s*:\s*)(?:var\(--[^)]+\)|#[0-9a-fA-F]{3,8}|[^;"]+)',
+            rf'\g<1>{bg_var}',
+            html, count=1
+        )
 
     return html
 
@@ -5865,6 +6481,31 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
         import html as _html_escape
         html = html.replace('{{BRAND_COPYRIGHT}}', _html_escape.escape(_copyright_str))
         html = html.replace('{{BRAND_SIGNATURE}}', _html_escape.escape(_sig_str))
+        # {{BRAND}} — cover bottom-right brand label, code-enforced.
+        # LLM is instructed to keep this placeholder; code replaces it with
+        # the project brand_name or empty string.
+        _brand_name = ""
+        try:
+            _db2 = get_db()
+            _row = _db2.execute("SELECT value FROM settings WHERE key='brand_name'").fetchone()
+            _db2.close()
+            if _row and _row["value"]:
+                _brand_name = _row["value"].strip()
+        except Exception:
+            pass
+        if "{{BRAND}}" in html:
+            html = html.replace('{{BRAND}}', _html_escape.escape(_brand_name))
+        else:
+            # Fallback: LLM may have replaced {{BRAND}} with heading text.
+            # Find the bottom-right brand span and force correct value.
+            import re as _re_brand
+            _brand_div = _re_brand.search(
+                r'(position:\s*absolute\s*;\s*bottom:\s*40px\s*;\s*right:\s*60px\s*[^"]*"[^>]*>'
+                r'[\s\S]*?<span[^>]*>)([^<]+)(</span>)',
+                html
+            )
+            if _brand_div and _brand_div.group(2).strip() != _brand_name:
+                html = html[:_brand_div.start(2)] + _html_escape.escape(_brand_name) + html[_brand_div.end(2):]
 
         # Per-slide code enforcement: background + text from tokens.yaml
         # AI does not choose colors — tokens define everything per page type.

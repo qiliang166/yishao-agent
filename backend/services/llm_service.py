@@ -91,7 +91,7 @@ async def generate(
         for block in response.content:
             if block.type == "text":
                 return block.text
-        return response.content[0].text if response.content else ""
+        return ""
 
     # ── OpenAI-compatible path ──
     client = AsyncOpenAI(
@@ -202,7 +202,7 @@ async def refine(
         for block in response.content:
             if block.type == "text":
                 return block.text
-        return response.content[0].text if response.content else ""
+        return ""
 
     # ── OpenAI-compatible path ──
     client = AsyncOpenAI(
