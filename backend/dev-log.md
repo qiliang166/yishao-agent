@@ -1,3 +1,9 @@
+[2026-07-09] SPA 深层路由刷新 404 — 后端加 index.html 回退:
+现象: 用户在项目页(/project/xxx)或设置页(/workspace/xxx/settings)按 F5 刷新, 返回 {"detail":"Not Found"}; 只有根路径 / 能刷新。
+根因: backend/app.py 末尾 app.mount("/", StaticFiles(html=True)) 只对根路径伺服 index.html, React-Router 的客户端路由(如 /project/xxx)在后端既无对应路由也无同名文件 → StaticFiles 抛 404, 刷新即失败。日志早有 GET /workspace/.../settings 404 佐证。
+修复(backend/app.py, 仅此一文件): 新增 SPAStaticFiles(StaticFiles) 子类覆写 get_response — 捕获 StarletteHTTPException(注意: Starlette 0.41.3 StaticFiles 是 raise 404 而非 return, 且 FastAPI 的 HTTPException 是子类不能反捕父类, 故 import starlette.exceptions.HTTPException as StarletteHTTPException 精确捕获); 404 且非 /api/ 前缀 → 回退伺服 index.html, 否则 re-raise。守卫用 scope["path"](原始 ASGI 路径, 恒正斜杠)而非 path 参数(StaticFiles 经 os.path.normpath 在 Windows 变反斜杠导致 startswith('api/') 漏判 → 未知 /api/* 曾被 SPA 吞成 200)。
+验证: py_compile pass; 重启后端 6 条路由实测 — / 200 / /project/xxx 200 / /workspace/xxx/settings 200 / /assets/*.js 200 / /api/nonexistent 404(未知API仍正确404) / /api/health 200; 全部符合预期。
+
 [2026-07-09] 修复第2步"分析文档"生成忽略用户配置的角色提示词+SKILL — 竞态+硬编码id双根因:
 现象: 用户在工作区把"道与术文案(dao)"的提示词+SKILL改为7章模板并保存, 但生成的文档仍是旧格式(emoji随笔), 完全没走配置的SKILL; 直接导致下游col4 PPT第7/9页无料可提。
 根因(DB+时间戳+代码链路证实, 非推测): (a)配置17:14:21已保存(prompt872字/skill2146字), 文档17:15:41生成(晚80秒)却没用上 → 排除"旧文档", 是加载bug。(b)ProjectPage.tsx "Load project" useEffect三个Promise并行无序: getProject设workspaceIdRef, listProjectItems回调里读workspaceIdRef.current; 当listProjectItems先完成时ref仍undefined → listColumnConfigs(undefined)返回seed行(id=seed-c2-dao)。(c)applyCol12Configs用硬编码 c.id==='c2-dao' 匹配 → seed行id失配 → s2p空 → setStage2Prompts被跳过 → stage2Prompts.dao=undefined。(d)TeachingDocPanel静默兜底 prompt||DEFAULT_PROMPTS[dao]('请分析原理与方法'), skill空则不带SKILL → emoji随笔。额外: 非"一勺笔录"工作区col2行id是随机uuid, 硬编码匹配对所有其他工作区都失配。

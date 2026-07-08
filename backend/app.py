@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Body, Reques
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import bcrypt
 from jose import JWTError, jwt
@@ -3650,6 +3651,48 @@ def api_ppt_outline(req: PPTPlanRequest):
             except Exception:
                 pass
 
+        # ── column_configs fallback (systemic fix for ALL fields) ──
+        if column_id:
+            try:
+                ws_id = None
+                if project_id:
+                    ws_row = db.execute(
+                        "SELECT workspace_id FROM projects WHERE id = ?",
+                        (project_id,)
+                    ).fetchone()
+                    if ws_row:
+                        ws_id = ws_row["workspace_id"]
+
+                # skill: always use newest from any workspace (structural
+                # definition, user edits in WorkspaceSettingsPage).
+                cc_skill = db.execute(
+                    "SELECT skill FROM column_configs WHERE column_id = ? AND skill IS NOT NULL AND skill != '' ORDER BY updated_at DESC LIMIT 1",
+                    (column_id,)
+                ).fetchone()
+                if cc_skill and cc_skill["skill"]:
+                    column_skill = cc_skill["skill"]
+
+                if ws_id:
+                    cc_ws = db.execute(
+                        "SELECT prompt, rules FROM column_configs WHERE column_id = ? AND workspace_id = ?",
+                        (column_id, ws_id)
+                    ).fetchone()
+                    if cc_ws:
+                        if not column_prompt and cc_ws["prompt"]:
+                            column_prompt = cc_ws["prompt"]
+                        if cc_ws["rules"]:
+                            try:
+                                cc_rules = json.loads(cc_ws["rules"])
+                                if cc_rules and isinstance(cc_rules, dict):
+                                    for key in ("outline_architect_prompt", "cognitive_design_principles",
+                                                "typography_spec", "design_rules"):
+                                        if cc_rules.get(key) and not rules.get(key):
+                                            rules[key] = cc_rules[key]
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
         if req.template_id:
             row = db.execute(
                 "SELECT rules FROM templates WHERE id = ?",
@@ -4805,17 +4848,19 @@ def api_list_style_vi_files(style_id: str):
     if not os.path.isdir(d):
         return {"files": [], "exists": False}
     files = []
-    from services.ppt_service import _page_type_sort_key
+    from services.ppt_service import _page_type_sort_key, _extract_h1_label
     for root, _dirs, filenames in os.walk(d):
         for f in filenames:
             if f.endswith((".md", ".yaml")):
                 p = os.path.join(root, f)
                 rel = os.path.relpath(p, d).replace("\\", "/")
                 section = rel.rsplit(".", 1)[0]  # e.g. "blocks/header", "cover"
+                label = _extract_h1_label(p) if f.endswith(".md") else None
                 files.append({
                     "name": rel,
                     "size": os.path.getsize(p),
                     "section": section,
+                    "label": label,
                 })
     files.sort(key=lambda x: _page_type_sort_key(x["section"]))
     return {"files": files, "exists": True, "dir": d}
@@ -5744,8 +5789,29 @@ if getattr(sys, 'frozen', False):
     FRONTEND_DIST = os.path.join(sys._MEIPASS, "frontend", "dist")
 else:
     FRONTEND_DIST = os.path.join(WORKSPACE_ROOT, "frontend", "dist")
+
+
+class SPAStaticFiles(StaticFiles):
+    # Serve real files; fall back to index.html for client-side routes so that
+    # refreshing on a deep React-Router path (e.g. /project/xxx) returns the SPA
+    # shell instead of a 404. Starlette's StaticFiles *raises* HTTPException(404)
+    # for missing paths, so the fallback is done in an except block. API routes are
+    # registered before this mount and matched first, so they are never shadowed.
+    async def get_response(self, path, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            # scope["path"] is the raw ASGI path (always forward-slash), unlike the
+            # `path` arg which StaticFiles runs through os.path.normpath (backslashes
+            # on Windows). Guard on the raw path so unknown /api/* stays a real 404.
+            raw = scope.get("path", "")
+            if exc.status_code == 404 and not raw.startswith("/api/"):
+                return await super().get_response("index.html", scope)
+            raise
+
+
 if os.path.isdir(FRONTEND_DIST):
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+    app.mount("/", SPAStaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
