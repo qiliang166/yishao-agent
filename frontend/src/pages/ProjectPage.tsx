@@ -764,6 +764,9 @@ export default function ProjectPage() {
       setProject(p)
       setProjStoragePath(p.storage_path || '')
       workspaceIdRef.current = p.workspace_id
+      // Load col1/col2/col3+ configs only after workspace_id is known — avoids a race
+      // where listColumnConfigs(undefined) returned seed rows and the dao config was dropped.
+      loadColConfigs(p.workspace_id)
     }).catch(() => navigate('/'))
     let hasModelOverride = false
     api.getSteps(id).then((s: any[]) => {
@@ -861,28 +864,43 @@ export default function ProjectPage() {
         yanxi: map['_ds_s2_yanxi'] || prev.yanxi,
       }))
     })
-    // Shared col1/col2 config parser — single source of truth for stage 1 & 2 prompts
+    // Shared col1/col2 config parser — single source of truth for stage 1 & 2 prompts.
+    // Match by label (uniform across seed / literal-id / uuid-id workspaces) with a
+    // sort_order fallback, so it never depends on hardcoded literal ids that only exist
+    // in the manually-seeded workspace.
+    const COL1_BY_LABEL: Record<string, string> = { '直接输入': 'text', '视频链接': 'video', '导入文件': 'file' }
+    const COL1_BY_SORT: Record<number, string> = { 0: 'text', 1: 'video', 2: 'file' }
+    const COL2_BY_LABEL: Record<string, string> = { '文档生成': 'sop', '道与术文案': 'dao', '研学手册文案': 'yanxi' }
+    const COL2_BY_SORT: Record<number, string> = { 3: 'sop', 4: 'dao', 5: 'yanxi' }
     const applyCol12Configs = (configs: any[]) => {
       const s1p: Record<string, string> = {}
       let s1s = ''
       const s2p: Record<string, { prompt: string; skill: string }> = {}
       configs.forEach((c: any) => {
         if (c.column_id === 'col1') {
-          const key = c.id === 'c1-text' ? 'text' : c.id === 'c1-video' ? 'video' : c.id === 'c1-file' ? 'file' : ''
+          const key = COL1_BY_LABEL[c.label] || COL1_BY_SORT[c.sort_order] || ''
           if (key) { s1p[key] = c.prompt; if (!s1s) s1s = c.skill }
         }
         if (c.column_id === 'col2') {
-          const key = c.id === 'c2-sop' ? 'sop' : c.id === 'c2-dao' ? 'dao' : c.id === 'c2-yanxi' ? 'yanxi' : ''
+          const key = COL2_BY_LABEL[c.label] || COL2_BY_SORT[c.sort_order] || ''
           if (key) s2p[key] = { prompt: c.prompt, skill: c.skill }
         }
       })
       if (Object.keys(s1p).length > 0) setStage1Prompts(s1p)
       if (s1s) setStage1Skill(s1s)
       if (Object.keys(s2p).length > 0) setStage2Prompts(s2p)
+      // Surface a load failure instead of silently falling back to generic prompts —
+      // the dao/sop/yanxi doc generation depends on these being present.
+      if (!s2p.dao?.skill) {
+        console.warn('[config] col2 dao skill missing after load — doc generation will fall back to default prompt.',
+          { rows: configs.filter((c: any) => c.column_id === 'col2').map((c: any) => ({ id: c.id, label: c.label, sort: c.sort_order })) })
+      }
     }
 
-    // Try project_items first (new per-project architecture)
-    api.listProjectItems(id).then((items: any[]) => {
+    // Load col configs once workspace_id is known (called from getProject().then).
+    const loadColConfigs = (wid?: string) => {
+      // Try project_items first (new per-project architecture)
+      api.listProjectItems(id).then((items: any[]) => {
       if (items && items.length > 0) {
         const s3p: Record<string, { prompt: string; skill: string }> = {}
         const s4p: Record<string, { prompt: string; skill: string }> = {}
@@ -898,11 +916,12 @@ export default function ProjectPage() {
         setStage3Prompts(s3p)
         if (Object.keys(s4p).length > 0) setStage4Prompts(s4p)
         // col1 & col2 always loaded from column configs (shared parser, no duplication)
-        api.listColumnConfigs(workspaceIdRef.current).then(applyCol12Configs).catch(() => {})
+        api.listColumnConfigs(wid).then(applyCol12Configs).catch(() => {})
         return
       }
-      loadWorkspaceConfigs(workspaceIdRef.current)
-    }).catch(() => { loadWorkspaceConfigs(workspaceIdRef.current) })
+      loadWorkspaceConfigs(wid)
+    }).catch(() => { loadWorkspaceConfigs(wid) })
+    }  // end loadColConfigs
 
     const loadWorkspaceConfigs = (wid?: string) => {
       // Load column configs for the project's workspace (not global seed)

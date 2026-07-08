@@ -1,4 +1,11 @@
-[2026-07-08] PPT 结构页面模板系统统一 — VI 优先 + 代码回退 + 4 bug 修复:
+[2026-07-09] 修复第2步"分析文档"生成忽略用户配置的角色提示词+SKILL — 竞态+硬编码id双根因:
+现象: 用户在工作区把"道与术文案(dao)"的提示词+SKILL改为7章模板并保存, 但生成的文档仍是旧格式(emoji随笔), 完全没走配置的SKILL; 直接导致下游col4 PPT第7/9页无料可提。
+根因(DB+时间戳+代码链路证实, 非推测): (a)配置17:14:21已保存(prompt872字/skill2146字), 文档17:15:41生成(晚80秒)却没用上 → 排除"旧文档", 是加载bug。(b)ProjectPage.tsx "Load project" useEffect三个Promise并行无序: getProject设workspaceIdRef, listProjectItems回调里读workspaceIdRef.current; 当listProjectItems先完成时ref仍undefined → listColumnConfigs(undefined)返回seed行(id=seed-c2-dao)。(c)applyCol12Configs用硬编码 c.id==='c2-dao' 匹配 → seed行id失配 → s2p空 → setStage2Prompts被跳过 → stage2Prompts.dao=undefined。(d)TeachingDocPanel静默兜底 prompt||DEFAULT_PROMPTS[dao]('请分析原理与方法'), skill空则不带SKILL → emoji随笔。额外: 非"一勺笔录"工作区col2行id是随机uuid, 硬编码匹配对所有其他工作区都失配。
+修复(frontend/src/pages/ProjectPage.tsx, 前端根治两层): (1)消竞态 — loadColConfigs(p.workspace_id)移入getProject().then(), 用已确定的workspace_id直传, 不再依赖竞态ref。(2)稳定匹配 — applyCol12Configs改按label为主(COL1/COL2_BY_LABEL, 跨seed/字面/uuid工作区一致)+ sort_order兜底(COL2_BY_SORT: 3=sop/4=dao/5=yanxi), 替代硬编码字面id; col1同理。(3)防静默 — 加载后dao.skill仍空则console.warn(含workspace_id与拿到的行id列表)。col3/4/5/speech/tts同类硬编码本轮不动(走project_items分支且当前正常, 避免扩大blast radius)。
+收尾: 用户需在分析文档面板重新点一次生成 → 得到7章文档 → 再跑col4大纲第7/9页就有料。
+验证: 自审diff通过; tsc+vite build pass; DB核实label映射(道与术文案→dao在seed/字面/uuid三类工作区均一致); 竞态修复使workspace_id必先于配置加载确定。
+
+
 (1) 守卫修改 (line 3640): PPT 结构页面先检查 VI 是否有 ## HTML 模板，有则走 LLM 模板填充（同 col3），无则回退代码填充（向后兼容）
 (2) Bug 修复: rich/cover.html 添加 opacity:{{IMAGE_OPACITY}}；图片 div 删除正则匹配模板实际文本；META_INFO 回退到 key_points[0]；BRAND 不再取 notes 字段
 (3) LLM 路径后处理: 添加 {{IMAGE_OPACITY}} 替换（之前仅 _fill_slide_template 处理）
