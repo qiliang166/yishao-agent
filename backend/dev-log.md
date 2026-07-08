@@ -1,3 +1,10 @@
+[2026-07-08] PPT 结构页面模板系统统一 — VI 优先 + 代码回退 + 4 bug 修复:
+(1) 守卫修改 (line 3640): PPT 结构页面先检查 VI 是否有 ## HTML 模板，有则走 LLM 模板填充（同 col3），无则回退代码填充（向后兼容）
+(2) Bug 修复: rich/cover.html 添加 opacity:{{IMAGE_OPACITY}}；图片 div 删除正则匹配模板实际文本；META_INFO 回退到 key_points[0]；BRAND 不再取 notes 字段
+(3) LLM 路径后处理: 添加 {{IMAGE_OPACITY}} 替换（之前仅 _fill_slide_template 处理）
+(4) 效果: business 风格封面使用 vi/business/cover.md，VI 编辑器修改立即生效；tech 等无模板风格保持代码回退
+验证: tsc pass, vite build pass, 回归 GET 端点全部 200, _fill_slide_template 4 项单元测试通过, 守卫逻辑分支验证通过
+
 [2026-07-03 21:30:00] Image generation pipeline + template mode color fix:
 (1) _generate_and_replace_images() — scans slide HTML for {{image:PROMPT,SIZE}} and {{IMAGE_URL}} placeholders, calls image_service.generate_image(), downloads to html_dir/images/, replaces with <img> tag
 (2) Wired into generate_ppt() after HTML gen, before deck assembly (is_portrait guard)
@@ -67,3 +74,12 @@ TypeScript: pass. Build: pass. API: 无后端改动。
 (7) 数据存储：help_manual_sections 表，18个 location，更新通过 update_manual.py 脚本
 (8) TypeScript: pass. Build: pass (59 modules, 643KB JS, 19.7KB CSS).
 
+
+[2026-07-08] col4 编辑器切换页面类型 layout_hint 残留 — 根治:
+(1) 问题：在 Col45StructureEditor 里切换某页 page_type 后，layout_hint 残留旧类型布局（如 chart→table 仍是 dashboard、closing→table 仍是 single_focus），生成时布局错乱。
+(2) 根因：setPageType 调 emptyPage(type, p.layout_hint) 把旧布局当默认传入；emptyPage 末尾 else 分支（table/troubleshoot/comparison 等）无布局覆盖，直接沿用旧值；后端 resolve_layout 中 user_layout 优先级最高，残留值直接生效。
+(3) 修复（仅 frontend/src/components/Col45StructureEditor.tsx 一个文件）：
+    - 新增 TYPE_DEFAULT_LAYOUT 映射，与后端 PAGE_TYPE_LAYOUT_MAP 同源（table/troubleshoot→data_table、technique→vertical_steps、principle→two_column_asymmetric 等）
+    - emptyPage 默认布局改用该映射：lh = layout || TYPE_DEFAULT_LAYOUT[type] || 'hero_grid'，删除散落在 if 分支的硬编码 layout_hint
+    - setPageType 去掉 p.layout_hint 继承，切类型用新类型标准布局（heading 保留）
+(4) 验证：tsc + vite build pass（TYPE_DEFAULT_LAYOUT: Record<PageType,LayoutHint> 全类型穷举，漏类型即编译报错）；脚本比对前后端映射零内容类型 mismatch；两个实测用例（chart→table→data_table、closing→table→data_table）逻辑追踪通过。
