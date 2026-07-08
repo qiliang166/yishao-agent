@@ -83,3 +83,9 @@ TypeScript: pass. Build: pass. API: 无后端改动。
     - emptyPage 默认布局改用该映射：lh = layout || TYPE_DEFAULT_LAYOUT[type] || 'hero_grid'，删除散落在 if 分支的硬编码 layout_hint
     - setPageType 去掉 p.layout_hint 继承，切类型用新类型标准布局（heading 保留）
 (4) 验证：tsc + vite build pass（TYPE_DEFAULT_LAYOUT: Record<PageType,LayoutHint> 全类型穷举，漏类型即编译报错）；脚本比对前后端映射零内容类型 mismatch；两个实测用例（chart→table→data_table、closing→table→data_table）逻辑追踪通过。
+
+[2026-07-09] col4 目录页章节标题被 LLM 改写 — 根治:
+(1) 问题：生成大纲后，toc 目录页章节名从编辑器定义的"道·烹饪理念与原理"被改成 example 内容"润之道/形之道…"，且丢失 example 字段。
+(2) 根因：Stage1 大纲提示词铁律要求"替换模板标签为SOP实际值、禁止保留模板标签原文"，此规则对 key_points 正确，但对 toc.chapters 错误——章节名是编辑器固定结构不应被 LLM 改。而修复函数 _fix_stage1_table_keypoints 只还原 table 页 key_points/examples，未还原 toc chapters，被改坏的值存活。
+(3) 修复（backend/services/ppt_service.py _fix_stage1_table_keypoints）：toc 页从模板收集 chapters 加入 tmpl_map；应用时强制覆盖 s["chapters"]（非 fallback，因 LLM 总会产出被改写的 chapters，not s.get() 守卫救不了）。与 table 页 key_points 还原同一机制。
+(4) 验证：抽取函数隔离单测通过（被改坏的 toc → 还原为编辑器正确章节名 + example 恢复）；py_compile 语法通过；确认调用点 line 940/1042 在大纲主链路且 skill_template 在作用域内。

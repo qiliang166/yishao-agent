@@ -1170,9 +1170,10 @@ def _human_text_to_json(provider_id, model, human_text: str, original_json: list
                             if isinstance(orig, dict) and orig.get("seq"):
                                 _orig_by_seq[orig["seq"]] = orig
                         # Fields always copied from original (never in free text)
+                        # chapters: toc 章节列表由编辑器定义，自由文本中不出现，必须保留
                         _always_preserve = ("images", "cards", "examples",
                                            "layout_hint", "visual_weight",
-                                           "page_type", "charts")
+                                           "page_type", "charts", "chapters")
                         # Fields copied from original only when LLM didn't produce them
                         _fallback_preserve = ("description", "subtitle", "title_format")
                         for s in valid:
@@ -1302,7 +1303,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 1. 输出格式必须与上方「幻灯片结构模板」完全一致：模板是 JSON 数组 [{...}]，你就输出 JSON 数组 [{...}]，禁止在外面包一层 { "page_outline": [...] } 或任何其他包装
 2. 页面数量、seq 顺序、page_type 必须与模板完全一致，不可增删改任何页面
 3. key_points 的数量和顺序必须与模板一致（不可增删改、合并、重排）。但模板中的标签文字是占位符，你需要将它们替换为从 SOP 提取的实际内容值。例如模板标签"编写日期"应替换为"2026年7月"，而不是保留"编写日期"原文
-4. layout_hint 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
+4. layout_hint 保持模板原值不变（系统会根据 page_type 自动确定最优布局，你无需修改此字段）
 5. visual_weight 从以下选择: low, medium, high
 6. 封面页特殊规则：
    - heading 填入从 title_format 替换占位符后的实际标题（不超过30字符），不可填"封面"等类型名
@@ -1469,6 +1470,10 @@ def _fix_stage1_table_keypoints(stage1, skill_template):
             if pt in ("table", "flowchart", "chart", "diagram"):
                 entry["key_points"] = p.get("key_points", [])
                 entry["examples"] = p.get("examples", [])
+            # toc: 章节标题是编辑器定义的固定结构，LLM 不得改写。
+            # 大纲阶段"替换模板标签为实际值"的规则会误改章节名，此处强制还原。
+            if pt == "toc" and "chapters" in p:
+                entry["chapters"] = p["chapters"]
             # Restore images, charts, cards for all page types (code-level control fields)
             if "images" in p:
                 entry["images"] = p["images"]
@@ -1488,6 +1493,9 @@ def _fix_stage1_table_keypoints(stage1, skill_template):
                     s["key_points"] = entry["key_points"]
                 if "examples" in entry and entry["examples"]:
                     s["examples"] = entry["examples"]
+                # toc chapters: 强制覆盖（LLM 会改写章节名，fallback 守卫救不了，须直接还原）
+                if "chapters" in entry:
+                    s["chapters"] = entry["chapters"]
                 # Restore code-level control fields from template only when
                 # LLM output is missing them. Images and charts carry user
                 # settings (hint, opacity) that must not be hallucinated away.
@@ -3094,8 +3102,10 @@ def _validate_cards(slides: list) -> list[str]:
     Returns list of error strings. Empty list = all valid.
     """
     VALID_LAYOUTS = {
-        "single_focus", "two_column", "two_column_asymmetric", "three_column",
-        "hero_grid", "mixed_grid", "dashboard", "timeline", "horizontal_split", "full_bleed"
+        "single_focus", "single_column", "two_column", "two_column_asymmetric", "three_column",
+        "quad_grid", "hero_grid", "mixed_grid", "dashboard", "timeline", "vertical_steps",
+        "horizontal_split", "horizontal_steps", "full_bleed", "media_text", "matrix_2x2",
+        "profile_grid", "data_table"
     }
     VALID_TYPES = {
         "cover", "toc", "section", "chapter",
@@ -3228,7 +3238,7 @@ def _stage2_cards(provider_id, model, llm_generate, rules, stage1_slides,
 铁律：
 - 只输出此批次的幻灯片，按 seq 顺序
 {_build_page_type_prompt(style_id, column_id, project_id=project_id)}
-- layout 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
+- layout 从以下选择: single_focus, single_column, two_column, two_column_asymmetric, three_column, quad_grid, hero_grid, mixed_grid, dashboard, timeline, vertical_steps, horizontal_split, horizontal_steps, full_bleed, media_text, matrix_2x2, profile_grid, data_table
 - ⛔ layout=single_focus 仅限 cover/quote/section 页使用。summary/closing/content/data/comparison/process/timeline 等所有其余类型一律禁止 single_focus
 - 每卡必有 role (hero/metric/card_0/card_1/left/right/cell_0_0 等)
 - 每卡必有 title 或 body 或 chart
@@ -3364,6 +3374,159 @@ def _fallback_zones_to_cards(slides: list) -> list:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Deterministic Layout Resolution — 代码决定布局，LLM 只负责填充内容
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# page_type → layout 静态映射（覆盖 24 种明确语义类型）
+PAGE_TYPE_LAYOUT_MAP = {
+    # 全屏叙事 — 开场/收尾/过渡
+    "cover": "full_bleed",
+    "section": "full_bleed",
+    "closing": "full_bleed",
+    "summary": "full_bleed",
+    "copyright": "full_bleed",
+    # 单一焦点 — 金句/大数字
+    "quote": "single_focus",
+    "data_hero": "single_focus",
+    # 线性序列 — 罗列/阅读
+    "toc": "single_column",
+    "appendix": "single_column",
+    "document": "single_column",
+    # 时间/流程
+    "process_flow": "timeline",
+    "process_timeline": "timeline",
+    "timeline": "timeline",
+    # 步骤 — 垂直递进
+    "technique": "vertical_steps",
+    # 对比 — 双栏
+    "comparison": "two_column",
+    "duo_compare": "two_column",
+    # 数据 — 仪表盘/表格
+    "data": "dashboard",
+    "table": "data_table",
+    "troubleshoot": "data_table",
+    # 层级 — 主次
+    "principle": "two_column_asymmetric",
+    "chapter": "hero_grid",
+    "grid_cards": "hero_grid",
+    "food_archive": "hero_grid",
+    # 网格 — 等分
+    "image_grid": "quad_grid",
+    "skill_card": "profile_grid",
+    # 图文混排
+    "image_hero": "media_text",
+}
+
+# page_type 为 "content" 时的正文关键词 → 布局推断
+CONTENT_KEYWORD_LAYOUT = [
+    ("horizontal_steps", ["步骤", "工序", "流程", "第一阶段", "第.步"]),
+    ("vertical_steps", ["操作步骤", "审批", "教程"]),
+    ("two_column", ["对比", " vs ", "VS", "区别", "差异", "优劣", "前后对比"]),
+    ("dashboard", ["%", "指标", "占比", "数据", "KPI"]),
+]
+
+# 按卡片数兜底（仅用于 "content" 类型）
+CARD_COUNT_FALLBACK = {2: "two_column", 3: "three_column", 4: "quad_grid"}
+
+VALID_LAYOUTS_SET = {
+    "single_focus", "single_column", "two_column", "two_column_asymmetric", "three_column",
+    "quad_grid", "hero_grid", "mixed_grid", "dashboard", "timeline", "vertical_steps",
+    "horizontal_split", "horizontal_steps", "full_bleed", "media_text", "matrix_2x2",
+    "profile_grid", "data_table"
+}
+
+
+def _count_numbered_items(text: str) -> int:
+    """统计正文中编号条目的数量（支持 1. 2. 3. / ① ② ③ / 步骤一 步骤二 等模式）。"""
+    if not text:
+        return 0
+    patterns = [
+        r'(?:^|\n|\s)(\d+)[\.\、\）\)](?!\d)',  # 1. 2) 3、 (避免匹配 3.14 等小数)
+        r'[①②③④⑤⑥⑦⑧⑨⑩]',                       # 带圈数字
+        r'(?:步骤|阶段|工序)\s*[一二三四五六七八九十]',       # 步骤一
+    ]
+    count = 0
+    for pat in patterns:
+        count = max(count, len(re.findall(pat, text)))
+    # 如果匹配到 ≥2 个编号项，返回计数；否则返回 0
+    return count if count >= 2 else 0
+
+
+# 数值指标模式：数字(可小数) + 空格 + 2~6个中文短标签（如「9.5 鲜味强度」）。
+# 负向前瞻排除带单位的参数（60℃/120℃），只捕获 KPI 式「数字+纯中文标签」。
+_METRIC_PATTERN = re.compile(r'(?<![\d.])(\d+\.?\d*)\s+([一-龥]{2,6})(?=\s|$)')
+
+
+def _count_metric_items(text: str) -> int:
+    """统计正文中 KPI 式数值指标的数量（如「9.5 鲜味强度  5 技法步骤  3 口感层次」）。
+
+    这是比关键词更强的可量化信号：≥3 个数值指标几乎必为数据仪表盘页，
+    优先级高于「步骤」等易被标签词误触发的关键词分析。
+    """
+    if not text:
+        return 0
+    return len(_METRIC_PATTERN.findall(text))
+
+
+def resolve_layout(page_type: str = "content", body: str = "",
+                   cards: list = None, key_points: list = None,
+                   user_layout: str = "") -> str:
+    """确定性布局解析 — 根据内容语义选择最优布局。
+
+    优先级（从高到低）：
+    1. user_layout — 用户在编辑器中显式选择的布局（最高优先）
+    2. PAGE_TYPE_LAYOUT_MAP — 基于 page_type 的静态映射（覆盖 24 种明确语义）
+    3. 正文关键词分析 — 仅用于 page_type == "content" 的通用类型
+    4. 卡片数量兜底 — 2卡→two_column, 3卡→three_column, 4卡→quad_grid
+    5. mixed_grid — 最终兜底
+
+    Args:
+        page_type: 页面语义类型（cover/content/data/comparison 等）
+        body: 页面正文文本，用于关键词分析
+        cards: 已确定的卡片列表，用于计数兜底
+        key_points: 关键点列表
+        user_layout: 用户在编辑器中显式选择的布局
+
+    Returns:
+        有效的布局名称（保证在 VALID_LAYOUTS_SET 中）
+    """
+    # 1. 用户显式选择永远优先
+    if user_layout and user_layout in VALID_LAYOUTS_SET:
+        return user_layout
+
+    # 2. 静态映射（覆盖明确语义类型）
+    if page_type in PAGE_TYPE_LAYOUT_MAP:
+        return PAGE_TYPE_LAYOUT_MAP[page_type]
+
+    # 3. 仅 "content" 类型进入正文分析
+    if page_type == "content":
+        body_lower = body.lower() if body else ""
+        key_text = " ".join(key_points) if key_points else ""
+
+        # 3a. 数值指标检测 → dashboard（最强信号，优先于易被标签词误触发的关键词）
+        if _count_metric_items(body) >= 3:
+            return "dashboard"
+
+        # 3b. 编号条目检测 → horizontal_steps
+        if _count_numbered_items(body) >= 2 or _count_numbered_items(key_text) >= 2:
+            return "horizontal_steps"
+
+        # 3c. 关键词匹配
+        for layout, keywords in CONTENT_KEYWORD_LAYOUT:
+            for kw in keywords:
+                if kw.lower() in body_lower:
+                    return layout
+
+        # 3d. 卡片数量兜底
+        n = len(cards) if cards else 0
+        if n in CARD_COUNT_FALLBACK:
+            return CARD_COUNT_FALLBACK[n]
+
+    # 4. 最终兜底
+    return "mixed_grid"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Two-Phase HTML Pipeline (replaces old JSON card → SVG flow)
 # Phase 1: Structure planning (lightweight, one call)
 # Phase 2: Per-slide HTML generation (parallel, design-system.md guided)
@@ -3371,28 +3534,33 @@ def _fallback_zones_to_cards(slides: list) -> list:
 
 def _fallback_stage1_structure(stage1_slides: list) -> list:
     """Build slide structure from stage1 outline deterministically — no LLM needed."""
-    fallback_layouts = [
-        "full_bleed", "three_column", "two_column", "hero_grid",
-        "mixed_grid", "dashboard", "two_column_asymmetric", "full_bleed"
-    ]
     result = []
     for s in stage1_slides:
         if not isinstance(s, dict):
             continue
         seq = s.get("seq", 0)
-        layout_idx = (seq - 1) % len(fallback_layouts)
         ptype = s.get("page_type", "content")
         heading = s.get("heading", "")
-        cards = [{"role": "hero", "content_hint": heading}]
-        has_chart = any(kw in (heading + s.get("body", ""))
+        body = s.get("body", "")
+        cards = s.get("cards", [{"role": "hero", "content_hint": heading}])
+        key_points = s.get("key_points", [])
+        user_layout = s.get("layout_hint", "")
+        layout = resolve_layout(
+            page_type=ptype,
+            body=body,
+            cards=cards,
+            key_points=key_points,
+            user_layout=user_layout if user_layout in VALID_LAYOUTS_SET else "",
+        )
+        has_chart = any(kw in (heading + body)
                        for kw in ["%", "数据", "指标", "占比", "率", "值", "量"])
         entry = {
             "seq": seq,
             "type": ptype,
-            "layout": s.get("layout_hint") or fallback_layouts[layout_idx],
+            "layout": layout,
             "heading": heading,
-            "body": s.get("body", ""),
-            "key_points": s.get("key_points", []),
+            "body": body,
+            "key_points": key_points,
             "kicker": s.get("kicker", ""),
             "lead": s.get("lead", ""),
             "notes": s.get("notes", ""),
@@ -3400,11 +3568,9 @@ def _fallback_stage1_structure(stage1_slides: list) -> list:
             "has_chart": has_chart,
             "chart_hint": "big_number" if has_chart else "",
         }
-        for pass_thru in ("title_format", "subtitle", "description", "images", "charts"):
+        for pass_thru in ("title_format", "subtitle", "description", "images", "charts", "chapters"):
             if pass_thru in s:
                 entry[pass_thru] = s[pass_thru]
-        if "cards" in s:
-            entry["cards"] = s["cards"]
         result.append(entry)
     return result
 
@@ -3503,7 +3669,14 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
                         merged = dict(s1)
                         # Overlay LLM structure decisions
                         merged["type"] = s.get("type") or s1.get("page_type", "content")
-                        merged["layout"] = s.get("layout") or s1.get("layout_hint", "")
+                        # 确定性布局：代码根据 page_type 语义决定，LLM 不再猜布局
+                        merged["layout"] = resolve_layout(
+                            page_type=s1.get("page_type", "content"),
+                            body=s1.get("body", ""),
+                            cards=s.get("cards"),
+                            key_points=s1.get("key_points", []),
+                            user_layout=s1.get("layout_hint", ""),
+                        )
                         merged["has_chart"] = s.get("has_chart", False)
                         merged["chart_hint"] = s.get("chart_hint", "")
                         merged["lead"] = s1.get("subtitle") or s1.get("lead", "")
@@ -6135,21 +6308,31 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
             html = html[:kp_match.start()] + html[kp_match.end():]
 
     # ── Loop blocks: {{#CHAPTERS}}...{{/CHAPTERS}} (TOC) ──
+    # 章节标题来源优先级：编辑器的 chapters[].label（与 col3 的 _build_toc_rows 同源），
+    # cards[].content_hint 仅作兜底。此前只读 cards 导致编辑器填写的章节全部丢失。
     ch_pattern = re.compile(
         r'\{\{#CHAPTERS\}\}(.*?)\{\{/CHAPTERS\}\}', re.DOTALL
     )
     ch_match = ch_pattern.search(html)
     if ch_match:
         ch_template = ch_match.group(1)
-        if cards:
-            ch_parts = []
+        chapters = slide.get("chapters", [])
+        titles = []
+        for ch in chapters:
+            if isinstance(ch, dict):
+                label = str(ch.get("label", "")).strip()
+                if label:
+                    titles.append(label)
+        if not titles:
             for i, card in enumerate(cards):
-                c_title = card.get("content_hint", "") or card.get("title", "") or f"章节 {i+1}"
-                ch_part = ch_template.replace("{{title}}", esc(c_title))
+                titles.append(card.get("content_hint", "") or card.get("title", "") or f"章节 {i+1}")
+        if titles:
+            ch_parts = []
+            for i, title in enumerate(titles):
+                ch_part = ch_template.replace("{{title}}", esc(title))
                 ch_part = ch_part.replace("{{num}}", f"{i+1:02d}")
-                # Replace chart_color with var(--chart-N) cycling through chart colors
-                chart_idx = i % 5
-                ch_part = ch_part.replace("{{chart_color}}", f"var(--chart-{chart_idx})")
+                # 章节序号圆的循环配色：模板写死 var(--chart_color)，逐条替换为 var(--chart-N)
+                ch_part = ch_part.replace("var(--chart_color)", f"var(--chart-{i % 5})")
                 ch_parts.append(ch_part)
             html = html[:ch_match.start()] + "\n".join(ch_parts) + html[ch_match.end():]
         else:
