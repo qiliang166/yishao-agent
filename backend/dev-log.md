@@ -1,3 +1,9 @@
+[2026-07-09] col4 确定性渲染 — 按数据形态选布局(消除"3张表长得一样"的单调):
+背景: 用户反馈"KIMI 布局类型更多更丰富, 你的很单调……即便丰满也不好看, 只是拉伸了而已"。定路线=扩充确定性渲染器(AskUserQuestion), 权衡=丰富与稳定都要尽量平衡。
+证据(真11页大纲 last_outline_response 逐页数据形态分析, 非推测): seq4 表 row0=`发花胶→…→装盘`(7步→序列), seq5 表 row0=`干货涨发→…→终味融合`(5步→序列), seq7 表 row0=`鹅掌 / 猪蹄 / 牛筋`(3命名实体, 无→)。三页同为 table 却语义不同(4/5 是流程, 7 是对照), 旧渲染全走同一"列卡"→ 视觉三胞胎, 正是"单调"根因。
+方案(结构性, 同 page_type 按数据特征自动选骨架): backend/services/content_render.py 新增 _render_timeline(横向流程时间轴: 连接线+编号圆节点+步骤标题带+各步属性卡, 属性来自对齐的后续行); _render_table 加数据形态分支——row0 含→且步数>=3且与列数一致且<=8 → 走 timeline, 否则维持列卡(命名实体对照)/不规则兜底行。判据是数据自身特征(→序列 vs 命名实体), 非硬编码页码。
+验证: ast 语法 pass; 真大纲跑测——seq4/5 判为 timeline(10967/10062 字符)、seq7 判为列卡(8421), 分支确证; 结构核对 seq5=5节点+15属性点(3属性行×5步)全来自真数据零编造; 边界: 2步→仍列卡(guard>=3)、3步→转 timeline、属性行错位不崩、slash 实体不误判为 timeline; 全内容页回归渲染+720框 pass, 空 kp/未知类型正确 None; 生产色彩链路预览(_build_root_vars + _resolve_color_vars(css_vars=True))→ data/debug/timeline_preview.html 零 hex leak。现内容 deck 7 页 6 种布局家族(principle 深色嵌卡/timeline×2/technique 竖步卡/列卡对照/troubleshoot 三列阵/grid_cards 深色大卡)。_proof_render.py 是独立陈旧脚本(写另一目录), 不在生产链路, 未改。
+
 [2026-07-09] col4 内容页确定性渲染 — 第三条生成路径(消除 LLM 崩页/塌空/丢数据):
 背景: col4 分析PPT 的内容页(principle/table/technique/troubleshoot/grid_cards)走 LLM 自由生成, 不稳定——崩页、塌空、平铺糊页、丢数据(见前几条 seq5 塌空系列)。用户核心判断: VI 素材丰富却产出差=设计缺陷, 要 Kimi 级质量且颜色必须走13色变量系统(严禁硬编码 hex, 换色只改13个值)。
 方案(结构性, 非补丁, 隔离新增): 在既有两条路径(结构页 code-fill / LLM 自由生成)之外新增第三条"确定性内容页渲染":

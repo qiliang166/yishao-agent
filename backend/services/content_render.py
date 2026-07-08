@@ -143,30 +143,171 @@ def _render_principle(slide, seq, total, w, h):
     return _frame(inner, w, h)
 
 
+def _split_cells(kp: str) -> list:
+    """Split one key_point into aligned cells.
+
+    Delimiters are prioritised: strong column signals (→ ； ;) win first; the
+    weaker "/ 、 ·" are only used when no strong one is present, because in real
+    data a slash is often an intra-cell "A/B" list (e.g. 蒸/温水浸/冷水浸) rather
+    than a column boundary — using it blindly misaligns the matrix."""
+    for d in ("→", "；", ";"):
+        if d in kp:
+            return [c.strip() for c in kp.split(d) if c.strip()]
+    for d in ("/", "、", "·"):
+        if d in kp:
+            return [c.strip() for c in kp.split(d) if c.strip()]
+    return [kp]
+
+
+def _render_timeline(slide, seq, total, w, h, matrix):
+    """Horizontal process timeline: nodes on a connector line + attribute cards.
+
+    Chosen when the table's row-0 is a step SEQUENCE (contains →), e.g.
+    发花胶→发花菇→…→装盘.  Each → cell becomes a numbered node; the remaining
+    rows' aligned cells stack as that step's attributes in the card below —
+    turning a "process table" into a real timeline instead of a look-alike of
+    the comparison column-cards, so tables of different data shape look different.
+    """
+    steps = matrix[0]
+    attr_rows = matrix[1:]
+    n = len(steps)
+    inset = 100.0 / n / 2.0  # align connector ends with the first/last node centres
+    nodes = []
+    for ci in range(n):
+        col = _node(ci)
+        nodes.append(
+            f'<div style="display:flex;flex-direction:column;align-items:center;">'
+            f'<div style="width:44px;height:44px;border-radius:50%;background:{col};color:#ffffff;'
+            f'font-weight:800;font-size:19px;display:flex;align-items:center;justify-content:center;'
+            f'box-shadow:0 3px 8px rgba(0,0,0,0.18);border:3px solid #ffffff;">{ci+1}</div></div>')
+    node_band = (
+        f'<div style="position:relative;height:56px;flex-shrink:0;">'
+        f'<div style="position:absolute;top:22px;left:{inset}%;right:{inset}%;height:3px;'
+        f'background:linear-gradient(90deg,{{{{accent}}}},{{{{secondary}}}});"></div>'
+        f'<div style="position:relative;height:100%;display:grid;grid-template-columns:repeat({n},1fr);'
+        f'align-items:center;">{"".join(nodes)}</div></div>')
+
+    titles = []
+    for ci in range(n):
+        titles.append(
+            f'<div style="text-align:center;font-size:14.5px;font-weight:800;color:{{{{secondary}}}};'
+            f'line-height:1.25;padding:0 6px;">{esc(steps[ci])}</div>')
+    title_band = (f'<div style="display:grid;grid-template-columns:repeat({n},1fr);gap:12px;'
+                  f'margin:8px 0 12px;flex-shrink:0;">{"".join(titles)}</div>')
+
+    cards = []
+    for ci in range(n):
+        col = _node(ci)
+        fields = []
+        for row in attr_rows:
+            val = row[ci] if ci < len(row) else ""
+            if not val:
+                continue
+            fields.append(
+                f'<div style="flex:1;display:flex;align-items:flex-start;gap:8px;padding:9px 0;'
+                f'border-top:1px dashed rgba(var(--text-rgb),0.12);">'
+                f'<span style="flex-shrink:0;width:7px;height:7px;margin-top:6px;border-radius:50%;background:{col};"></span>'
+                f'<span style="font-size:12.5px;color:{{{{text}}}};line-height:1.5;">{esc(val)}</span></div>')
+        body = ("".join(fields) if fields else
+                '<div style="flex:1;"></div>')
+        cards.append(
+            f'<div style="display:flex;flex-direction:column;background:#ffffff;border-radius:11px;'
+            f'overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,0.09);border:1px solid rgba(var(--text-rgb),0.06);">'
+            f'<div style="height:4px;background:{col};"></div>'
+            f'<div style="flex:1;display:flex;flex-direction:column;padding:4px 13px 12px;">{body}</div></div>')
+    card_band = (f'<div style="flex:1;display:grid;grid-template-columns:repeat({n},1fr);gap:12px;'
+                 f'min-height:0;">{"".join(cards)}</div>')
+
+    box = (f'<div style="height:100%;display:flex;flex-direction:column;">'
+           f'{node_band}{title_band}{card_band}</div>')
+    inner = _header(slide.get("heading", ""), seq, total, w) + _subtitle_strip(_sub(slide), w) + _region(box, _top(slide))
+    return _frame(inner, w, h)
+
+
 def _render_table(slide, seq, total, w, h):
-    """Data-driven table with NO fabricated column headers.  Each key_point is a
-    numbered row; delimiters (；/→/·) split it into aligned cells."""
+    """Matrix table rendered as COLUMN CARDS to fill both width and height.
+
+    Outline table shape: each key_point is one "attribute row" whose ；/→/·
+    delimiters split it into per-entity values.  Row 0 is usually the entity
+    names.  We TRANSPOSE this into one card per entity, stacking that entity's
+    attributes inside a dark block — so the page fills space instead of leaving
+    tall single-line rows with big vertical gaps (the "不够丰满" complaint).
+
+    Data-shape branch: if row-0 is a step SEQUENCE (contains →), the page is a
+    PROCESS, not a comparison → render a horizontal timeline instead, so tables
+    of different meaning don't all look identical (the "布局类型很单调" complaint).
+
+    Fallback: if the matrix is irregular (rows have very different cell counts),
+    fall back to full-height numbered rows with the value chips laid out."""
     kps = [str(k) for k in slide.get("key_points", [])]
     if not kps:
         return None
+
+    matrix = [_split_cells(kp) for kp in kps]
+    counts = [len(r) for r in matrix]
+    ncols = max(counts)
+
+    # Process shape: row-0 is a →-sequence of >=3 steps → horizontal timeline.
+    if "→" in kps[0] and len(matrix[0]) >= 3 and len(matrix[0]) == ncols and ncols <= 8:
+        return _render_timeline(slide, seq, total, w, h, matrix)
+
+    # Regular matrix = most rows share the max column count → transpose to cards.
+    regular = ncols >= 2 and sum(1 for c in counts if c == ncols) >= max(2, len(matrix) - 1)
+
+    if regular and ncols <= 8:
+        # Column cards, LIGHT style (deliberately distinct from the dark-embed
+        # cards used by principle/grid_cards, so the deck has light/dark rhythm
+        # instead of one repeated motif). Header = row-0 value; body stacks the
+        # remaining rows' values as label + value split by a colored hairline.
+        header_row = matrix[0]
+        attr_rows = matrix[1:]
+        cards = []
+        for ci in range(ncols):
+            col = _node(ci)
+            title = header_row[ci] if ci < len(header_row) else f"{ci+1}"
+            fields = []
+            for ri, row in enumerate(attr_rows):
+                val = row[ci] if ci < len(row) else ""
+                if not val:
+                    continue
+                fields.append(
+                    f'<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;'
+                    f'{"border-top:1px dashed rgba(var(--text-rgb),0.14);" if ri>0 else ""}">'
+                    f'<span style="flex-shrink:0;width:18px;height:18px;margin-top:1px;border-radius:5px;'
+                    f'background:rgba(var(--secondary-rgb),0.12);color:{{{{secondary}}}};font-size:11px;'
+                    f'font-weight:700;display:flex;align-items:center;justify-content:center;">{ri+1}</span>'
+                    f'<span style="font-size:13.5px;color:{{{{text}}}};line-height:1.5;">{esc(val)}</span></div>')
+            cards.append(
+                f'<div style="flex:1;min-width:0;display:flex;flex-direction:column;background:#ffffff;'
+                f'border-radius:12px;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,0.09);'
+                f'border:1px solid rgba(var(--text-rgb),0.06);">'
+                f'<div style="height:5px;background:{col};"></div>'
+                f'<div style="display:flex;align-items:center;gap:10px;padding:14px 16px 11px;'
+                f'background:{{{{card_bg}}}};border-bottom:1px solid rgba(var(--text-rgb),0.06);">'
+                f'<div style="width:34px;height:34px;flex-shrink:0;border-radius:9px;background:{col};color:#ffffff;'
+                f'font-weight:800;font-size:16px;display:flex;align-items:center;justify-content:center;">{esc(chr(65+ci))}</div>'
+                f'<span style="font-size:16px;font-weight:800;color:{{{{secondary}}}};line-height:1.2;">{esc(title)}</span></div>'
+                f'<div style="flex:1;padding:6px 16px 12px;display:flex;flex-direction:column;">{"".join(fields)}</div></div>')
+        grid = (f'<div style="height:100%;display:grid;grid-template-columns:repeat({ncols},1fr);gap:16px;">'
+                f'{"".join(cards)}</div>')
+        inner = _header(slide.get("heading", ""), seq, total, w) + _subtitle_strip(_sub(slide), w) + _region(grid, _top(slide))
+        return _frame(inner, w, h)
+
+    # Irregular fallback: full-height numbered rows, values as inline chips.
     rows = []
-    for i, kp in enumerate(kps):
-        cells = [c.strip() for c in re.split(r"[；;]|→|·", kp) if c.strip()]
-        if not cells:
-            cells = [kp]
+    for i, cells in enumerate(matrix):
         col = _node(i)
-        cell_html = "".join(
-            f'<div style="flex:1;min-width:0;padding:0 14px;font-size:13.5px;line-height:1.5;'
-            f'color:{"{{secondary}}" if j==0 else "{{text}}"};font-weight:{700 if j==0 else 400};'
-            f'{"border-left:1px solid rgba(var(--text-rgb),0.08);" if j>0 else ""}">{esc(c)}</div>'
+        chips = "".join(
+            f'<div style="flex:1;min-width:0;padding:10px 14px;background:rgba(255,255,255,0.55);'
+            f'border-radius:8px;font-size:13.5px;line-height:1.5;'
+            f'color:{"{{secondary}}" if j==0 else "{{text}}"};font-weight:{700 if j==0 else 400};">{esc(c)}</div>'
             for j, c in enumerate(cells))
-        bg = "{{card_bg}}" if i % 2 == 0 else "{{background}}"
         rows.append(
-            f'<div style="flex:1;display:flex;align-items:center;background:{bg};border-radius:10px;'
-            f'overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.05);">'
-            f'<div style="width:52px;flex-shrink:0;align-self:stretch;background:{col};color:#ffffff;'
+            f'<div style="flex:1;display:flex;align-items:stretch;gap:10px;background:{{{{card_bg}}}};'
+            f'border-radius:10px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,0.05);padding:8px 10px 8px 0;">'
+            f'<div style="width:52px;flex-shrink:0;align-self:stretch;background:{col};color:#ffffff;border-radius:8px;'
             f'font-weight:800;font-size:17px;display:flex;align-items:center;justify-content:center;">{i+1}</div>'
-            f'<div style="flex:1;display:flex;align-items:center;padding:12px 6px;">{cell_html}</div></div>')
+            f'<div style="flex:1;display:flex;align-items:center;gap:10px;">{chips}</div></div>')
     box = f'<div style="height:100%;display:flex;flex-direction:column;gap:12px;">{"".join(rows)}</div>'
     inner = _header(slide.get("heading", ""), seq, total, w) + _subtitle_strip(_sub(slide), w) + _region(box, _top(slide))
     return _frame(inner, w, h)
