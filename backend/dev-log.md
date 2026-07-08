@@ -1,3 +1,9 @@
+[2026-07-09] col4 seq5 落空兜底真根因(日志实证) + best_soft 安全网:
+现象追查: 上一条修了"兜底正文被吃",但 seq5 为何一开始就落兜底?查 backend_startup.log 实证(非推测): attempt1(line154) 页面正常渲染完(hex-fix/white-fix 都跑在真内容上), 却被 _detect_fullscreen_mask 判为"全屏遮罩(bg=#ffffff)"否决 → 追加纠正消息重试; attempt2(line215) LLM 面对纠正反馈返回 0 字符("HTML too short") → 两次耗尽落兜底。即: 一个渲染良好的页被软性质量启发式(mask 误判 data_table 的全幅背景板)废弃, 重试又产出空 → 整页丢失。这是 token 截断以外的真因, 我之前"data_table token 过重"的猜测是错的。
+根因定性: _gen_one 重试循环里, 软性检查(container/overflow/mask 三项 retry_msg)命中就 continue 丢弃当前 html; 若下次 attempt 返回垃圾(0字符/截断/失衡), 之前那份"仅软性瑕疵、结构完整"的好渲染被白白扔掉 → 落空白兜底。
+修复(backend/services/ppt_service.py _gen_one, 结构性): 新增 best_soft 记忆——软性检查命中且 attempt<1 时, 把当前"已过截断/div/svg 平衡校验"的完整 html 存入 best_soft 再 continue; 所有 attempt 耗尽时优先返回 best_soft(而非空白兜底模板)。软性瑕疵(装饰性 mask/局部溢出)的完整页 >> 空白兜底页。mask 启发式本身不动(收紧灵敏度有放行真遮罩的风险, 且 best_soft 已消除空白页后果)。
+验证: py_compile pass; 重启后端 health 200; 逻辑: 软性拒绝页现在保底为"有正文的完整渲染", 叠加上一条 _extract_outermost_div 修复, seq5 双重保险不再塌空。待用户重生成 col4 端到端确认。
+
 [2026-07-09] col4 PPT 整页塌空(seq5 只剩页码) — _extract_outermost_div 吃掉兜底模板正文:
 现象: col4 生成的 index.html 第5页(通用流程, page_type=table)整页空白只剩页码角标; result.json 里该页 html 其实有 1683 字符兜底正文, 到 index_vars.html 只剩 416 字符。逐页硬比 Kimi 对照 PPTX 发现的第一个硬 bug。
 根因(双 bug 叠加, 代码实证): (a)单页富渲染失败落兜底 — _gen_one 并行生成每页, seq5(data_table 重 SVG)两次 attempt 都被截断检查(line 4361 not endswith '>')拦下 → 落 _fallback_single_slide_html(line 3701)。同为 table 的 seq4 富渲染成功(9 SVG)故无恙。(b)兜底正文被组装环节吃掉 — 兜底模板(line 3724)是 <section> 包 3 个兄弟 div(4px色条/正文/页码); 而 _assemble_html_deck 调的 _extract_outermost_div(line 6066)硬假设最外层是 <div>, 抓到第一个 div(4px色条)depth 立即归零就 return, <h1>/正文/<ul> 全丢。

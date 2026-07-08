@@ -4256,6 +4256,13 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             with open(os.path.join(debug_dir, "last_system_prompt.txt"), "w", encoding="utf-8") as _df:
                 _df.write(tailored_system)
 
+        # Best structurally-complete candidate seen across attempts. A slide that
+        # only tripped a *soft* quality heuristic (cosmetic mask/overflow) but is
+        # otherwise complete and tag-balanced beats a blank fallback when the retry
+        # returns garbage. Without this, a good attempt-1 render is thrown away and
+        # a 0-char attempt-2 sends the whole page to the empty fallback template.
+        best_soft = None  # {"html":..., "html_vars":...}
+
         for attempt in range(2):
             try:
                 response = _safe_run_async(llm_generate(provider_id, model,
@@ -4453,6 +4460,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
 
                     if retry_msg and attempt < 1:
                         _logger.warning(f"Slide {seq} attempt {attempt+1}: {retry_msg[:120]}")
+                        # Keep this structurally-complete render as a safety net —
+                        # it passed truncation/div/svg balance and only failed a
+                        # soft heuristic. If the retry returns garbage we fall back
+                        # to this instead of a blank template.
+                        best_soft = {"html": html, "html_vars": html_vars}
                         user += f"\n\n{retry_msg}"
                         continue
                     elif retry_msg:
@@ -4475,6 +4487,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 _logger.warning(f"Slide {seq} HTML attempt {attempt+1} failed: {e}")
                 _logger.warning(f"Slide {seq} traceback: {_tb.format_exc()[-500:]}")
 
+        if best_soft:
+            _logger.warning(f"Slide {seq}: all attempts failed, using best "
+                            f"soft-rejected render ({len(best_soft['html'])} chars) "
+                            f"instead of blank fallback")
+            return {**slide, "html": best_soft["html"], "html_vars": best_soft["html_vars"]}
         _logger.warning(f"Slide {seq}: all attempts failed, using fallback")
         return _fallback_single_slide_html(slide, style_id, canvas_w, canvas_h)
 
