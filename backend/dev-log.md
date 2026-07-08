@@ -1,3 +1,10 @@
+[2026-07-09] col4 PPT 整页塌空(seq5 只剩页码) — _extract_outermost_div 吃掉兜底模板正文:
+现象: col4 生成的 index.html 第5页(通用流程, page_type=table)整页空白只剩页码角标; result.json 里该页 html 其实有 1683 字符兜底正文, 到 index_vars.html 只剩 416 字符。逐页硬比 Kimi 对照 PPTX 发现的第一个硬 bug。
+根因(双 bug 叠加, 代码实证): (a)单页富渲染失败落兜底 — _gen_one 并行生成每页, seq5(data_table 重 SVG)两次 attempt 都被截断检查(line 4361 not endswith '>')拦下 → 落 _fallback_single_slide_html(line 3701)。同为 table 的 seq4 富渲染成功(9 SVG)故无恙。(b)兜底正文被组装环节吃掉 — 兜底模板(line 3724)是 <section> 包 3 个兄弟 div(4px色条/正文/页码); 而 _assemble_html_deck 调的 _extract_outermost_div(line 6066)硬假设最外层是 <div>, 抓到第一个 div(4px色条)depth 立即归零就 return, <h1>/正文/<ul> 全丢。
+修复(backend/services/ppt_service.py _extract_outermost_div, 单函数根治): 改为 tag-agnostic — 检测 <div> 与 <section> 谁先出现即以谁为外壳 tag, 用该 tag 做 depth 追踪。正常页(外层<div>)路径零变化; 兜底页(外层<section>)不再被吃正文。
+验证: py_compile pass; 4 项隔离单测通过 — (1)兜底<section>保留 heading+body+key_points (2)正常<div>输入输出完全一致 (3)跨页泄漏防护仍生效(div后接垃圾被截断) (4)未闭合<section>自动补闭合。
+遗留(未在本次修): seq5 富渲染为何两次截断(data_table token 过重)属生成鲁棒性问题; col4 页数/页型被大纲提示词锁死(line 1304/1322 禁止拆分页面/改 page_type)导致「道」4主题压1页、27种富页型闲置 — 属设计缺陷主因, 需与用户对齐产品方向后再动。
+
 [2026-07-09] SPA 深层路由刷新 404 — 后端加 index.html 回退:
 现象: 用户在项目页(/project/xxx)或设置页(/workspace/xxx/settings)按 F5 刷新, 返回 {"detail":"Not Found"}; 只有根路径 / 能刷新。
 根因: backend/app.py 末尾 app.mount("/", StaticFiles(html=True)) 只对根路径伺服 index.html, React-Router 的客户端路由(如 /project/xxx)在后端既无对应路由也无同名文件 → StaticFiles 抛 404, 刷新即失败。日志早有 GET /workspace/.../settings 404 佐证。

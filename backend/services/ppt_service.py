@@ -6064,42 +6064,51 @@ def _preprocess_a4_slides(slides: list, canvas_w: int, canvas_h: int) -> list:
 
 
 def _extract_outermost_div(html: str) -> str:
-    """Extract the outermost <div> container from LLM-generated HTML.
+    """Extract the outermost slide container from generated HTML.
 
-    The LLM is instructed to output exactly one outer <div> container
-    (width:...;height:...). We find the first <div and trace element
-    depth to locate its matching </div>, returning a self-contained
-    div tree that cannot leak into or out of the slide wrapper.
+    Normal LLM output wraps a slide in one outer <div>; the failure
+    fallback (_fallback_single_slide_html) wraps it in a <section> with
+    sibling divs. We detect whichever wrapper tag opens first and trace
+    depth on THAT tag, returning a self-contained subtree that cannot
+    leak into or out of the slide wrapper.
 
-    This replaces fragile regex-based div counting that could strip
-    closing tags from the wrong position when divs are structurally
-    (not numerically) imbalanced.
+    Matching on the actual wrapper tag (not always <div>) is required:
+    tracing <div> depth on a <section> wrapper would stop at the first
+    inner sibling div and discard the rest of the slide's content.
     """
-    first_open = html.find('<div')
-    if first_open < 0:
+    first_div = html.find('<div')
+    first_section = html.find('<section')
+    if first_div < 0 and first_section < 0:
         return html
+    # Pick whichever wrapper tag appears first as the outermost element.
+    if first_section >= 0 and (first_div < 0 or first_section < first_div):
+        tag, open_tok, close_tok = 'section', '<section', '</section>'
+        first_open = first_section
+    else:
+        tag, open_tok, close_tok = 'div', '<div', '</div>'
+        first_open = first_div
 
     depth = 0
     pos = first_open
     while pos < len(html):
-        next_open = html.find('<div', pos)
-        next_close = html.find('</div>', pos)
+        next_open = html.find(open_tok, pos)
+        next_close = html.find(close_tok, pos)
 
         if next_close == -1:
             break
 
         if next_open != -1 and next_open < next_close:
             depth += 1
-            pos = next_open + 4
+            pos = next_open + len(open_tok)
         else:
             depth -= 1
             if depth == 0:
-                return html[first_open:next_close + 6]
-            pos = next_close + 6
+                return html[first_open:next_close + len(close_tok)]
+            pos = next_close + len(close_tok)
 
-    # Depth never returned to 0 — outermost <div> is unclosed.
+    # Depth never returned to 0 — outermost wrapper is unclosed.
     # Close it ourselves so the slide wrapper stays intact.
-    return html[first_open:] + '</div>'
+    return html[first_open:] + close_tok
 
 
 def _wcag_relative_luminance(hex_color: str) -> float:
