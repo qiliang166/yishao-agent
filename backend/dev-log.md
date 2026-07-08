@@ -1,3 +1,11 @@
+[2026-07-09] col4 内容页确定性渲染 — 第三条生成路径(消除 LLM 崩页/塌空/丢数据):
+背景: col4 分析PPT 的内容页(principle/table/technique/troubleshoot/grid_cards)走 LLM 自由生成, 不稳定——崩页、塌空、平铺糊页、丢数据(见前几条 seq5 塌空系列)。用户核心判断: VI 素材丰富却产出差=设计缺陷, 要 Kimi 级质量且颜色必须走13色变量系统(严禁硬编码 hex, 换色只改13个值)。
+方案(结构性, 非补丁, 隔离新增): 在既有两条路径(结构页 code-fill / LLM 自由生成)之外新增第三条"确定性内容页渲染":
+(1) 新模块 backend/services/content_render.py(全新文件, 零风险触碰7551行引擎): 5个 page_type 的机械渲染器, 纯 Python 零 LLM——永不崩、永不丢数据。学 Kimi 手法(全宽深色页眉条/副标题金线条/米色卡内嵌深色多字段块/藏蓝红双色对照/accent 铜条/色条轮换), 但全部输出 {{primary}}/{{chart_N}}/{{semantic_negative}} 占位符, 由 _resolve_color_vars(css_vars=True) 解析 → 与结构页 code-fill 同一 html_vars 契约, 换色只改13值即可。
+(2) 铁律 1:1 零构造: 只读大纲已有字段(heading/subtitle/lead/key_points/description), 缺字段就省略该元素(如无 subtitle 则不画副标题条), 绝不注入 section/summary 页、绝不编造表头/统计数字/文案。—— 修正了 _proof_render 里 abalone 专属的构造(注入章节页/summary、硬编码表头与"温控跨度"等), 那些在生产渲染器里全部移除。
+(3) 门控钩子(backend/services/ppt_service.py _gen_one, 结构页短路之后): `if column_id=="col4" and not is_a4 and active_scheme:` 调 render_content_slide, 命中则返回 {html, html_vars}, 返回 None(不支持类型/空数据/异常)则 fall through 到原 LLM 路径。col5 及其他路径零改动, safe by construction。
+验证: py_compile 双文件 pass; import services.ppt_service pass(服务器加载无误); 真11页大纲(last_outline_response)跑测——7内容页(principle/table×3/technique/troubleshoot/grid_cards)确定性覆盖、4结构页(cover/toc/copyright/closing)正确 fall through; 解析后 HTML 零非白 hex leak(全走13变量); seq7 主料调整6项真数据(鹅掌/猪蹄/牛筋/柱侯酱/高压锅28min/宴席气派)完整无编造、无 proof-era 构造串泄漏; 门控确证仅 col4(col5 未动); 预览 HTTP 200。待用户重生成 col4 端到端确认质量, 及决定是否微调深海蓝色值贴近 Kimi 暖调(仅改 tokens.yaml 的13值)。
+
 [2026-07-09] col4 seq5 落空兜底真根因(日志实证) + best_soft 安全网:
 现象追查: 上一条修了"兜底正文被吃",但 seq5 为何一开始就落兜底?查 backend_startup.log 实证(非推测): attempt1(line154) 页面正常渲染完(hex-fix/white-fix 都跑在真内容上), 却被 _detect_fullscreen_mask 判为"全屏遮罩(bg=#ffffff)"否决 → 追加纠正消息重试; attempt2(line215) LLM 面对纠正反馈返回 0 字符("HTML too short") → 两次耗尽落兜底。即: 一个渲染良好的页被软性质量启发式(mask 误判 data_table 的全幅背景板)废弃, 重试又产出空 → 整页丢失。这是 token 截断以外的真因, 我之前"data_table token 过重"的猜测是错的。
 根因定性: _gen_one 重试循环里, 软性检查(container/overflow/mask 三项 retry_msg)命中就 continue 丢弃当前 html; 若下次 attempt 返回垃圾(0字符/截断/失衡), 之前那份"仅软性瑕疵、结构完整"的好渲染被白白扔掉 → 落空白兜底。

@@ -3975,6 +3975,22 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 return {**slide, "html": html, "html_vars": html_vars}
             # No template available → fall through to LLM generation below
 
+        # ── Deterministic content-page render (col4 landscape) ──
+        # Third generation path: data pages (principle/table/technique/
+        # troubleshoot/grid_cards) are rendered mechanically from the outline
+        # slide — no LLM, so they never crash and never drop data. Emits
+        # {{token}} color placeholders resolved the same way as the structural
+        # path. Returns None for unsupported types → falls through to the LLM
+        # path below, so behavior is safe by construction.
+        if column_id == "col4" and not is_a4 and active_scheme:
+            from services.content_render import render_content_slide
+            _det = render_content_slide(slide, seq, total, canvas_w, canvas_h)
+            if _det:
+                html_vars = _det
+                html = _resolve_color_vars(_det, active_scheme, css_vars=True)
+                _logger.info(f"Slide {seq}: content-rendered ({stype}), {len(html)} chars")
+                return {**slide, "html": html, "html_vars": html_vars}
+
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
         # Load VI section FIRST to detect HTML template mode
