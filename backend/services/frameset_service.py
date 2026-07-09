@@ -10,6 +10,7 @@
   render_with_content(fs, frame_id, slots)   按框架真实几何渲染(占位缺失回退example)
 """
 import json
+import re
 from pathlib import Path
 
 _RES = Path(__file__).resolve().parent.parent / "resources" / "framesets"
@@ -78,6 +79,9 @@ _CACHE = {}
 
 def load_frameset(style_id: str = "business") -> dict | None:
     """读取 resources/framesets/{style_id}.json；无则回退 business.json。"""
+    # style_id 直接拼进文件路径，必须限制为安全标识符，防止路径穿越(../)。
+    if not style_id or not re.fullmatch(r"[A-Za-z0-9_-]+", style_id):
+        style_id = "business"
     if style_id in _CACHE:
         return _CACHE[style_id]
     path = _RES / f"{style_id}.json"
