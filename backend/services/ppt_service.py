@@ -4018,6 +4018,25 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     _done_lock = _threading.Lock()
     _done_count = [0]
 
+    # ── Frameset (real-PPT-extracted frameworks) setup ──
+    # For landscape decks (col4/col5) load the extracted frameset once. Every
+    # slide's layout is then chosen by the LLM from these REAL frameworks (pick
+    # frame_id + fill slots); geometry/coordinates/colors stay locked in the
+    # JSON. Built once here (not per-slide) so the catalog prompt is reused.
+    _frameset = None
+    _frameset_cat_txt = ""
+    if not is_a4 and active_scheme:
+        try:
+            from services import frameset_service as _fset_mod
+            _frameset = _fset_mod.load_frameset(style_id)
+            if _frameset:
+                _frameset_cat_txt = _fset_mod.catalog_prompt(
+                    _fset_mod.frame_catalog(_frameset))
+        except Exception as _e:
+            _logger.warning(f"frameset load failed ({style_id}), "
+                            f"falling back to per-slide LLM HTML: {_e}")
+            _frameset = None
+
     def _gen_one(slide, idx):
         seq = slide.get("seq", idx + 1)
         stype = slide.get("type", "content")
@@ -4033,6 +4052,38 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         notes = slide.get("notes", "")
         description = slide.get("description", "")
         title_format = slide.get("title_format", "")
+
+        # ── Frameset path: real-PPT frameworks (LLM selects + fills) ──
+        # PRIMARY layout path for landscape decks. The LLM picks one frame_id
+        # from the extracted frameset and writes text per slot; geometry and
+        # colors are 100% locked in the JSON (no hand-written frameworks, no
+        # LLM-authored HTML). Rendered by frameset_service from real L/T/W/H.
+        # On any failure it falls through to the legacy branches below.
+        if _frameset and not is_a4 and active_scheme:
+            try:
+                from services import frameset_service as _fset_mod
+                pick = _frameset_pick_and_fill(
+                    provider_id, model, llm_generate, slide,
+                    _frameset, _frameset_cat_txt, temperature=0.3)
+                if pick and pick.get("frame_id"):
+                    fid = pick["frame_id"]
+                    slots = pick.get("slots", {}) or {}
+                    html_vars = _fset_mod.render_with_content(_frameset, fid, slots)
+                    if html_vars:
+                        html = _resolve_color_vars(html_vars, active_scheme, css_vars=True)
+                        _logger.info(f"Slide {seq}: frameset {fid} "
+                                     f"({len(slots)} slots), {len(html)} chars")
+                        if project_id:
+                            with _done_lock:
+                                _done_count[0] += 1
+                                _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"已完成 {_done_count[0]}/{total} 页", "slides_done": _done_count[0], "slides_total": total}
+                        return {**slide, "html": html, "html_vars": html_vars,
+                                "_code_filled": True, "frame_id": fid}
+                    _logger.warning(f"Slide {seq}: frameset render empty for {fid}, falling through")
+                else:
+                    _logger.warning(f"Slide {seq}: frameset pick failed, falling through to legacy")
+            except Exception as _e:
+                _logger.warning(f"Slide {seq}: frameset path error ({_e}), falling through")
 
         # ── Structural page template: VI-first, code-fill fallback ──
         if stype in STRUCTURAL_PAGE_TYPES and not is_a4 and active_scheme:
@@ -6312,6 +6363,57 @@ def _load_slide_template(family: str, page_type: str) -> str | None:
         return None
     with open(tmpl_path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+_FRAMESET_SYS = """你是PPT排版助手。用户给你一页的内容，你从"框架库"里选一个最合适的框架，并把内容填进框架的每个槽位。
+
+规则：
+1. 只能从框架库里选一个已存在的 frame_id，不许自创。
+2. 按页面用途选：封面→cover框架, 目录→toc, 章节隔断→section, 正文要点→content/grid, 表格数据→table, 结尾→closing。
+3. 每个槽位(content_key)填一段贴合其用途(role_cn)和字号的文字；正文可用\\n换行分点。
+4. 严格遵守每个槽位的字数上限(≤N字)：宁可精炼删减，绝不超过上限，否则会溢出格子。
+5. 输出纯JSON：{"frame_id":"...", "slots":{"content_key":"文本", ...}}，不输出别的。"""
+
+
+def _frameset_pick_and_fill(provider_id, model, llm_generate, slide: dict,
+                            fs: dict, catalog_txt: str, temperature: float = 0.3) -> dict | None:
+    """LLM picks one frame_id from the extracted frameset + fills its slots.
+
+    Geometry/coordinates/colors stay locked in the frameset JSON. The LLM only
+    chooses which real framework fits the content and writes text per slot,
+    respecting each slot's ≤N字 capacity. Returns {"frame_id","slots"} or None.
+    Retries up to 3× on empty/invalid JSON.
+    """
+    heading = slide.get("heading", "")
+    kps = slide.get("key_points", [])
+    body = slide.get("body", "")
+    stype = slide.get("type", "content")
+    kp_lines = "\n".join(
+        f"  - {k if isinstance(k, str) else json.dumps(k, ensure_ascii=False)}"
+        for k in kps
+    )
+    user = (f"【本页内容】\n页型建议: {stype}\n标题: {heading}\n"
+            f"正文: {body[:400]}\n要点:\n{kp_lines}\n\n"
+            f"【框架库】\n{catalog_txt}\n\n"
+            f"请选一个 frame_id 并填满其槽位。输出JSON。")
+    last_err = None
+    for _ in range(3):
+        try:
+            resp = _safe_run_async(llm_generate(
+                provider_id, model, _FRAMESET_SYS, user,
+                temperature=temperature, max_tokens=4096))
+            cleaned = _clean_json_response(resp or "")
+            if not cleaned.strip():
+                last_err = "empty response"
+                continue
+            data = json.loads(cleaned)
+            if data.get("frame_id"):
+                return data
+            last_err = "missing frame_id"
+        except Exception as e:
+            last_err = str(e)
+    _logger.warning(f"frameset pick_and_fill failed after 3 tries: {last_err}")
+    return None
 
 
 def _select_framework_template(vi_content: str, n_items: int) -> str:

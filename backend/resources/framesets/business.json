@@ -1,0 +1,6966 @@
+{
+  "source": "鲍鱼一品煲SOP",
+  "canvas": [
+    1280,
+    720
+  ],
+  "fill_map": {
+    "0C1B33": "var(--primary)",
+    "1B3A5C": "var(--secondary)",
+    "B87333": "var(--accent)",
+    "F0EDE8": "var(--card_bg)",
+    "5C1A1A": "var(--semantic-negative)",
+    "4CAF50": "var(--semantic-positive)",
+    "FF9999": "var(--semantic-negative)"
+  },
+  "text_map": {
+    "FFFFFF": "#ffffff",
+    "B87333": "var(--accent)",
+    "D4A76A": "var(--accent)",
+    "0C1B33": "var(--primary)",
+    "1B3A5C": "var(--secondary)",
+    "5C1A1A": "var(--semantic-negative)",
+    "8B8C89": "rgba(var(--text-rgb),0.55)",
+    "8C8C89": "rgba(var(--text-rgb),0.55)",
+    "2C1810": "var(--text)"
+  },
+  "frame_count": 16,
+  "frames": [
+    {
+      "frame_id": "cover_p01",
+      "source_page": 1,
+      "page_type": "cover",
+      "container_count": 10,
+      "repeat_panels": 0,
+      "containers": [
+        {
+          "z": 0,
+          "role": "image",
+          "kind": "PICTURE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 100.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 2,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 9.38,
+            "H": 16.67
+          },
+          "fs": null,
+          "fill_hex": "FFFFFF",
+          "fill_var": "#ffffff",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "FFFFFF",
+          "line_var": "#ffffff",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 90.62,
+            "T": 83.33,
+            "W": 9.38,
+            "H": 16.67
+          },
+          "fs": null,
+          "fill_hex": "FFFFFF",
+          "fill_var": "#ffffff",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "FFFFFF",
+          "line_var": "#ffffff",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 42.19,
+            "T": 26.67,
+            "W": 15.62,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "B87333",
+          "line_var": "var(--accent)",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 42.19,
+            "T": 27.22,
+            "W": 15.62,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "B87333",
+          "line_var": "var(--accent)",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 6,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 30.56,
+            "W": 78.12,
+            "H": 8.33
+          },
+          "fs": 44.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 19,
+            "hardcap": 22
+          },
+          "example": "「鲍鱼一品煲」SOP 的\"道\"与\"术\""
+        },
+        {
+          "z": 7,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 18.75,
+            "T": 41.67,
+            "W": 62.5,
+            "H": 5.0
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 20,
+            "hardcap": 35
+          },
+          "example": "烹饪原理深度解析 × 可复用通用流程提炼"
+        },
+        {
+          "z": 8,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 38.28,
+            "T": 77.78,
+            "W": 23.44,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "B87333",
+          "line_var": "var(--accent)",
+          "line_w": 1.0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 26.56,
+            "T": 80.56,
+            "W": 46.88,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 12,
+            "hardcap": 41
+          },
+          "example": "菜品研发与标准化操作解析"
+        },
+        {
+          "z": 10,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 26.56,
+            "T": 84.72,
+            "W": 46.88,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 14,
+            "hardcap": 41
+          },
+          "example": "2025年 · 内部技术文档"
+        }
+      ]
+    },
+    {
+      "frame_id": "toc_p02",
+      "source_page": 2,
+      "page_type": "toc",
+      "container_count": 13,
+      "repeat_panels": 2,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 31.25,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 11,
+            "hardcap": 17
+          },
+          "example": "目录 CONTENTS"
+        },
+        {
+          "z": 2,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 13.89,
+            "W": 78.12,
+            "H": 30.56
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 13.89,
+            "W": 78.12,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 13.28,
+            "T": 18.06,
+            "W": 6.25,
+            "H": 6.94
+          },
+          "fs": 40.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "01"
+        },
+        {
+          "z": 5,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 13.28,
+            "T": 25.69,
+            "W": 73.44,
+            "H": 5.0
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 11,
+            "hardcap": 38
+          },
+          "example": "道 — 烹饪理念与原理"
+        },
+        {
+          "z": 6,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 13.28,
+            "T": 31.94,
+            "W": 73.44,
+            "H": 8.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 56,
+            "hardcap": 114
+          },
+          "example": "从\"发、皮、序、味\"四个维度深度解读鲍鱼一品煲的烹饪哲学\n涵盖干料复水、虎皮塑形、分时投料、风味叠加四大核心原理"
+        },
+        {
+          "z": 7,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 50.0,
+            "W": 78.12,
+            "H": 30.56
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 8,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 50.0,
+            "W": 78.12,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 13.28,
+            "T": 54.17,
+            "W": 6.25,
+            "H": 6.94
+          },
+          "fs": 40.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "02"
+        },
+        {
+          "z": 10,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 13.28,
+            "T": 61.81,
+            "W": 73.44,
+            "H": 5.0
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 38
+          },
+          "example": "术 — 操作技法与通用流程"
+        },
+        {
+          "z": 11,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 13.28,
+            "T": 68.06,
+            "W": 73.44,
+            "H": 8.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 47,
+            "hardcap": 114
+          },
+          "example": "六艺操作参数、可复用通用流程、主料替换方案与常见问题纠偏\n从单一菜品到通用工艺的标准化知识体系"
+        },
+        {
+          "z": 12,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 91.41,
+            "T": 94.44,
+            "W": 6.25,
+            "H": 3.33
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 7,
+            "hardcap": 7
+          },
+          "example": "02 / 16"
+        }
+      ]
+    },
+    {
+      "frame_id": "section_p03",
+      "source_page": 3,
+      "page_type": "section",
+      "container_count": 6,
+      "repeat_panels": 1,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 3.75,
+            "H": 100.0
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "hero_numeral",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 56.25,
+            "T": 16.67,
+            "W": 40.62,
+            "H": 16.67
+          },
+          "fs": 80.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 10,
+            "hardcap": 10
+          },
+          "example": "CHAPTER 01"
+        },
+        {
+          "z": 2,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 38.89,
+            "W": 58.59,
+            "H": 7.22
+          },
+          "fs": 36.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 11,
+            "hardcap": 20
+          },
+          "example": "道 — 烹饪理念与原理"
+        },
+        {
+          "z": 3,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 47.78,
+            "W": 7.81,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "B87333",
+          "line_var": "var(--accent)",
+          "line_w": 1.0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 50.56,
+            "W": 54.69,
+            "H": 4.17
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 25,
+            "hardcap": 37
+          },
+          "example": "从\"发、皮、序、味\"四维度解读鲍鱼一品煲的烹饪哲学"
+        },
+        {
+          "z": 5,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 84.38,
+            "T": 94.44,
+            "W": 12.5,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 9,
+            "hardcap": 10
+          },
+          "example": "第一章 / 共二章"
+        }
+      ]
+    },
+    {
+      "frame_id": "content_p04",
+      "source_page": 4,
+      "page_type": "content",
+      "container_count": 17,
+      "repeat_panels": 1,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 11,
+            "hardcap": 46
+          },
+          "example": "发之道：海味的深度唤醒"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "04"
+        },
+        {
+          "z": 3,
+          "role": "image",
+          "kind": "PICTURE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 29.69,
+            "H": 38.89
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.25,
+            "T": 10.0,
+            "W": 58.75,
+            "H": 38.89
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.25,
+            "T": 10.0,
+            "W": 58.75,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "1B3A5C",
+          "fill_var": "var(--secondary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 6,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 37.81,
+            "T": 11.67,
+            "W": 55.62,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 15,
+            "hardcap": 38
+          },
+          "example": "核心原理：干制-复水的精准控制"
+        },
+        {
+          "z": 7,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 37.81,
+            "T": 16.39,
+            "W": 55.62,
+            "H": 30.56
+          },
+          "fs": 15.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 125,
+            "hardcap": 414
+          },
+          "example": "花胶处理：先蒸20分钟软化坚硬结构，再以50℃温水浸泡8-9小时，使胶质均匀吸水，达到软糯Q弹\n花菇处理：冷水浸泡6-8小时，让细胞缓慢吸水，将鸟苷酸等鲜味物质锁在菇体内\n关键控制点：温度决定复水质量——花胶忌沸水（外烂内硬），花菇忌热水（香气流失）"
+        },
+        {
+          "z": 8,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 51.67,
+            "W": 44.06,
+            "H": 19.44
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 53.06,
+            "W": 15.62,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 12
+          },
+          "example": "正确操作结果"
+        },
+        {
+          "z": 10,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 56.94,
+            "W": 40.94,
+            "H": 12.5
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 44,
+            "hardcap": 108
+          },
+          "example": "花胶：软糯Q弹，胶质完整保留\n花菇：菇香浓郁，口感饱满有弹性\n鲜味物质充分锁存在食材内部"
+        },
+        {
+          "z": 11,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.94,
+            "T": 51.67,
+            "W": 44.06,
+            "H": 19.44
+          },
+          "fs": null,
+          "fill_hex": "5C1A1A",
+          "fill_var": "var(--semantic-negative)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 12,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.5,
+            "T": 53.06,
+            "W": 15.62,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FF9999",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 12
+          },
+          "example": "错误操作后果"
+        },
+        {
+          "z": 13,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.5,
+            "T": 56.94,
+            "W": 40.94,
+            "H": 12.5
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 46,
+            "hardcap": 108
+          },
+          "example": "花胶沸水复水：外层糊化软烂，内部硬芯\n花菇热水急泡：菇香溶于水，菇体无味\n营养与鲜味双重流失"
+        },
+        {
+          "z": 14,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 73.61,
+            "W": 90.0,
+            "H": 8.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 15,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 74.72,
+            "W": 86.88,
+            "H": 6.11
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 62,
+            "hardcap": 78
+          },
+          "example": "关键参数：花胶：蒸20min → 50℃温水浸泡8-9h ｜ 花菇：冷水浸泡6-8h ｜ 核心原则：根据食材特性选择复水方式"
+        },
+        {
+          "z": 16,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 23,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP 技术文档"
+        }
+      ]
+    },
+    {
+      "frame_id": "table_p05",
+      "source_page": 5,
+      "page_type": "table",
+      "container_count": 30,
+      "repeat_panels": 5,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 46
+          },
+          "example": "皮之道：凤爪虎皮的塑形哲学"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "05"
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 4.17
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "01"
+        },
+        {
+          "z": 6,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 15.83,
+            "W": 19.06,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 4,
+            "hardcap": 13
+          },
+          "example": "白醋焯水"
+        },
+        {
+          "z": 7,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 20.0,
+            "W": 19.06,
+            "H": 20.83
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 53,
+            "hardcap": 102
+          },
+          "example": "冷水下锅加白醋\n原理：软化表皮，改变蛋白质pH值，使高温下更易脱水起泡\n目的：去除腥味，为虎皮形成创造条件"
+        },
+        {
+          "z": 8,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 27.81,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 27.81,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 10,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 28.91,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 4.17
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "02"
+        },
+        {
+          "z": 11,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 28.91,
+            "T": 15.83,
+            "W": 19.06,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 4,
+            "hardcap": 13
+          },
+          "example": "生抽腌制"
+        },
+        {
+          "z": 12,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 28.91,
+            "T": 20.0,
+            "W": 19.06,
+            "H": 20.83
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 46,
+            "hardcap": 102
+          },
+          "example": "沥干后涂抹生抽\n原理：提供糖分和氨基酸，是美拉德反应的底物\n目的：提供底味，形成金黄色泽来源"
+        },
+        {
+          "z": 13,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.62,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 14,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.62,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 15,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 51.72,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 4.17
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "03"
+        },
+        {
+          "z": 16,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 51.72,
+            "T": 15.83,
+            "W": 19.06,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 4,
+            "hardcap": 13
+          },
+          "example": "高温油炸"
+        },
+        {
+          "z": 17,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 51.72,
+            "T": 20.0,
+            "W": 19.06,
+            "H": 20.83
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 45,
+            "hardcap": 102
+          },
+          "example": "八九成油温炸至金黄\n原理：表皮水分瞬间汽化，胶原蛋白急剧膨胀\n目的：形成\"爆起\"的虎皮结构"
+        },
+        {
+          "z": 18,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 73.44,
+            "T": 10.0,
+            "W": 21.56,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 19,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 73.44,
+            "T": 10.0,
+            "W": 21.56,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 20,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 74.53,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 4.17
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "04"
+        },
+        {
+          "z": 21,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 74.53,
+            "T": 15.83,
+            "W": 19.38,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 4,
+            "hardcap": 14
+          },
+          "example": "飞水去油"
+        },
+        {
+          "z": 22,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 74.53,
+            "T": 20.0,
+            "W": 19.38,
+            "H": 20.83
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 46,
+            "hardcap": 102
+          },
+          "example": "炸后放入沸水汆烫\n原理：洗去附着油脂，疏通虎皮蜂窝结构\n目的：汤汁清爽不腻，虎皮更好吸收汤汁"
+        },
+        {
+          "z": 23,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 45.83,
+            "W": 90.0,
+            "H": 12.5
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 24,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 46.94,
+            "W": 23.44,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 9,
+            "hardcap": 20
+          },
+          "example": "虎皮形成的关键判断"
+        },
+        {
+          "z": 25,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 50.83,
+            "W": 54.69,
+            "H": 6.11
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 45,
+            "hardcap": 48
+          },
+          "example": "表皮呈海绵状蜂窝结构 | 色泽金黄 | 用手触摸有粗糙颗粒感 | 炖煮时能充分吸收汤汁膨胀"
+        },
+        {
+          "z": 26,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 60.56,
+            "W": 90.0,
+            "H": 27.78
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 27,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 61.94,
+            "W": 23.44,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "5C1A1A",
+          "text_var": "var(--semantic-negative)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 7,
+            "hardcap": 17
+          },
+          "example": "常见错误与后果"
+        },
+        {
+          "z": 28,
+          "role": "data_table",
+          "kind": "TABLE",
+          "geom": {
+            "L": 6.56,
+            "T": 66.39,
+            "W": 86.88,
+            "H": 20.28
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 29,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 33,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP 技术文档 · 凤爪预处理工艺"
+        }
+      ]
+    },
+    {
+      "frame_id": "grid_or_fourcol_p06",
+      "source_page": 6,
+      "page_type": "grid_or_fourcol",
+      "container_count": 38,
+      "repeat_panels": 4,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 46
+          },
+          "example": "序之道：分时投料的口感交响"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "06"
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 90.0,
+            "H": 8.33
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 10.83,
+            "W": 86.88,
+            "H": 6.67
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 42,
+            "hardcap": 68
+          },
+          "example": "根本法则：\"难熟先下，易熟后下\" —— 让不同耐煮度的食材在同一锅中达到各自最佳口感"
+        },
+        {
+          "z": 5,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 29.17,
+            "W": 84.38,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "0C1B33",
+          "line_var": "var(--primary)",
+          "line_w": 3.0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 6,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 28.06,
+            "W": 1.25,
+            "H": 2.22
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 7,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.47,
+            "T": 23.61,
+            "W": 5.94,
+            "H": 3.89
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 3,
+            "hardcap": 4
+          },
+          "example": "T+0"
+        },
+        {
+          "z": 8,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 35.94,
+            "T": 28.06,
+            "W": 1.25,
+            "H": 2.22
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 33.2,
+            "T": 23.61,
+            "W": 6.72,
+            "H": 3.89
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 7,
+            "hardcap": 7
+          },
+          "example": "T+60min"
+        },
+        {
+          "z": 10,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 64.06,
+            "T": 28.06,
+            "W": 1.25,
+            "H": 2.22
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 11,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 61.33,
+            "T": 23.61,
+            "W": 6.72,
+            "H": 3.89
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 7,
+            "hardcap": 7
+          },
+          "example": "T+75min"
+        },
+        {
+          "z": 12,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 90.62,
+            "T": 28.06,
+            "W": 1.25,
+            "H": 2.22
+          },
+          "fs": null,
+          "fill_hex": "1B3A5C",
+          "fill_var": "var(--secondary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 13,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 88.28,
+            "T": 23.61,
+            "W": 5.94,
+            "H": 3.89
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 4
+          },
+          "example": "出品"
+        },
+        {
+          "z": 14,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 34.72,
+            "W": 21.09,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 15,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 34.72,
+            "W": 21.09,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "1B3A5C",
+          "fill_var": "var(--secondary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 16,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 6.37,
+            "T": 36.67,
+            "W": 1.64,
+            "H": 3.33
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 17,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 8.75,
+            "T": 36.67,
+            "W": 15.62,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 10,
+            "hardcap": 11
+          },
+          "example": "凤爪（T+0 下锅）"
+        },
+        {
+          "z": 18,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.25,
+            "T": 41.39,
+            "W": 18.59,
+            "H": 25.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 59,
+            "hardcap": 128
+          },
+          "example": "炖煮时长：60分钟\n食材特性：质地坚韧，需长时间炖煮\n目标口感：软糯有嚼劲\n判断标准：皮质松软，筷子可轻易穿透且有弹性"
+        },
+        {
+          "z": 19,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 27.66,
+            "T": 34.72,
+            "W": 21.09,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 20,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 27.66,
+            "T": 34.72,
+            "W": 21.09,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 21,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 28.91,
+            "T": 36.67,
+            "W": 1.88,
+            "H": 3.33
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 22,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 31.41,
+            "T": 36.67,
+            "W": 15.62,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 14,
+            "hardcap": 14
+          },
+          "example": "鲍鱼（T+60min 下锅）"
+        },
+        {
+          "z": 23,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 28.91,
+            "T": 41.39,
+            "W": 18.59,
+            "H": 25.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 55,
+            "hardcap": 128
+          },
+          "example": "炖煮时长：15分钟\n食材特性：已开水定型，肉质紧实\n目标口感：弹韧但不硬\n判断标准：吸收汤汁入味即可，久煮变老"
+        },
+        {
+          "z": 24,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.31,
+            "T": 34.72,
+            "W": 21.09,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 25,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.31,
+            "T": 34.72,
+            "W": 21.09,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 26,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 51.8,
+            "T": 36.67,
+            "W": 1.41,
+            "H": 3.33
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 27,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 54.06,
+            "T": 36.67,
+            "W": 15.62,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 14,
+            "hardcap": 14
+          },
+          "example": "花胶（T+75min 浸泡）"
+        },
+        {
+          "z": 28,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 51.56,
+            "T": 41.39,
+            "W": 18.59,
+            "H": 25.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 59,
+            "hardcap": 128
+          },
+          "example": "处理时长：20-30分钟\n食材特性：泡发后已软化，极不耐煮\n目标口感：保留完美弹性\n处理方式：汤汁浸泡调味，非直接炖煮"
+        },
+        {
+          "z": 29,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 72.97,
+            "T": 34.72,
+            "W": 22.03,
+            "H": 33.33
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 30,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 72.97,
+            "T": 34.72,
+            "W": 22.03,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "1B3A5C",
+          "fill_var": "var(--secondary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 31,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 74.22,
+            "T": 36.67,
+            "W": 1.88,
+            "H": 3.33
+          },
+          "fs": null,
+          "fill_hex": "1B3A5C",
+          "fill_var": "var(--secondary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 32,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 76.72,
+            "T": 36.67,
+            "W": 16.41,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 8,
+            "hardcap": 11
+          },
+          "example": "花菇（全程垫底）"
+        },
+        {
+          "z": 33,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 74.22,
+            "T": 41.39,
+            "W": 19.53,
+            "H": 25.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 50,
+            "hardcap": 136
+          },
+          "example": "炖煮时长：全程\n食材特性：耐炖且持续释放香气\n目标作用：垫底增香，吸收汤汁精华\n摆放位置：砂锅最底层"
+        },
+        {
+          "z": 34,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 70.83,
+            "W": 90.0,
+            "H": 11.11
+          },
+          "fs": null,
+          "fill_hex": "5C1A1A",
+          "fill_var": "var(--semantic-negative)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 35,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 6.56,
+            "T": 73.61,
+            "W": 1.88,
+            "H": 3.33
+          },
+          "fs": null,
+          "fill_hex": "FF9999",
+          "fill_var": "var(--semantic-negative)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 36,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 9.38,
+            "T": 72.22,
+            "W": 84.38,
+            "H": 8.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 54,
+            "hardcap": 150
+          },
+          "example": "同时下锅的后果：凤爪软糯时，鲍鱼已老如橡胶，花胶则溶化于汤中 —— 所有食材失去独立口感层次，沦为平庸大锅炖"
+        },
+        {
+          "z": 37,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 27,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP · 分时炖煮工艺"
+        }
+      ]
+    },
+    {
+      "frame_id": "grid_or_fourcol_p07",
+      "source_page": 7,
+      "page_type": "grid_or_fourcol",
+      "container_count": 29,
+      "repeat_panels": 5,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 46
+          },
+          "example": "味之道：风味叠加的多维构建"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "07"
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 47.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 5.0
+          },
+          "fs": 28.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "01"
+        },
+        {
+          "z": 5,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 16.94,
+            "W": 19.06,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 12
+          },
+          "example": "底味"
+        },
+        {
+          "z": 6,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 21.11,
+            "W": 19.06,
+            "H": 2.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 5,
+            "hardcap": 17
+          },
+          "example": "基础调味层"
+        },
+        {
+          "z": 7,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 25.28,
+            "W": 19.06,
+            "H": 30.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 57,
+            "hardcap": 170
+          },
+          "example": "凤爪焯水：白醋去腥软化\n凤爪腌炸：生抽提供底味与上色基底\n作用：为食材建立最基础的味道层次，决定成品风味的起点高度"
+        },
+        {
+          "z": 8,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 29.06,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 47.22
+          },
+          "fs": null,
+          "fill_hex": "1B3A5C",
+          "fill_var": "var(--secondary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 30.16,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 5.0
+          },
+          "fs": 28.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "02"
+        },
+        {
+          "z": 10,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 30.16,
+            "T": 16.94,
+            "W": 19.06,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 12
+          },
+          "example": "炖味"
+        },
+        {
+          "z": 11,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 30.16,
+            "T": 21.11,
+            "W": 19.06,
+            "H": 2.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 17
+          },
+          "example": "复合香型骨架"
+        },
+        {
+          "z": 12,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 30.16,
+            "T": 25.28,
+            "W": 19.06,
+            "H": 30.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 50,
+            "hardcap": 170
+          },
+          "example": "炖煮香料：姜、葱、香叶、八角\n烹入花雕酒：去腥增香\n作用：构建整道菜的复合香型骨架，赋予汤底醇厚底蕴"
+        },
+        {
+          "z": 13,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 53.12,
+            "T": 10.0,
+            "W": 21.25,
+            "H": 47.22
+          },
+          "fs": null,
+          "fill_hex": "1B3A5C",
+          "fill_var": "var(--secondary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 14,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 54.22,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 5.0
+          },
+          "fs": 28.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "03"
+        },
+        {
+          "z": 15,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 54.22,
+            "T": 16.94,
+            "W": 19.06,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 12
+          },
+          "example": "本味"
+        },
+        {
+          "z": 16,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 54.22,
+            "T": 21.11,
+            "W": 19.06,
+            "H": 2.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 17
+          },
+          "example": "独立风味注入"
+        },
+        {
+          "z": 17,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 54.22,
+            "T": 25.28,
+            "W": 19.06,
+            "H": 30.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 57,
+            "hardcap": 170
+          },
+          "example": "花胶腌汁：大地鱼粉、高汤、蚝油、老抽\n浸泡20-30min\n作用：为花胶注入独立浓郁的海味鲜香，使其风味突出不混杂"
+        },
+        {
+          "z": 18,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 77.19,
+            "T": 10.0,
+            "W": 17.81,
+            "H": 47.22
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 19,
+          "role": "item_index",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 78.28,
+            "T": 11.39,
+            "W": 4.69,
+            "H": 5.0
+          },
+          "fs": 28.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 2
+          },
+          "example": "04"
+        },
+        {
+          "z": 20,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 78.28,
+            "T": 16.94,
+            "W": 15.62,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 9
+          },
+          "example": "顶味"
+        },
+        {
+          "z": 21,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 78.28,
+            "T": 21.11,
+            "W": 15.62,
+            "H": 2.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 4,
+            "hardcap": 13
+          },
+          "example": "点睛之笔"
+        },
+        {
+          "z": 22,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 78.28,
+            "T": 25.28,
+            "W": 15.62,
+            "H": 30.0
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 36,
+            "hardcap": 130
+          },
+          "example": "成品淋入鲍鱼汁\n作用：在装盘瞬间提供浓郁顶层鲜香，强化\"鲍鱼\"主角存在感"
+        },
+        {
+          "z": 23,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 59.72,
+            "W": 90.0,
+            "H": 27.78
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 24,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 61.11,
+            "W": 31.25,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 23
+          },
+          "example": "分层调味 vs 一次性调味"
+        },
+        {
+          "z": 25,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 65.83,
+            "W": 42.19,
+            "H": 19.44
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 58,
+            "hardcap": 185
+          },
+          "example": "四重奏调味（本SOP）\n每种食材保持独立风味特征\n花胶海味突出、鲍鱼鲜香主导、凤爪软糯吸味\n整道菜层次丰富，口感立体"
+        },
+        {
+          "z": 26,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.0,
+            "T": 61.11,
+            "W": 0.0,
+            "H": 23.61
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "8B8C89",
+          "line_var": "rgba(var(--text-rgb),0.55)",
+          "line_w": 1.0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 27,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 51.56,
+            "T": 65.83,
+            "W": 42.19,
+            "H": 19.44
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "5C1A1A",
+          "text_var": "var(--semantic-negative)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 49,
+            "hardcap": 185
+          },
+          "example": "一次性调味（常见错误）\n所有食材味道雷同模糊\n花胶和鲍鱼自身鲜美无法凸显\n沦为平庸大锅炖，层次单一"
+        },
+        {
+          "z": 28,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 27,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP · 风味构建体系"
+        }
+      ]
+    },
+    {
+      "frame_id": "section_p08",
+      "source_page": 8,
+      "page_type": "section",
+      "container_count": 6,
+      "repeat_panels": 1,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 3.75,
+            "H": 100.0
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "hero_numeral",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 56.25,
+            "T": 16.67,
+            "W": 40.62,
+            "H": 16.67
+          },
+          "fs": 80.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 10,
+            "hardcap": 10
+          },
+          "example": "CHAPTER 02"
+        },
+        {
+          "z": 2,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 38.89,
+            "W": 58.59,
+            "H": 7.22
+          },
+          "fs": 36.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 20
+          },
+          "example": "术 — 操作技法与通用流程"
+        },
+        {
+          "z": 3,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 47.78,
+            "W": 7.81,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "B87333",
+          "line_var": "var(--accent)",
+          "line_w": 1.0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 7.81,
+            "T": 50.56,
+            "W": 54.69,
+            "H": 4.17
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 25,
+            "hardcap": 37
+          },
+          "example": "六艺操作参数 × 可复用通用流程 × 常见问题纠偏"
+        },
+        {
+          "z": 5,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 84.38,
+            "T": 94.44,
+            "W": 12.5,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 9,
+            "hardcap": 10
+          },
+          "example": "第二章 / 共二章"
+        }
+      ]
+    },
+    {
+      "frame_id": "table_p09",
+      "source_page": 9,
+      "page_type": "table",
+      "container_count": 5,
+      "repeat_panels": 0,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 14,
+            "hardcap": 46
+          },
+          "example": "六艺操作法：核心技法参数总览"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "09"
+        },
+        {
+          "z": 3,
+          "role": "data_table",
+          "kind": "TABLE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 90.0,
+            "H": 82.78
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 28,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP · 操作技法参数表"
+        }
+      ]
+    },
+    {
+      "frame_id": "table_p10",
+      "source_page": 10,
+      "page_type": "table",
+      "container_count": 5,
+      "repeat_panels": 0,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 17,
+            "hardcap": 46
+          },
+          "example": "通用流程总览：道术结合的四阶段模型"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "10"
+        },
+        {
+          "z": 3,
+          "role": "data_table",
+          "kind": "TABLE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 90.0,
+            "H": 82.78
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 25,
+            "hardcap": 48
+          },
+          "example": "Source: 「多味干料复水与分时焖炖」通用流程"
+        }
+      ]
+    },
+    {
+      "frame_id": "content_p11",
+      "source_page": 11,
+      "page_type": "content",
+      "container_count": 23,
+      "repeat_panels": 3,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 17,
+            "hardcap": 46
+          },
+          "example": "分步操作卡：从选料到风味预制（上）"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "11"
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 38.89
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 11.67,
+            "W": 7.81,
+            "H": 4.44
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 6
+          },
+          "example": "Step 1"
+        },
+        {
+          "z": 6,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 16.39,
+            "W": 26.56,
+            "H": 3.61
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 19
+          },
+          "example": "选料与预处理"
+        },
+        {
+          "z": 7,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 20.83,
+            "W": 26.56,
+            "H": 26.39
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 56,
+            "hardcap": 192
+          },
+          "example": "主料：\n花胶约100g、干花菇7个\n鲍鱼4个、凤爪约500g\n预处理：\n选择干燥无霉变的干制海味\n鲜凤爪剪去指甲"
+        },
+        {
+          "z": 8,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 35.47,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 38.89
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 35.47,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 10,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.56,
+            "T": 11.67,
+            "W": 7.5,
+            "H": 4.44
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 6
+          },
+          "example": "Step 2"
+        },
+        {
+          "z": 11,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.56,
+            "T": 16.39,
+            "W": 26.56,
+            "H": 3.61
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 7,
+            "hardcap": 19
+          },
+          "example": "食材复水与定型"
+        },
+        {
+          "z": 12,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.56,
+            "T": 20.83,
+            "W": 26.56,
+            "H": 26.39
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 89,
+            "hardcap": 192
+          },
+          "example": "花胶：蒸20min → 50℃温水浸泡8-9h\n花菇：冷水浸泡6-8h至完全柔软\n鲍鱼：火枪喷烤去污 → 盐搓腌8-10min → 开水浸泡\n凤爪：冷水+白醋焯水 → 沥干拌生抽"
+        },
+        {
+          "z": 13,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 65.94,
+            "T": 10.0,
+            "W": 29.06,
+            "H": 38.89
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 14,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 65.94,
+            "T": 10.0,
+            "W": 29.06,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 15,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 67.03,
+            "T": 11.67,
+            "W": 7.5,
+            "H": 4.44
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 6
+          },
+          "example": "Step 3"
+        },
+        {
+          "z": 16,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 67.03,
+            "T": 16.39,
+            "W": 26.56,
+            "H": 3.61
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 4,
+            "hardcap": 19
+          },
+          "example": "风味预制"
+        },
+        {
+          "z": 17,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 67.03,
+            "T": 20.83,
+            "W": 26.56,
+            "H": 26.39
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 93,
+            "hardcap": 192
+          },
+          "example": "凤爪炸制：\n八九成热油炸至表皮爆起金黄 → 沸水飞水1min去油\n花胶腌汁调制：\n炒香姜葱 → 加大地鱼粉(15g/100g花胶) → 烹花雕 → 加高汤、盐、糖、老抽、蚝油、芝麻油煮开"
+        },
+        {
+          "z": 18,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 51.67,
+            "W": 90.0,
+            "H": 16.67
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 19,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 53.06,
+            "W": 23.44,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 20
+          },
+          "example": "关键控制要点"
+        },
+        {
+          "z": 20,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 57.22,
+            "W": 86.88,
+            "H": 9.17
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 111,
+            "hardcap": 156
+          },
+          "example": "■ 花胶蒸制后立即转入温水，不可自然冷却 ｜ ■ 凤爪炸制前必须沥干，防止油溅 ｜ ■ 飞水时间严格控制在1min，过久会损失虎皮质感\n■ 花胶腌汁需完全没过花胶，确保均匀入味 ｜ ■ 大地鱼粉用量：约15g/100g花胶"
+        },
+        {
+          "z": 21,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 70.83,
+            "W": 90.0,
+            "H": 5.56
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 17,
+            "hardcap": 70
+          },
+          "example": "↓ 接下页：核心炖煮工艺与出品组装"
+        },
+        {
+          "z": 22,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 29,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP · 分步骤通用操作卡"
+        }
+      ]
+    },
+    {
+      "frame_id": "content_p12",
+      "source_page": 12,
+      "page_type": "content",
+      "container_count": 23,
+      "repeat_panels": 2,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 18,
+            "hardcap": 46
+          },
+          "example": "分步操作卡：核心炖煮与出品组装（下）"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "12"
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 52.78
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 11.67,
+            "W": 7.5,
+            "H": 4.44
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 6
+          },
+          "example": "Step 4"
+        },
+        {
+          "z": 6,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 16.39,
+            "W": 41.41,
+            "H": 3.61
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 31
+          },
+          "example": "核心炖煮工艺"
+        },
+        {
+          "z": 7,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 20.83,
+            "W": 41.41,
+            "H": 3.06
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 8,
+            "hardcap": 36
+          },
+          "example": "① 炒香料与调汤"
+        },
+        {
+          "z": 8,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 24.44,
+            "W": 41.41,
+            "H": 8.33
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 41,
+            "hardcap": 78
+          },
+          "example": "热锅冷油，爆香姜片、葱段、香叶、八角\n烹入花雕酒，加清水约500g，调入盐和糖烧开"
+        },
+        {
+          "z": 9,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 33.33,
+            "W": 41.41,
+            "H": 3.06
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 15,
+            "hardcap": 36
+          },
+          "example": "② 阶段一：凤爪炖煮（T+0）"
+        },
+        {
+          "z": 10,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 36.94,
+            "W": 41.41,
+            "H": 6.11
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 17,
+            "hardcap": 39
+          },
+          "example": "将汤和凤爪转入砂锅，中火炖煮1小时"
+        },
+        {
+          "z": 11,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 43.61,
+            "W": 41.41,
+            "H": 3.06
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 19,
+            "hardcap": 36
+          },
+          "example": "③ 阶段二：加入鲍鱼（T+60min）"
+        },
+        {
+          "z": 12,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 47.22,
+            "W": 41.41,
+            "H": 6.11
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 24,
+            "hardcap": 39
+          },
+          "example": "取出定型中的鲍鱼，放入砂锅，继续中火炖煮15分钟"
+        },
+        {
+          "z": 13,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 54.17,
+            "W": 41.41,
+            "H": 6.94
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 31,
+            "hardcap": 39
+          },
+          "example": "判断标准：凤爪皮质松软、筷子可轻易穿透且有弹性，鲍鱼弹韧但不硬"
+        },
+        {
+          "z": 14,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.94,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 52.78
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 15,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.94,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 16,
+          "role": "section_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 11.67,
+            "W": 7.5,
+            "H": 4.44
+          },
+          "fs": 24.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "B87333",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 6
+          },
+          "example": "Step 5"
+        },
+        {
+          "z": 17,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 16.39,
+            "W": 41.41,
+            "H": 3.61
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 11,
+            "hardcap": 31
+          },
+          "example": "装盘与点缀（出品组装）"
+        },
+        {
+          "z": 18,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 21.39,
+            "W": 41.41,
+            "H": 30.56
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 87,
+            "hardcap": 324
+          },
+          "example": "① 预热砂锅\n提前烧热一个干净砂锅，防止粘锅\n② 分层铺放\n凤爪捞出 → 垫底\n鲍鱼、腌制好的花胶、花菇 → 整齐铺于面上\n③ 淋汁激发\n淋上适量鲍鱼汁，盖上盖子烧开即可上桌"
+        },
+        {
+          "z": 19,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 52.78,
+            "W": 41.41,
+            "H": 9.17
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 40,
+            "hardcap": 78
+          },
+          "example": "价值体现：堆叠造型展示菜品价值感，顶层淋汁在砂锅热气中激发香气，提升成品的仪式感"
+        },
+        {
+          "z": 20,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 65.56,
+            "W": 90.0,
+            "H": 11.11
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 21,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 66.67,
+            "W": 86.88,
+            "H": 8.89
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 76,
+            "hardcap": 156
+          },
+          "example": "完整时间线：凤爪预处理(炸+飞水) → 花胶腌制20-30min → 炒香料调汤 → 凤爪炖1h → 加鲍鱼炖15min → 花胶最后浸泡 → 装盘出品"
+        },
+        {
+          "z": 22,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 30,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP · 核心炖煮与出品工艺"
+        }
+      ]
+    },
+    {
+      "frame_id": "table_p13",
+      "source_page": 13,
+      "page_type": "table",
+      "container_count": 5,
+      "repeat_panels": 0,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 16,
+            "hardcap": 46
+          },
+          "example": "主料替换方案：三种变体的关键调整"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "13"
+        },
+        {
+          "z": 3,
+          "role": "data_table",
+          "kind": "TABLE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 90.0,
+            "H": 82.78
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 34,
+            "hardcap": 48
+          },
+          "example": "Source: 「多味干料复水与分时焖炖」通用流程 · 主料调整建议"
+        }
+      ]
+    },
+    {
+      "frame_id": "content_p14",
+      "source_page": 14,
+      "page_type": "content",
+      "container_count": 26,
+      "repeat_panels": 0,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 14,
+            "hardcap": 46
+          },
+          "example": "常见问题与解决：术的纠偏指南"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "14"
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 19.44
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "5C1A1A",
+          "fill_var": "var(--semantic-negative)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 11.39,
+            "W": 42.19,
+            "H": 3.33
+          },
+          "fs": 15.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "5C1A1A",
+          "text_var": "var(--semantic-negative)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 11,
+            "hardcap": 34
+          },
+          "example": "问题一：凤爪虎皮不明显"
+        },
+        {
+          "z": 6,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 15.28,
+            "W": 42.19,
+            "H": 12.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 71,
+            "hardcap": 160
+          },
+          "example": "原因：① 未加白醋 ② 表皮不够干 ③ 油温不足\n解决：焯水务必加白醋；沥干后等表皮干爽再炸；确保油温升至七八成热（筷子插入冒出大量密集气泡）"
+        },
+        {
+          "z": 7,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.94,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 19.44
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 8,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.94,
+            "T": 10.0,
+            "W": 44.06,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "5C1A1A",
+          "fill_var": "var(--semantic-negative)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 9,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 11.39,
+            "W": 42.19,
+            "H": 3.33
+          },
+          "fs": 15.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "5C1A1A",
+          "text_var": "var(--semantic-negative)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 34
+          },
+          "example": "问题二：花胶炖煮后溶化消失"
+        },
+        {
+          "z": 10,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 15.28,
+            "W": 42.19,
+            "H": 12.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 76,
+            "hardcap": 160
+          },
+          "example": "原因：① 泡发过度 ② 炖煮时间过长\n解决：严格控制泡发时间，观察花胶变软即可；花胶不应参与长时间炖煮，仅在最后用汤汁浸泡或短时间加热，采用\"浸熟\"方式"
+        },
+        {
+          "z": 11,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 31.67,
+            "W": 44.06,
+            "H": 19.44
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 12,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 31.67,
+            "W": 44.06,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "5C1A1A",
+          "fill_var": "var(--semantic-negative)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 13,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 33.06,
+            "W": 42.19,
+            "H": 3.33
+          },
+          "fs": 15.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "5C1A1A",
+          "text_var": "var(--semantic-negative)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 13,
+            "hardcap": 34
+          },
+          "example": "问题三：鲍鱼口感发硬如橡皮"
+        },
+        {
+          "z": 14,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 36.94,
+            "W": 42.19,
+            "H": 12.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 62,
+            "hardcap": 160
+          },
+          "example": "原因：在汤汁中炖煮过久\n解决：鲍鱼已用开水定型，只需15分钟左右吸收汤汁并入味即可。务必遵守分时投料原则，不可与凤爪同时下锅"
+        },
+        {
+          "z": 15,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.94,
+            "T": 31.67,
+            "W": 44.06,
+            "H": 19.44
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 16,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 50.94,
+            "T": 31.67,
+            "W": 44.06,
+            "H": 0.42
+          },
+          "fs": null,
+          "fill_hex": "5C1A1A",
+          "fill_var": "var(--semantic-negative)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 17,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 33.06,
+            "W": 42.19,
+            "H": 3.33
+          },
+          "fs": 15.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "5C1A1A",
+          "text_var": "var(--semantic-negative)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 11,
+            "hardcap": 34
+          },
+          "example": "问题四：整道菜味道油腻"
+        },
+        {
+          "z": 18,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 52.03,
+            "T": 36.94,
+            "W": 42.19,
+            "H": 12.78
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 66,
+            "hardcap": 160
+          },
+          "example": "原因：对炸过的凤爪\"飞水\"不彻底\n解决：凤爪炸好后，必须经过沸水汆烫，彻底洗去表面和网孔内的浮油，只留虎皮结构。飞水时间不少于1分钟"
+        },
+        {
+          "z": 19,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 54.17,
+            "W": 90.0,
+            "H": 13.89
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 20,
+          "role": "item_subtitle",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 55.56,
+            "W": 23.44,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 20
+          },
+          "example": "纠偏核心原则"
+        },
+        {
+          "z": 21,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 59.44,
+            "W": 86.88,
+            "H": 7.22
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 74,
+            "hardcap": 78
+          },
+          "example": "所有问题的根源均可追溯至\"道\"层面的理解不足 —— 理解每种食材的物理化学特性（耐煮度、胶质结构、蛋白质反应），才能在\"术\"的层面做出正确判断和调整"
+        },
+        {
+          "z": 22,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 70.56,
+            "W": 90.0,
+            "H": 19.44
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 23,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 71.67,
+            "W": 31.25,
+            "H": 3.33
+          },
+          "fs": 16.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 7,
+            "hardcap": 23
+          },
+          "example": "出品前自检清单"
+        },
+        {
+          "z": 24,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 75.83,
+            "W": 86.88,
+            "H": 12.78
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 100,
+            "hardcap": 234
+          },
+          "example": "■ 凤爪虎皮呈海绵状蜂窝结构，色泽金黄 ｜ ■ 花胶软糯Q弹，形态完整不碎 ｜ ■ 鲍鱼弹韧有嚼劲，不老不硬\n■ 汤汁清澈不浑浊，无明显浮油 ｜ ■ 花菇饱满有香气 ｜ ■ 整体风味层次丰富，无腥膻味"
+        },
+        {
+          "z": 25,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 30,
+            "hardcap": 48
+          },
+          "example": "Source: 「鲍鱼一品煲」SOP · 常见问题与解决方案"
+        }
+      ]
+    },
+    {
+      "frame_id": "content_p15",
+      "source_page": 15,
+      "page_type": "content",
+      "container_count": 27,
+      "repeat_panels": 3,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 100.0,
+            "H": 7.22
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 1.39,
+            "W": 82.03,
+            "H": 4.44
+          },
+          "fs": 22.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 14,
+            "hardcap": 46
+          },
+          "example": "扩展应用：现代厨具的适配方案"
+        },
+        {
+          "z": 2,
+          "role": "page_number",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 92.97,
+            "T": 1.39,
+            "W": 4.69,
+            "H": 4.44
+          },
+          "fs": 13.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "15"
+        },
+        {
+          "z": 3,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 63.89
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 6.09,
+            "T": 12.22,
+            "W": 2.5,
+            "H": 4.44
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 6,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 17.78,
+            "W": 26.56,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 9,
+            "hardcap": 17
+          },
+          "example": "慢炖锅 / 电炖盅"
+        },
+        {
+          "z": 7,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 22.5,
+            "W": 4.69,
+            "H": 3.06
+          },
+          "fs": null,
+          "fill_hex": "4CAF50",
+          "fill_var": "var(--semantic-positive)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 8,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 22.5,
+            "W": 4.69,
+            "H": 3.06
+          },
+          "fs": 11.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "推荐"
+        },
+        {
+          "z": 9,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.09,
+            "T": 26.94,
+            "W": 26.56,
+            "H": 44.44
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 93,
+            "hardcap": 308
+          },
+          "example": "适配性：非常适合分时炖煮\n阶段一设置：\n高火炖1.5小时（凤爪）\n阶段二设置：\n加入鲍鱼和花胶后，继续高火炖15分钟\n优势：\n风味更醇厚，温控精准\n注意：\n需注意食材完整性，避免过度软烂"
+        },
+        {
+          "z": 10,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 35.47,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 63.89
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 11,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 35.47,
+            "T": 10.0,
+            "W": 28.91,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 12,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 36.56,
+            "T": 12.22,
+            "W": 2.5,
+            "H": 4.44
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 13,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.56,
+            "T": 17.78,
+            "W": 26.56,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 3,
+            "hardcap": 17
+          },
+          "example": "压力锅"
+        },
+        {
+          "z": 14,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.56,
+            "T": 22.5,
+            "W": 4.69,
+            "H": 3.06
+          },
+          "fs": null,
+          "fill_hex": "4CAF50",
+          "fill_var": "var(--semantic-positive)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 15,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.56,
+            "T": 22.5,
+            "W": 4.69,
+            "H": 3.06
+          },
+          "fs": 11.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "推荐"
+        },
+        {
+          "z": 16,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 36.56,
+            "T": 26.94,
+            "W": 26.56,
+            "H": 44.44
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 101,
+            "hardcap": 308
+          },
+          "example": "适配性：极大缩短凤爪炖煮时间\n阶段一设置：\n凤爪前处理一致，入压力锅上汽后压15-20分钟\n阶段二设置：\n释放压力后转入砂锅，加入鲍鱼和花胶进行最后的短时间炖煮和收汁\n注意：\n仍需独立操作以控制各自口感"
+        },
+        {
+          "z": 17,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 65.94,
+            "T": 10.0,
+            "W": 29.06,
+            "H": 63.89
+          },
+          "fs": null,
+          "fill_hex": "F0EDE8",
+          "fill_var": "var(--card_bg)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 18,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 65.94,
+            "T": 10.0,
+            "W": 29.06,
+            "H": 0.56
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 19,
+          "role": "panel",
+          "kind": "FREEFORM",
+          "geom": {
+            "L": 67.03,
+            "T": 12.22,
+            "W": 2.5,
+            "H": 4.44
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 20,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 67.03,
+            "T": 17.78,
+            "W": 26.56,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1B3A5C",
+          "text_var": "var(--secondary)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 9,
+            "hardcap": 17
+          },
+          "example": "空气炸锅 / 烤箱"
+        },
+        {
+          "z": 21,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 67.03,
+            "T": 22.5,
+            "W": 4.69,
+            "H": 3.06
+          },
+          "fs": null,
+          "fill_hex": "4CAF50",
+          "fill_var": "var(--semantic-positive)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 22,
+          "role": "caption",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 67.03,
+            "T": 22.5,
+            "W": 4.69,
+            "H": 3.06
+          },
+          "fs": 11.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 2,
+            "hardcap": 3
+          },
+          "example": "推荐"
+        },
+        {
+          "z": 23,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 67.03,
+            "T": 26.94,
+            "W": 26.56,
+            "H": 44.44
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "1A1A1A",
+          "text_var": "var(--text)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 117,
+            "hardcap": 308
+          },
+          "example": "适配性：不适用于主流程，但可用于凤爪预处理\n操作参数：\n凤爪经白醋和生抽处理后，表面刷薄油\n空气炸锅200℃炸15-20min\n或烤箱220℃烤约20min\n优势：\n可获得类似\"爆皮\"效果，且用油量更少\n后续：\n仍需飞水后进入炖煮环节"
+        },
+        {
+          "z": 24,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 76.39,
+            "W": 90.0,
+            "H": 6.94
+          },
+          "fs": null,
+          "fill_hex": "0C1B33",
+          "fill_var": "var(--primary)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 25,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 6.56,
+            "T": 77.22,
+            "W": 86.88,
+            "H": 5.28
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 66,
+            "hardcap": 78
+          },
+          "example": "核心原则不变：无论使用何种现代厨具，\"道\"层面的原理（分时投料、温度控制、风味层次）始终适用，\"术\"层面的参数需根据设备特性灵活调整"
+        },
+        {
+          "z": 26,
+          "role": "footnote",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 5.0,
+            "T": 94.44,
+            "W": 46.88,
+            "H": 2.78
+          },
+          "fs": 12.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "8B8C89",
+          "text_var": "rgba(var(--text-rgb),0.55)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 32,
+            "hardcap": 48
+          },
+          "example": "Source: 「多味干料复水与分时焖炖」通用流程 · 扩展应用"
+        }
+      ]
+    },
+    {
+      "frame_id": "closing_p16",
+      "source_page": 16,
+      "page_type": "closing",
+      "container_count": 20,
+      "repeat_panels": 0,
+      "containers": [
+        {
+          "z": 0,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 0.0,
+            "T": 0.0,
+            "W": 9.38,
+            "H": 16.67
+          },
+          "fs": null,
+          "fill_hex": "FFFFFF",
+          "fill_var": "#ffffff",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "FFFFFF",
+          "line_var": "#ffffff",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 1,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 90.62,
+            "T": 83.33,
+            "W": 9.38,
+            "H": 16.67
+          },
+          "fs": null,
+          "fill_hex": "FFFFFF",
+          "fill_var": "#ffffff",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "FFFFFF",
+          "line_var": "#ffffff",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 2,
+          "role": "page_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 18.75,
+            "T": 6.67,
+            "W": 62.5,
+            "H": 6.11
+          },
+          "fs": 32.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 9,
+            "hardcap": 24
+          },
+          "example": "以道驭术，以术证道"
+        },
+        {
+          "z": 3,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 42.19,
+            "T": 14.44,
+            "W": 15.62,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "B87333",
+          "line_var": "var(--accent)",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 4,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 42.19,
+            "T": 15.0,
+            "W": 15.62,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "B87333",
+          "line_var": "var(--accent)",
+          "line_w": 0.5,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 5,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 20.56,
+            "W": 0.94,
+            "H": 1.67
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 6,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 12.81,
+            "T": 19.44,
+            "W": 65.62,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 32,
+            "hardcap": 45
+          },
+          "example": "\"道\"提供烹饪的底层逻辑与判断标准 —— 理解食材特性与反应原理"
+        },
+        {
+          "z": 7,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 27.5,
+            "W": 0.94,
+            "H": 1.67
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 8,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 12.81,
+            "T": 26.39,
+            "W": 65.62,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 31,
+            "hardcap": 45
+          },
+          "example": "\"术\"提供可执行的操作参数与纠偏方法 —— 精准控制每一步工艺"
+        },
+        {
+          "z": 9,
+          "role": "panel",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 34.44,
+            "W": 0.94,
+            "H": 1.67
+          },
+          "fs": null,
+          "fill_hex": "B87333",
+          "fill_var": "var(--accent)",
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 10,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 12.81,
+            "T": 33.33,
+            "W": 65.62,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 31,
+            "hardcap": 45
+          },
+          "example": "二者结合形成从单一菜品到通用流程的完整知识体系，实现标准化复用"
+        },
+        {
+          "z": 11,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 40.28,
+            "W": 78.12,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "FFFFFF",
+          "line_var": "#ffffff",
+          "line_w": 1.0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 12,
+          "role": "item_title",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 43.89,
+            "W": 39.06,
+            "H": 4.44
+          },
+          "fs": 20.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "D4A76A",
+          "text_var": "var(--accent)",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 6,
+            "hardcap": 23
+          },
+          "example": "核心要点回顾"
+        },
+        {
+          "z": 13,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 50.28,
+            "W": 78.12,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 21,
+            "hardcap": 54
+          },
+          "example": "发之道：精准复水是唤醒干制海味的关键第一步"
+        },
+        {
+          "z": 14,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 55.56,
+            "W": 78.12,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 22,
+            "hardcap": 54
+          },
+          "example": "皮之道：四步工艺链决定虎皮成败，每步不可省略"
+        },
+        {
+          "z": 15,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 60.83,
+            "W": 78.12,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 20,
+            "hardcap": 54
+          },
+          "example": "序之道：分时投料是口感层次分明的核心保障"
+        },
+        {
+          "z": 16,
+          "role": "lead_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 66.11,
+            "W": 78.12,
+            "H": 3.89
+          },
+          "fs": 18.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 22,
+            "hardcap": 54
+          },
+          "example": "味之道：四重调味体系构建立体风味，避免大锅炖"
+        },
+        {
+          "z": 17,
+          "role": "divider",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 10.94,
+            "T": 72.22,
+            "W": 78.12,
+            "H": 0.0
+          },
+          "fs": null,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": null,
+          "text_var": null,
+          "line_hex": "FFFFFF",
+          "line_var": "#ffffff",
+          "line_w": 1.0,
+          "chars": {
+            "comfort": 0,
+            "hardcap": 0
+          },
+          "example": null
+        },
+        {
+          "z": 18,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 26.56,
+            "T": 76.39,
+            "W": 46.88,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 16,
+            "hardcap": 41
+          },
+          "example": "菜品研发技术部 · 内部培训资料"
+        },
+        {
+          "z": 19,
+          "role": "body_text",
+          "kind": "AUTO_SHAPE",
+          "geom": {
+            "L": 26.56,
+            "T": 80.56,
+            "W": 46.88,
+            "H": 3.33
+          },
+          "fs": 14.0,
+          "fill_hex": null,
+          "fill_var": null,
+          "text_hex": "FFFFFF",
+          "text_var": "#ffffff",
+          "line_hex": null,
+          "line_var": null,
+          "line_w": 0,
+          "chars": {
+            "comfort": 25,
+            "hardcap": 41
+          },
+          "example": "本文基于「鲍鱼一品煲」SOP整理，保留核心技术参数"
+        }
+      ]
+    }
+  ]
+}

@@ -139,3 +139,14 @@ TypeScript: pass. Build: pass. API: 无后端改动。
     - backend/services/ppt_service.py _fill_slide_template(line~6567): KEY_POINTS循环后追加索引式解析(纯加法, 不动老逻辑)——kpI_*从key_points(复用_kp_fields), 超量索引正则清空; 对比带用key_points聚合成正解列/反例列(避免把长body塞小框逼到9px)。
 (4) 验证: emit自检4×4+带+页头脚占位符全present; 端到端 verify_synth_page7.py 走生产管线(_select_framework_template→_fill_slide_template→_resolve_color_vars)+_fit_code_filled_slides → spill=0 clip=0 残留=0 非白硬编码hex=0; 几何逐一比对原PPT vs 合成=29容器0 mismatch(byte-identical); rebuild_deck重建 index.html principle页 flex:1 1 0(手写标志)=0, 含4竖栏真坐标+对比带; 全deck仅未触碰的封面/版权/closing有历史spill(非本次回归, isolation保持原样)。
 (5) 暂不做: 其余15页提取+各VI section; 其他VI风格。
+
+[2026-07-09] col4/col5 合成PPT 接入真实框架库 — 大模型从16个PPT提取框架选框架+填槽(网站按钮生效):
+(1) 背景: 之前的框架库(16框架选+填)只活在 data/debug 测试脚本, 没接进网站"合成PPT"按钮 → 用户点生成仍是手写假页型(process_flow/technique/food_archive/skill_card/troubleshoot/summary), "一次一次做的都不是我要的"。用户明确: 用这16个框架让大模型根据内容选框架合成PPT。
+(2) 落地(生产管线):
+    - backend/resources/framesets/business.json: 从 frameset_abalone.json 拷入生产资源目录(16框架, canvas 1280×720, 每容器z/L/T/W/H/字号/fill_var/text_var/line_var, 配色全 var(--x))。
+    - backend/services/frameset_service.py: 自包含生产模块(不依赖data/debug)。load_frameset(style)/frame_catalog(fs)/catalog_prompt(cat)/render_with_content(fs,fid,slots)/render_frame。几何100%来自JSON, 代码零手写坐标。
+    - backend/services/ppt_service.py _stage2_html_per_slide: 循环外一次性 load_frameset+catalog_prompt(不逐页重建); _gen_one 新增"框架库分支"作为横板(非A4)首选路径——大模型 _frameset_pick_and_fill(选frame_id+按≤N字填槽, 3次重试), render_with_content 渲染, _resolve_color_vars 上色, 标 _code_filled 交给 fit-to-box 兜底。任何失败 falls through 到原结构页/col4/LLM分支(纯加法, 不破坏老路径)。
+    - 大纲阶段产出的假页型 stype 不再决定版面: 框架库分支先跑, 大模型把每页内容映射到真实frame_id。
+(3) 验证(走生产同一函数, 非平行脚本): backend/data/debug/verify_frameset_button.py 直接调用 _stage2_html_per_slide(与按钮同函数)对鲍鱼col5真实16页 → 16/16页全用真实框架(cover_p01/toc_p02/content_p04/p11/p14/p15/grid_or_fourcol_p06/p07/closing_p16); Playwright 1280×720 逐页实测: max_clip=0 max_spill=0 残留{{}}=0 非白硬编码hex=0 → PASS。("Event loop is closed" 为 Windows httpx 清理噪声, _safe_run_async 已注明无害)。
+(4) 生效: 旧后端(PID16680, 启动早于本次改动, 无--reload)持旧代码内存 → 停止并以相同方式(backend/ venv python app.py)重启(PID23728, port8766, /及/api/settings HTTP200), 更新 backend.pid。现在点"合成PPT"即走真实框架库。
+(5) 暂不做: 大纲提示词(database.py col4/col5)仍产假页型字段, 但已不影响版面(框架库分支绕过); 后续可清理; 其他VI风格(tech/creative…)复用同机制只需各自 framesets/{style}.json。
