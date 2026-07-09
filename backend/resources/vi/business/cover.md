@@ -5,11 +5,6 @@
 ```html
 <div style="width:1280px;height:720px;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--primary) 0%,var(--secondary) 100%);font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;">
 
-  <!-- 第0层：可选配图（{{IMAGE_URL}} 由代码自动生成，AI 禁止修改此占位符） -->
-  <div style="position:absolute;inset:0;">
-    <img src="{{IMAGE_URL}}" style="width:100%;height:100%;object-fit:cover;" alt="">
-  </div>
-
   <!-- 第1层：背景层 -->
   <div style="position:absolute;inset:0;background:linear-gradient(to bottom right,rgba(0,0,0,0.2),rgba(0,0,0,0.5));"></div>
 
@@ -75,7 +70,6 @@
 | `{{SUBTITLE}}` | 副标题（一句话概述） | lead 或 body 首句提炼 |
 | `{{META_INFO}}` | 日期/作者/机构信息 | key_points[0] 或 kicker |
 | `{{BRAND}}` | 品牌标识文字 | notes 或固定机构名 |
-| `{{IMAGE_URL}}` | **代码自动生成，AI 禁止修改** — 配图路径由后端生成后替换 | 系统自动 |
 
 ## 必须遵守
 
@@ -84,7 +78,6 @@
 - **绝对禁止**添加或删除装饰元素（SVG circle/pattern/gradient）
 - **绝对禁止**修改背景渐变方向和色标
 - 只能替换 `{{PLACEHOLDER}}` 占位符为实际文字内容
-- **`{{IMAGE_URL}}` 是系统自动生成占位符，AI 禁止修改** — 保持原样传递给代码
 - 占位符文字长度不限，但标题建议 ≤20 字，副标题建议 ≤40 字
 - 封面文字必须在深色背景上可读 — 文字颜色已设为 `#ffffff`（唯一合法的硬编码 hex）
 - 禁止添加卡片容器、页头、页尾

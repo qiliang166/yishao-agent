@@ -1,3 +1,14 @@
+[2026-07-10 00:40:00] 删除 col4/col5 横版封面背景图（{{IMAGE_URL}}）:
+需求：用户要求封面不再使用背景图（col4+col5 一起改，col3 不动）。
+病根：封面背景图不由大纲 JSON 决定（seq1 images=null）。触发条件唯一 = 封面 HTML 出现 {{IMAGE_URL}}（ppt_service.py:5506），该占位符来自封面模板 business/cover.md 第0层 <img src="{{IMAGE_URL}}">。封面走 STRUCTURAL_PAGE_TYPES 代码填充照抄整个模板 → _generate_and_replace_images 检测到占位符即生成并注入图片。
+改动（仅 1 文件 backend/resources/vi/business/cover.md，删 3 处）：
+(1) 删第0层图片层（第8-11行 <img src="{{IMAGE_URL}}"> 整段）
+(2) 删占位符表中 {{IMAGE_URL}} 行
+(3) 删「必须遵守」中 {{IMAGE_URL}} 条目
+不改任何 Python 逻辑。模板实时读盘（_load_style_vi_section 无缓存），无需重启后端。
+影响范围：col4/col5 共用 business/cover.md → 两者封面均去背景图；col3 用独立 business/col3/cover.md（含 {{INFO_TABLE}}，本就无图）→ 零回归。
+验证：col4/col5 模板 IMAGE_URL=0、<img=0；生产函数 _fill_slide_template 生成封面 HTML 无 {{IMAGE_URL}}/<img/残留占位符，标题正常；col3 模板 {{INFO_TABLE}} 保留、长度 4163 不变。git diff 仅 cover.md 删 3 处。封面保留全屏渐变+装饰+标题，full_bleed 版式不变（layout_hint 与背景图无关）。
+
 [2026-07-09 23:32:00] 数据库整库还原到 07-08 备份（配合代码回退 ab8c951）:
 背景：代码已切回 ab8c951（col4 视觉编辑器之前），但 col4 大纲仍是 07-08 视觉编辑器保存的 11 页 JSON——因 yishao.db 被 .gitignore 排除，git 回退不动数据库。
 操作（纯数据，无代码 commit）：
