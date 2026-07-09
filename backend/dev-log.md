@@ -1,3 +1,14 @@
+[2026-07-09 23:32:00] 数据库整库还原到 07-08 备份（配合代码回退 ab8c951）:
+背景：代码已切回 ab8c951（col4 视觉编辑器之前），但 col4 大纲仍是 07-08 视觉编辑器保存的 11 页 JSON——因 yishao.db 被 .gitignore 排除，git 回退不动数据库。
+操作（纯数据，无代码 commit）：
+(1) 安全网：先备份当前库 → data/backups/yishao-PRE-RESTORE-20260709_233139.db（integrity ok，含本次 col3 id=241/155KB、col5 id=244/280KB 成品，可随时捞回）
+(2) 停后端释放文件锁（旧 PID 25508 → taskkill），无 WAL/journal 残留
+(3) cp data/backups/yishao-2026-07-08.db data/yishao.db（整体覆盖，integrity ok）
+(4) 重启后端 PID=19948，更新 backend.pid；/api/health、/api/projects 均 200
+验证：col4 skill = 旧 markdown「道与术解析·四章16-18页」2434字（非11页JSON）；col5 = 「研学手册·八章」；API 端到端确认。
+已知代价（用户二次确认接受）：07-08 18:00~07-09 15:16 鲍鱼项目 15 行 step_results（含本次 col3/col5 成品）+ col2 prompt/skill 回退到 07-08。全部可从 PRE-RESTORE 备份恢复。
+对比过整库差异：23 表行数完全一致（无增删行），仅 20 个 cell 内容不同。
+
 [2026-07-03 21:30:00] Image generation pipeline + template mode color fix:
 (1) _generate_and_replace_images() — scans slide HTML for {{image:PROMPT,SIZE}} and {{IMAGE_URL}} placeholders, calls image_service.generate_image(), downloads to html_dir/images/, replaces with <img> tag
 (2) Wired into generate_ppt() after HTML gen, before deck assembly (is_portrait guard)
