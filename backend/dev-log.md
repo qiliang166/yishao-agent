@@ -1,4 +1,16 @@
-[2026-07-09] col4 确定性渲染 — 按数据形态选布局(消除"3张表长得一样"的单调):
+[2026-07-09] 框架内按VI原则填满 — 双向fit(欠填涨字号)+对比度校正+图片区柔和背板:
+背景: 上一步16框架已接进按钮且渲染源切到可编辑VI(.md), 但用户实测多缺陷——(a)很多容器空白/只标题(填不满); (b)封面白底叠白字(cover_p01满屏PICTURE透明占位, 白字后无深背板); (c)字号不对、图/图标一塌糊涂、"和VI原则不吻合"。根因(3个Explore读码坐实): _gen_one框架分支先命中就return, 绕过整个VI系统与所有VI代码护栏(_auto_fix_*/_enforce_slide_rules只在LLM分支跑); 唯一作用于框架页的_fit_code_filled_slides只缩不涨, 无"填不满"概念。用户决定性方向: "AI在我给的框架内创新但不得超出框架"→框架锁死几何, VI原则决定填多满(字号/配色/对比/填充), 代码按VI兜底。本轮规则(用户): 每个内容DIV填充≥60%(本轮只填文字, 图标图片下轮另做); 图片占位DIV由大模型按VI决定(不硬编码刺眼虚线框)。
+方案(可量化约束→交给代码, 非LLM自查; 报告证实_auto_fix_*字符串函数会误伤框架里合法"白字压深背板", 故不复用, 改真实渲染的结构化护栏):
+ (1) backend/services/ppt_service.py _fit_code_filled_slides(line~3874): 单向缩→双向填。FIT_JS两相——相A(仅frame_id框架页)对内容DIV量scrollHeight/clientHeight, <0.60则涨字号逼近[0.60,0.92], 上限min(原字号×1.8,96px), 涨后若溢出立即回退; 相B(始终)缩一切溢出到MINF=9px, 保证clip≈0。对比度校正(仅框架页): 用elementsFromPoint测每个文字背后真实背景色算WCAG比, <4.5时在#ffffff与var(--text)间选比值更高者(修复白压白/白压中间调金/绿; 合法白压深背板>=4.5则不动)。几何L/T/W/H零改动, 只调DIV内字号/(必要时)颜色。col4代码填充页维持只缩(不回归)。
+ (2) _FRAMESET_SYS(line~6425)+pick_and_fill user消息: 除≤N字上限外加填充下限——每个内容槽写够容量60-100%, 正文/条目\n分点写满, 不留空槽; 加"选框架配内容"(内容多选槽多框架); 图片区可填说明或留空。
+ (3) backend/services/frameset_service.py: PICTURE渲染从"透明+虚线"改"rgba(var(--text-rgb),0.04)柔和背板"; 非整页图(W或H<95%)开可选caption文字槽image#n(大模型可填配图说明或留空作配图位), 整页背景图(cover)只作背板不开槽; frame_catalog/catalog_prompt暴露图片槽并标注可选; _assign_content_keys相应放行PICTURE(整页除外)。跑emit_all_framesets.py重生成16个framesets/*.md(几何仍100%渲染器吐出, 零手写坐标)。
+验证(两层, 逐页出数):
+ (A) 确定性guard(不依赖LLM) data/debug/verify_frameset_fill.py: 16框架各填满内容槽→走生产_fit_code_filled_slides→Playwright逐页实测: 欠填DIV=0 低对比DIV=0 max_clip=0 max_spill=0 残留=0 非白hex=0 → 16/16 PASS(修前cover白压白已消, 相较首轮修掉p07金底/p15绿底7个低对比+toc 1px clip)。
+ (B) 端到端(实LLM, 按钮同函数) data/debug/verify_frameset_button.py 调_stage2_html_per_slide对鲍鱼col5真16页: 16/16全用真实框架, 逐页 clip=0 spill=0 欠填=0 低对比=0 残留=0 硬码hex=0 → PASS。
+生效: 停旧后端(PID23728, 持旧代码内存, 无--reload)→同方式(backend/ venv python app.py, PYTHONIOENCODING=utf-8)重启(PID17772, port8766, /api/health 200 status:ok), 更新backend.pid。现点"合成PPT": 大模型选真框架+按VI填够60%, 代码双向fit撑满+对比度兜底, 几何锁死不超框。
+暂不做(本轮通过后再议): 真实图片/图表生成(图标图片另做, 本轮图片区只柔和背板/可选文字); col4代码填充页也升级双向填(本轮只缩避回归); catalog从VI实时生成; 其他VI风格推广。
+
+
 背景: 用户反馈"KIMI 布局类型更多更丰富, 你的很单调……即便丰满也不好看, 只是拉伸了而已"。定路线=扩充确定性渲染器(AskUserQuestion), 权衡=丰富与稳定都要尽量平衡。
 证据(真11页大纲 last_outline_response 逐页数据形态分析, 非推测): seq4 表 row0=`发花胶→…→装盘`(7步→序列), seq5 表 row0=`干货涨发→…→终味融合`(5步→序列), seq7 表 row0=`鹅掌 / 猪蹄 / 牛筋`(3命名实体, 无→)。三页同为 table 却语义不同(4/5 是流程, 7 是对照), 旧渲染全走同一"列卡"→ 视觉三胞胎, 正是"单调"根因。
 方案(结构性, 同 page_type 按数据特征自动选骨架): backend/services/content_render.py 新增 _render_timeline(横向流程时间轴: 连接线+编号圆节点+步骤标题带+各步属性卡, 属性来自对齐的后续行); _render_table 加数据形态分支——row0 含→且步数>=3且与列数一致且<=8 → 走 timeline, 否则维持列卡(命名实体对照)/不规则兜底行。判据是数据自身特征(→序列 vs 命名实体), 非硬编码页码。

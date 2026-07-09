@@ -3872,16 +3872,26 @@ def _build_toc_rows(skill_json: str, vi_section: str) -> str:
 
 
 def _fit_code_filled_slides(slides: list, active_scheme, canvas_w: int, canvas_h: int) -> list:
-    """Guarantee code-filled slides never overflow their 1280×720 canvas.
+    """Fit code-filled slides to their 1280×720 canvas — never overflow, and (for
+    frameset pages) never leave content DIVs half-empty.
 
     For every slide marked `_code_filled`, load its `html_vars` in headless
-    chromium, measure two numbers per element:
-      • clipped: multi-line text taller than its own box (would be cut off)
-      • spill:   any element painted beyond the slide rect
-    Any offending text has its font-size shrunk (step 0.5px, floor 9px) until it
-    fits. The shrink is applied to `html_vars` (the var(--x) recolor source), then
-    `html` is re-resolved from it — so recolor keeps working. Idempotent and safe:
-    on any error the original slide is returned unchanged.
+    chromium and measure per leaf-text element:
+      • clipped: text taller than its own box (would be cut off) → shrink font
+      • fill ratio (scrollHeight/clientHeight): frameset content DIVs below 0.60
+        get their font GROWN toward the [0.60,0.92] band (capped at orig×1.8, 96px)
+      • contrast (frameset only): each text vs the real painted background behind
+        it (elementsFromPoint); if WCAG ratio < 4.5, recolor to #ffffff on dark bg
+        or var(--text) on light bg — the structural fix for white-on-white cover.
+    Geometry (L/T/W/H) is NEVER touched — only the font-size and, when contrast
+    demands, the color inside each box. This is "innovate WITHIN the frame".
+
+    Frameset pages are detected by `frame_id`; they get grow+contrast. Other
+    code-filled slides (col4) keep the shrink-only behavior (no regression).
+
+    Edits apply to `html_vars` (the var(--x) recolor source), then `html` is
+    re-resolved from it — so recolor keeps working. Idempotent and safe: on any
+    error the original slide is returned unchanged.
 
     Runs ONCE on the main thread (playwright sync API is not thread-safe, and the
     generator uses a ThreadPoolExecutor), reusing a single browser for all slides.
@@ -3898,28 +3908,87 @@ def _fit_code_filled_slides(slides: list, active_scheme, canvas_w: int, canvas_h
     root = _build_root_vars(active_scheme) if active_scheme else ""
     FIT_JS = r'''
     (cfg) => {
-      const MINF=cfg.minFont, STEP=cfg.step;
+      const MINF=cfg.minFont, STEP=cfg.step, GROW=cfg.grow, CONTRAST=cfg.contrast;
+      const LOW=0.60, MAXMULT=1.8, MAXABS=96.0;
       const slide=document.querySelector('body > div');
-      if(!slide) return {clipped:0, spill:0, html:document.body.innerHTML};
+      if(!slide) return {clipped:0, spill:0, underfilled:0, lowcontrast:0, html:document.body.innerHTML};
       const S=slide.getBoundingClientRect();
       const px=v=>parseFloat(v)||0;
-      const texts=[...slide.querySelectorAll('div,span')].filter(e=>{
+      const isPageNum=t=>/^\s*\d+\s*\/\s*\d+\s*$/.test(t);
+      const isContent=e=>{ const t=(e.textContent||'').trim();
+        return e.clientHeight>=24 && e.clientWidth>=40 && !isPageNum(t); };
+      const overflow=e=>Math.max(e.scrollHeight-e.clientHeight, e.scrollWidth-e.clientWidth);
+      const leaves=[...slide.querySelectorAll('div,span')].filter(e=>{
         if(e.children.length) return false;
-        const t=(e.textContent||'').trim(); if(!t) return false;
-        return e.scrollHeight > px(getComputedStyle(e).fontSize)*1.4 + 2;
+        return (e.textContent||'').trim().length>0;
       });
+      const orig=new Map(); leaves.forEach(e=>orig.set(e, px(getComputedStyle(e).fontSize)));
+      // ── phase A: grow underfilled content DIVs toward the fill band (frameset only) ──
+      if(GROW){
+        let guard=0, changed=true;
+        while(changed && guard<800){ changed=false;
+          for(const e of leaves){
+            if(!isContent(e) || overflow(e)>0) continue;
+            const fs=px(getComputedStyle(e).fontSize);
+            const maxF=Math.min(orig.get(e)*MAXMULT, MAXABS);
+            if(fs<maxF && e.scrollHeight < LOW*e.clientHeight){
+              e.style.fontSize=Math.min(maxF,fs+STEP)+'px';
+              if(overflow(e)>0){ e.style.fontSize=fs+'px'; continue; }  // back off if it now spills
+              changed=true;
+            }
+          }
+          guard++;
+        }
+      }
+      // ── phase B: shrink anything overflowing until it fits (always; guarantees clip≈0) ──
       let guard=0, changed=true;
-      while(changed && guard<600){ changed=false;
-        for(const e of texts){ if(e.scrollHeight-e.clientHeight>0){
+      while(changed && guard<800){ changed=false;
+        for(const e of leaves){ if(overflow(e)>0){
           const fs=px(getComputedStyle(e).fontSize);
           if(fs>MINF){ e.style.fontSize=Math.max(MINF,fs-STEP)+'px'; changed=true; }
-        }} guard++; }
-      let clipped=0; for(const e of texts){ clipped=Math.max(clipped,e.scrollHeight-e.clientHeight); }
+        }} guard++;
+      }
+      // ── contrast: measure real painted bg behind each text, pick white/var(--text) by best ratio ──
+      let lowcontrast=0;
+      if(CONTRAST){
+        const lum=(r,g,b)=>{const a=[r,g,b].map(v=>{v/=255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4);});return 0.2126*a[0]+0.7152*a[1]+0.0722*a[2];};
+        const parse=c=>{c=(c||'').trim();
+          let m=c.match(/rgba?\(([^)]+)\)/);
+          if(m){const p=m[1].split(',').map(x=>parseFloat(x));return {r:p[0],g:p[1],b:p[2],a:p.length>3?p[3]:1};}
+          m=c.match(/^#([0-9a-fA-F]{6})$/);
+          if(m){const n=parseInt(m[1],16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255,a:1};}
+          m=c.match(/^#([0-9a-fA-F]{3})$/);
+          if(m){const h=m[1];return {r:parseInt(h[0]+h[0],16),g:parseInt(h[1]+h[1],16),b:parseInt(h[2]+h[2],16),a:1};}
+          return null;};
+        const cr=(a,b)=>{const Lf=lum(a.r,a.g,a.b)+0.05,Lb=lum(b.r,b.g,b.b)+0.05;return Lf>Lb?Lf/Lb:Lb/Lf;};
+        const textRGB=parse(getComputedStyle(document.documentElement).getPropertyValue('--text'))||{r:26,g:26,b:26,a:1};
+        const WHITE={r:255,g:255,b:255,a:1};
+        const bgOf=e=>{ const r=e.getBoundingClientRect();
+          const stack=document.elementsFromPoint(r.left+r.width/2, r.top+r.height/2);
+          for(const el of stack){ if(el===e||e.contains(el)) continue;
+            const bg=parse(getComputedStyle(el).backgroundColor); if(bg&&bg.a>=0.5) return bg; }
+          const sb=parse(getComputedStyle(slide).backgroundColor);
+          return sb&&sb.a>=0.5?sb:WHITE;
+        };
+        for(const e of leaves){ const fg=parse(getComputedStyle(e).color); if(!fg) continue;
+          const bg=bgOf(e);
+          if(cr(fg,bg)>=4.5) continue;                 // already readable → leave it
+          lowcontrast++;
+          const cw=cr(WHITE,bg), ct=cr(textRGB,bg);    // pick the better legal option
+          e.style.color = cw>=ct ? '#ffffff' : 'var(--text)';
+        }
+      }
+      // ── measure residuals ──
+      let clipped=0, underfilled=0;
+      for(const e of leaves){ clipped=Math.max(clipped, e.scrollHeight-e.clientHeight);
+        if(GROW && isContent(e) && e.scrollHeight < LOW*e.clientHeight) underfilled++;
+      }
       let spill=0;
       slide.querySelectorAll('*').forEach(e=>{ const r=e.getBoundingClientRect();
         spill=Math.max(spill, Math.max(0,r.right-S.right), Math.max(0,r.bottom-S.bottom),
                        Math.max(0,S.left-r.left), Math.max(0,S.top-r.top)); });
-      return {clipped:Math.round(clipped), spill:Math.round(spill), html:document.body.innerHTML};
+      return {clipped:Math.round(clipped), spill:Math.round(spill),
+              underfilled, lowcontrast, html:document.body.innerHTML};
     }
     '''
     try:
@@ -3929,19 +3998,22 @@ def _fit_code_filled_slides(slides: list, active_scheme, canvas_w: int, canvas_h
             for s in targets:
                 try:
                     hv = s["html_vars"]
+                    is_frameset = bool(s.get("frame_id"))
                     doc = (f'<!doctype html><html><head><meta charset="utf-8"><style>{root}\n'
                            f'*{{box-sizing:border-box;}} html,body{{margin:0;padding:0;}}</style>'
                            f'</head><body>{hv}</body></html>')
                     page.set_content(doc)
-                    res = page.evaluate(FIT_JS, {"minFont": 9.0, "step": 0.5})
+                    res = page.evaluate(FIT_JS, {"minFont": 9.0, "step": 0.5,
+                                                 "grow": is_frameset, "contrast": is_frameset})
                     fixed_vars = res.get("html", hv)
                     # strip the wrapping <body> the browser roundtrip may add
                     s["html_vars"] = fixed_vars
                     if active_scheme:
                         s["html"] = _resolve_color_vars(fixed_vars, active_scheme, css_vars=True)
-                    if res.get("clipped") or res.get("spill"):
+                    if res.get("clipped") or res.get("spill") or res.get("underfilled") or res.get("lowcontrast"):
                         _logger.warning(f"fit-to-box slide {s.get('seq')}: residual "
-                                        f"clipped={res.get('clipped')} spill={res.get('spill')}")
+                                        f"clipped={res.get('clipped')} spill={res.get('spill')} "
+                                        f"underfilled={res.get('underfilled')} lowcontrast={res.get('lowcontrast')}")
                     else:
                         _logger.info(f"fit-to-box slide {s.get('seq')}: 0/0 OK")
                 except Exception as e:
@@ -4068,7 +4140,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 if pick and pick.get("frame_id"):
                     fid = pick["frame_id"]
                     slots = pick.get("slots", {}) or {}
-                    html_vars = _fset_mod.render_with_content(_frameset, fid, slots)
+                    # 渲染源 = 可编辑的 VI 文件（resources/vi/{style}/framesets/{fid}.md）。
+                    # 用户在 VI 编辑器改色/字号，合成即跟着变。VI 缺失/无模板时回退 JSON。
+                    html_vars = _fset_mod.render_from_vi(style_id, fid, slots, seq=seq, total=total)
+                    if not html_vars:
+                        html_vars = _fset_mod.render_with_content(_frameset, fid, slots)
                     if html_vars:
                         html = _resolve_color_vars(html_vars, active_scheme, css_vars=True)
                         _logger.info(f"Slide {seq}: frameset {fid} "
@@ -6371,8 +6447,11 @@ _FRAMESET_SYS = """你是PPT排版助手。用户给你一页的内容，你从"
 1. 只能从框架库里选一个已存在的 frame_id，不许自创。
 2. 按页面用途选：封面→cover框架, 目录→toc, 章节隔断→section, 正文要点→content/grid, 表格数据→table, 结尾→closing。
 3. 每个槽位(content_key)填一段贴合其用途(role_cn)和字号的文字；正文可用\\n换行分点。
-4. 严格遵守每个槽位的字数上限(≤N字)：宁可精炼删减，绝不超过上限，否则会溢出格子。
-5. 输出纯JSON：{"frame_id":"...", "slots":{"content_key":"文本", ...}}，不输出别的。"""
+4. 【填充下限】每个内容槽都要写够，写到其字数容量的 60%-100%：宁可充实展开、绝不留空槽或只写三两个字。正文/条目类槽位尽量用 \\n 分点写满，把框架撑满、层次饱满。
+5. 【填充上限】不得超过每个槽位的字数上限(≤N字)：到达上限即精炼收尾，绝不超过，否则溢出格子。
+6. 【选框架配内容】优先选槽位数量与你的要点条数匹配的框架：内容多选槽位多的框架，内容少选槽位少的框架，避免"大框架填不满"。
+7. 图片区(标注"图片区")可填一句配图说明文字，或按内容需要留空作配图位。
+8. 输出纯JSON：{"frame_id":"...", "slots":{"content_key":"文本", ...}}，不输出别的。"""
 
 
 def _frameset_pick_and_fill(provider_id, model, llm_generate, slide: dict,
@@ -6395,7 +6474,8 @@ def _frameset_pick_and_fill(provider_id, model, llm_generate, slide: dict,
     user = (f"【本页内容】\n页型建议: {stype}\n标题: {heading}\n"
             f"正文: {body[:400]}\n要点:\n{kp_lines}\n\n"
             f"【框架库】\n{catalog_txt}\n\n"
-            f"请选一个 frame_id 并填满其槽位。输出JSON。")
+            f"请选一个 frame_id，并把每个内容槽都填够（60%-100% 容量，不留空槽、不只写三两字），"
+            f"正文/条目类用 \\n 分点写满。只输出JSON。")
     last_err = None
     for _ in range(3):
         try:
