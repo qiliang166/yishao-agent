@@ -4003,8 +4003,10 @@ def _fit_code_filled_slides(slides: list, active_scheme, canvas_w: int, canvas_h
                            f'*{{box-sizing:border-box;}} html,body{{margin:0;padding:0;}}</style>'
                            f'</head><body>{hv}</body></html>')
                     page.set_content(doc)
+                    # grow(涨字号)仅框架页(几何来自提取, 涨不越界); 对比度校正是安全护栏,
+                    # 对所有 code-filled 页生效(col4模板页也会白压色, 必须兜住)。
                     res = page.evaluate(FIT_JS, {"minFont": 9.0, "step": 0.5,
-                                                 "grow": is_frameset, "contrast": is_frameset})
+                                                 "grow": is_frameset, "contrast": True})
                     fixed_vars = res.get("html", hv)
                     # strip the wrapping <body> the browser roundtrip may add
                     s["html_vars"] = fixed_vars

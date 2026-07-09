@@ -1,4 +1,11 @@
-[2026-07-09] 框架内按VI原则填满 — 双向fit(欠填涨字号)+对比度校正+图片区柔和背板:
+[2026-07-09] col4 质量差(白压色/背景色当字色)根治 — 对比度校正从"仅框架页"放宽到所有code-filled页:
+背景: 用户实测线上 col4 index.html(11页)"质量很差 和WORD差不多", 我实测证实9页低对比(白字/背景色字压彩色块看不清)+文字被切。此前我声称的PASS只在col5(16页)测过, col4没覆盖到——教训: 不同栏目走的分支不同, 别声称修好就以为全覆盖([[feedback_output_quality_uses_vi]] [[feedback_no_fabrication]])。
+取证(不猜, 走生产同函数 data/debug/diag_col4_quality.py, col4 11页逐页拆): col4与col5同链路(generate_ppt→_generate_slides_staged→_stage2_html_per_slide→_gen_one→_assemble_html_deck→写index.html, 无独立路径)。11页里10页走框架分支(有frame_id)全绿, 唯1页grid_cards走"col4模板分支"(_code_filled=True但无frame_id)→低对比5: color:rgb(179,58,46)压rgb(196,30,58)(暗红压红)、#ffffff压rgb(254,245,230)(白压米)。根因: _fit_code_filled_slides 的对比度校正门槛是 contrast:is_frameset(=bool frame_id), col4模板页无frame_id → 对比度校正被跳过, VI模板(grid_cards.md等)里写死的问题色直接漏出。
+修复(结构性, 1处, ppt_service.py:~4006): grow(涨字号)保持仅框架页(几何来自提取涨不越界); 对比度校正是纯安全护栏(白压白必是bug), 门槛从 is_frameset 放宽到 True → 对所有code-filled页(含col4模板页)生效。校正逻辑不变(elementsFromPoint测真实背景算WCAG, <4.5时在#ffffff/var(--text)间选比值高者)。纯LLM页(无_code_filled)本就不进fit, 无影响。
+验证: (A)取证脚本重跑col4 11页 → 低对比全归零(修前seq9=5→修后=0), 唯seq9残2px clip(文字框太小9px仍差2px, 物理约束不影响可读); (B)确定性16框架回归 verify_frameset_fill PASS(欠填=0 低对比=0 clip=0 spill=0 残留=0 非白hex=0, 放宽对比度未误伤框架页); (C)col5端到端按钮同函数复测。后端重启PID33000(port8766 /api/health 200)生效。
+暂不做: seq9 grid_cards的2px物理clip(极小, 不影响可读); VI模板源头写死色的逐个清理(运行时护栏已统一兜底, 治本无需逐模板改)。
+
+
 背景: 上一步16框架已接进按钮且渲染源切到可编辑VI(.md), 但用户实测多缺陷——(a)很多容器空白/只标题(填不满); (b)封面白底叠白字(cover_p01满屏PICTURE透明占位, 白字后无深背板); (c)字号不对、图/图标一塌糊涂、"和VI原则不吻合"。根因(3个Explore读码坐实): _gen_one框架分支先命中就return, 绕过整个VI系统与所有VI代码护栏(_auto_fix_*/_enforce_slide_rules只在LLM分支跑); 唯一作用于框架页的_fit_code_filled_slides只缩不涨, 无"填不满"概念。用户决定性方向: "AI在我给的框架内创新但不得超出框架"→框架锁死几何, VI原则决定填多满(字号/配色/对比/填充), 代码按VI兜底。本轮规则(用户): 每个内容DIV填充≥60%(本轮只填文字, 图标图片下轮另做); 图片占位DIV由大模型按VI决定(不硬编码刺眼虚线框)。
 方案(可量化约束→交给代码, 非LLM自查; 报告证实_auto_fix_*字符串函数会误伤框架里合法"白字压深背板", 故不复用, 改真实渲染的结构化护栏):
  (1) backend/services/ppt_service.py _fit_code_filled_slides(line~3874): 单向缩→双向填。FIT_JS两相——相A(仅frame_id框架页)对内容DIV量scrollHeight/clientHeight, <0.60则涨字号逼近[0.60,0.92], 上限min(原字号×1.8,96px), 涨后若溢出立即回退; 相B(始终)缩一切溢出到MINF=9px, 保证clip≈0。对比度校正(仅框架页): 用elementsFromPoint测每个文字背后真实背景色算WCAG比, <4.5时在#ffffff与var(--text)间选比值更高者(修复白压白/白压中间调金/绿; 合法白压深背板>=4.5则不动)。几何L/T/W/H零改动, 只调DIV内字号/(必要时)颜色。col4代码填充页维持只缩(不回归)。
