@@ -1,3 +1,15 @@
+[2026-07-10 05:40:00] col4/col5 封面副标题稳定化 + 新增概要（四层定义对齐）:
+需求：用户反映封面副标题不稳定（有时整句、有时空），且缺一句话概要。用户诊断根因为「定义层缺失」——字数/形态未定义。选「从定义层理清」，范围「项目+种子都改」，BRAND 暂不动。
+病根：四层定义互相矛盾。大纲提示词要求 subtitle+description，但 SKILL 封面 example 未含这两字段，且提示词硬规「禁止自行添加模板中没有的字段」→ LLM 输出不稳定；填充代码 {{SUBTITLE}} 回落到 body 首句 → 长正文塞进副标题。
+改动（四层对齐，改 3 文件 + DB 3 行）：
+(1) SKILL example（DB 3 行：项目 pi-fcf32913a82b-col4 / 鲍鱼种子 col4/d970b2ea904c / 全局种子 col4/NULL）封面新增 subtitle+summary 字段与字段说明（2434→2561 字符）
+(2) 大纲提示词 else 分支（col4/col5，ppt_service.py:1310-1311）：subtitle 改「2-3特征词≤20字不可整句」+ 新增 summary「≤150字一句话概要」；is_a4 分支（col3）不动
+(3) _fill_slide_template（ppt_service.py:6024-6047）：{{SUBTITLE}} 只取 slide.subtitle 或 lead（删 body 首句回落）；新增 summary 变量与 {{SUMMARY}} 替换；SUMMARY_TITLE 去重
+(4) business/cover.md：副标题下新增概要 <p>{{SUMMARY}}</p>，更新占位符表 SUBTITLE(≤20字)/SUMMARY(≤150字) 与「必须遵守」字数建议
+影响范围（Rule 1/6 已查证）：全部 plain {{SUBTITLE}} 仅出现于 cover 模板，各栏 cover 大纲分支均硬性要求 subtitle 显式字段 → 删 body 回落零风险；section/summary/closing/toc 只用 {{CHAPTER_SUBTITLE}}（源 lead，未动）。
+回归验证：col4/col5 填充 subtitle+summary 干净、无 {{IMAGE_URL}}/<img/残留；col3（business/col3/cover.md）无 SUMMARY 占位符=安全空操作，subtitle 正常，{{INFO_TABLE}} 由上游 _build_cover_info_table（ppt_service.py:3811）填充未受影响；ast.parse 通过。
+注意：SKILL 改动写在 yishao.db（.gitignore 排除）→ 磁盘持久但不入 git；代码/模板改动入 git。
+
 [2026-07-10 00:40:00] 删除 col4/col5 横版封面背景图（{{IMAGE_URL}}）:
 需求：用户要求封面不再使用背景图（col4+col5 一起改，col3 不动）。
 病根：封面背景图不由大纲 JSON 决定（seq1 images=null）。触发条件唯一 = 封面 HTML 出现 {{IMAGE_URL}}（ppt_service.py:5506），该占位符来自封面模板 business/cover.md 第0层 <img src="{{IMAGE_URL}}">。封面走 STRUCTURAL_PAGE_TYPES 代码填充照抄整个模板 → _generate_and_replace_images 检测到占位符即生成并注入图片。

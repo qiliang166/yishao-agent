@@ -1307,8 +1307,8 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 6. 封面页特殊规则：
    - heading 填入从 title_format 替换占位符后的实际标题（不超过30字符），不可填"封面"等类型名
    - title_format 中的 {占位符} 替换为 SOP 实际值后填入 title_format 字段
-   - subtitle 从正文提炼一句话概述（≤30字）填入 subtitle 字段，不可为空
-   - description 从正文提炼一段内容概述（≤150字），不可为空
+   - subtitle 填入 2-3 个特征词/短语概括主题（≤20字），不可为整句、不可为空
+   - summary 从正文提炼一句话概要（≤150字）填入 summary 字段，不可为空
    - key_points 每个位置必须填入从 SOP 提取的实际内容值，不可保留模板标签原文
    - 若模板包含 examples 数组，对照每个 example 的说明来填充对应位置的 key_points 值
 7. 若模板中某页包含 images 或 charts 字段，必须原样保留在输出中，不可修改、增删或忽略
@@ -6021,10 +6021,13 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
     cards = slide.get("cards", [])
     description = slide.get("description", "")
 
-    # Extract sub-parts: subtitle = lead or body first line
-    subtitle = lead or (body.split("\n")[0].strip() if body else "")
+    # Extract sub-parts: subtitle prefers explicit field, then lead (short phrases only).
+    # Never fall back to body — long body text belongs in {{SUMMARY}}, not the subtitle.
+    subtitle = slide.get("subtitle", "") or lead
     if subtitle == heading:
         subtitle = ""
+    # Summary: one-line abstract (≤150 chars). Prefers explicit field, then description.
+    summary = slide.get("summary", "") or description
     brand = ""  # Brand comes from project config, not slide data
     contact = lead.strip() if lead else ""
     meta = kicker.strip() if kicker else ""
@@ -6039,12 +6042,13 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
     esc = _html_mod.escape
     html = template_html
     html = html.replace("{{TITLE}}", esc(slide.get("title_format", "") or heading or ""))
-    html = html.replace("{{SUBTITLE}}", esc(slide.get("subtitle", "") or subtitle))
+    html = html.replace("{{SUBTITLE}}", esc(subtitle))
+    html = html.replace("{{SUMMARY_TITLE}}", esc(heading or "总结"))
+    html = html.replace("{{SUMMARY}}", esc(summary))
     html = html.replace("{{DESCRIPTION}}", esc(description))
     html = html.replace("{{CHAPTER_TITLE}}", esc(heading or ""))
     html = html.replace("{{CHAPTER_NUM}}", esc(kicker or ""))
     html = html.replace("{{CHAPTER_SUBTITLE}}", esc(lead or ""))
-    html = html.replace("{{SUMMARY_TITLE}}", esc(heading or "总结"))
     html = html.replace("{{THANKS}}", esc(heading or "谢谢"))
     html = html.replace("{{CTA}}", esc(notes or ""))
     html = html.replace("{{TOC_TITLE}}", esc(heading or "目录"))

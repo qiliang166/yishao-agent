@@ -44,7 +44,10 @@
     <h1 style="font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:64px;font-weight:700;letter-spacing:-1px;line-height:1.15;color:#ffffff;margin:0 0 24px 0;">{{TITLE}}</h1>
 
     <!-- 副标题 -->
-    <p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:22px;font-weight:400;letter-spacing:0.5px;line-height:1.4;color:rgba(255,255,255,0.8);margin:0 0 40px 0;">{{SUBTITLE}}</p>
+    <p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:22px;font-weight:400;letter-spacing:0.5px;line-height:1.4;color:rgba(255,255,255,0.8);margin:0 0 24px 0;">{{SUBTITLE}}</p>
+
+    <!-- 概要（一句话摘要，≤150字） -->
+    <p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:16px;font-weight:400;line-height:1.7;color:rgba(255,255,255,0.7);margin:0 0 32px 0;max-width:680px;">{{SUMMARY}}</p>
 
     <!-- 装饰性底部短线 -->
     <div style="width:40px;height:3px;background:rgba(255,255,255,0.5);margin-bottom:40px;border-radius:2px;"></div>
@@ -67,7 +70,8 @@
 | 占位符 | 说明 | 来源 |
 |--------|------|------|
 | `{{TITLE}}` | 主标题 | heading |
-| `{{SUBTITLE}}` | 副标题（一句话概述） | lead 或 body 首句提炼 |
+| `{{SUBTITLE}}` | 副标题（2-3 个特征词/短语，≤20 字） | subtitle |
+| `{{SUMMARY}}` | 概要（一句话概括，≤150 字） | summary |
 | `{{META_INFO}}` | 日期/作者/机构信息 | key_points[0] 或 kicker |
 | `{{BRAND}}` | 品牌标识文字 | notes 或固定机构名 |
 
@@ -78,6 +82,6 @@
 - **绝对禁止**添加或删除装饰元素（SVG circle/pattern/gradient）
 - **绝对禁止**修改背景渐变方向和色标
 - 只能替换 `{{PLACEHOLDER}}` 占位符为实际文字内容
-- 占位符文字长度不限，但标题建议 ≤20 字，副标题建议 ≤40 字
+- 占位符文字长度建议：主标题 ≤20 字，副标题 ≤20 字（2-3 特征词），概要 ≤150 字
 - 封面文字必须在深色背景上可读 — 文字颜色已设为 `#ffffff`（唯一合法的硬编码 hex）
 - 禁止添加卡片容器、页头、页尾
