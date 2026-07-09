@@ -129,3 +129,13 @@ TypeScript: pass. Build: pass. API: 无后端改动。
 (2) 根因：Stage1 大纲提示词铁律要求"替换模板标签为SOP实际值、禁止保留模板标签原文"，此规则对 key_points 正确，但对 toc.chapters 错误——章节名是编辑器固定结构不应被 LLM 改。而修复函数 _fix_stage1_table_keypoints 只还原 table 页 key_points/examples，未还原 toc chapters，被改坏的值存活。
 (3) 修复（backend/services/ppt_service.py _fix_stage1_table_keypoints）：toc 页从模板收集 chapters 加入 tmpl_map；应用时强制覆盖 s["chapters"]（非 fallback，因 LLM 总会产出被改写的 chapters，not s.get() 守卫救不了）。与 table 页 key_points 还原同一机制。
 (4) 验证：抽取函数隔离单测通过（被改坏的 toc → 还原为编辑器正确章节名 + example 恢复）；py_compile 语法通过；确认调用点 line 940/1042 在大纲主链路且 skill_template 在作用域内。
+
+[2026-07-09] col4 principle 页真实框架落地 — 删手写框架, 接入 PPT 提取的真几何:
+(1) 背景: 用户反复指出 principle.md 里的 B7/B4 框架是我"照坐标手写HTML"(flex均分+正解/误区+chart-N循环色), 一眼假, 非其PPT真实结构。要求: 从真实PPT提取框架→写进VI→从VI渲染, 配色映射13色变量, 真几何+新内容, 先做page7验证。
+(2) 真实page7结构(从pptx提取, 非编): 4竖排色块panel(色=primary/secondary/secondary/accent; 前三栏W21.25末栏W17.81; T10 H47.22)每栏叠 item_index(fs28)+item_title(fs18)+caption(fs13)+body_text(fs13,H30); 底部card_bg对比带(T59.72 H27.78)=lead_text(fs16)+左正解(铜)+竖线divider+右反例(暗红); 页头深条+标题+页码+脚注。共29容器。
+(3) 实现(零手写坐标):
+    - backend/data/debug/emit_page7_template.py: 复用 frame_renderer.render_frame 按 frameset_abalone.json 真几何"吐出"带{{占位符}}的HTML(坐标全来自JSON, 我不打一个)。
+    - backend/resources/vi/business/principle.md: 删除2个手写框架, 写入吐出的真实page7模板(cap:2-4), 占位符改 kp0..3_index/title/caption/body + BAND_LEAD/POS/NEG + FOOTNOTE。
+    - backend/services/ppt_service.py _fill_slide_template(line~6567): KEY_POINTS循环后追加索引式解析(纯加法, 不动老逻辑)——kpI_*从key_points(复用_kp_fields), 超量索引正则清空; 对比带用key_points聚合成正解列/反例列(避免把长body塞小框逼到9px)。
+(4) 验证: emit自检4×4+带+页头脚占位符全present; 端到端 verify_synth_page7.py 走生产管线(_select_framework_template→_fill_slide_template→_resolve_color_vars)+_fit_code_filled_slides → spill=0 clip=0 残留=0 非白硬编码hex=0; 几何逐一比对原PPT vs 合成=29容器0 mismatch(byte-identical); rebuild_deck重建 index.html principle页 flex:1 1 0(手写标志)=0, 含4竖栏真坐标+对比带; 全deck仅未触碰的封面/版权/closing有历史spill(非本次回归, isolation保持原样)。
+(5) 暂不做: 其余15页提取+各VI section; 其他VI风格。

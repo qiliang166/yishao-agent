@@ -3871,6 +3871,87 @@ def _build_toc_rows(skill_json: str, vi_section: str) -> str:
     return "\n".join(rows)
 
 
+def _fit_code_filled_slides(slides: list, active_scheme, canvas_w: int, canvas_h: int) -> list:
+    """Guarantee code-filled slides never overflow their 1280×720 canvas.
+
+    For every slide marked `_code_filled`, load its `html_vars` in headless
+    chromium, measure two numbers per element:
+      • clipped: multi-line text taller than its own box (would be cut off)
+      • spill:   any element painted beyond the slide rect
+    Any offending text has its font-size shrunk (step 0.5px, floor 9px) until it
+    fits. The shrink is applied to `html_vars` (the var(--x) recolor source), then
+    `html` is re-resolved from it — so recolor keeps working. Idempotent and safe:
+    on any error the original slide is returned unchanged.
+
+    Runs ONCE on the main thread (playwright sync API is not thread-safe, and the
+    generator uses a ThreadPoolExecutor), reusing a single browser for all slides.
+    """
+    targets = [s for s in slides if s.get("_code_filled") and s.get("html_vars")]
+    if not targets:
+        return slides
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as e:
+        _logger.warning(f"fit-to-box skipped (playwright unavailable): {e}")
+        return slides
+
+    root = _build_root_vars(active_scheme) if active_scheme else ""
+    FIT_JS = r'''
+    (cfg) => {
+      const MINF=cfg.minFont, STEP=cfg.step;
+      const slide=document.querySelector('body > div');
+      if(!slide) return {clipped:0, spill:0, html:document.body.innerHTML};
+      const S=slide.getBoundingClientRect();
+      const px=v=>parseFloat(v)||0;
+      const texts=[...slide.querySelectorAll('div,span')].filter(e=>{
+        if(e.children.length) return false;
+        const t=(e.textContent||'').trim(); if(!t) return false;
+        return e.scrollHeight > px(getComputedStyle(e).fontSize)*1.4 + 2;
+      });
+      let guard=0, changed=true;
+      while(changed && guard<600){ changed=false;
+        for(const e of texts){ if(e.scrollHeight-e.clientHeight>0){
+          const fs=px(getComputedStyle(e).fontSize);
+          if(fs>MINF){ e.style.fontSize=Math.max(MINF,fs-STEP)+'px'; changed=true; }
+        }} guard++; }
+      let clipped=0; for(const e of texts){ clipped=Math.max(clipped,e.scrollHeight-e.clientHeight); }
+      let spill=0;
+      slide.querySelectorAll('*').forEach(e=>{ const r=e.getBoundingClientRect();
+        spill=Math.max(spill, Math.max(0,r.right-S.right), Math.max(0,r.bottom-S.bottom),
+                       Math.max(0,S.left-r.left), Math.max(0,S.top-r.top)); });
+      return {clipped:Math.round(clipped), spill:Math.round(spill), html:document.body.innerHTML};
+    }
+    '''
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page(viewport={"width": canvas_w, "height": canvas_h})
+            for s in targets:
+                try:
+                    hv = s["html_vars"]
+                    doc = (f'<!doctype html><html><head><meta charset="utf-8"><style>{root}\n'
+                           f'*{{box-sizing:border-box;}} html,body{{margin:0;padding:0;}}</style>'
+                           f'</head><body>{hv}</body></html>')
+                    page.set_content(doc)
+                    res = page.evaluate(FIT_JS, {"minFont": 9.0, "step": 0.5})
+                    fixed_vars = res.get("html", hv)
+                    # strip the wrapping <body> the browser roundtrip may add
+                    s["html_vars"] = fixed_vars
+                    if active_scheme:
+                        s["html"] = _resolve_color_vars(fixed_vars, active_scheme, css_vars=True)
+                    if res.get("clipped") or res.get("spill"):
+                        _logger.warning(f"fit-to-box slide {s.get('seq')}: residual "
+                                        f"clipped={res.get('clipped')} spill={res.get('spill')}")
+                    else:
+                        _logger.info(f"fit-to-box slide {s.get('seq')}: 0/0 OK")
+                except Exception as e:
+                    _logger.warning(f"fit-to-box slide {s.get('seq')} failed, kept original: {e}")
+            browser.close()
+    except Exception as e:
+        _logger.warning(f"fit-to-box pass skipped (browser error): {e}")
+    return slides
+
+
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
                            temperature: float = 0.3, column_id: str = "",
@@ -3975,21 +4056,26 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 return {**slide, "html": html, "html_vars": html_vars}
             # No template available → fall through to LLM generation below
 
-        # ── Deterministic content-page render (col4 landscape) ──
-        # Third generation path: data pages (principle/table/technique/
-        # troubleshoot/grid_cards) are rendered mechanically from the outline
-        # slide — no LLM, so they never crash and never drop data. Emits
-        # {{token}} color placeholders resolved the same way as the structural
-        # path. Returns None for unsupported types → falls through to the LLM
-        # path below, so behavior is safe by construction.
+        # ── Content-page VI-template code-fill (col4 landscape) ──
+        # Second code-fill path: content data pages (e.g. principle) that have a
+        # `## HTML 模板` section in their VI file render deterministically via the
+        # SAME mechanism as structural pages (extract template → _fill_slide_template
+        # → _resolve_color_vars). No LLM → the bento composition never drops data or
+        # comes out monotonous. Types without a `## HTML 模板` fall through to LLM.
         if column_id == "col4" and not is_a4 and active_scheme:
-            from services.content_render import render_content_slide
-            _det = render_content_slide(slide, seq, total, canvas_w, canvas_h)
-            if _det:
-                html_vars = _det
-                html = _resolve_color_vars(_det, active_scheme, css_vars=True)
-                _logger.info(f"Slide {seq}: content-rendered ({stype}), {len(html)} chars")
-                return {**slide, "html": html, "html_vars": html_vars}
+            vi_content = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id, project_id=project_id)
+            if vi_content and "## HTML 模板" in vi_content:
+                # A VI section may hold MULTIPLE ```html``` frameworks (each with a
+                # `<!-- cap:min-max -->` capacity annotation). Select the framework
+                # whose container capacity matches the real key_points count, so the
+                # LLM's job is only to fill content — the geometry/color is locked.
+                template_html = _select_framework_template(vi_content, len(key_points))
+                if template_html:
+                    html = _fill_slide_template(template_html, slide, total)
+                    html_vars = html
+                    html = _resolve_color_vars(html, active_scheme, css_vars=True)
+                    _logger.info(f"Slide {seq}: content code-filled ({style_id}/{stype}, {len(key_points)} kp), {len(html)} chars")
+                    return {**slide, "html": html, "html_vars": html_vars, "_code_filled": True}
 
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
@@ -4528,6 +4614,16 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     elapsed = __import__("time").time() - t0
     result.sort(key=lambda s: s.get("seq", 0))
     _logger.info(f"Stage 2 HTML: {len(result)}/{total} slides generated in {elapsed:.1f}s")
+
+    # ── Fit-to-box guarantee (main thread, single browser) ──
+    # Code-filled slides are measured in headless chromium; any overflowing text
+    # is shrunk until it fits. Runs here (not in _gen_one) because playwright sync
+    # is not thread-safe and generation above is threaded.
+    try:
+        result = _fit_code_filled_slides(result, active_scheme, canvas_w, canvas_h)
+    except Exception as e:
+        _logger.warning(f"fit-to-box pass error (slides kept as-is): {e}")
+
     return result if result else None
 
 
@@ -6218,6 +6314,32 @@ def _load_slide_template(family: str, page_type: str) -> str | None:
         return f.read()
 
 
+def _select_framework_template(vi_content: str, n_items: int) -> str:
+    """Pick the best HTML framework from a VI section by container capacity.
+
+    A VI section may hold MULTIPLE ```html``` frameworks, each preceded by a
+    `<!-- cap:min-max -->` annotation declaring how many repeat-containers it
+    holds. Given the real key_points count, select the framework whose capacity
+    range contains n_items; if none matches, pick the one whose max is closest.
+    Falls back to the first block when no cap annotations are present.
+    """
+    blocks = re.findall(
+        r'<!--\s*cap:(\d+)-(\d+)\s*-->\s*```html\s*\n(.*?)\n```',
+        vi_content, re.DOTALL
+    )
+    if not blocks:
+        m = re.search(r'```html\s*\n(.*?)\n```', vi_content, re.DOTALL)
+        return m.group(1).strip() if m else ""
+    n = max(1, n_items)
+    exact = [(lo, hi, html) for lo, hi, html in
+             ((int(a), int(b), h) for a, b, h in blocks) if lo <= n <= hi]
+    if exact:
+        return exact[0][2].strip()
+    # No range contains n → choose the framework whose max capacity is nearest.
+    best = min(blocks, key=lambda b: abs(int(b[1]) - n))
+    return best[2].strip()
+
+
 def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> str:
     """Fill a slide template with actual slide data. Pure code, no LLM.
 
@@ -6269,6 +6391,48 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
     html = html.replace("{{COPYRIGHT}}", "© 2026 All rights reserved.")
     html = html.replace("{{PAGE_NUM}}", str(seq))
     html = html.replace("{{TOTAL_PAGES}}", str(total_pages))
+
+    # ── Key-point field extraction (for principle/bento multi-module layouts) ──
+    # Each key_point may be "标题：正确做法；反例" — split into structured parts so
+    # a template can render an asymmetric composition (spine + tiles) rather than
+    # a flat list. Purely additive: {{text}} still behaves exactly as before.
+    def _kp_str(kp):
+        if isinstance(kp, dict):
+            return (kp.get("text", "") or kp.get("heading", "") or str(kp)).strip()
+        return str(kp).strip()
+
+    def _kp_fields(kp_raw, i):
+        s = _kp_str(kp_raw)
+        if "：" in s:
+            title, _, rest = s.partition("：")
+            title = title.strip()
+        else:
+            title, rest = "", s
+        parts = re.split(r"[；;]", rest, maxsplit=1)
+        correct = parts[0].strip()
+        wrong = parts[1].strip() if len(parts) > 1 else ""
+        # bullets: split the body into clean clauses for step/technique pages.
+        bullets = [b.strip() for b in re.split(r"[；;→，,]", rest) if b.strip()]
+        # cells: table columns — split the WHOLE string on table delimiters only
+        # (→ ／ / ； ；), deliberately NOT on comma/、 so in-cell commas survive.
+        cells = [c.strip() for c in re.split(r"[→／/；;]", s) if c.strip()]
+        char = title[0] if title else str(i + 1)
+        # label: a always-non-empty short name for spines/rails — real title if the
+        # kp had a "：", else the first clause (so the rail is never blank).
+        label = title if title else (bullets[0] if bullets else f"要点{i + 1}")
+        return {"text": s, "title": title, "char": char, "label": label,
+                "correct": correct, "wrong": wrong, "bullets": bullets, "cells": cells}
+
+    # ── Theme tags (spine): THEME_CHAR = heading's first char; THEME_SUB =
+    # heading text after "·" (else heading); THEME_NOTE = kp chars joined by "·". ──
+    _heading_stripped = (heading or "").strip()
+    theme_char = _heading_stripped[0] if _heading_stripped else ""
+    theme_sub = _heading_stripped.split("·")[-1].strip() if "·" in _heading_stripped else _heading_stripped
+    theme_note = " · ".join(_kp_fields(kp, i)["char"] for i, kp in enumerate(key_points)) if key_points else ""
+    html = html.replace("{{THEME_CHAR}}", esc(theme_char))
+    html = html.replace("{{THEME_SUB}}", esc(theme_sub))
+    html = html.replace("{{THEME_NOTE}}", esc(theme_note))
+    html = html.replace("{{KP_COUNT}}", str(len(key_points)))
 
     # ── Image opacity: from SKILL images[0].opacity (background role), default 0.3 ──
     # If no images defined, remove the image div entirely (avoid broken <img src="">).
@@ -6334,20 +6498,132 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
         html = _resolve_conditional(html, cond_tag, val)
 
     # ── Loop blocks: {{#KEY_POINTS}}...{{/KEY_POINTS}} ──
-    kp_pattern = re.compile(
-        r'\{\{#KEY_POINTS\}\}(.*?)\{\{/KEY_POINTS\}\}', re.DOTALL
-    )
-    kp_match = kp_pattern.search(html)
-    if kp_match:
-        kp_template = kp_match.group(1)
-        if key_points:
-            kp_parts = []
-            for kp in key_points:
-                kp_text = (kp.get("text", "") or kp.get("heading", "") or str(kp)) if isinstance(kp, dict) else str(kp)
-                kp_parts.append(kp_template.replace("{{text}}", esc(kp_text)))
-            html = html[:kp_match.start()] + "\n".join(kp_parts) + html[kp_match.end():]
-        else:
-            html = html[:kp_match.start()] + html[kp_match.end():]
+    # Per-iteration this exposes (all additive; {{text}} unchanged):
+    #   {{text}}      full key_point string (escaped)
+    #   {{kp_index}}  01, 02, ...        {{kp_title}}  before "："
+    #   {{kp_char}}   theme char (title[0])
+    #   {{kp_correct}} after "：" before first "；"
+    #   {{kp_wrong}}  after first "；" (may be empty)
+    #   {{#KP_WRONG}}...{{/KP_WRONG}} kept only when wrong is non-empty
+    #   var(--chart_color) → var(--chart-{i%5}) (per-index cycling color)
+    def _render_kp_block(kp_template: str) -> str:
+        parts_out = []
+        for i, kp in enumerate(key_points):
+            f = _kp_fields(kp, i)
+            block = kp_template
+            # nested {{#BULLETS}}...{{/BULLETS}} — repeat inner tmpl per clause,
+            # exposing {{bullet}}. Resolve BEFORE outer value substitution so the
+            # inner tmpl's own {{bullet}} isn't clobbered.
+            b_pat = re.compile(r'\{\{#BULLETS\}\}(.*?)\{\{/BULLETS\}\}', re.DOTALL)
+            def _bul(m, _f=f):
+                inner = m.group(1)
+                return "\n".join(inner.replace("{{bullet}}", esc(b)) for b in _f["bullets"])
+            block = b_pat.sub(_bul, block)
+            # nested {{#CELLS}}...{{/CELLS}} — table row cells, exposes {{cell}}
+            # and {{cell_index}} (0-based, for per-column color cycling).
+            c_pat = re.compile(r'\{\{#CELLS\}\}(.*?)\{\{/CELLS\}\}', re.DOTALL)
+            def _cel(m, _f=f):
+                inner = m.group(1)
+                out = []
+                for ci, c in enumerate(_f["cells"]):
+                    piece = inner.replace("{{cell}}", esc(c))
+                    piece = piece.replace("{{cell_index}}", str(ci))
+                    piece = piece.replace("var(--cell_color)", f"var(--chart-{ci % 5})")
+                    out.append(piece)
+                return "\n".join(out)
+            block = c_pat.sub(_cel, block)
+            # scoped conditional first (before value substitution)
+            kw_pat = re.compile(r'\{\{#KP_WRONG\}\}(.*?)\{\{/KP_WRONG\}\}', re.DOTALL)
+            block = kw_pat.sub(r'\1', block) if f["wrong"] else kw_pat.sub('', block)
+            kt_pat = re.compile(r'\{\{#KP_TITLE\}\}(.*?)\{\{/KP_TITLE\}\}', re.DOTALL)
+            block = kt_pat.sub(r'\1', block) if f["title"] else kt_pat.sub('', block)
+            # first-vs-rest scoped conditionals (for table header row vs data rows)
+            kf_pat = re.compile(r'\{\{#KP_FIRST\}\}(.*?)\{\{/KP_FIRST\}\}', re.DOTALL)
+            block = kf_pat.sub(r'\1', block) if i == 0 else kf_pat.sub('', block)
+            kr_pat = re.compile(r'\{\{#KP_REST\}\}(.*?)\{\{/KP_REST\}\}', re.DOTALL)
+            block = kr_pat.sub(r'\1', block) if i > 0 else kr_pat.sub('', block)
+            block = block.replace("{{kp_index}}", f"{i + 1:02d}")
+            block = block.replace("{{kp_title}}", esc(f["title"]))
+            block = block.replace("{{kp_label}}", esc(f["label"]))
+            block = block.replace("{{kp_char}}", esc(f["char"]))
+            block = block.replace("{{kp_correct}}", esc(f["correct"]))
+            block = block.replace("{{kp_wrong}}", esc(f["wrong"]))
+            block = block.replace("{{text}}", esc(f["text"]))
+            block = block.replace("var(--chart_color)", f"var(--chart-{i % 5})")
+            parts_out.append(block)
+        return "\n".join(parts_out)
+
+    for _loop_tag in ("KEY_POINTS", "KP_INDEX"):
+        loop_pat = re.compile(
+            r'\{\{#' + _loop_tag + r'\}\}(.*?)\{\{/' + _loop_tag + r'\}\}', re.DOTALL
+        )
+        m = loop_pat.search(html)
+        if m:
+            if key_points:
+                html = html[:m.start()] + _render_kp_block(m.group(1)) + html[m.end():]
+            else:
+                html = html[:m.start()] + html[m.end():]
+
+    # ── Indexed placeholders: {{kpI_index/title/caption/body}} ──
+    # For frameworks extracted from real PPTs whose repeat-columns each have a
+    # DIFFERENT left/width/color (e.g. principle page7's 4 vertical panels), a
+    # single {{#KEY_POINTS}} loop can't express per-column geometry. Instead the
+    # template names each column by index; here we fill kp0..kpN from key_points
+    # (reusing _kp_fields), then blank any indexed tag past the real count so no
+    # {{}} residual survives. Purely additive — {{#KEY_POINTS}} above is untouched.
+    if "{{kp0_index}}" in html or "{{kp0_body}}" in html:
+        for i, kp in enumerate(key_points):
+            f = _kp_fields(kp, i)
+            html = html.replace("{{kp%d_index}}" % i, f"{i + 1:02d}")
+            html = html.replace("{{kp%d_title}}" % i, esc(f["label"]))
+            html = html.replace("{{kp%d_caption}}" % i, esc(f["wrong"]))
+            html = html.replace("{{kp%d_body}}" % i, esc(f["correct"] or f["text"]))
+        # Blank unused indexed tags (columns beyond the real key_point count).
+        html = re.sub(r"\{\{kp\d+_(?:index|title|caption|body)\}\}", "", html)
+
+        # ── Comparison band (slide-level summary, NOT per-column) ──
+        # The band is a short 正/反 recap strip. Its two boxes are fed by
+        # aggregating each key_point's correct/wrong halves into concise clauses
+        # (one line per point) so the band stays readable and never needs the
+        # 9px shrink floor. If the slide's `body`/`lead` carries an explicit
+        # "A vs B" contrast, that wins for the lead label.
+        _kf = [_kp_fields(kp, i) for i, kp in enumerate(key_points)]
+        _band_lead = (lead or "").strip()
+        if not _band_lead:
+            _vs = re.split(r"\s*(?:vs\.?|VS|｜|\|)\s*", (body or "").strip(), maxsplit=1)
+            _band_lead = "正确路径 vs 常见误区" if len(_vs) < 2 else f"{_vs[0][:12]} vs {_vs[1][:12]}"
+        _band_pos = "\n".join(
+            f"✓ {f['label']}：{f['correct']}" if f["correct"] else f"✓ {f['label']}"
+            for f in _kf)
+        _band_neg = "\n".join(f"✕ {f['wrong']}" for f in _kf if f["wrong"])
+        html = html.replace("{{BAND_LEAD}}", esc(_band_lead))
+        html = html.replace("{{BAND_POS}}", esc(_band_pos))
+        html = html.replace("{{BAND_NEG}}", esc(_band_neg))
+        html = html.replace("{{FOOTNOTE}}", esc(f"共 {len(key_points)} 项 · 正反对照"))
+
+    # ── Transpose loop: {{#COLUMNS}}...{{/COLUMNS}} ──
+    # For troubleshoot-style pages where key_points are PARALLEL ARRAYS:
+    #   kp[0] = 问题 row, kp[1] = 原因 row, kp[2] = 解决 row (cell-split each).
+    # Transpose to per-column items so each card shows one aligned triple.
+    # Exposes {{col_a}}(row0 cell), {{col_b}}(row1 cell), {{col_c}}(row2 cell...),
+    # {{col_index}} (01..), var(--col_color) per column.
+    col_pat = re.compile(r'\{\{#COLUMNS\}\}(.*?)\{\{/COLUMNS\}\}', re.DOTALL)
+    col_m = col_pat.search(html)
+    if col_m:
+        rows = [_kp_fields(kp, i)["cells"] for i, kp in enumerate(key_points)]
+        ncols = min((len(r) for r in rows), default=0)  # align to shortest row
+        inner = col_m.group(1)
+        cols_out = []
+        letters = ["a", "b", "c", "d", "e", "f"]
+        for ci in range(ncols):
+            piece = inner
+            for ri, row in enumerate(rows):
+                if ri < len(letters):
+                    piece = piece.replace("{{col_%s}}" % letters[ri], esc(row[ci]))
+            piece = piece.replace("{{col_index}}", f"{ci + 1:02d}")
+            piece = piece.replace("var(--col_color)", f"var(--chart-{ci % 5})")
+            cols_out.append(piece)
+        html = html[:col_m.start()] + "\n".join(cols_out) + html[col_m.end():]
 
     # ── Loop blocks: {{#CHAPTERS}}...{{/CHAPTERS}} (TOC) ──
     # 章节标题来源优先级：编辑器的 chapters[].label（与 col3 的 _build_toc_rows 同源），
