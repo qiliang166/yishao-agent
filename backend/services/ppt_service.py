@@ -4092,25 +4092,6 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     _done_lock = _threading.Lock()
     _done_count = [0]
 
-    # ── Frameset (real-PPT-extracted frameworks) setup ──
-    # For landscape decks (col4/col5) load the extracted frameset once. Every
-    # slide's layout is then chosen by the LLM from these REAL frameworks (pick
-    # frame_id + fill slots); geometry/coordinates/colors stay locked in the
-    # JSON. Built once here (not per-slide) so the catalog prompt is reused.
-    _frameset = None
-    _frameset_cat_txt = ""
-    if not is_a4 and active_scheme:
-        try:
-            from services import frameset_service as _fset_mod
-            _frameset = _fset_mod.load_frameset(style_id)
-            if _frameset:
-                _frameset_cat_txt = _fset_mod.catalog_prompt(
-                    _fset_mod.frame_catalog(_frameset))
-        except Exception as _e:
-            _logger.warning(f"frameset load failed ({style_id}), "
-                            f"falling back to per-slide LLM HTML: {_e}")
-            _frameset = None
-
     def _gen_one(slide, idx):
         seq = slide.get("seq", idx + 1)
         stype = slide.get("type", "content")
@@ -4126,85 +4107,6 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         notes = slide.get("notes", "")
         description = slide.get("description", "")
         title_format = slide.get("title_format", "")
-
-        # ── Frameset path: real-PPT frameworks (LLM selects + fills) ──
-        # PRIMARY layout path for landscape decks. The LLM picks one frame_id
-        # from the extracted frameset and writes text per slot; geometry and
-        # colors are 100% locked in the JSON (no hand-written frameworks, no
-        # LLM-authored HTML). Rendered by frameset_service from real L/T/W/H.
-        # On any failure it falls through to the legacy branches below.
-        if _frameset and not is_a4 and active_scheme:
-            try:
-                from services import frameset_service as _fset_mod
-                pick = _frameset_pick_and_fill(
-                    provider_id, model, llm_generate, slide,
-                    _frameset, _frameset_cat_txt, temperature=0.3)
-                if pick and pick.get("frame_id"):
-                    fid = pick["frame_id"]
-                    slots = pick.get("slots", {}) or {}
-                    # 渲染源 = 可编辑的 VI 文件（resources/vi/{style}/framesets/{fid}.md）。
-                    # 用户在 VI 编辑器改色/字号，合成即跟着变。VI 缺失/无模板时回退 JSON。
-                    html_vars = _fset_mod.render_from_vi(style_id, fid, slots, seq=seq, total=total)
-                    if not html_vars:
-                        html_vars = _fset_mod.render_with_content(_frameset, fid, slots)
-                    if html_vars:
-                        html = _resolve_color_vars(html_vars, active_scheme, css_vars=True)
-                        _logger.info(f"Slide {seq}: frameset {fid} "
-                                     f"({len(slots)} slots), {len(html)} chars")
-                        if project_id:
-                            with _done_lock:
-                                _done_count[0] += 1
-                                _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"已完成 {_done_count[0]}/{total} 页", "slides_done": _done_count[0], "slides_total": total}
-                        return {**slide, "html": html, "html_vars": html_vars,
-                                "_code_filled": True, "frame_id": fid}
-                    _logger.warning(f"Slide {seq}: frameset render empty for {fid}, falling through")
-                else:
-                    _logger.warning(f"Slide {seq}: frameset pick failed, falling through to legacy")
-            except Exception as _e:
-                _logger.warning(f"Slide {seq}: frameset path error ({_e}), falling through")
-
-        # ── Structural page template: VI-first, code-fill fallback ──
-        if stype in STRUCTURAL_PAGE_TYPES and not is_a4 and active_scheme:
-            # VI-first, code-fill: extract HTML template from VI and do deterministic
-            # string replacement. LLM is NOT involved — placeholder filling is mechanical.
-            vi_cover = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id, project_id=project_id)
-            template_html = ""
-            if vi_cover and "## HTML 模板" in vi_cover:
-                tmpl_match = re.search(r'```html\s*\n(.*?)\n```', vi_cover, re.DOTALL)
-                if tmpl_match:
-                    template_html = tmpl_match.group(1).strip()
-            if not template_html:
-                # Fallback: old-style HTML template file (backward compat)
-                family = _detect_template_family(style_id, active_scheme)
-                template_html = _load_slide_template(family, stype) or ""
-            if template_html:
-                html = _fill_slide_template(template_html, slide, total)
-                html_vars = html
-                html = _resolve_color_vars(html, active_scheme, css_vars=True)
-                _logger.info(f"Slide {seq}: code-filled ({style_id}/{stype}), {len(html)} chars")
-                return {**slide, "html": html, "html_vars": html_vars}
-            # No template available → fall through to LLM generation below
-
-        # ── Content-page VI-template code-fill (col4 landscape) ──
-        # Second code-fill path: content data pages (e.g. principle) that have a
-        # `## HTML 模板` section in their VI file render deterministically via the
-        # SAME mechanism as structural pages (extract template → _fill_slide_template
-        # → _resolve_color_vars). No LLM → the bento composition never drops data or
-        # comes out monotonous. Types without a `## HTML 模板` fall through to LLM.
-        if column_id == "col4" and not is_a4 and active_scheme:
-            vi_content = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id, project_id=project_id)
-            if vi_content and "## HTML 模板" in vi_content:
-                # A VI section may hold MULTIPLE ```html``` frameworks (each with a
-                # `<!-- cap:min-max -->` capacity annotation). Select the framework
-                # whose container capacity matches the real key_points count, so the
-                # LLM's job is only to fill content — the geometry/color is locked.
-                template_html = _select_framework_template(vi_content, len(key_points))
-                if template_html:
-                    html = _fill_slide_template(template_html, slide, total)
-                    html_vars = html
-                    html = _resolve_color_vars(html, active_scheme, css_vars=True)
-                    _logger.info(f"Slide {seq}: content code-filled ({style_id}/{stype}, {len(key_points)} kp), {len(html)} chars")
-                    return {**slide, "html": html, "html_vars": html_vars, "_code_filled": True}
 
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
