@@ -1,3 +1,10 @@
+[2026-07-10 07:10:00] 内容页 LLM 填充管线残留占位符兜底 + summary 序号式 KEY_POINT 修复:
+背景：诊断"大纲内容↔VI手册统一不了"根因。查明系统有两条填充管线——结构页(cover/section/summary/toc/closing)走代码机械填充(_fill_slide_template，3802 return)；内容页(content/data)走 LLM 模板填充(_gen_one，4306 return)。内容页契约无单一真相源(占位符名 HEADING vs 代码只填 TITLE、给LLM的占位符映射只4个、模板自带契约表与 content_parts 双份无校验)，且全链无残留 {{}} 兜底清理 → LLM 漏填即字面泄漏。
+改动1（LLM路径兜底，ppt_service.py）：新增 _fill_residual_placeholders(html,seq,heading,total)，在 _auto_fix_font_size 后、html_vars 快照前调用(4189)。机械填 {{HEADING}}/{{PAGE_NUM}}/{{TOTAL_PAGES}}；正则 strip 剩余 UPPERCASE {{TAG}}；保留清单 _RESIDUAL_KEEP_TAGS(IMAGE_URL/IMAGE_OPACITY/TOC_ROWS/BRAND*)+ 小写颜色变量({{primary}}) + 图片指令({{image:...}}，含冒号不匹配)。结构页在 3802 已 return，不经此net。
+改动2（结构页真bug，端到端发现）：summary.md 用序号式 {{KEY_POINT_1}}/{{KEY_POINT_2}}，但 _fill_slide_template 只处理循环式 {{#KEY_POINTS}} → 序号式原样漏进成品。新增序号式填充(6196)：按 key_points 顺序填 KEY_POINT_N，超出数据的槽位清空，防泄漏。
+验证：(1)单测 12项全过(机械填/保留颜色变量/保留系统标签/保留图片指令/删合成占位符 CARD_N/METRIC_N)。(2)实生成 col4 全17页(Stage2 484s)，成品 deck 扫描：LLM页 0 残留、_fill_residual 触发0次(LLM都填对=健康)。(3)首轮成品暴露 {{KEY_POINT_1/2}} 泄漏→定位 summary.md→修复后用真实 seq16 slide(5个key_points)复测 residual=NONE、KEY_POINT leak=False。(4)Rule6 同类检查：cover/section/toc/closing 无序号式占位符；col3/cover.md 的 {{KP_N}} 由 _build_cover_info_table 经 {{INFO_TABLE}} 上游填充，最近 col3 成品 0 残留，未受影响。
+决策依据：未做内容页大重构(无故障证据=不提前优化)；未改 LLM synthesis(CARD_N/METRIC_N 是Frameset缩扩写，仍归LLM)；只在系统边界(LLM产出)加下行兜底。ppt_service.py 7346行拆分单独立项(本轮不做)。
+
 [2026-07-10 05:40:00] col4/col5 封面副标题稳定化 + 新增概要（四层定义对齐）:
 需求：用户反映封面副标题不稳定（有时整句、有时空），且缺一句话概要。用户诊断根因为「定义层缺失」——字数/形态未定义。选「从定义层理清」，范围「项目+种子都改」，BRAND 暂不动。
 病根：四层定义互相矛盾。大纲提示词要求 subtitle+description，但 SKILL 封面 example 未含这两字段，且提示词硬规「禁止自行添加模板中没有的字段」→ LLM 输出不稳定；填充代码 {{SUBTITLE}} 回落到 body 首句 → 长正文塞进副标题。

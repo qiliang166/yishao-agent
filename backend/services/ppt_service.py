@@ -4178,6 +4178,15 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     html = _strip_local_var_overrides(html, seq)
                     # Post-process: enforce VI typography minimums (15px → 16px)
                     html = _auto_fix_font_size(html, seq, is_a4=is_a4)
+                    # Post-process: fill/strip residual content placeholders the LLM
+                    # left behind. Templates use mechanical tags (e.g. {{HEADING}})
+                    # that the code contract never fills on the LLM path — fill the
+                    # ones we have deterministic values for, then drop any leftover
+                    # UPPERCASE placeholder so no literal {{TAG}} leaks into output.
+                    # Preserve: lowercase color vars ({{primary}}), system tags
+                    # resolved later ({{IMAGE_URL}}/{{IMAGE_OPACITY}}/{{BRAND*}}/
+                    # {{TOC_ROWS}}) and image directives ({{image:...}}).
+                    html = _fill_residual_placeholders(html, seq, heading, total)
                     # Save unresolved HTML for later recolor (before hex resolution)
                     html_vars = html
                     # Resolve {{primary}} etc. → actual hex from active color scheme
@@ -5125,6 +5134,52 @@ def _lookup_knowledge(topic: str) -> str | None:
                     with open(path, encoding="utf-8") as fh:
                         return fh.read()
     return None
+
+
+# Placeholders resolved by later pipeline stages — MUST survive residual cleanup.
+# {{IMAGE_URL}}/{{IMAGE_OPACITY}} → _generate_and_replace_images (post _gen_one);
+# {{BRAND*}} → _fix_brand_placeholders / deck assembly; {{TOC_ROWS}} → _build_toc_rows.
+_RESIDUAL_KEEP_TAGS = frozenset({
+    "IMAGE_URL", "IMAGE_OPACITY", "TOC_ROWS",
+    "BRAND", "BRAND_COPYRIGHT", "BRAND_SIGNATURE", "BRAND_NAME",
+})
+
+
+def _fill_residual_placeholders(html: str, seq: int, heading: str, total: int) -> str:
+    """Fill/strip residual template placeholders on the LLM generation path.
+
+    The LLM template path (content/data pages) has no code-fill contract, so
+    mechanical tags like {{HEADING}} the model forgets to replace would leak
+    into the deck as literal text. Fill the ones with deterministic values,
+    then drop any leftover UPPERCASE placeholder.
+
+    Preserved (untouched):
+      - lowercase color vars, e.g. {{primary}}, {{text_rgb}} (resolved by
+        _resolve_color_vars downstream)
+      - image directives {{image:...}} (contain ':' — resolved by image gen)
+      - system tags in _RESIDUAL_KEEP_TAGS (resolved by later stages)
+    """
+    import re as _re
+    esc = _html_mod.escape
+    # Mechanical fills we have exact values for.
+    html = html.replace("{{HEADING}}", esc(heading or ""))
+    html = html.replace("{{PAGE_NUM}}", str(seq))
+    html = html.replace("{{TOTAL_PAGES}}", str(total))
+
+    # Strip any leftover UPPERCASE placeholder ({{TAG}} or {{TAG_1_X}}), but keep
+    # system tags and skip image directives / lowercase color vars.
+    def _drop(m):
+        tag = m.group(1)
+        if tag in _RESIDUAL_KEEP_TAGS:
+            return m.group(0)
+        return ""
+
+    stripped = _re.sub(r'\{\{([A-Z][A-Z0-9_]*)\}\}', _drop, html)
+    dropped = len(_re.findall(r'\{\{[A-Z][A-Z0-9_]*\}\}', html)) - \
+        len(_re.findall(r'\{\{[A-Z][A-Z0-9_]*\}\}', stripped))
+    if dropped > 0:
+        _logger.warning(f"Slide {seq}: stripped {dropped} unfilled placeholder(s) from LLM output")
+    return stripped
 
 
 def _fix_llm_html_errors(html: str, is_a4: bool = False) -> str:
@@ -6137,6 +6192,19 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
             html = html[:kp_match.start()] + "\n".join(kp_parts) + html[kp_match.end():]
         else:
             html = html[:kp_match.start()] + html[kp_match.end():]
+
+    # ── Indexed key points: {{KEY_POINT_1}}, {{KEY_POINT_2}}, ... ──
+    # summary.md uses 1-based indexed slots instead of the loop form. Fill from
+    # key_points in order; strip any slot beyond the available data so no literal
+    # {{KEY_POINT_N}} leaks (structural pages return before the LLM-path net).
+    kp_idx_tags = re.findall(r'\{\{KEY_POINT_(\d+)\}\}', html)
+    if kp_idx_tags:
+        for n in sorted(set(int(i) for i in kp_idx_tags)):
+            val = ""
+            if n - 1 < len(key_points):
+                kp = key_points[n - 1]
+                val = (kp.get("text", "") or kp.get("heading", "") or str(kp)) if isinstance(kp, dict) else str(kp)
+            html = html.replace(f"{{{{KEY_POINT_{n}}}}}", esc(val))
 
     # ── Loop blocks: {{#CHAPTERS}}...{{/CHAPTERS}} (TOC) ──
     ch_pattern = re.compile(
