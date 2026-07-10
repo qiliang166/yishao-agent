@@ -463,6 +463,8 @@ horizontal_split      → [hero, card_0, card_1, card_2?]
 | primary | style YAML primary 色 | 标题/重点 | 标题文字、hero 卡背景 |
 | amber/orange | chart_colors amber | 中性/注意/待定 | 中间指标、进度提示 |
 
+> **对比度铁律（元素级）**：任何元素的 `background` 为深色（primary/secondary/深 chart 色/hero 渐变，亮度 ≤ 128）时，其内部文字必须用白色 `#ffffff`，覆盖 text 的全页正文默认。这是 `text` "全页正文" 规则的唯一例外，且不局限于 hero 卡/表头等列举场景——任意深底元素（含即兴创建的深色渐变卡）都适用。
+
 ---
 
 ## 十五、配图规范

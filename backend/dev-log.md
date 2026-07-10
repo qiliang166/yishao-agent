@@ -1,3 +1,22 @@
+[2026-07-10 11:30:00] 元素级对比度守卫 + 客户端文字自适应两类整类缺陷结构化修复(根因,非补丁):
+背景:用户从 col4 成品实测报两类"看得见的坏"——(A)第8页深蓝渐变 hero 卡 + 第10页 primary 深蓝表头,内部近黑字看不见;(B)第10页文字超出容器、第15页几乎撑满拥挤、第16页文字显示不全。逐层排查确认二者都不是个例,是整类结构缺陷,分两条根因线。
+
+===== 缺陷类A:分配类色彩规定全无"元素级可读性兜底" =====
+根因(查实非推测):系统所有颜色规定——colors.md 色彩角色分工/vi.md 页面类型覆盖表/design-system「十四、色彩语义」——全是"分配类"(什么色用在哪、什么语义配什么色),无一处做"分配后可读性兜底"。design-system「十四」明写 primary→使用场景:标题文字+hero 卡背景,即准许 primary 既当文字又当深背景却没配套"primary 当背景时文字转白"→ LLM 照章:primary 做 hero 卡背景(合规)+ text 做卡内正文(合规)= 深蓝底近黑字,两规则各自没违反合起来不可读。可读性兜底只在"整页级"做了:_auto_fix_white_on_light(2107)/_auto_fix_dark_on_dark(2188)都用整页一个 bg_luminance 判断;实测 tokens.yaml content/data 页整页背景={{background}}(白),整页级判定"这页白底"完全正确于是 dark_on_dark 在 2215 直接 return 跳过。但第8/10页是白底页里 LLM 即兴放的 background:var(--primary) 深蓝局部块,tokens.yaml 不可能记录它(非页面类型固定背景)→ 局部深底黑字落进整页级盲区。
+改动A(代码,ppt_service.py):新增 _enforce_element_contrast(html,scheme,slide_seq,style_id,page_type)(2280),接在 _auto_fix_dark_on_dark 之后、_strip_local_var_overrides 之前(4486)。时机关键——必须在 _resolve_color_vars({{primary}}→hex)之前,那时元素样式仍是 var()/{{}}/#hex 混合语义形态,能识别"背景是哪个角色色"。算法(元素级/可计算/无页面清单):bs4 遍历每个可见文字节点(跳过 svg/script/style)→ 沿 .parents 求有效背景(第一个非透明 inline bg,渐变取最深 stop,alpha<0.6 视透明,回落 scheme.background)→ 求文字色(继承链,回落 {{text}})→ _wcag_contrast_ratio>=4.5 跳过;<4.5 选修正:深底(亮度≤128)写 #ffffff(recolor 安全,该元素底是 primary/secondary 任何方案仍深、白字恒可读)、浅底写 {{text}}(随方案)。只改 color 绝不动 background/fill;图片/SVG 叠字祖先算不出底→保守跳过;异常→原样返回 html(绝不破坏产物)。日志 [CONTRAST-FIX] Slide N: fixed K low-contrast text element(s)。
+改动A2(约定层根因,6文件,避免自检清单把代码改对的白字要求 LLM 改回 text):(1)prompts/core/always/colors.md:31"正文 {{text}}"拆两行,加通用例外"所在元素/祖先 background 深色亮度≤128→#ffffff",并加「对比度铁律(元素级——唯一的 text 默认例外)」节;(2)checklist.md:17 自检项补"深色背景(hero卡/表头/深色块/深色渐变卡)上文字为白色 #ffffff";(3)scenarios/{col4,col5,_default}/design-system.md「十四」表后 +(4)vi/business/colors.md 角色分工后,各加同一条元素级对比度铁律(含"任意即兴深色渐变卡都适用"+"#ffffff 是唯一合法硬编码 hex")。符合 LLM 创造→代码约束:约定给 LLM 减少出错,代码 _enforce_element_contrast 做确定性兜底保无遗漏。
+
+===== 缺陷类B:全系统无"填充后文字溢出容器"兜底 =====
+根因:模板固定 height + overflow:hidden,LLM 缩扩写填字,字多即被裁。此前尝试静态字数/行高估算(_tmp_height_calib)误报第3/4/7/9/14页(用户从未报),证实静态估算无法预测浏览器 CJK 换行,不可靠,放弃。改用真实浏览器测量(playwright 已装,app.py:5069 PNG 导出在用)。确立正确的"被裁"判据:文字叶子真被裁 = (a)自身 overflow:hidden 且 scrollHeight-clientHeight>1(自裁),或(b)渲染 rect 被 overflow:hidden 祖先切掉(rect.bottom-ancestorRect.bottom>1)。用此判据实测恰好第10/15/16页命中——与用户报告完全吻合(此前"13-20页坏"是把设计上故意出血的装饰 SVG 误计)。
+改动B(代码,ppt_service.py):新增 _TEXT_FIT_SCRIPT 模块常量(6824,纯 vanilla JS 单花括号无 {{}}、免被 _resolve_color_vars 正则误伤),烘焙进 _assemble_html_deck 返回 f-string 的 {wrapped} 与 </body> 之间(7092)。浏览器加载即 runFit():leaves() 收含文字叶子→clipBoxes() 找裁切文字的 overflow:hidden 盒(自裁叶子同时加叶子+最近 flex/hidden 祖先,治第16页 flex 挤压型)→stillClips() 检自身 scrollHeight+后代自裁+rect 被切→shrink() 按 SAFE=0.985 递减 font-size(跳装饰 fs≥48&≤2字)/line-height/margin/padding/gap 至下限 MINF=11px,迭代至不裁或全触底。DOMContentLoaded + document.fonts.ready 双触发。架构优势:客户端运行(同覆盖预览 iframe 与 playwright 截图导出 PNG/PPTX 路径)、颜色无关(index.html/index_vars.html 同脚本)、抗 recolor+手动编辑、零生成延迟、单插入点(_assemble_html_deck)三栏(col3 A4/col4/col5 横版)全覆盖。
+
+验证(端到端):
+(1)ast.parse 通过;后端重启 HTTP 200(/docs)、backend_startup.log 无错。
+(2)对比度单测6例全过;真实第8页渐变 hero 卡黑字→注入3处 #ffffff、同页浅底 {{text}} 正确不动。
+(3)溢出:真实20页 col4 deck 烘焙脚本自动运行、被裁文字→0;回归 col3 no-op(0被裁)、col5 第9页48→0;无需手动调用。
+(4)时机零破坏:_enforce_element_contrast 写入的 #ffffff/{{text}} 被下游三函数确认不破坏(_strip_local_var_overrides 只删 --var:赋值、_fill_residual_placeholders 只清大写 {{TAG}}、_resolve_color_vars 只 {{text}}→var(--text) 不碰 #ffffff)。
+决策依据(符合 characterize-defect-class/structural-fix/llm-code-separation):两类都普查整类边界而非逐页补丁;不动整页级 _auto_fix_*(管整页深底 cover/section/quote,工作正常,互补不冲突);不动结构页代码填充路径(3880-3898 深底白字模板已正确、绕过后处理);不动色彩语义/角色分配逻辑(LLM 仍按语义配色);溢出弃静态估算改真实浏览器测量(无捏造、判据与用户报告吻合)。
+
 [2026-07-10 10:05:00] toc/closing 缺 HTML 模板整类缺陷结构化修复(根因,非补丁):
 背景:用户从头指出 col3 大纲爆炸/封面缺字段/{菜名}泄露/残留占位符不是孤立 bug,是同一根因的多个症状——我此前逐个打补丁(dedup/_resolve_title/_fill_residual)每个都"自审通过"却给虚假完成感,因为地基坏了补丁也漏。普查确认缺陷类边界:business ~40 个页面类型只有 5 个(cover/content/data/section/summary)有「## HTML 模板」头走代码确定性填充(锁版式/稳定/前端可预览);toc 和 closing 虽被声明进 STRUCTURAL_PAGE_TYPES(6097),却缺 HTML 模板块 → 掉进 if template_html 的 else "fall through to LLM"(3885)→ LLM 自由发挥 → 时而爆炸/版式浮动/前端预览读不到。这是「声明了却没实现」的半成品,违反 Rule6。缺陷类完整成员=3模板+2代码,无遗漏。
 改动A(3 模板补「## HTML 模板」块,参照已验证实现不新发明):

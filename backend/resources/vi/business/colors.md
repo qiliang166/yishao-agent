@@ -47,6 +47,8 @@
 | text `{{text}}` | 正文 | 全页 |
 | card_bg `{{card_bg}}` | 卡片背景 | 卡片区域 |
 
+> **对比度铁律（元素级）**：任何元素的 `background` 为深色（primary/secondary/深 chart 色/hero 渐变，亮度 ≤ 128）时，其内部文字必须用白色 `#ffffff`，覆盖 text 的全页正文默认。这是 `text` "全页正文" 规则的唯一例外——不局限于 hero 卡/表头，任意深底元素都适用。`#ffffff` 是唯一合法硬编码 hex。
+
 ## 禁止事项
 
 - 禁止 accent 色用于卡片色条（accent 是页面级装饰色）

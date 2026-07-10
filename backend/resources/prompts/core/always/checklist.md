@@ -14,7 +14,8 @@
 [ ] 标题下方有 accent 短线
 [ ] 右下角有页码
 [ ] 标题使用 primary 色
-[ ] 正文使用 text 色
+[ ] 正文使用 text 色（**例外：深色底元素/卡片内的文字用 #ffffff**）
+[ ] 深色背景（hero 卡/表头/深色块/深色渐变卡）上的文字为白色 #ffffff
 [ ] 卡片背景使用 card_bg 色
 [ ] 页面背景使用 background 色
 [ ] 字体来自 typography token

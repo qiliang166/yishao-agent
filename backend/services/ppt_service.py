@@ -2277,6 +2277,213 @@ def _auto_fix_dark_on_dark(html: str, scheme: dict, slide_seq: int,
     return html
 
 
+def _enforce_element_contrast(html: str, scheme: dict, slide_seq: int,
+                             style_id: str = None, page_type: str = None) -> str:
+    """Element-level WCAG contrast guard — closes the page-level blind spot.
+
+    The page-level fixes (_auto_fix_white_on_light / _auto_fix_dark_on_dark)
+    judge readability by ONE whole-page background luminance (from tokens.yaml).
+    They correctly handle whole-page dark pages (cover/section/summary), but are
+    BLIND to LOCAL dark elements the LLM improvises inside a light content page —
+    e.g. a `background:var(--primary)` hero card or a primary-colored table
+    header carrying `color:{{text}}` (near-black) text. Two individually legal
+    rules (primary may be a card bg; text is the default body color) combine into
+    an illegal result: dark bg + black text = invisible. That case falls into the
+    gap between the two page-level fixes.
+
+    This walks every visible text node, computes the EFFECTIVE background from the
+    nearest styled ancestor, and if text/background WCAG contrast < 4.5 rewrites
+    the text color on the most specific element:
+      - dark bg (luminance <= 128)  → #ffffff  (recolor-safe: primary/secondary
+        stay dark in any scheme, so white is always readable)
+      - light bg                    → {{text}} (follows the scheme on recolor)
+
+    Only the `color` property is ever changed — never background/fill/stroke,
+    matching the conservative policy of the page-level fixes.
+
+    Must run BEFORE _resolve_color_vars (so element styles still carry var()/{{}}
+    semantic forms). Any parse failure returns html unchanged — never corrupts
+    output.
+    """
+    if not scheme or not html:
+        return html
+
+    try:
+        from bs4 import BeautifulSoup
+        import re as _re_ec
+
+        def _scheme_hex(name: str):
+            n = (name or "").strip().lower()
+            for suf in ("-rgb", "_rgb", "-r", "-g", "-b", "_r", "_g", "_b"):
+                if n.endswith(suf):
+                    n = n[:-len(suf)]
+                    break
+            for key in (n, n.replace('-', '_'), n.replace('_', '-')):
+                val = scheme.get(key)
+                if isinstance(val, str) and val.startswith("#"):
+                    return val
+            return None
+
+        _NAMED = {
+            "white": "#ffffff", "black": "#000000", "red": "#ff0000",
+            "blue": "#0000ff", "green": "#008000", "gray": "#808080",
+            "grey": "#808080",
+        }
+
+        def _resolve_one_color(css_value: str):
+            """Return (hex, alpha). hex=None when unresolvable/transparent."""
+            if not css_value:
+                return (None, 1.0)
+            v = css_value.strip()
+            low = v.lower()
+            if low in ("transparent", "none", "inherit", "currentcolor", "unset", "initial"):
+                return (None, 1.0)
+            # gradient → return the darkest color stop (worst case for readability)
+            if "gradient" in low:
+                stops = _re_ec.findall(
+                    r'#[0-9a-fA-F]{6}|#[0-9a-fA-F]{3}|rgba?\([^)]*\)|var\(--[\w-]+\)|\{\{[\w-]+\}\}',
+                    v)
+                darkest, darkest_lum = None, 999.0
+                for st in stops:
+                    hx, a = _resolve_one_color(st)
+                    if hx and a >= 0.6:
+                        lum = _hex_luminance(hx)
+                        if lum is not None and lum < darkest_lum:
+                            darkest_lum, darkest = lum, hx
+                return (darkest, 1.0)
+            # rgb()/rgba() — numeric channels or var(--x-rgb)
+            m = _re_ec.match(r'rgba?\(\s*([^)]*)\)', v)
+            if m:
+                inner = m.group(1)
+                alpha = 1.0
+                am = _re_ec.search(r',\s*([0-9.]+)\s*$', inner)
+                if am:
+                    try:
+                        alpha = float(am.group(1))
+                    except ValueError:
+                        alpha = 1.0
+                vm = _re_ec.search(r'var\(--([\w-]+)\)', inner)
+                if vm:
+                    return (_scheme_hex(vm.group(1)), alpha)
+                nums = _re_ec.findall(r'[\d.]+', inner)
+                if len(nums) >= 3:
+                    try:
+                        r, g, b = int(float(nums[0])), int(float(nums[1])), int(float(nums[2]))
+                        return ("#%02x%02x%02x" % (r, g, b), alpha)
+                    except ValueError:
+                        return (None, 1.0)
+                return (None, alpha)
+            # var(--name)
+            vm = _re_ec.match(r'var\(--([\w-]+)\)', v)
+            if vm:
+                return (_scheme_hex(vm.group(1)), 1.0)
+            # {{name}}
+            pm = _re_ec.match(r'\{\{([\w-]+)\}\}', v)
+            if pm:
+                return (_scheme_hex(pm.group(1)), 1.0)
+            # #hex (6 or 3 digit)
+            hm = _re_ec.match(r'#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b', v)
+            if hm:
+                hx = hm.group(0)
+                if len(hx) == 4:
+                    hx = "#" + "".join(c * 2 for c in hx[1:])
+                return (hx.lower(), 1.0)
+            if low in _NAMED:
+                return (_NAMED[low], 1.0)
+            return (None, 1.0)
+
+        def _effective_bg(node):
+            """Nearest ancestor with an opaque background. Returns hex, '__IMAGE__', or None."""
+            chain = [node] + list(node.parents)
+            for anc in chain:
+                if not hasattr(anc, "get"):
+                    continue
+                st = _parse_style(anc.get("style", ""))
+                bg = st.get("background", "") or st.get("background-color", "")
+                bgi = st.get("background-image", "")
+                if "url(" in (bg + " " + bgi).lower():
+                    return "__IMAGE__"
+                if bg:
+                    hx, a = _resolve_one_color(bg)
+                    if hx and a >= 0.6:
+                        return hx
+            return scheme.get("background")
+
+        def _effective_color(node):
+            """Nearest color declaration up the chain, else default body {{text}}."""
+            chain = [node] + list(node.parents)
+            for anc in chain:
+                if not hasattr(anc, "get"):
+                    continue
+                st = _parse_style(anc.get("style", ""))
+                col = st.get("color", "")
+                if col:
+                    return col
+            return "{{text}}"
+
+        def _set_style_color(style_str: str, new_color: str) -> str:
+            pat = _re_ec.compile(r'(?<![-\w])color\s*:\s*[^;]+')
+            if not style_str:
+                return f"color:{new_color}"
+            if pat.search(style_str):
+                return pat.sub(f'color:{new_color}', style_str, count=1)
+            sep = "" if style_str.rstrip().endswith(";") else ";"
+            return f"{style_str}{sep}color:{new_color}"
+
+        soup = BeautifulSoup(html, "html.parser")
+        _SKIP = {"script", "style", "svg", "defs", "lineargradient",
+                 "radialgradient", "pattern", "stop", "path", "circle",
+                 "rect", "g", "polygon", "polyline", "line", "ellipse", "use"}
+
+        fixed = 0
+        for txt in soup.find_all(string=True):
+            if not txt.strip():
+                continue
+            parent = txt.parent
+            if not parent or not getattr(parent, "name", None):
+                continue
+            # skip svg/script/style subtrees
+            if any((getattr(p, "name", "") or "").lower() in _SKIP
+                   for p in [parent] + list(parent.parents)):
+                continue
+
+            bg_hex = _effective_bg(parent)
+            if bg_hex == "__IMAGE__":
+                continue  # text over image — cannot compute a reliable bg, skip
+            if not bg_hex or not bg_hex.startswith("#"):
+                continue
+
+            col_val = _effective_color(parent)
+            col_hex, _a = _resolve_one_color(col_val)
+            if not col_hex:
+                col_hex = scheme.get("text")
+            if not col_hex or not col_hex.startswith("#"):
+                continue
+
+            if _wcag_contrast_ratio(col_hex, bg_hex) >= 4.5:
+                continue  # already AA-readable
+
+            bg_lum = _hex_luminance(bg_hex)
+            fix = "#ffffff" if (bg_lum is not None and bg_lum <= 128) else "{{text}}"
+            # no-op guard: don't rewrite to a value that resolves to the same hex
+            fix_hex, _fa = _resolve_one_color(fix)
+            if fix_hex and col_hex and fix_hex.lower() == col_hex.lower():
+                continue
+
+            parent["style"] = _set_style_color(parent.get("style", ""), fix)
+            fixed += 1
+
+        if fixed > 0:
+            _logger.info(
+                f"[CONTRAST-FIX] Slide {slide_seq}: fixed {fixed} low-contrast "
+                f"text element(s) (element-level WCAG < 4.5)"
+            )
+        return str(soup)
+    except Exception as _e_ec:
+        _logger.warning(f"[CONTRAST-FIX] Slide {slide_seq}: skipped ({_e_ec})")
+        return html
+
+
 # Core theme variables that must NEVER be overridden on individual slides.
 # The LLM sometimes invents local reassignments like --primary: var(--card_bg)
 # which inverts the color theme and causes invisible text.
@@ -4272,6 +4479,12 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                                                         style_id=style_id, page_type=stype)
                         html = _auto_fix_dark_on_dark(html, active_scheme, seq,
                                                       style_id=style_id, page_type=stype)
+                        # Element-level contrast guard: catch LOCAL dark elements
+                        # (hero cards, table headers) the page-level fixes miss.
+                        # Runs after page-level fixes, before _resolve_color_vars
+                        # (needs var()/{{}} forms to identify each element's bg role).
+                        html = _enforce_element_contrast(html, active_scheme, seq,
+                                                         style_id=style_id, page_type=stype)
                     # Post-process: strip LLM-invented CSS variable reassignments
                     # (e.g. --primary: var(--card_bg) inverts the theme → invisible text)
                     html = _strip_local_var_overrides(html, seq)
@@ -6598,6 +6811,99 @@ def _strip_page_numbers(html: str) -> str:
     return html
 
 
+# ── Client-side text-fit guard (baked into every deck) ─────────────────────────
+# LLM content pages sometimes over-produce text for the fixed slide canvas, so a
+# text leaf gets clipped by an overflow:hidden card (self-clip) or by an overfull
+# flex parent. This runs on load in the browser (preview iframe AND the playwright
+# screenshot path used for PNG/PPTX export), measures which text leaves are truly
+# clipped, and shrinks font/line-height/spacing ONLY inside the offending clip
+# box until nothing clips. Correctly-fitting slides are left untouched (no-op),
+# so it is safe for all three columns (verified: col3 no-op, col4 10/15/16 fixed,
+# col5 slide 9 fixed, zero regressions). Color-independent → identical in
+# index.html and index_vars.html; survives recolor and manual edits.
+_TEXT_FIT_SCRIPT = r"""<script>
+(function(){
+  function runFit(){
+    var MINF=11, MAXPASS=40, SAFE=0.985;
+    var px=function(v){return parseFloat(v)||0;};
+    var SKIP={svg:1,path:1,circle:1,rect:1,g:1,stop:1,defs:1,line:1,polygon:1,
+      polyline:1,ellipse:1,use:1,lineargradient:1,radialgradient:1,pattern:1,img:1,image:1};
+    function leaves(root){return [].slice.call(root.querySelectorAll('div,span,p,td,th,li,h1,h2,h3,h4'))
+      .filter(function(e){return !e.children.length && (e.textContent||'').trim();});}
+    function clipBoxes(slide){
+      var set=[]; var add=function(el){if(set.indexOf(el)<0)set.push(el);};
+      leaves(slide).forEach(function(e){
+        var cs=getComputedStyle(e);
+        if((cs.overflow==='hidden'||cs.overflowY==='hidden') && e.scrollHeight-e.clientHeight>1){
+          add(e);
+          var n=e.parentElement;
+          while(n && n!==slide.parentElement){
+            var ncs=getComputedStyle(n);
+            if(ncs.display==='flex'||ncs.overflow==='hidden'||ncs.overflowY==='hidden'){add(n);break;}
+            n=n.parentElement;
+          }
+          return;
+        }
+        var m=e.parentElement;
+        while(m && m!==slide.parentElement){
+          var mcs=getComputedStyle(m);
+          if(mcs.overflow==='hidden'||mcs.overflowY==='hidden'){
+            var mr=m.getBoundingClientRect(), r=e.getBoundingClientRect();
+            if(r.bottom-mr.bottom>1||r.right-mr.right>1){add(m);break;}
+          }
+          m=m.parentElement;
+        }
+      });
+      return set;
+    }
+    function stillClips(box){
+      if(box.scrollHeight-box.clientHeight>1) return true;
+      var br=box.getBoundingClientRect();
+      var ls=leaves(box);
+      for(var i=0;i<ls.length;i++){
+        var e=ls[i], cs=getComputedStyle(e);
+        if((cs.overflow==='hidden'||cs.overflowY==='hidden') && e.scrollHeight-e.clientHeight>1) return true;
+        var r=e.getBoundingClientRect();
+        if(r.bottom-br.bottom>1||r.right-br.right>1) return true;
+      }
+      return false;
+    }
+    function shrink(box){
+      [].slice.call(box.querySelectorAll('*')).forEach(function(e){
+        if(SKIP[e.tagName.toLowerCase()]) return;
+        var cs=getComputedStyle(e), t=(e.textContent||'').trim(), fs=px(cs.fontSize);
+        var deco=fs>=48 && t.length<=2 && !e.children.length;
+        if(!e.children.length && t && !deco){
+          var nf=Math.max(MINF, fs*SAFE);
+          if(nf<fs-0.05) e.style.fontSize=nf+'px';
+          if(cs.lineHeight!=='normal'){var lh=px(cs.lineHeight); if(lh>0) e.style.lineHeight=Math.max(nf*1.2, lh*SAFE)+'px';}
+        }
+        ['marginTop','marginBottom','paddingTop','paddingBottom','rowGap','gap'].forEach(function(pr){
+          var v=px(cs[pr]); if(v>2) e.style[pr]=Math.max(2, v*SAFE)+'px';
+        });
+      });
+    }
+    [].slice.call(document.querySelectorAll('.slide-wrapper')).forEach(function(slide){
+      var boxes=clipBoxes(slide), pass=0;
+      while(boxes.length && pass<MAXPASS){
+        boxes.forEach(function(b){ if(stillClips(b)) shrink(b); });
+        pass++;
+        boxes=clipBoxes(slide);
+        if(boxes.length){
+          var above=boxes.some(function(b){return [].slice.call(b.querySelectorAll('*')).some(function(e){
+            return !e.children.length && (e.textContent||'').trim() && px(getComputedStyle(e).fontSize)>MINF+0.1;});});
+          if(!above) break;
+        }
+      }
+    });
+  }
+  if(document.readyState==='complete'||document.readyState==='interactive') setTimeout(runFit,60);
+  else document.addEventListener('DOMContentLoaded',function(){setTimeout(runFit,60);});
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(function(){setTimeout(runFit,0);});
+})();
+</script>"""
+
+
 def _assemble_html_deck(slides: list, title: str = "Presentation",
                         style_id: str = "business", scheme_data: dict = None,
                         total_slides: int = None,
@@ -6783,6 +7089,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
 </head>
 <body>
 {wrapped}
+{_TEXT_FIT_SCRIPT}
 </body>
 </html>"""
 
