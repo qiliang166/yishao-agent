@@ -71,7 +71,7 @@
 
 ```html
 <!-- 第3层：标题（页面根级，独立定位） -->
-<h2 style="position:absolute;top:28px;left:60px;">页面标题</h2>
+<h2 style="position:absolute;top:28px;left:60px;line-height:1.1;">页面标题</h2>
 
 <!-- 第4层：基准容器（定义内容边界） -->
 <div style="position:absolute;top:130px;left:60px;right:60px;bottom:50px;
@@ -160,7 +160,7 @@
 | 元素 | 位置 | 规格 |
 |------|------|------|
 | 顶部色条 | top:0, left:0, right:0 | 4px accent 色 |
-| 标题短线 | 标题下方 | 40×3px accent 色，border-radius: 2px |
+| 标题短线 | top:90px, left:60px | 40×3px accent 色，border-radius: 2px（在 top:28、字号≤44、line-height:1.1 的标题之下，留 ≥6px 间隙，禁止压到标题文字） |
 | 页码标记 | 右下角 | dot(6px accent) + 当前页/总页数 |
 
 ### 封面/总结页装饰（≥3 个大面积元素）

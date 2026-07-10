@@ -1894,7 +1894,12 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
             return '#' + h[1]*2 + h[2]*2 + h[3]*2
         return h
 
-    all_hex_raw = set(h.lower() for h in _re_hex.findall(r'#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?', html))
+    # Word-boundary guard: a hex color must NOT be immediately followed by another
+    # identifier char. Without it, url(#decorGrad1) → #dec is captured as color
+    # #ddeecc, truncating the SVG gradient/filter/mask id → invalid fill → black
+    # shapes. 6-digit is tried first (greedy) so #1a365dff isn't split into #1a365d.
+    _HEX_RE = r'#[0-9a-fA-F]{6}(?![0-9a-zA-Z_-])|#[0-9a-fA-F]{3}(?![0-9a-zA-Z_-])'
+    all_hex_raw = set(h.lower() for h in _re_hex.findall(_HEX_RE, html))
     all_hex_expanded = {_expand_hex(h) for h in all_hex_raw}
     all_hex_expanded.discard("#ffffff")
 
@@ -1974,8 +1979,10 @@ def _auto_fix_hardcoded_hex(html: str, scheme: dict, slide_seq: int) -> str:
                 fallback_count += 1
 
     # ── Replace all hex values with {{placeholder}} vars ──
+    # Same word-boundary guard as detection: replacing bare #dec must not also
+    # rewrite #dec inside url(#decorGrad1) on the same page.
     for hex_original, var_name in replacement_map.items():
-        hex_pattern = '(?i)' + hex_original
+        hex_pattern = '(?i)' + _re_hex.escape(hex_original) + r'(?![0-9a-zA-Z_-])'
         placeholder = '{{' + var_name + '}}'
         html = _re_hex.sub(hex_pattern, placeholder, html)
 
@@ -4499,6 +4506,15 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     # resolved later ({{IMAGE_URL}}/{{IMAGE_OPACITY}}/{{BRAND*}}/
                     # {{TOC_ROWS}}) and image directives ({{image:...}}).
                     html = _fill_residual_placeholders(html, seq, heading, total)
+                    # Landscape (col4/col5) has no A4 pagination strip, so LLM-invented
+                    # overflow-y:auto/scroll on cards produces a scrollbar ("拉链条",
+                    # forbidden by cards.md:22). Convert to overflow:hidden — satisfies
+                    # the card contract AND lets that container enter the client-side
+                    # fit script's clip detection (RC1) to be shrunk, instead of hiding
+                    # content behind a scrollbar. A4 keeps its own strip at 6088.
+                    if not is_a4:
+                        html = re.sub(r'overflow(?:-y)?\s*:\s*(?:auto|scroll)\s*;?',
+                                      'overflow:hidden;', html)
                     # Save unresolved HTML for later recolor (before hex resolution)
                     html_vars = html
                     # Resolve {{primary}} etc. → actual hex from active color scheme
@@ -6830,8 +6846,42 @@ _TEXT_FIT_SCRIPT = r"""<script>
       polyline:1,ellipse:1,use:1,lineargradient:1,radialgradient:1,pattern:1,img:1,image:1};
     function leaves(root){return [].slice.call(root.querySelectorAll('div,span,p,td,th,li,h1,h2,h3,h4'))
       .filter(function(e){return !e.children.length && (e.textContent||'').trim();});}
+    // An element "owns text" if it has a non-empty direct text node (childless leaf
+    // OR a mixed-content div like  A<br/>B<span>C</span>  whose A/B are direct text).
+    // shrink() must resize such elements too — a <br/>-joined div is NOT a leaf, so
+    // the old !children.length gate left its font untouched and it stayed clipped.
+    function ownsText(e){
+      for(var i=0;i<e.childNodes.length;i++){
+        var n=e.childNodes[i];
+        if(n.nodeType===3 && (n.textContent||'').trim()) return true;
+      }
+      return false;
+    }
     function clipBoxes(slide){
-      var set=[]; var add=function(el){if(set.indexOf(el)<0)set.push(el);};
+      var set=[]; var add=function(el){if(el&&set.indexOf(el)<0)set.push(el);};
+      // (A) container-level self-clip: ANY overflow(-y):hidden element whose own
+      //     content overflows vertically, WITH OR WITHOUT children. Judged by the
+      //     element's own scrollHeight/clientHeight (leaf geometry irrelevant) —
+      //     covers cards whose whole content stack exceeds a fixed height while no
+      //     single leaf's rect crosses its direct parent. leaves(el).length guards
+      //     against pure SVG/image clip boxes. The 1280x720 root canvas (direct child
+      //     of .slide-wrapper) is excluded: whole-page overload is an upstream content-
+      //     budget concern (_detect_content_overflow); shrinking every leaf on the page
+      //     to MINF is a destructive regression, not a fit.
+      [].slice.call(slide.querySelectorAll('*')).forEach(function(el){
+        if(SKIP[el.tagName.toLowerCase()]) return;
+        if(el.clientHeight<=1) return;
+        if(el.parentElement && el.parentElement.classList
+           && el.parentElement.classList.contains('slide-wrapper')) return;
+        var cs=getComputedStyle(el);
+        if((cs.overflow==='hidden'||cs.overflowY==='hidden')
+           && el.scrollHeight-el.clientHeight>1
+           && leaves(el).length){
+          add(el);
+        }
+      });
+      // (B) leaf-level detection (self-clipping leaves + leaves cut by an ancestor
+      //     rect) — unchanged, preserves the already-fixed slide 15/16 behavior.
       leaves(slide).forEach(function(e){
         var cs=getComputedStyle(e);
         if((cs.overflow==='hidden'||cs.overflowY==='hidden') && e.scrollHeight-e.clientHeight>1){
@@ -6873,7 +6923,9 @@ _TEXT_FIT_SCRIPT = r"""<script>
         if(SKIP[e.tagName.toLowerCase()]) return;
         var cs=getComputedStyle(e), t=(e.textContent||'').trim(), fs=px(cs.fontSize);
         var deco=fs>=48 && t.length<=2 && !e.children.length;
-        if(!e.children.length && t && !deco){
+        // Shrink pure leaves AND mixed-content owners (A<br/>B<span>C</span>): the
+        // latter carry direct text at their own font-size that no child leaf covers.
+        if((!e.children.length || ownsText(e)) && t && !deco){
           var nf=Math.max(MINF, fs*SAFE);
           if(nf<fs-0.05) e.style.fontSize=nf+'px';
           if(cs.lineHeight!=='normal'){var lh=px(cs.lineHeight); if(lh>0) e.style.lineHeight=Math.max(nf*1.2, lh*SAFE)+'px';}

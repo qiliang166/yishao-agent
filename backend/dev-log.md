@@ -1,3 +1,19 @@
+[2026-07-11 02:30:00] hex 正则无词边界破坏 SVG id 引用整类缺陷根治(黑圆圈根因,非提示词问题):
+背景:用户从最新 col4 成品(分析PPT,22页)实测第10/16页出现大黑圆圈、col5 第2/3/4页同样黑点,位置逐次漂移。逐层取证钉死根因(非推测):第10页黑圆的 fill 在成品 index.html 是 fill="url(var(--semantic-positive)orGrad1)"(非法值→浏览器渲染黑),变量版 index_vars.html 是 url({{semantic_positive}}orGrad1),而 LLM 原始单页 slides/slide_10.html 里定义与引用都正确:<radialGradient id="decorGrad1"> + fill="url(#decorGrad1)"。破坏发生在 _auto_fix_hardcoded_hex(1733)的 hex 扫描:正则 #[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})? 无词边界,把 url(#decorGrad1) 里的 #dec(d/e/c 皆合法十六进制)当成 3 位色值 #ddeecc→语义匹配 semantic_positive→替换 #dec 为 {{semantic_positive}},残留 orGrad1→渐变引用被拦腰截断。#glow1 因 g/l/o 非 hex 字符幸存。所以"哪页中招"随 LLM 即兴给渐变命名漂移(dec/dee 开头就爆),bug 本身固定。
+缺陷类普查(characterize-defect-class):不止渐变——凡"# 开头且标识符前 3 字符全是十六进制"的引用都会中招:url(#gradient/filter/mask/clipPath)、xlink:href=#symbol、href=#anchor 共 6 类。当前成品 16 种 id 里恰只 decorGrad1/decorGrad2/deco-glow 命中(全是渐变、全在报错页),cardShadow/shadow-md/glow1/steam-mask 等 13 种因前缀含非 hex 字符幸存——是运气非安全,LLM 未来命名 fadeShadow/defMask/beeIcon 会静默破坏且症状更隐蔽。故根治正则而非给 id 改名。
+根因二处(引用排查 Rule1 后确认,单修一处不够):(A)检测正则 1897 无边界把 #dec 捞进候选;(B)替换 sub 1978-1980 hex_pattern='(?i)'+hex_original 无边界——若某页真有独立 #dec 进 replacement_map,该 sub 会连带把同页 #decorGrad1 的 #dec 一起替换(已复现:OLD 破坏=True)。
+改动(ppt_service.py,仅两行):(A)1897 → _HEX_RE=r'#[0-9a-fA-F]{6}(?![0-9a-zA-Z_-])|#[0-9a-fA-F]{3}(?![0-9a-zA-Z_-])'(6位贪婪优先防 #1a365dff 被切,后向否定断言拒绝"hex 后紧跟标识符字符");(B)1978 → hex_pattern='(?i)'+_re_hex.escape(hex_original)+r'(?![0-9a-zA-Z_-])'(同边界+escape 防御)。
+验证:(1)18/18 边界用例(真颜色 #fff/#1a365d/#abc/独立#dec"/#dec;/#dec空格 全捕获;id decorGrad1/deco-glow/deadbeef/facePattern/abcThing 全 None;#1a365dff 不被切成 #1a365d;#ffffff 仍匹配由既有 discard 排除)。(2)导入真实补丁函数 _auto_fix_hardcoded_hex 跑重构 bug 输入(含 6 类 id 引用+真颜色):全部 url/href/xlink 引用保留完好、渐变定义 id 保留、真颜色正确→占位符。(3)真实黑点页重放:fill="url(#decorGrad1)"/url(#deco-glow) 修复后无 {{}} 破坏、id 保留、#1a365d→{{primary}}。(4)ast.parse 通过;后端重启 HTTP 200。
+决策(llm-code-separation):黑圆圈非提示词导致——LLM 写 id="decorGrad1" 完全合法;是代码正则缺边界。根治在代码层一次性令 6 类引用免疫,不靠改 svg id 命名规避。
+
+[2026-07-11 01:55:00] col4 视觉缺陷四类根因结构性修复(容器级缩字 + 横版滚动条 + 标题压线 + hero 留白):
+背景:用户实测 col4 成品报第3页滚动条/第8/10页文字裁切/第20页版权压金条/第4/6/7页大留白。上轮"0裁切"验证是假阳性(验证脚本与被修脚本共用有缺陷的叶子判据),Playwright 全量测量钉死 4 类根因。
+RC1(核心,_TEXT_FIT_SCRIPT):(a)clipBoxes 加容器级自裁检测——overflow(-y):hidden 且 scrollHeight-clientHeight>1 且 leaves(el).length,并排除 1280×720 根画布(其溢出属上游 _detect_content_overflow 内容预算,暴力缩整页是破坏性回归);(b)shrink 与 leaves 原用 !e.children.length 判叶子,漏掉"直接文字+<br/>/<span>混合子元素"的 div(如 火枪取肉<br/>盐腌<span>炖煮</span>)导致其 14px 永不缩→加 ownsText(e)(有非空直接文字节点)使混合 div 也缩字。验证:fixture 第8页 3→0、第10/20页 0、回归第15/16页 0。
+RC2(_gen_one 链):横版(not is_a4)加 re.sub 把 LLM 违规写的 overflow(-y):auto/scroll → overflow:hidden(cards.md:22 禁卡内滚动条;A4 走 6088 自有 strip 不受影响)。验证:新版 col5 源码 0 个 auto/scroll。
+RC3(提示词,6文件):h2 页标题 line-height:1.1 + accent 短线 top:90px,防标题底压短线;改 core/always/structure.md、decoration.md、typography.md + prompts/design-system.md + scenarios/{_default,col4,col5}/design-system.md。
+RC4(提示词,hero_grid.md):加"hero 大卡内容量铁律"——内容填充≥75%、禁 justify-content:center(改 flex-start)、内容不足加装饰 SVG/数据可视化填充。验证:新版 col5 hero 填充率 1.00。
+回归:col3(A4)0裁切0滚动条(not is_a4 隔离未误伤);col5 slide9 干净。ast.parse 通过、后端重启 HTTP 200。
+
 [2026-07-10 11:30:00] 元素级对比度守卫 + 客户端文字自适应两类整类缺陷结构化修复(根因,非补丁):
 背景:用户从 col4 成品实测报两类"看得见的坏"——(A)第8页深蓝渐变 hero 卡 + 第10页 primary 深蓝表头,内部近黑字看不见;(B)第10页文字超出容器、第15页几乎撑满拥挤、第16页文字显示不全。逐层排查确认二者都不是个例,是整类结构缺陷,分两条根因线。
 

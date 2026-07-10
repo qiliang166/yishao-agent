@@ -49,8 +49,10 @@
 **所有内容页使用同一个基准容器**：第 4 层（内容层）必须是一个统一的容器，定义页面边界，内部卡片 flex 填满分隔空间。
 
 ```html
-<!-- 第3层：标题（页面根级，独立定位） -->
-<h2 style="position:absolute;top:28px;left:60px;">页面标题</h2>
+<!-- 第3层：标题（页面根级，独立定位；line-height:1.1 防止标题底边压到 accent 短线） -->
+<h2 style="position:absolute;top:28px;left:60px;line-height:1.1;">页面标题</h2>
+<!-- accent 短线：标题下方 top:90px（在 top:28、字号≤44、line-height:1.1 的标题之下留 ≥6px 间隙） -->
+<div style="position:absolute;top:90px;left:60px;width:40px;height:3px;background:{{accent}};border-radius:2px;"></div>
 
 <!-- 第4层：基准容器（定义内容边界） -->
 <div style="position:absolute;top:130px;left:60px;right:60px;bottom:50px;

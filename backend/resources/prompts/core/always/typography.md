@@ -11,7 +11,8 @@
 | 标注 | 14px | 页码、来源、脚注、插图标签 |
 
 ### 行距与字距
-- 标题 line-height: 1.15-1.25
+- 页标题 h2 line-height: 1.1（配合 accent 短线 top:90px，防止标题底边压到短线）
+- 卡片标题 line-height: 1.15-1.25
 - 正文 line-height: 1.6-1.8
 - 标题 letter-spacing: -0.3~-0.5px（英文）
 - 卡片之间间距 = card_style.gap 值
