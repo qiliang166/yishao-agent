@@ -4515,6 +4515,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     if not is_a4:
                         html = re.sub(r'overflow(?:-y)?\s*:\s*(?:auto|scroll)\s*;?',
                                       'overflow:hidden;', html)
+                        # Landscape flex cards stretch to full row height (~500px) via
+                        # align-items:stretch (default). Short content (46-84 chars) then
+                        # leaves a 280-340px void inside each card. Force top-alignment so
+                        # card height follows content — void collapses to the safe area.
+                        html = _fix_card_underfill(html, seq)
                     # Save unresolved HTML for later recolor (before hex resolution)
                     html_vars = html
                     # Resolve {{primary}} etc. → actual hex from active color scheme
@@ -5508,6 +5513,50 @@ def _fill_residual_placeholders(html: str, seq: int, heading: str, total: int) -
     if dropped > 0:
         _logger.warning(f"Slide {seq}: stripped {dropped} unfilled placeholder(s) from LLM output")
     return stripped
+
+
+def _fix_card_underfill(html: str, seq: int = 0) -> str:
+    """Stop flex:1 cards from stretching to full height when content is short.
+
+    Defect (col5 第3/7/9页): a base flex container (left:60px;right:60px;display:flex)
+    stretches each flex:1 card to the full ~500px row height. When the LLM only
+    writes 46-84 chars per card, the card renders 35-49% full, leaving a 280-340px
+    empty void below the text. The system cannot generate images or fabricate text,
+    so the void cannot be filled — the correct fix is to let card height follow
+    content instead of forcing full height.
+
+    Deterministic transform on the base flex container's style ONLY:
+      1. add `align-items:flex-start` so children align to top at their natural
+         height instead of stretching (default `align-items:stretch`).
+    Cards keep flex:1 (equal WIDTH distribution in a row) but no longer stretch
+    vertically. Short cards become short; the leftover space stays in the safe
+    area (below the cards) instead of as a void inside each card.
+
+    Measured on real slide_07: cards 1/2 fill 35% → 85%, void 338px → 28px,
+    widths unchanged. Idempotent (skips if align-items already present).
+    """
+    import re as _re
+
+    def _repl(m):
+        style = m.group(0)
+        if "align-items" in style:
+            return style  # already set — idempotent, don't override
+        # insert right after the display:flex declaration
+        return _re.sub(r'(display\s*:\s*flex\s*;?)',
+                       r'\1align-items:flex-start;', style, count=1)
+
+    # Only the 4th-layer base container: absolute + left:60px + right:60px + display:flex.
+    # Order-tolerant: require all three tokens somewhere in the same style attr.
+    pattern = _re.compile(
+        r'style="(?=[^"]*position\s*:\s*absolute)'
+        r'(?=[^"]*left\s*:\s*60px)'
+        r'(?=[^"]*right\s*:\s*60px)'
+        r'(?=[^"]*display\s*:\s*flex)[^"]*"'
+    )
+    new_html, n = pattern.subn(_repl, html)
+    if n and seq:
+        _logger.info(f"Slide {seq}: card-underfill fix applied to {n} base container(s)")
+    return new_html
 
 
 def _fix_llm_html_errors(html: str, is_a4: bool = False) -> str:
