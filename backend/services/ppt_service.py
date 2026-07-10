@@ -937,6 +937,7 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                              column_id=column_id, project_id=project_id)
     if not stage1:
         return None
+    stage1 = _dedup_table_pages(stage1, skill_template)
     stage1 = _fix_stage1_table_keypoints(stage1, skill_template)
     _logger.info(f"Phase 4 outline: {len(stage1)} slides extracted")
     if project_id:
@@ -1039,6 +1040,7 @@ def _generate_outline_only(provider_id, model, rules, sop_content,
         if project_id:
             _ppt_status.pop(project_id, None)
         return None, ""
+    stage1 = _dedup_table_pages(stage1, skill_template)
     stage1 = _fix_stage1_table_keypoints(stage1, skill_template)
 
     outline_text = _slides_to_human_text(stage1)
@@ -1502,6 +1504,86 @@ def _fix_stage1_table_keypoints(stage1, skill_template):
     except Exception:
         pass
     return stage1
+
+
+def _dedup_table_pages(stage1, skill_template):
+    """Collapse LLM-exploded table pages back to one page per SKILL seq.
+
+    The Stage 1 LLM sometimes emits one page PER TABLE ROW (e.g. 20 ingredient
+    pages all with seq=8) instead of a single table page whose rows live in the
+    page body. This inflates an 11-page doc to 40 pages. The SKILL template is
+    the source of truth for page count; any page_type that the template defines
+    exactly once but the LLM produced multiple times is an accidental row-split.
+
+    Fix: for such over-produced seqs, keep the first page as the skeleton and
+    fold each extra page's key_points into a `rows` list (+ a text `body`) so
+    Stage 2 can render all rows in one table. No data is lost — every row's
+    values are preserved. Non-table duplicates are also collapsed defensively
+    (keeping the first), since the template forbids page duplication.
+
+    Idempotent: a stage1 that already matches the template count passes through.
+    """
+    if not stage1 or not skill_template:
+        return stage1
+    try:
+        template = json.loads(skill_template)
+        if not isinstance(template, list) or not template:
+            return stage1
+    except (json.JSONDecodeError, TypeError):
+        return stage1
+
+    # seqs the template defines exactly once (any dup in stage1 is accidental)
+    from collections import Counter
+    tmpl_seq_counts = Counter(p.get("seq") for p in template if p.get("seq") is not None)
+    tmpl_single_seqs = {seq for seq, n in tmpl_seq_counts.items() if n == 1}
+
+    # Group stage1 pages by seq, preserving first-seen order
+    order = []
+    groups = {}
+    for s in stage1:
+        seq = s.get("seq")
+        if seq not in groups:
+            groups[seq] = []
+            order.append(seq)
+        groups[seq].append(s)
+
+    # Nothing over-produced → no-op
+    if all(len(groups[seq]) == 1 or seq not in tmpl_single_seqs for seq in order):
+        return stage1
+
+    merged = []
+    for seq in order:
+        pages = groups[seq]
+        if len(pages) == 1 or seq not in tmpl_single_seqs:
+            merged.extend(pages)
+            continue
+
+        base = dict(pages[0])  # skeleton = first page (keeps column headers/labels)
+        # Collect each page's key_points as one data row. Skip the first page's
+        # key_points ONLY if they are template column labels; otherwise the first
+        # page also carries a real row. Heuristic: every page in an exploded
+        # table has same-length key_points = one row each, so treat all as rows.
+        rows = []
+        for p in pages:
+            kp = p.get("key_points") or []
+            if kp:
+                rows.append([str(x) for x in kp])
+        if rows:
+            base["rows"] = rows
+            # Serialize rows into body text so Stage 2 (which reads body to build
+            # {{TABLE_ROWS}}) sees every row. Append to any existing body.
+            row_text = "\n".join(" | ".join(r) for r in rows)
+            existing_body = (base.get("body") or "").strip()
+            base["body"] = (existing_body + "\n\n" + row_text).strip() if existing_body else row_text
+            # In an exploded table every page's key_points is a DATA row, so the
+            # skeleton's key_points hold row-1 data, not column labels. Clear it so
+            # _fix_stage1_table_keypoints (runs after) restores template column labels.
+            base["key_points"] = []
+        merged.append(base)
+
+    _logger.info(f"_dedup_table_pages: collapsed {len(stage1)} → {len(merged)} pages "
+                 f"(template defines {len(template)})")
+    return merged
 
 
 # ── Scenario prompt files ──
@@ -3951,7 +4033,10 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         if description:
             content_parts.append(f"内容简述: {description[:200]}")
         if body:
-            content_parts.append(f"正文内容: {body[:1000]}")
+            # Table/flowchart A4 pages carry every row in body (folded from
+            # exploded pages by _dedup_table_pages); a low cap would drop rows.
+            body_limit = 6000 if (is_a4 and stype in ("table", "flowchart")) else 1000
+            content_parts.append(f"正文内容: {body[:body_limit]}")
         if key_points:
             if is_a4 and stype == "cover":
                 # A4 cover: key_points values correspond to {{KP_0}}, {{KP_1}}, ...

@@ -1,3 +1,12 @@
+[2026-07-10 08:40:00] col3 表格页爆炸(40页)修复 + col5 封面 subtitle/summary 补齐:
+问题1：col3 视觉编辑器定义 11 页，但生成大纲产出 40 页。根因 = Stage1 LLM 把「表格行」误当「页」逐行拆分(seq8×20 食材/seq9×7 步骤/seq4×3/seq10×3)；提示词已禁「合并或拆分页面」但 LLM 违反 → 按「LLM 创造→代码约束」原则用代码兜底(不叠加提示词)。用户强调「既然发生就说明有漏洞需要解决，不能赌是否复发」。
+改动1(代码兜底，ppt_service.py)：新增 _dedup_table_pages(stage1, skill_template)(1509)——以 SKILL 模板为页数真相源，模板中「只出现1次的 seq」若 stage1 出现多次即判定为行拆分误爆。折叠策略：保留首页作骨架，把每页 key_points 收集为 rows 数据行(20 条全保留不丢)、序列化进 body(供 Stage2 LLM 读 body 填 {{TABLE_ROWS}})；关键——清空骨架 key_points([]),使下游 _fix_stage1_table_keypoints 从模板恢复列名(否则骨架残留首行食材数据当列名)。非表格重复页也防御性折叠。幂等(已匹配模板页数则原样返回)。非 JSON skill(col4/col5 markdown)→ 守卫 no-op。
+改动2(接入)：940/1042 两个调用点，dedup 置于 _fix_stage1_table_keypoints 之前(顺序关键：先折叠清空 kp，再恢复列名)。
+改动3(截断修复)：_gen_one body 截断 1000→表格/流程页 6000(is_a4 && stype in table/flowchart)。seq8 折叠后 body=1094字 >1000 会丢末尾食材；提高上限保 20 条完整入 LLM。type 由 page_type 在 960 归一，stype='table' 条件命中。
+问题2：col5 封面 example 缺 subtitle/summary(col4 上轮已补，col5 漏)。改动(DB 15 行，.gitignore 不入 git)：cover example 加 subtitle/summary + 字段说明，镜像 col4 措辞。覆盖 3 项目(pi-*-col5) + 12 种子(column_configs col5)，含 2014字异形行。幂等(含 subtitle 则跳过)，先备份 yishao-PRE-COL5SKILL-20260710_082832.db，integrity ok。
+验证：(1)真实产线路径 _generate_outline_only 灌 40 页真数据(mock _stage1_content/_phase2_research)→ 输出 11 页、seq 计数全为 1、seq8 key_points=8 列名(序号/食材类型/…/单位)、rows=20、outline_text 含全部食材(花胶/鲍鱼/凤爪/干花菇/鲍鱼汁)。(2)幂等：二次 dedup 仍 11 页。(3)回归 col4：markdown skill → dedup no-op，19 页不变。(4)回归 col5：markdown skill no-op，subtitle/summary 字段落库正确。(5)ast.parse 通过；后端重启 PID=30188、/api/health 200。
+决策依据：未改提示词(已明令禁拆分，LLM 违反 → 代码是可靠约束层)；未删 _generate_and_replace_images 等无关逻辑；只在大纲后处理(系统边界)加折叠兜底，与既有 _fix_stage1_table_keypoints 同层。
+
 [2026-07-10 07:10:00] 内容页 LLM 填充管线残留占位符兜底 + summary 序号式 KEY_POINT 修复:
 背景：诊断"大纲内容↔VI手册统一不了"根因。查明系统有两条填充管线——结构页(cover/section/summary/toc/closing)走代码机械填充(_fill_slide_template，3802 return)；内容页(content/data)走 LLM 模板填充(_gen_one，4306 return)。内容页契约无单一真相源(占位符名 HEADING vs 代码只填 TITLE、给LLM的占位符映射只4个、模板自带契约表与 content_parts 双份无校验)，且全链无残留 {{}} 兜底清理 → LLM 漏填即字面泄漏。
 改动1（LLM路径兜底，ppt_service.py）：新增 _fill_residual_placeholders(html,seq,heading,total)，在 _auto_fix_font_size 后、html_vars 快照前调用(4189)。机械填 {{HEADING}}/{{PAGE_NUM}}/{{TOTAL_PAGES}}；正则 strip 剩余 UPPERCASE {{TAG}}；保留清单 _RESIDUAL_KEEP_TAGS(IMAGE_URL/IMAGE_OPACITY/TOC_ROWS/BRAND*)+ 小写颜色变量({{primary}}) + 图片指令({{image:...}}，含冒号不匹配)。结构页在 3802 已 return，不经此net。
