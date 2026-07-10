@@ -4127,7 +4127,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             # Build explicit placeholder mapping for common cover/template placeholders
             ph_map_lines = []
             if title_format or heading:
-                ph_map_lines.append(f"  {{{{TITLE}}}} = {title_format or heading}")
+                ph_map_lines.append(f"  {{{{TITLE}}}} = {_resolve_title(slide)}")
             if lead:
                 ph_map_lines.append(f"  {{{{SUBTITLE}}}} = {lead}")
             if description:
@@ -6143,6 +6143,25 @@ def _load_slide_template(family: str, page_type: str) -> str | None:
         return f.read()
 
 
+def _resolve_title(slide: dict) -> str:
+    """Pick the cover/section title, preferring title_format only when the LLM
+    actually filled its {占位符}. The SKILL template ships title_format as a
+    pattern like "{菜名} SOP的道与术"; the outline prompt tells the LLM to
+    substitute the {…} tokens and mirror the result into heading. When the LLM
+    leaves a raw single-brace {…} in title_format (a quantifiable defect), the
+    literal pattern would leak into the deck, so fall back to heading, which the
+    LLM fills reliably. Double-brace {{…}} system placeholders are ignored here.
+    """
+    heading = slide.get("heading", "") or ""
+    tf = slide.get("title_format", "") or ""
+    if not tf:
+        return heading
+    residual = re.sub(r'\{\{[^{}]*\}\}', '', tf)
+    if re.search(r'\{[^{}]+\}', residual):
+        return heading or tf
+    return tf
+
+
 def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> str:
     """Fill a slide template with actual slide data. Pure code, no LLM.
 
@@ -6181,7 +6200,7 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
     # ── Simple replacements (escape user text to prevent XSS in generated HTML) ──
     esc = _html_mod.escape
     html = template_html
-    html = html.replace("{{TITLE}}", esc(slide.get("title_format", "") or heading or ""))
+    html = html.replace("{{TITLE}}", esc(_resolve_title(slide)))
     html = html.replace("{{SUBTITLE}}", esc(subtitle))
     html = html.replace("{{SUMMARY_TITLE}}", esc(heading or "总结"))
     html = html.replace("{{SUMMARY}}", esc(summary))

@@ -1,3 +1,11 @@
+[2026-07-10 09:20:00] col4 封面标题 {菜名} 占位符泄露修复(_resolve_title):
+问题:用户报 col4 合成封面 <h1> 显示字面「{菜名} SOP的道与术」。端到端定位实际交付文件(data/output/鲍鱼一品煲/*_col4/index.html):col4 <h1>={菜名} SOP的道与术(泄露),col3/col5 干净。
+双层根因:(1)LLM 层——SKILL 模板 title_format 是「{菜名} SOP的道与术」模式串,大纲提示词(1311)要求 LLM 替换 {占位符} 并镜像到 heading;LLM 把 heading 正确填成「鲍鱼一品煲 SOP的道与术」,却把 title_format 的 {菜名} 漏填留了原样。(2)代码层——_fill_slide_template(6184)填 {{TITLE}} 用 `title_format or heading`,title_format 非空即胜出→字面 {菜名} 泄进成品。
+修复(LLM 创造→代码约束):新增 _resolve_title(slide)(6146)——优先 title_format,但先剥离双括号 {{系统占位符}} 后用正则检测是否残留单括号 {…}(可量化缺陷);若残留则回落 heading(LLM 稳定填对的字段),heading 也空才退回 title_format(不丢内容)。双括号系统占位符不误判。两处调用同步(Rule6):code-fill 6203(_fill_slide_template)+ LLM 提示词映射 4130(ph_map_lines {{TITLE}})。
+验证:(1)ast.parse 通过。(2)单测 7 例全过(缺填回落heading/已填用title_format/无字段/双括号不误判/正常串/heading空退回)。(3)真实产线:用 col4 实际大纲 seq1(title_format={菜名}…, heading=鲍鱼一品煲…)跑 _fill_slide_template → <h1>=鲍鱼一品煲 SOP的道与术,不含 {菜名}。(4)回归:col5 封面(无title_format,用heading)、col3 封面(title_format=鲍鱼一品煲—标准作业文档,已填)均不受影响、无泄露。(5)扫全三栏大纲仅 col4 seq1 一处 title_format 缺填,其余正常。
+附带澄清(非bug):早前发现 col4 result step_result 的 slide_plan 字段含 38 个 {{BRAND_*}}——那是合成前逐页快照(_fill_residual 故意保留 BRAND 待 deck 级填充);检查实际交付 3 栏 index.html 残留 {{XXX}}=0,BRAND 由 _assemble_html_deck(6656)+ deck 级(566)正常填充,无缺陷。
+决策依据:未改 LLM synthesis(title_format 替换本应 LLM 做,但代码需对可量化缺陷兜底);未动 col3 dedup 等无关逻辑;只在填充边界加缺陷检测回落,符合「可量化约束由代码检查」。
+
 [2026-07-10 08:40:00] col3 表格页爆炸(40页)修复 + col5 封面 subtitle/summary 补齐:
 问题1：col3 视觉编辑器定义 11 页，但生成大纲产出 40 页。根因 = Stage1 LLM 把「表格行」误当「页」逐行拆分(seq8×20 食材/seq9×7 步骤/seq4×3/seq10×3)；提示词已禁「合并或拆分页面」但 LLM 违反 → 按「LLM 创造→代码约束」原则用代码兜底(不叠加提示词)。用户强调「既然发生就说明有漏洞需要解决，不能赌是否复发」。
 改动1(代码兜底，ppt_service.py)：新增 _dedup_table_pages(stage1, skill_template)(1509)——以 SKILL 模板为页数真相源，模板中「只出现1次的 seq」若 stage1 出现多次即判定为行拆分误爆。折叠策略：保留首页作骨架，把每页 key_points 收集为 rows 数据行(20 条全保留不丢)、序列化进 body(供 Stage2 LLM 读 body 填 {{TABLE_ROWS}})；关键——清空骨架 key_points([]),使下游 _fix_stage1_table_keypoints 从模板恢复列名(否则骨架残留首行食材数据当列名)。非表格重复页也防御性折叠。幂等(已匹配模板页数则原样返回)。非 JSON skill(col4/col5 markdown)→ 守卫 no-op。
