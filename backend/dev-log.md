@@ -1,3 +1,20 @@
+[2026-07-10 10:05:00] toc/closing 缺 HTML 模板整类缺陷结构化修复(根因,非补丁):
+背景:用户从头指出 col3 大纲爆炸/封面缺字段/{菜名}泄露/残留占位符不是孤立 bug,是同一根因的多个症状——我此前逐个打补丁(dedup/_resolve_title/_fill_residual)每个都"自审通过"却给虚假完成感,因为地基坏了补丁也漏。普查确认缺陷类边界:business ~40 个页面类型只有 5 个(cover/content/data/section/summary)有「## HTML 模板」头走代码确定性填充(锁版式/稳定/前端可预览);toc 和 closing 虽被声明进 STRUCTURAL_PAGE_TYPES(6097),却缺 HTML 模板块 → 掉进 if template_html 的 else "fall through to LLM"(3885)→ LLM 自由发挥 → 时而爆炸/版式浮动/前端预览读不到。这是「声明了却没实现」的半成品,违反 Rule6。缺陷类完整成员=3模板+2代码,无遗漏。
+改动A(3 模板补「## HTML 模板」块,参照已验证实现不新发明):
+(1) business/toc.md(横版1280×720):var(--background) 底 + SVG grid/glow 装饰 + accent 顶条 +「目录」标题 + <table> 含 {{TOC_ROWS}} 占位符 + {{PAGE_NUM}}/{{TOTAL_PAGES}} 页尾;规则禁 AI 手写目录行(由代码注入)。
+(2) business/closing.md(横版1280×720):深色渐变 linear-gradient(135deg,var(--primary),var(--secondary)) 与封面书挡呼应;{{THANKS}}+{{#CTA}}/{{#CONTACT_INFO}} 条件块+{{COPYRIGHT}}+页码,全部已被 _fill_slide_template 支持。
+(3) business/col3/closing.md(A4 794×1123):primary 底+10px 金色装饰线+居中 flex:1 内容+{{THANKS}}/{{CTA}}/{{CONTACT_INFO}}+页尾 {{BRAND_COPYRIGHT}}/{{BRAND_SIGNATURE}}(系统占位符严禁替换);用 plain 占位符(非 {{#CTA}} 条件块)因 col3 走 LLM 路径,规则命 LLM 删空 div。
+改动B(2 处代码 ppt_service.py):
+(1) _build_toc_rows(3724):原只读 chapters,但 col4/col5 章节在 key_points(chapters=None)→ 增 key_points 兜底;圆序号色由 {{CHART_N}}(大写不可解析)改为直接输出 var(--chart-N)(已解析形态,穿透 code-fill return 与残留清理);页码列 {{ENTRY_i_PAGE}}(全码库无 resolver 的死占位符)改为留空,消除泄漏。
+(2) _fill_slide_template(6345):新增 if "{{TOC_ROWS}}" in html 检测,取 slide 的 chapters/key_points 调 _build_toc_rows 注入 → 横版 toc 走 3866 结构化闸门命中代码填充,return 时目录行已就位(横版不再落 LLM,is_a4 门控自然绕开,无需删)。
+验证(端到端,真实产线三栏重生成,先剥 slide_plan 里已烘焙的 html/html_vars 强制真重生成):
+(1)后端日志确认代码填充:"Slide 2: code-filled (business/toc)"、"Slide 15: code-filled (business/closing), 2665 chars",不再 fall through to LLM。
+(2)成品扫描三栏 index.html 残留 {{ = 0。
+(3)col4(20页):目录 4 章(烹饪之道/操作之术/通用流程/技术附录)正确、圆序号 var(--chart- ×10 有色、无 var(--chart_color) 泄漏、copyright 末页正常。
+(4)col5(15页):目录 8 章正确(此前拼接成一行,现 8 独立 <tr>)、var(--chart- ×14、closing 深色渐变+accent 条+©+THANKS=结语、无残留。
+(5)col3(11页):目录仍 11 页、var(--chart- ×16、新增 closing 书挡生效(primary 底+金线)、A4 三段 flex 不回归。
+决策依据(符合 characterize-defect-class/structural-fix):不逐个补丁而普查整类边界;参照 col3/toc.md 已验证实现不新发明结构;发现 col3 toc 的 _build_toc_rows 输出本就被丢弃(其表格无 <tbody> 供正则回落匹配)→ 改 _build_toc_rows 对 col3 零影响、只修 col4/col5;不碰 copyright/cover/section/summary/content/data(已验证)。
+
 [2026-07-10 09:20:00] col4 封面标题 {菜名} 占位符泄露修复(_resolve_title):
 问题:用户报 col4 合成封面 <h1> 显示字面「{菜名} SOP的道与术」。端到端定位实际交付文件(data/output/鲍鱼一品煲/*_col4/index.html):col4 <h1>={菜名} SOP的道与术(泄露),col3/col5 干净。
 双层根因:(1)LLM 层——SKILL 模板 title_format 是「{菜名} SOP的道与术」模式串,大纲提示词(1311)要求 LLM 替换 {占位符} 并镜像到 heading;LLM 把 heading 正确填成「鲍鱼一品煲 SOP的道与术」,却把 title_format 的 {菜名} 漏填留了原样。(2)代码层——_fill_slide_template(6184)填 {{TITLE}} 用 `title_format or heading`,title_format 非空即胜出→字面 {菜名} 泄进成品。

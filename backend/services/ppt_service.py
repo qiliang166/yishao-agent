@@ -3722,13 +3722,15 @@ def _build_cover_info_table(skill_json: str, vi_section: str) -> str:
 
 
 def _build_toc_rows(skill_json: str, vi_section: str) -> str:
-    """Build the TOC table rows for a toc slide from SKILL chapters.
+    """Build the TOC table rows for a toc slide.
 
-    Reads the toc page's chapters from the SKILL JSON (editor-defined structure),
-    then generates <tr> rows with placeholder entry titles and page numbers.
-    Format matches _common/blocks/toc.md: 编号 | 标题(dotted line) | 页码.
+    Reads chapter labels from the toc page's `chapters` (col3 editor structure)
+    or `key_points` (col4/col5 SKILL, where entries are plain strings), then
+    generates circle-badge <tr> rows: 编号 | 标题(dotted line) | 页码(blank).
+    Circle colors use var(--chart-N) (already-resolved form). The page-number
+    cell is left blank — no deterministic per-entry page number exists.
 
-    Returns empty string if no toc page found or no chapters defined.
+    Returns empty string if no toc page found or no labels defined.
     """
     import json as _json_toc
 
@@ -3751,29 +3753,41 @@ def _build_toc_rows(skill_json: str, vi_section: str) -> str:
     if not toc:
         return ""
 
-    chapters = toc.get("chapters", [])
-    if not chapters or len(chapters) == 0:
+    # Chapter labels live in `chapters` (col3 editor structure) or fall back to
+    # `key_points` (col4/col5 SKILL, where toc entries are plain strings).
+    labels: list[str] = []
+    chapters = toc.get("chapters") or []
+    for ch in chapters:
+        if isinstance(ch, dict):
+            lbl = str(ch.get("label", "")).strip()
+        else:
+            lbl = str(ch).strip()
+        if lbl:
+            labels.append(lbl)
+    if not labels:
+        for kp in (toc.get("key_points") or []):
+            lbl = str(kp).strip()
+            if lbl:
+                labels.append(lbl)
+    if not labels:
         return ""
 
     rows = []
-    for i, ch in enumerate(chapters):
-        if not isinstance(ch, dict):
-            continue
-        label = str(ch.get("label", "")).strip()
-        if not label:
-            continue
+    for i, label in enumerate(labels):
         num = str(i + 1).zfill(2)
-        page = f"{{{{ENTRY_{i}_PAGE}}}}"
-
-        chart_idx = i % 5
-        chart_color = f"{{{{CHART_{chart_idx}}}}}"
+        # Circle color: emit the already-resolved CSS var form (var(--chart-N))
+        # so it survives both the code-fill path (returns before color resolution)
+        # and the residual-placeholder stripper, which drops UPPERCASE {{TAG}}.
+        chart_color = f"var(--chart-{i % 5})"
+        # No deterministic per-entry page number exists — leave the cell blank
+        # rather than leaking a {{ENTRY_i_PAGE}} placeholder that nothing fills.
         rows.append(
             f'      <tr>\n'
             f'        <td style="padding:12px 0;vertical-align:middle;width:48px;">\n'
             f'          <div style="width:32px;height:32px;border-radius:50%;background:{chart_color};color:#ffffff;font-size:14px;font-weight:600;font-family:\'DM Sans\',Inter,\'PingFang SC\',\'Microsoft YaHei\',sans-serif;display:flex;align-items:center;justify-content:center;">{num}</div>\n'
             f'        </td>\n'
             f'        <td style="padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(var(--text-rgb),0.15);font-weight:600;font-size:16px;">{_html_mod.escape(label)}</td>\n'
-            f'        <td style="padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:13px;">{page}</td>\n'
+            f'        <td style="padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:13px;"></td>\n'
             f'      </tr>'
         )
 
@@ -6330,6 +6344,18 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
             html = html[:ch_match.start()] + "\n".join(ch_parts) + html[ch_match.end():]
         else:
             html = html[:ch_match.start()] + html[ch_match.end():]
+
+    # ── TOC rows: {{TOC_ROWS}} → circle-badge <tr> rows (landscape toc) ──
+    # Structural toc pages (col4/col5) fill this deterministically here — the
+    # LLM-path injection at _stage2_html_per_slide is is_a4-gated and never runs
+    # for landscape. Build from this slide's own chapters/key_points.
+    if "{{TOC_ROWS}}" in html:
+        chapters = slide.get("chapters") or []
+        toc_page = {"page_type": "toc", "chapters": chapters, "key_points": key_points}
+        toc_rows = _build_toc_rows(
+            json.dumps([toc_page], ensure_ascii=False), ""
+        )
+        html = html.replace("{{TOC_ROWS}}", toc_rows)
 
     return html
 
