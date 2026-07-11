@@ -1105,10 +1105,283 @@ def init_db():
             )
         """)
 
+        _migrate_v1_rbac(conn)
+
         conn.commit()
     finally:
         conn.close()
     print(f"[DB] Initialized at {DB_PATH}")
+
+
+def _migrate_v1_rbac(conn):
+    """v0→v1: Multi-role RBAC + member system migration. Idempotent."""
+    try:
+        existing = [r[1] for r in conn.execute("PRAGMA table_info(settings)").fetchall()]
+    except Exception:
+        return
+    if 'value' not in existing:
+        return  # settings table not ready yet
+
+    # Check schema version (idempotent guard)
+    row = conn.execute("SELECT value FROM settings WHERE key='db_schema_version'").fetchone()
+    current_version = int(row["value"]) if row else 0
+    if current_version >= 1:
+        return
+
+    # Check if migration was partially completed (tables exist but version < 1)
+    try:
+        conn.execute("SELECT 1 FROM users LIMIT 0")
+        tables_exist = True
+    except Exception:
+        tables_exist = False
+
+    if not tables_exist:
+        _migrate_v1_create_tables(conn)
+
+    _migrate_v1_seed_roles(conn)
+    _migrate_v1_create_admin(conn)
+
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('db_schema_version', '1')")
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('migration_status', 'completed')")
+    print("[DB] Migration v0→v1 completed: RBAC + member system initialized")
+
+
+def _migrate_v1_create_tables(conn):
+    """Create all v1 tables and add created_by columns to existing tables."""
+    import uuid as _uuid
+
+    # 1. users table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            username TEXT UNIQUE COLLATE NOCASE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT NOT NULL,
+            email TEXT UNIQUE,
+            user_type TEXT NOT NULL CHECK(user_type IN ('admin','member')),
+            is_active INTEGER NOT NULL DEFAULT 1,
+            is_approved INTEGER NOT NULL DEFAULT 0,
+            approved_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            approved_at TEXT,
+            expires_at TEXT,
+            token_version INTEGER NOT NULL DEFAULT 1,
+            failed_login_attempts INTEGER NOT NULL DEFAULT 0,
+            locked_until TEXT,
+            password_changed_at TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_users_is_approved ON users(is_approved)")
+
+    # 2. roles table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS roles (
+            id TEXT PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT DEFAULT '',
+            user_type TEXT NOT NULL CHECK(user_type IN ('admin','member')),
+            is_system INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # 3. role_permissions table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS role_permissions (
+            role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+            permission TEXT NOT NULL,
+            PRIMARY KEY (role_id, permission)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_rp_role_id ON role_permissions(role_id)")
+
+    # 4. user_roles table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_roles (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+            PRIMARY KEY (user_id, role_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ur_user_id ON user_roles(user_id)")
+
+    # 5. member_projects table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS member_projects (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            PRIMARY KEY (user_id, project_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_mp_user_id ON member_projects(user_id)")
+
+    # 6. payment_records table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS payment_records (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            amount_cents INTEGER NOT NULL,
+            plan_name TEXT NOT NULL,
+            duration_days INTEGER NOT NULL,
+            payment_method TEXT DEFAULT '',
+            recorded_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+            expires_before TEXT,
+            expires_after TEXT,
+            note TEXT DEFAULT '',
+            paid_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
+    # 7. audit_log table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id TEXT PRIMARY KEY,
+            actor_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+            action TEXT NOT NULL,
+            target_type TEXT DEFAULT '',
+            target_id TEXT DEFAULT '',
+            detail TEXT DEFAULT '{}',
+            ip_address TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_log(actor_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)")
+
+    # Add created_by to existing tables (NULL = super admin)
+    _tables_for_created_by = [
+        "workspaces", "projects", "project_items",
+        "step_results", "templates", "prompts",
+    ]
+    for tbl in _tables_for_created_by:
+        try:
+            cols = [r[1] for r in conn.execute(f"PRAGMA table_info({tbl})").fetchall()]
+            if "created_by" not in cols:
+                conn.execute(f"ALTER TABLE {tbl} ADD COLUMN created_by TEXT")
+                conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{tbl}_created_by ON {tbl}(created_by)")
+        except Exception as e:
+            print(f"[DB] Warning: could not add created_by to {tbl}: {e}")
+
+
+def _migrate_v1_seed_roles(conn):
+    """Insert 4 system roles with their permissions."""
+    import uuid as _uuid
+    import json as _json
+
+    # All 19 permission codes
+    ALL_PERMISSIONS = [
+        "project.create", "project.edit_own", "project.delete_own",
+        "project.view_all", "project.edit_all",
+        "config.project", "config.global",
+        "stage1.view", "stage1.generate",
+        "stage2.view", "stage2.generate",
+        "stage3.view", "stage3.generate",
+        "stage4.view", "stage4.generate",
+        "stage5.view", "stage5.download",
+        "template.manage", "prompt.manage",
+        "member.manage", "role.manage",
+    ]
+
+    CONTENT_ADMIN_PERMS = [
+        "project.create", "project.edit_own", "project.delete_own",
+        "config.project",
+        "stage1.view", "stage1.generate",
+        "stage2.view", "stage2.generate",
+        "stage3.view", "stage3.generate",
+        "stage4.view", "stage4.generate",
+        "stage5.view", "stage5.download",
+    ]
+
+    BASIC_MEMBER_PERMS = [
+        "stage1.view", "stage2.view", "stage3.view",
+        "stage4.view", "stage5.view", "stage5.download",
+    ]
+
+    _seed_roles = [
+        ("超级管理员", "admin", ALL_PERMISSIONS),
+        ("内容管理员", "admin", CONTENT_ADMIN_PERMS),
+        ("基础会员", "member", BASIC_MEMBER_PERMS),
+        ("高级会员", "member", BASIC_MEMBER_PERMS),
+    ]
+
+    for name, utype, perms in _seed_roles:
+        existing = conn.execute("SELECT id FROM roles WHERE name=?", (name,)).fetchone()
+        if existing:
+            continue
+        rid = str(_uuid.uuid4())
+        conn.execute(
+            "INSERT INTO roles (id, name, description, user_type, is_system) VALUES (?, ?, ?, ?, 1)",
+            (rid, name, f"系统预置{name}角色", utype),
+        )
+        for p in perms:
+            conn.execute(
+                "INSERT OR IGNORE INTO role_permissions (role_id, permission) VALUES (?, ?)",
+                (rid, p),
+            )
+
+
+def _migrate_v1_create_admin(conn):
+    """Create super admin user from existing admin_password or generate new password."""
+    import uuid as _uuid
+    import secrets
+
+    # Check if super admin already exists
+    existing = conn.execute("SELECT id FROM users WHERE user_type='admin' LIMIT 1").fetchone()
+    if existing:
+        return
+
+    # Read existing password from settings
+    stored_hash_row = conn.execute(
+        "SELECT value FROM settings WHERE key='admin_password'"
+    ).fetchone()
+    stored_hash = stored_hash_row["value"] if stored_hash_row else ""
+
+    if stored_hash and stored_hash.strip():
+        password_hash = stored_hash.strip()
+    else:
+        # New installation: generate random password
+        import string as _str
+        alphabet = _str.ascii_letters + _str.digits
+        password = ''.join(secrets.choice(alphabet) for _ in range(16))
+        password_hash = _hash_password_v1(password)
+        # Print to console
+        print("=" * 48)
+        print(f"  初始超级管理员密码: {password}")
+        print("  请登录后立即修改")
+        print("=" * 48)
+        # Also write to file as fallback
+        try:
+            with open(os.path.join(BASE_DIR, "initial_admin_password.txt"), "w") as f:
+                f.write(password)
+        except Exception:
+            pass
+
+    # Create super admin user
+    admin_id = str(_uuid.uuid4())
+    conn.execute(
+        """INSERT INTO users (id, username, password_hash, display_name, email, user_type,
+           is_active, is_approved, token_version)
+           VALUES (?, 'admin', ?, '超级管理员', NULL, 'admin', 1, 1, 1)""",
+        (admin_id, password_hash),
+    )
+
+    # Find super admin role
+    role_row = conn.execute("SELECT id FROM roles WHERE name='超级管理员' AND is_system=1").fetchone()
+    if role_row:
+        conn.execute(
+            "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+            (admin_id, role_row["id"]),
+        )
+
+
+def _hash_password_v1(password: str) -> str:
+    """bcrypt hash helper usable during migration (avoids circular import)."""
+    import bcrypt as _bcrypt
+    return _bcrypt.hashpw(password.encode("utf-8")[:72], _bcrypt.gensalt()).decode("utf-8")
 
 
 if __name__ == "__main__":

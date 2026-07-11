@@ -1,3 +1,5 @@
+import { emitAuthEvent } from '../contexts/AuthContext'
+
 const BASE = ''
 const TOKEN_KEY = 'auth_token'
 
@@ -42,6 +44,9 @@ async function request(path: string, options?: RequestInit & { timeoutMs?: numbe
     const res = await fetch(BASE + path, { ...fetchOpts, headers, signal: ctrl.signal })
     const data = await res.json()
     if (!res.ok) {
+      if (res.status === 401 && data.detail && (data.detail.includes('权限已变更') || data.detail.includes('请重新登录'))) {
+        emitAuthEvent('token_version_mismatch')
+      }
       if (res.status === 403 && data.code === 'LICENSE_REQUIRED' && _onLicenseRequired) {
         _onLicenseRequired()
       }
@@ -926,4 +931,122 @@ export const api = {
       body: JSON.stringify({ content }),
     }).then(d => d as { ok: boolean }),
 
+  // Members
+  listPendingMembers: (page?: number, pageSize?: number) => {
+    const params = new URLSearchParams()
+    if (page) params.set('page', String(page))
+    if (pageSize) params.set('page_size', String(pageSize))
+    const qs = params.toString()
+    return request('/api/members/pending' + (qs ? '?' + qs : '')).then(d => d as { members: any[]; total: number; page: number; page_size: number })
+  },
+  approveMember: (userId: string, durationDays?: number) =>
+    request('/api/members/' + userId + '/approve', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duration_days: durationDays || 30 }),
+    }).then(d => d as { ok: boolean; message: string; expires_at: string }),
+  rejectMember: (userId: string, reason?: string) =>
+    request('/api/members/' + userId + '/reject', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '' }),
+    }).then(d => d as { ok: boolean; message: string }),
+  recordPayment: (userId: string, data: { amount_cents: number; plan_name: string; duration_days: number; payment_method?: string; note?: string }) =>
+    request('/api/members/' + userId + '/payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean; expires_before: string; expires_after: string }),
+  listPayments: (userId: string) =>
+    request('/api/members/' + userId + '/payments').then(d => d as { payments: any[] }),
+
+  // Roles
+  listRoles: (userType?: string) => {
+    const qs = userType ? '?user_type=' + encodeURIComponent(userType) : ''
+    return request('/api/roles' + qs).then(d => d.roles as any[])
+  },
+  createRole: (data: { name: string; description?: string; user_type: string }) =>
+    request('/api/roles', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as any),
+  updateRole: (id: string, data: { name?: string; description?: string }) =>
+    request('/api/roles/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as any),
+  deleteRole: (id: string) =>
+    request('/api/roles/' + id, { method: 'DELETE' }),
+  getRole: (id: string) =>
+    request('/api/roles/' + id).then(d => d as any),
+  addRolePermission: (roleId: string, permission: string) =>
+    request('/api/roles/' + roleId + '/permissions/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission }),
+    }).then(d => d as any),
+  removeRolePermission: (roleId: string, permission: string) =>
+    request('/api/roles/' + roleId + '/permissions/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permission }),
+    }).then(d => d as any),
+
+  // Users
+  listUsers: (params?: { user_type?: string; status?: string; search?: string; page?: number; page_size?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.user_type) qs.set('user_type', params.user_type)
+    if (params?.status) qs.set('status', params.status)
+    if (params?.search) qs.set('search', params.search)
+    if (params?.page) qs.set('page', String(params.page))
+    if (params?.page_size) qs.set('page_size', String(params.page_size))
+    const q = qs.toString()
+    return request('/api/users' + (q ? '?' + q : '')).then(d => d as { users: any[]; total: number; page: number; page_size: number })
+  },
+  getUser: (id: string) =>
+    request('/api/users/' + id).then(d => d as any),
+  createUser: (data: { username: string; password: string; display_name: string; user_type: string; email?: string }) =>
+    request('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as any),
+  updateUser: (id: string, data: { display_name?: string; email?: string; is_active?: number }) =>
+    request('/api/users/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as any),
+  deleteUser: (id: string) =>
+    request('/api/users/' + id, { method: 'DELETE' }),
+  toggleUserActive: (userId: string) =>
+    request('/api/users/' + userId + '/active', { method: 'PUT' }).then(d => d as any),
+  addUserRole: (userId: string, roleId: string) =>
+    request('/api/users/' + userId + '/roles/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role_id: roleId }),
+    }).then(d => d as any),
+  removeUserRole: (userId: string, roleId: string) =>
+    request('/api/users/' + userId + '/roles/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role_id: roleId }),
+    }).then(d => d as any),
+  getUserProjects: (userId: string) =>
+    request('/api/users/' + userId + '/projects').then(d => d.projects as any[]),
+  addUserProjects: (userId: string, projectIds: string[]) =>
+    request('/api/users/' + userId + '/projects/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_ids: projectIds }),
+    }).then(d => d as any),
+  removeUserProject: (userId: string, projectId: string) =>
+    request('/api/users/' + userId + '/projects/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_id: projectId }),
+    }).then(d => d as any),
 }

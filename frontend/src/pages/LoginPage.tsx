@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
 export default function LoginPage() {
-  const { login, isAuthenticated, loading: authLoading } = useAuth()
+  const { user, login, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [brandName, setBrandName] = useState('')
   const [brandLogo, setBrandLogo] = useState('')
   const [storedPhone, setStoredPhone] = useState('')
+  const [hasRbac, setHasRbac] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -23,23 +24,19 @@ export default function LoginPage() {
       else if (fallback) setBrandName(fallback)
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.admin_phone) setStoredPhone(s.admin_phone)
+      if (s.db_schema_version) setHasRbac(true)
     }).catch(() => {})
   }, [])
 
-  if (authLoading) {
-    return (
-      <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        height: '100vh', color: 'var(--text-secondary)', fontSize: 14,
-      }}>
-        加载中...
-      </div>
-    )
-  }
-
-  if (isAuthenticated) {
+  // Already logged in → redirect based on user_type
+  if (!authLoading && user) {
+    if (user.user_type === 'member') {
+      return <Navigate to="/app" replace />
+    }
     return <Navigate to="/" replace />
   }
+
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -56,7 +53,11 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
     try {
-      await login(password)
+      if (hasRbac && username.trim()) {
+        await useAuth().authLogin(username.trim(), password)
+      } else {
+        await login(password)
+      }
       navigate('/', { replace: true })
     } catch (e: any) {
       setError(e.message || '登录失败')
@@ -95,7 +96,7 @@ export default function LoginPage() {
           fontSize: 12, textAlign: 'center', margin: '0 0 32px 0',
           color: 'var(--text-secondary)',
         }}>
-          请输入管理员密码以继续
+          请输入管理员账号密码以继续
         </p>
 
         {!storedPhone && (
@@ -108,10 +109,22 @@ export default function LoginPage() {
           </div>
         )}
 
+        {hasRbac && (
+          <input
+            className="form-input"
+            type="text"
+            placeholder="用户名"
+            value={username}
+            onChange={e => { setUsername(e.target.value); setError('') }}
+            onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
+            style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10 }}
+          />
+        )}
+
         <input
           className="form-input"
           type="password"
-          placeholder="管理员密码"
+          placeholder={hasRbac ? '密码' : '管理员密码'}
           value={password}
           onChange={e => { setPassword(e.target.value); setError('') }}
           onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
@@ -137,9 +150,20 @@ export default function LoginPage() {
           {loading ? '验证中...' : '登录'}
         </button>
 
+        {hasRbac && (
+          <p style={{
+            fontSize: 11, color: 'var(--text-secondary)',
+            marginTop: 16, textAlign: 'center',
+          }}>
+            <Link to="/member" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
+              会员登录 / 注册 →
+            </Link>
+          </p>
+        )}
+
         <p style={{
           fontSize: 11, color: 'var(--text-secondary)',
-          marginTop: 24, textAlign: 'center',
+          marginTop: hasRbac ? 8 : 24, textAlign: 'center',
         }}>
           <span
             onClick={() => { setShowHint(true); setPhoneInput(''); setPhoneError(''); setPhoneVerified(false) }}

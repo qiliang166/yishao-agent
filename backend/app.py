@@ -22,6 +22,7 @@ import json
 import logging
 from services.llm_service import test_connection, generate, generate_stream, refine, get_provider
 from routers.prompts import router as prompts_router
+from routers.users import router as users_router
 from routers.prompt_studio import router as prompt_studio_router
 from routers.scenarios import router as scenarios_router
 from services.license_service import (
@@ -52,6 +53,7 @@ app.add_middleware(
 )
 
 app.include_router(prompts_router)
+app.include_router(users_router)
 app.include_router(prompt_studio_router)
 app.include_router(scenarios_router)
 
@@ -189,7 +191,24 @@ SECRET_KEY = os.environ.get("JWT_SECRET", "yishao-agent-jwt-secret-2026")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
+
+# ── Rate limit state ────────────────────────────────────────────────
+_rate_limit_store: dict[str, list[float]] = {}  # ip_key → [timestamps]
+import time as _time
+
+
+def _check_rate_limit(key: str, max_req: int, window_sec: int) -> tuple[bool, int]:
+    """Check if key exceeds rate limit. Returns (allowed, retry_after_sec)."""
+    now = _time.time()
+    cutoff = now - window_sec
+    timestamps = [t for t in _rate_limit_store.get(key, []) if t > cutoff]
+    _rate_limit_store[key] = timestamps
+    if len(timestamps) >= max_req:
+        retry = int(timestamps[0] + window_sec - now) + 1
+        return False, max(retry, 1)
+    timestamps.append(now)
+    return True, 0
 
 
 def _hash_password(password: str) -> str:
@@ -213,7 +232,61 @@ def _verify_password(plain: str, stored_hash: str) -> bool:
     return legacy == stored_hash
 
 
+# ── User & permission helpers ────────────────────────────────────────
+
+def _get_user_permissions(user_id: str, user_type: str) -> list[str]:
+    """Compute effective permissions for a user (union of all role permissions)."""
+    db = get_db()
+    try:
+        rows = db.execute("""
+            SELECT DISTINCT rp.permission FROM role_permissions rp
+            JOIN user_roles ur ON ur.role_id = rp.role_id
+            WHERE ur.user_id = ?
+        """, (user_id,)).fetchall()
+        perms = [r["permission"] for r in rows]
+        # Rule 3: admin always has project.view_all
+        if user_type == "admin" and "project.view_all" not in perms:
+            perms.append("project.view_all")
+        # Rule 5: role.manage implies member.manage
+        if "role.manage" in perms and "member.manage" not in perms:
+            perms.append("member.manage")
+        return perms
+    finally:
+        db.close()
+
+
+def _get_user_roles(user_id: str) -> list[str]:
+    """Get role names for a user."""
+    db = get_db()
+    try:
+        rows = db.execute("""
+            SELECT r.name FROM roles r
+            JOIN user_roles ur ON ur.role_id = r.id
+            WHERE ur.user_id = ?
+        """, (user_id,)).fetchall()
+        return [r["name"] for r in rows]
+    finally:
+        db.close()
+
+
+def _create_jwt(user_row) -> str:
+    """Create JWT with user info, permissions, and token_version."""
+    permissions = _get_user_permissions(user_row["id"], user_row["user_type"])
+    roles = _get_user_roles(user_row["id"])
+    payload = {
+        "sub": user_row["id"],
+        "username": user_row["username"],
+        "user_type": user_row["user_type"],
+        "permissions": permissions,
+        "roles": roles,
+        "token_version": user_row["token_version"],
+        "exp": datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    """Legacy: create simple JWT (kept for backward compat)."""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS))
     to_encode.update({"exp": expire})
@@ -222,6 +295,8 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Validate JWT and return payload. Raises 401 on any failure."""
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="请先登录")
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -230,14 +305,107 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="无效或过期的令牌")
 
 
-# Auth middleware: protect all /api/* routes except login & auth/check
+# ── Permission enforcement ───────────────────────────────────────────
+
+def require_perm(permission: str):
+    """FastAPI dependency: check current user has the required permission."""
+    def checker(request: Request):
+        user = getattr(request.state, "user", None)
+        if user is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+        perms = set(user.get("permissions", []))
+        # Rule 3: admin always view_all
+        if user.get("user_type") == "admin":
+            perms.add("project.view_all")
+        # Rule 5: role.manage → member.manage
+        if "role.manage" in perms:
+            perms.add("member.manage")
+        # Rule 4: generate requires view
+        if permission.endswith(".generate"):
+            view_perm = permission.replace(".generate", ".view")
+            if view_perm not in perms:
+                raise HTTPException(status_code=403, detail=f"缺少权限: {view_perm}")
+        if permission not in perms:
+            raise HTTPException(status_code=403, detail=f"缺少权限: {permission}")
+        return user
+    return Depends(checker)
+
+
+def check_ownership(resource_created_by: str | None, user: dict,
+                    edit_all_perm: str = "project.edit_all") -> None:
+    """Raise 403 if user doesn't own the resource and lacks edit_all permission."""
+    if resource_created_by is None:
+        return  # historical data
+    if resource_created_by == user.get("user_id"):
+        return
+    if edit_all_perm in user.get("permissions", []):
+        return
+    raise HTTPException(status_code=403, detail="只能操作自己创建的内容")
+
+
+def verify_project_access(project_id: str, user: dict) -> None:
+    """Raise 403 if user (member) doesn't have access to this project."""
+    if user.get("user_type") == "admin":
+        return
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT 1 FROM member_projects WHERE user_id=? AND project_id=?",
+            (user["user_id"], project_id),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=403, detail="无权访问此项目资源")
+    finally:
+        db.close()
+
+
+def _write_audit(conn, actor_id: str, action: str, target_type: str = "",
+                 target_id: str = "", detail: str = "{}", ip_address: str = ""):
+    """Write an audit log entry."""
+    import uuid as _uuid
+    conn.execute(
+        """INSERT INTO audit_log (id, actor_id, action, target_type, target_id, detail, ip_address)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (str(_uuid.uuid4()), actor_id, action, target_type, target_id, detail, ip_address),
+    )
+
+
+# ── Auth middleware (extended) ───────────────────────────────────────
+
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     method = request.method
 
+    # --- Phase 1: Inject request.state.user from JWT (new) ---
+    auth_header = request.headers.get("Authorization", "")
+    request.state.user = None
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            # Check token_version if present (new-style JWT)
+            if "token_version" in payload and "sub" in payload:
+                db = get_db()
+                try:
+                    urow = db.execute(
+                        "SELECT token_version FROM users WHERE id=? AND is_active=1",
+                        (payload["sub"],),
+                    ).fetchone()
+                    if not urow or urow["token_version"] != payload["token_version"]:
+                        db.close()
+                        return JSONResponse(status_code=401,
+                            content={"detail": "权限已变更，请重新登录"})
+                finally:
+                    db.close()
+            request.state.user = payload
+        except JWTError:
+            request.state.user = None
+        except Exception:
+            request.state.user = None
+
+    # --- Phase 2: Legacy protection for settings/config write endpoints ---
     # Only protect settings/config write endpoints when password is enabled
-    # Protected routes: (prefix, allowed_methods)
     _protected = (
         ("/api/settings", ("PUT",)),
         ("/api/column-configs/", ("PUT", "POST", "DELETE")),
@@ -251,9 +419,6 @@ async def auth_middleware(request: Request, call_next):
     needs_auth = False
     for prefix, methods in _protected:
         if path.startswith(prefix) and method in methods:
-            # For /api/projects/ and /api/workspaces/, only protect the
-            # resource itself and its items (column configs). Sub-resources
-            # like steps, files, materials are user content — not settings.
             if prefix in ("/api/projects/", "/api/workspaces/"):
                 rest = path[len(prefix):]
                 parts = rest.split("/")
@@ -263,6 +428,10 @@ async def auth_middleware(request: Request, call_next):
             break
 
     if needs_auth:
+        # If already authenticated via JWT (request.state.user is set), skip legacy check
+        if request.state.user is not None:
+            return await call_next(request)
+
         stored_hash = _get_setting("admin_password")
         if not stored_hash:
             return await call_next(request)
@@ -270,12 +439,12 @@ async def auth_middleware(request: Request, call_next):
         if enabled == "0":
             return await call_next(request)
 
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
+        auth_header_legacy = request.headers.get("Authorization", "")
+        if not auth_header_legacy.startswith("Bearer "):
             return JSONResponse(status_code=401, content={"detail": "缺少认证令牌"})
-        token = auth_header[7:]
+        token_legacy = auth_header_legacy[7:]
         try:
-            jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            jwt.decode(token_legacy, SECRET_KEY, algorithms=[ALGORITHM])
         except JWTError:
             return JSONResponse(status_code=401, content={"detail": "无效或过期的令牌"})
 
@@ -497,23 +666,53 @@ def copy_seed_configs_to_workspace(workspace_id: str):
 # ── Projects ──
 
 @app.get("/api/projects")
-def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = ""):
+def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", request: Request = None):
     db = get_db()
     try:
-        if workspace_id:
-            total = db.execute("SELECT COUNT(*) FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
-            offset = (page - 1) * page_size
-            rows = db.execute(
-                "SELECT * FROM projects WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-                (workspace_id, page_size, offset)
-            ).fetchall()
+        user = getattr(request.state, "user", None) if request else None
+        if user and user.get("user_type") == "member":
+            # Member: only projects assigned via member_projects
+            if workspace_id:
+                total = db.execute("""
+                    SELECT COUNT(*) FROM projects p
+                    JOIN member_projects mp ON mp.project_id = p.id
+                    WHERE mp.user_id = ? AND p.workspace_id = ?
+                """, (user["sub"], workspace_id)).fetchone()[0]
+                offset = (page - 1) * page_size
+                rows = db.execute("""
+                    SELECT p.* FROM projects p
+                    JOIN member_projects mp ON mp.project_id = p.id
+                    WHERE mp.user_id = ? AND p.workspace_id = ?
+                    ORDER BY p.updated_at DESC LIMIT ? OFFSET ?
+                """, (user["sub"], workspace_id, page_size, offset)).fetchall()
+            else:
+                total = db.execute("""
+                    SELECT COUNT(*) FROM projects p
+                    JOIN member_projects mp ON mp.project_id = p.id
+                    WHERE mp.user_id = ?
+                """, (user["sub"],)).fetchone()[0]
+                offset = (page - 1) * page_size
+                rows = db.execute("""
+                    SELECT p.* FROM projects p
+                    JOIN member_projects mp ON mp.project_id = p.id
+                    WHERE mp.user_id = ?
+                    ORDER BY p.updated_at DESC LIMIT ? OFFSET ?
+                """, (user["sub"], page_size, offset)).fetchall()
         else:
-            total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
-            offset = (page - 1) * page_size
-            rows = db.execute(
-                "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-                (page_size, offset)
-            ).fetchall()
+            if workspace_id:
+                total = db.execute("SELECT COUNT(*) FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
+                offset = (page - 1) * page_size
+                rows = db.execute(
+                    "SELECT * FROM projects WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                    (workspace_id, page_size, offset)
+                ).fetchall()
+            else:
+                total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
+                offset = (page - 1) * page_size
+                rows = db.execute(
+                    "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                    (page_size, offset)
+                ).fetchall()
         return {"projects": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
@@ -617,7 +816,7 @@ def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
 
 
 @app.post("/api/projects")
-def create_project(req: ProjectCreate):
+def create_project(req: ProjectCreate, user=require_perm("project.create")):
     pid = uuid.uuid4().hex[:12]
     db = get_db()
     try:
@@ -642,8 +841,8 @@ def create_project(req: ProjectCreate):
         project_code = f"KH{today}-{today_count + 1:04d}"
 
         db.execute(
-            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id) VALUES (?, ?, ?, ?, ?, ?)",
-            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id))
+            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, user["sub"]))
         db.commit()
         # Initialize project_items from workspace configs
         _init_project_items_from_factory(pid, req.workspace_id)
@@ -854,9 +1053,10 @@ def api_project_files(project_id: str):
 
 
 @app.get("/api/projects/{project_id}/download-all")
-def api_download_all(project_id: str):
+def api_download_all(project_id: str, request: Request, user=require_perm("stage5.download")):
     """Download all files in a project folder as a zip archive."""
     import zipfile, io
+    verify_project_access(project_id, user)
     path = resolve_project_storage(project_id, auto_create=False)
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="项目文件夹不存在")
@@ -878,8 +1078,9 @@ def api_download_all(project_id: str):
 
 
 @app.post("/api/projects/{project_id}/download-selected")
-async def api_download_selected(project_id: str, request: Request):
+async def api_download_selected(project_id: str, request: Request, user=require_perm("stage5.download")):
     """Download selected files as a zip archive."""
+    verify_project_access(project_id, user)
     body = await request.json()
     import zipfile, io
     proj = _get_project(project_id)
@@ -966,12 +1167,13 @@ def get_project(project_id: str):
 
 
 @app.put("/api/projects/{project_id}")
-def update_project(project_id: str, req: ProjectUpdate):
+def update_project(project_id: str, req: ProjectUpdate, user=require_perm("project.edit_own")):
     db = get_db()
     try:
-        existing = db.execute("SELECT id FROM projects WHERE id = ?", (project_id,)).fetchone()
+        existing = db.execute("SELECT id, created_by FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not existing:
             raise HTTPException(status_code=404, detail="Project not found")
+        check_ownership(existing["created_by"], user)
 
         if req.name is not None:
             db.execute("UPDATE projects SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.name, project_id))
@@ -1136,12 +1338,13 @@ def _delete_project_files(project_id: str, db):
 
 
 @app.delete("/api/projects/{project_id}")
-def delete_project(project_id: str):
+def delete_project(project_id: str, user=require_perm("project.delete_own")):
     db = get_db()
     try:
-        row = db.execute("SELECT is_locked FROM projects WHERE id = ?", (project_id,)).fetchone()
+        row = db.execute("SELECT is_locked, created_by FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Project not found")
+        check_ownership(row["created_by"], user)
         if row["is_locked"]:
             raise HTTPException(403, "项目已锁定，无法删除")
         _delete_project_files(project_id, db)
@@ -1153,16 +1356,20 @@ def delete_project(project_id: str):
 
 
 @app.post("/api/projects/batch-delete")
-def batch_delete_projects(req: dict):
+def batch_delete_projects(req: dict, user=require_perm("project.delete_own")):
     ids = req.get("ids", [])
     if not ids:
         raise HTTPException(400, "ids required")
     db = get_db()
     try:
         placeholders = ",".join(["?"] * len(ids))
-        locked_rows = db.execute(
-            f"SELECT id, name FROM projects WHERE id IN ({placeholders}) AND is_locked = 1", ids
+        rows = db.execute(
+            f"SELECT id, name, is_locked, created_by FROM projects WHERE id IN ({placeholders})", ids
         ).fetchall()
+        # Check ownership for all projects
+        for r in rows:
+            check_ownership(r["created_by"], user)
+        locked_rows = [r for r in rows if r["is_locked"]]
         locked_ids = {r["id"] for r in locked_rows}
         unlocked = [pid for pid in ids if pid not in locked_ids]
         if not unlocked:
@@ -5202,9 +5409,18 @@ def api_download_server():
 # ── File Download ──
 
 @app.get("/api/download/{filename}")
-def download_file(filename: str, project_id: str = None, name: str = None):
+def download_file(filename: str, project_id: str = None, name: str = None, request: Request = None):
     download_name = name or filename
     if project_id:
+        user = getattr(request.state, "user", None) if request else None
+        if user is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+        perms = set(user.get("permissions", []))
+        if user.get("user_type") == "admin":
+            perms.add("project.view_all")
+        if "stage5.download" not in perms:
+            raise HTTPException(status_code=403, detail="缺少权限: stage5.download")
+        verify_project_access(project_id, user)
         try:
             proj_dir = resolve_project_storage(project_id, auto_create=False)
             filepath = os.path.join(proj_dir, filename)
@@ -5462,9 +5678,18 @@ def api_tts_history_delete(history_id: int):
 
 
 @app.get("/api/audio/{filename}")
-def serve_audio(filename: str, project_id: str = None, name: str = None):
+def serve_audio(filename: str, project_id: str = None, name: str = None, request: Request = None):
     download_name = name or filename
     if project_id:
+        user = getattr(request.state, "user", None) if request else None
+        if user is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+        perms = set(user.get("permissions", []))
+        if user.get("user_type") == "admin":
+            perms.add("project.view_all")
+        if "stage4.view" not in perms:
+            raise HTTPException(status_code=403, detail="缺少权限: stage4.view")
+        verify_project_access(project_id, user)
         try:
             proj_dir = resolve_project_storage(project_id, auto_create=False)
             filepath = os.path.join(proj_dir, filename)
@@ -5531,7 +5756,7 @@ def get_settings():
 
 
 @app.put("/api/settings")
-def update_settings(req: dict):
+def update_settings(req: dict, user=require_perm("config.global")):
     db = get_db()
     try:
         for key, value in req.items():
@@ -5606,11 +5831,72 @@ def upsert_help_section(location: str, req: dict):
         db.close()
 
 
+def _get_client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    client = request.client
+    return client.host if client else "127.0.0.1"
+
+
+# ── Login endpoints ──────────────────────────────────────────────────
+
+_LOGIN_RATE_MAX = 5
+_LOGIN_RATE_WINDOW = 60
+_REGISTER_RATE_MAX = 3
+_REGISTER_RATE_WINDOW = 3600
+_MAX_FAILED_ATTEMPTS = 10
+_LOCK_DURATION_SEC = 1800  # 30 minutes
+
+
 @app.post("/api/login")
-def login(req: dict):
+def login(req: dict, request: Request):
+    """Backward-compatible login. Accepts {password} and maps to super admin.
+    When RBAC migration is active, returns new-style JWT for the admin user.
+    """
+    ip = _get_client_ip(request)
+    allowed, retry = _check_rate_limit(f"login:{ip}", _LOGIN_RATE_MAX, _LOGIN_RATE_WINDOW)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"登录请求过于频繁，请 {retry} 秒后再试",
+            headers={"Retry-After": str(retry)},
+        )
+
     plain = req.get("password", "")
     if not plain:
         raise HTTPException(status_code=400, detail="密码不能为空")
+
+    # If RBAC migration is active, find the (first) admin and log them in
+    db = get_db()
+    try:
+        admin = db.execute(
+            "SELECT * FROM users WHERE user_type='admin' AND is_active=1 "
+            "ORDER BY created_at LIMIT 1"
+        ).fetchone()
+    finally:
+        db.close()
+
+    if admin:
+        if not _verify_password(plain, admin["password_hash"]):
+            _check_login_lockout(admin)
+            raise HTTPException(status_code=403, detail="密码错误")
+        _reset_failed_attempts(admin["id"])
+        token = _create_jwt(admin)
+        return {
+            "token": token,
+            "expires_at": (datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)).isoformat(),
+            "user": {
+                "user_id": admin["id"],
+                "username": admin["username"],
+                "display_name": admin["display_name"],
+                "user_type": admin["user_type"],
+                "permissions": _get_user_permissions(admin["id"], admin["user_type"]),
+                "roles": _get_user_roles(admin["id"]),
+            },
+        }
+
+    # Legacy fallback (no RBAC migration yet)
     stored_hash = _get_setting("admin_password")
     if not stored_hash:
         raise HTTPException(status_code=400, detail="未设置初始密码，请先通过设置页面创建密码")
@@ -5618,20 +5904,475 @@ def login(req: dict):
         raise HTTPException(status_code=403, detail="密码错误")
     # Upgrade legacy hash to bcrypt
     if not stored_hash.startswith("$2"):
-        db = get_db()
+        db2 = get_db()
         try:
-            db.execute(
+            db2.execute(
                 "UPDATE settings SET value = ? WHERE key = 'admin_password'",
                 (_hash_password(plain),),
             )
-            db.commit()
+            db2.commit()
         finally:
-            db.close()
+            db2.close()
     token = create_access_token({"sub": "admin"})
     return {
         "token": token,
         "expires_at": (datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)).isoformat(),
     }
+
+
+def _check_login_lockout(user_row) -> None:
+    """Check if account is locked due to failed attempts. Increments counter on failure."""
+    if user_row["locked_until"]:
+        try:
+            locked = datetime.fromisoformat(user_row["locked_until"])
+            if locked > datetime.utcnow():
+                remain = int((locked - datetime.utcnow()).total_seconds())
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"账户已被锁定，请 {remain} 秒后再试",
+                    headers={"Retry-After": str(remain)},
+                )
+        except (ValueError, TypeError):
+            pass
+    db = get_db()
+    try:
+        new_attempts = user_row["failed_login_attempts"] + 1
+        if new_attempts >= _MAX_FAILED_ATTEMPTS:
+            locked_until = (datetime.utcnow() + timedelta(seconds=_LOCK_DURATION_SEC)).isoformat()
+            db.execute(
+                "UPDATE users SET failed_login_attempts=?, locked_until=? WHERE id=?",
+                (new_attempts, locked_until, user_row["id"]),
+            )
+            db.commit()
+            raise HTTPException(
+                status_code=429,
+                detail=f"登录失败次数过多，账户已锁定 {_LOCK_DURATION_SEC // 60} 分钟",
+                headers={"Retry-After": str(_LOCK_DURATION_SEC)},
+            )
+        db.execute(
+            "UPDATE users SET failed_login_attempts=? WHERE id=?",
+            (new_attempts, user_row["id"]),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+def _reset_failed_attempts(user_id: str) -> None:
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE users SET failed_login_attempts=0, locked_until=NULL WHERE id=?",
+            (user_id,),
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
+@app.post("/api/auth/login")
+def auth_login(req: dict, request: Request):
+    """New login for admin-type users with username+password."""
+    ip = _get_client_ip(request)
+    allowed, retry = _check_rate_limit(f"login:{ip}", _LOGIN_RATE_MAX, _LOGIN_RATE_WINDOW)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"登录请求过于频繁，请 {retry} 秒后再试",
+            headers={"Retry-After": str(retry)},
+        )
+
+    username = (req.get("username", "") or "").strip()
+    password = req.get("password", "") or ""
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
+
+    db = get_db()
+    try:
+        user = db.execute(
+            "SELECT * FROM users WHERE username=? COLLATE NOCASE AND user_type='admin'",
+            (username,),
+        ).fetchone()
+        if not user:
+            raise HTTPException(status_code=403, detail="用户名或密码错误")
+        if not user["is_active"]:
+            raise HTTPException(status_code=403, detail="账户已被停用")
+        if not _verify_password(password, user["password_hash"]):
+            _check_login_lockout(user)
+            raise HTTPException(status_code=403, detail="用户名或密码错误")
+        _reset_failed_attempts(user["id"])
+        token = _create_jwt(user)
+        return {
+            "token": token,
+            "expires_at": (datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)).isoformat(),
+            "user": {
+                "user_id": user["id"],
+                "username": user["username"],
+                "display_name": user["display_name"],
+                "user_type": user["user_type"],
+                "permissions": _get_user_permissions(user["id"], user["user_type"]),
+                "roles": _get_user_roles(user["id"]),
+            },
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    """Return current user info from JWT in auth middleware."""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    return {
+        "user_id": user.get("sub"),
+        "username": user.get("username"),
+        "user_type": user.get("user_type"),
+        "permissions": user.get("permissions", []),
+        "roles": user.get("roles", []),
+    }
+
+
+@app.post("/api/auth/change-password")
+def auth_change_password(req: dict, request: Request):
+    """Change current user's password."""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    old_pw = req.get("old_password", "") or ""
+    new_pw = req.get("new_password", "") or ""
+    if not old_pw or not new_pw:
+        raise HTTPException(status_code=400, detail="旧密码和新密码不能为空")
+    if len(new_pw) < 8:
+        raise HTTPException(status_code=400, detail="新密码长度不能少于 8 位")
+
+    db = get_db()
+    try:
+        urow = db.execute(
+            "SELECT password_hash FROM users WHERE id=? AND is_active=1",
+            (user["sub"],),
+        ).fetchone()
+        if not urow:
+            raise HTTPException(status_code=401, detail="用户不存在或已停用")
+        if not _verify_password(old_pw, urow["password_hash"]):
+            raise HTTPException(status_code=403, detail="旧密码错误")
+        new_hash = _hash_password(new_pw)
+        db.execute(
+            "UPDATE users SET password_hash=?, token_version=token_version+1, "
+            "password_changed_at=?, updated_at=? WHERE id=?",
+            (new_hash, datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), user["sub"]),
+        )
+        _write_audit(db, user["sub"], "auth.change_password", "user", user["sub"],
+                      json.dumps({}), _get_client_ip(request))
+        db.commit()
+    finally:
+        db.close()
+    return {"ok": True, "message": "密码已修改，请重新登录"}
+
+
+@app.get("/api/auth/permissions")
+def auth_permissions(request: Request):
+    """Return current user's permission codes and role names (for frontend init)."""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    return {
+        "permissions": user.get("permissions", []),
+        "roles": user.get("roles", []),
+    }
+
+
+# ── Member auth endpoints ────────────────────────────────────────────
+
+@app.post("/api/member/login")
+def member_login(req: dict, request: Request):
+    """Member login with username+password. Checks approval, active, and expiry."""
+    ip = _get_client_ip(request)
+    allowed, retry = _check_rate_limit(f"login:{ip}", _LOGIN_RATE_MAX, _LOGIN_RATE_WINDOW)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"登录请求过于频繁，请 {retry} 秒后再试",
+            headers={"Retry-After": str(retry)},
+        )
+
+    username = (req.get("username", "") or "").strip()
+    password = req.get("password", "") or ""
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
+
+    db = get_db()
+    try:
+        user = db.execute(
+            "SELECT * FROM users WHERE username=? COLLATE NOCASE AND user_type='member'",
+            (username,),
+        ).fetchone()
+        if not user:
+            raise HTTPException(status_code=403, detail="用户名或密码错误")
+        if not user["is_active"]:
+            raise HTTPException(status_code=403, detail="账户已被停用")
+        if not _verify_password(password, user["password_hash"]):
+            _check_login_lockout(user)
+            raise HTTPException(status_code=403, detail="用户名或密码错误")
+        if not user["is_approved"]:
+            raise HTTPException(status_code=403, detail="账户尚未通过审批，请等待管理员审核")
+        if user["is_approved"] == 2:
+            raise HTTPException(status_code=403, detail="注册申请已被拒绝，请联系管理员")
+        # Check expiry
+        if user["expires_at"]:
+            try:
+                expires = datetime.fromisoformat(user["expires_at"])
+                if expires < datetime.utcnow():
+                    raise HTTPException(status_code=403, detail="会员已到期，请联系管理员续费")
+            except (ValueError, TypeError):
+                pass
+        _reset_failed_attempts(user["id"])
+        token = _create_jwt(user)
+        return {
+            "token": token,
+            "expires_at": (datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)).isoformat(),
+            "user": {
+                "user_id": user["id"],
+                "username": user["username"],
+                "display_name": user["display_name"],
+                "user_type": user["user_type"],
+                "permissions": _get_user_permissions(user["id"], user["user_type"]),
+                "roles": _get_user_roles(user["id"]),
+            },
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/member/register")
+def member_register(req: dict, request: Request):
+    """Self-registration for members. Creates user with is_approved=0."""
+    ip = _get_client_ip(request)
+    allowed, retry = _check_rate_limit(f"register:{ip}", _REGISTER_RATE_MAX, _REGISTER_RATE_WINDOW)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"注册请求过于频繁，请 {retry} 秒后再试",
+            headers={"Retry-After": str(retry)},
+        )
+
+    username = (req.get("username", "") or "").strip()
+    password = req.get("password", "") or ""
+    display_name = (req.get("display_name", "") or "").strip() or username
+    email = (req.get("email", "") or "").strip()
+
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
+    if len(username) < 2:
+        raise HTTPException(status_code=400, detail="用户名至少需要 2 个字符")
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="密码长度不能少于 8 位")
+
+    db = get_db()
+    try:
+        existing = db.execute(
+            "SELECT id FROM users WHERE username=? COLLATE NOCASE",
+            (username,),
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=400, detail="该用户名已被注册")
+        if email:
+            email_existing = db.execute(
+                "SELECT id FROM users WHERE email=? COLLATE NOCASE",
+                (email,),
+            ).fetchone()
+            if email_existing:
+                raise HTTPException(status_code=400, detail="该邮箱已被注册，如需续费请联系管理员")
+            # Check email format
+            if "@" not in email or "." not in email.split("@")[-1]:
+                raise HTTPException(status_code=400, detail="邮箱格式不正确")
+
+        import uuid as _uuid
+        user_id = str(_uuid.uuid4())
+        now = datetime.utcnow().isoformat()
+        pw_hash = _hash_password(password)
+        db.execute(
+            """INSERT INTO users (id, username, password_hash, display_name, email, user_type,
+               is_active, is_approved, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, 'member', 1, 0, ?, ?)""",
+            (user_id, username, pw_hash, display_name, email, now, now),
+        )
+        _write_audit(db, user_id, "member.register", "user", user_id,
+                      json.dumps({"username": username, "email": email}), ip)
+        db.commit()
+    finally:
+        db.close()
+    return {"ok": True, "message": "注册成功，请等待管理员审批"}
+
+
+# ── Member management endpoints ─────────────────────────────────────
+
+@app.get("/api/members/pending")
+def list_pending_members(page: int = 1, page_size: int = 20, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        offset = (page - 1) * page_size
+        total = db.execute(
+            "SELECT COUNT(*) FROM users WHERE user_type='member' AND is_approved=0"
+        ).fetchone()[0]
+        rows = db.execute(
+            "SELECT id, username, display_name, email, is_approved, created_at "
+            "FROM users WHERE user_type='member' AND is_approved=0 "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (page_size, offset),
+        ).fetchall()
+        return {"members": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+    finally:
+        db.close()
+
+
+@app.put("/api/members/{user_id}/approve")
+def approve_member(user_id: str, req: dict = None, user=require_perm("member.manage")):
+    """Approve a pending member. Assigns '基础会员' role and sets expiry."""
+    import uuid as _uuid
+    duration_days = (req or {}).get("duration_days", 30)
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, username, user_type, is_approved FROM users WHERE id=?",
+            (user_id,),
+        ).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+        if m["user_type"] != "member":
+            raise HTTPException(400, "只能审批会员类型的用户")
+        if m["is_approved"] != 0:
+            raise HTTPException(400, "该用户已处理过")
+
+        from datetime import datetime as _dt, timedelta as _td
+        expires_at = (_dt.utcnow() + _td(days=int(duration_days))).isoformat()
+
+        db.execute(
+            "UPDATE users SET is_approved=1, approved_by=?, approved_at=?, "
+            "expires_at=?, updated_at=? WHERE id=?",
+            (user["sub"], _dt.utcnow().isoformat(), expires_at,
+             _dt.utcnow().isoformat(), user_id),
+        )
+
+        # Assign 基础会员 role
+        role = db.execute(
+            "SELECT id FROM roles WHERE name='基础会员' AND is_system=1"
+        ).fetchone()
+        if role:
+            db.execute(
+                "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                (user_id, role["id"]),
+            )
+
+        _write_audit(db, user["sub"], "member.approve", "user", user_id,
+                      json.dumps({"duration_days": duration_days, "expires_at": expires_at}))
+        db.commit()
+        return {"ok": True, "message": "审批通过", "expires_at": expires_at}
+    finally:
+        db.close()
+
+
+@app.put("/api/members/{user_id}/reject")
+def reject_member(user_id: str, req: dict = None, user=require_perm("member.manage")):
+    """Reject a pending member."""
+    reason = (req or {}).get("reason", "")
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, user_type, is_approved FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+        if m["user_type"] != "member":
+            raise HTTPException(400, "只能审批会员类型的用户")
+        if m["is_approved"] != 0:
+            raise HTTPException(400, "该用户已处理过")
+
+        from datetime import datetime as _dt
+        db.execute(
+            "UPDATE users SET is_approved=2, approved_by=?, approved_at=?, "
+            "updated_at=? WHERE id=?",
+            (user["sub"], _dt.utcnow().isoformat(), _dt.utcnow().isoformat(), user_id),
+        )
+        _write_audit(db, user["sub"], "member.reject", "user", user_id,
+                      json.dumps({"reason": reason}))
+        db.commit()
+        return {"ok": True, "message": "已拒绝"}
+    finally:
+        db.close()
+
+
+@app.post("/api/members/{user_id}/payment")
+def record_payment(user_id: str, req: dict, user=require_perm("member.manage")):
+    """Record a payment and extend member expiry."""
+    import uuid as _uuid
+    amount_cents = req.get("amount_cents", 0)
+    plan_name = req.get("plan_name", "")
+    duration_days = int(req.get("duration_days", 0))
+    payment_method = req.get("payment_method", "")
+    note = req.get("note", "")
+
+    if not plan_name or duration_days <= 0:
+        raise HTTPException(400, "请填写套餐名和有效续期天数")
+    if amount_cents <= 0:
+        raise HTTPException(400, "请填写有效的付费金额")
+
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, username, user_type, expires_at FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+        if m["user_type"] != "member":
+            raise HTTPException(400, "只能为会员记录付费")
+
+        from datetime import datetime as _dt, timedelta as _td
+        now = _dt.utcnow()
+        current_expires = None
+        if m["expires_at"]:
+            try:
+                current_expires = _dt.fromisoformat(m["expires_at"])
+            except (ValueError, TypeError):
+                pass
+        base = current_expires if current_expires and current_expires > now else now
+        new_expires = base + _td(days=duration_days)
+        new_expires_str = new_expires.isoformat()
+
+        pid = str(_uuid.uuid4())
+        db.execute(
+            """INSERT INTO payment_records
+               (id, user_id, amount_cents, plan_name, duration_days, payment_method,
+                recorded_by, expires_before, expires_after, note, paid_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (pid, user_id, amount_cents, plan_name, duration_days, payment_method,
+             user["sub"], m["expires_at"], new_expires_str, note, now.isoformat()),
+        )
+        db.execute(
+            "UPDATE users SET expires_at=?, updated_at=? WHERE id=?",
+            (new_expires_str, now.isoformat(), user_id),
+        )
+        _write_audit(db, user["sub"], "member.payment", "user", user_id,
+                      json.dumps({"amount_cents": amount_cents, "plan": plan_name,
+                                  "days": duration_days, "new_expires": new_expires_str}))
+        db.commit()
+        return {"ok": True, "expires_after": new_expires_str,
+                "expires_before": m["expires_at"], "duration_days": duration_days}
+    finally:
+        db.close()
+
+
+@app.get("/api/members/{user_id}/payments")
+def list_payments(user_id: str, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM payment_records WHERE user_id=? ORDER BY paid_at DESC",
+            (user_id,),
+        ).fetchall()
+        return {"payments": [dict(r) for r in rows]}
+    finally:
+        db.close()
 
 
 @app.get("/api/auth/check")

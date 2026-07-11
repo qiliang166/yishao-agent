@@ -9,14 +9,21 @@ import ProjItemSettingsPage from './pages/ProjItemSettingsPage'
 import TemplateManager from './pages/TemplateManager'
 import ManualPage from './pages/ManualPage'
 import LoginPage from './pages/LoginPage'
+import MemberLoginPage from './pages/MemberLoginPage'
+import MemberRegisterPage from './pages/MemberRegisterPage'
+import MemberDashboard from './pages/MemberDashboard'
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
 import PromptStudioPage from './pages/PromptStudioPage'
+import MemberApprovalPage from './pages/MemberApprovalPage'
+import UserManagePage from './pages/UserManagePage'
+import RoleManagePage from './pages/RoleManagePage'
 import { ModalProvider } from './components/ModalProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import SettingsLock from './components/SettingsLock'
 import SetupWizard from './components/SetupWizard'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LicenseProvider } from './contexts/LicenseContext'
+import { usePermission } from './hooks/usePermission'
 import { api } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
@@ -83,6 +90,11 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
     return <span style={{ fontSize: 15 }}>{brandLogo || '🍽'}</span>
   }
 
+  const canTemplate = usePermission('template.manage')
+  const canPrompt = usePermission('prompt.manage')
+  const canMember = usePermission('member.manage')
+  const canRole = usePermission('role.manage')
+
   return (
     <aside className="sidebar">
       <div className="sidebar-head">
@@ -107,16 +119,20 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
             <span className="ico">🔧</span> 全局配置
           </button>
         )}
-        <button
-          className={`sidebar-item ${location.pathname === '/templates' ? 'active' : ''}`}
-          onClick={() => navigate('/templates')}>
-          <span className="ico">📄</span> 模板管理
-        </button>
-        <button
-          className={`sidebar-item ${location.pathname === '/prompt-studio' ? 'active' : ''}`}
-          onClick={() => navigate('/prompt-studio')}>
-          <span className="ico">🎨</span> 提示词工作室
-        </button>
+        {canTemplate && (
+          <button
+            className={`sidebar-item ${location.pathname === '/templates' ? 'active' : ''}`}
+            onClick={() => navigate('/templates')}>
+            <span className="ico">📄</span> 模板管理
+          </button>
+        )}
+        {canPrompt && (
+          <button
+            className={`sidebar-item ${location.pathname === '/prompt-studio' ? 'active' : ''}`}
+            onClick={() => navigate('/prompt-studio')}>
+            <span className="ico">🎨</span> 提示词工作室
+          </button>
+        )}
         <button
           className={`sidebar-item ${location.pathname === '/manual' ? 'active' : ''}`}
           onClick={() => navigate('/manual')}>
@@ -127,6 +143,32 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           onClick={() => navigate('/settings')}>
           <span className="ico">⚙</span> 全局设置
         </button>
+        {(canMember || canRole) && (
+          <>
+            <div style={{ borderTop: '1px solid var(--border)', margin: '4px 12px' }} />
+            {canRole && (
+              <button
+                className={`sidebar-item ${location.pathname === '/roles' ? 'active' : ''}`}
+                onClick={() => navigate('/roles')}>
+                <span className="ico">🛡</span> 角色管理
+              </button>
+            )}
+            {canMember && (
+              <>
+                <button
+                  className={`sidebar-item ${location.pathname === '/members/pending' ? 'active' : ''}`}
+                  onClick={() => navigate('/members/pending')}>
+                  <span className="ico">✅</span> 会员审批
+                </button>
+                <button
+                  className={`sidebar-item ${location.pathname === '/members' ? 'active' : ''}`}
+                  onClick={() => navigate('/members')}>
+                  <span className="ico">👥</span> 用户管理
+                </button>
+              </>
+            )}
+          </>
+        )}
       </nav>
       <div className="sidebar-foot" style={{ padding: '8px 16px 8px 10px', marginBottom: 50, lineHeight: 2.2 }}>
         {isWorkspace && (
@@ -168,10 +210,10 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
 }
 
 function LogoutButton() {
-  const { logout, passwordRequired } = useAuth()
+  const { logout, user } = useAuth()
   const navigate = useNavigate()
 
-  if (!passwordRequired) return null
+  if (!user) return null
 
   const handleLogout = () => {
     logout()
@@ -233,11 +275,22 @@ function PhoneReminder() {
 
 function AppShell() {
   const location = useLocation()
-  const { isAuthenticated, passwordRequired, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, authRequired } = useAuth()
   const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
   const [showWizard, setShowWizard] = useState(false)
 
-  if (!authLoading && passwordRequired && !isAuthenticated) {
+  if (authLoading) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', color: 'var(--text-secondary)', fontSize: 14,
+      }}>
+        加载中...
+      </div>
+    )
+  }
+
+  if (authRequired && !user) {
     return <Navigate to="/login" replace />
   }
 
@@ -258,6 +311,9 @@ function AppShell() {
             <Route path="/templates" element={<TemplateManager />} />
             <Route path="/proj-settings" element={<SettingsLock><ProjSettingsPage /></SettingsLock>} />
             <Route path="/prompt-studio" element={<PromptStudioPage />} />
+            <Route path="/members/pending" element={<MemberApprovalPage />} />
+            <Route path="/members" element={<UserManagePage />} />
+            <Route path="/roles" element={<RoleManagePage />} />
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
             <Route path="/" element={<HomePage />} />
           </Routes>
@@ -300,8 +356,20 @@ function App() {
         <ModalProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
+            <Route path="/member" element={<MemberLoginPage />} />
+            <Route path="/member/register" element={<MemberRegisterPage />} />
+            <Route path="/app" element={
+              <ProtectedRoute requiredType="member">
+                <MemberDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/app/:pid" element={
+              <ProtectedRoute requiredType="member">
+                <ProjectPage />
+              </ProtectedRoute>
+            } />
             <Route path="*" element={
-              <ProtectedRoute>
+              <ProtectedRoute requiredType="admin">
                 <AppShell />
               </ProtectedRoute>
             } />

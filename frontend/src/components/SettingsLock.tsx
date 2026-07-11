@@ -7,7 +7,7 @@ const SETTINGS_TOKEN_KEY = 'settings_token'
 
 export default function SettingsLock({ children }: { children: ReactNode }) {
   const navigate = useNavigate()
-  const { isAuthenticated, login, loading: authLoading } = useAuth()
+  const { user, login, loading: authLoading } = useAuth()
   const [passwordEnabled, setPasswordEnabled] = useState<boolean | null>(null)
   const [unlocked, setUnlocked] = useState(false)
   const [password, setPassword] = useState('')
@@ -32,10 +32,10 @@ export default function SettingsLock({ children }: { children: ReactNode }) {
 
   // Already authenticated via AuthContext
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user) {
       setUnlocked(true)
     }
-  }, [isAuthenticated])
+  }, [user])
 
   const handleSubmit = async () => {
     if (!password.trim()) {

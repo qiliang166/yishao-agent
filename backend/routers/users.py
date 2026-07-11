@@ -1,0 +1,458 @@
+"""User & role management routes."""
+import uuid
+import logging
+from fastapi import APIRouter, HTTPException, Request
+from database import get_db
+from permissions import require_perm
+
+logger = logging.getLogger("users_router")
+
+router = APIRouter(prefix="/api")
+
+# ── Roles ──
+
+@router.get("/roles")
+def list_roles(user_type: str = None):
+    db = get_db()
+    try:
+        if user_type:
+            rows = db.execute(
+                "SELECT * FROM roles WHERE user_type = ? ORDER BY created_at",
+                (user_type,)).fetchall()
+        else:
+            rows = db.execute("SELECT * FROM roles ORDER BY created_at").fetchall()
+        roles = []
+        for r in rows:
+            role = dict(r)
+            perms = db.execute(
+                "SELECT permission FROM role_permissions WHERE role_id = ?",
+                (role["id"],)).fetchall()
+            role["permissions"] = [p["permission"] for p in perms]
+            roles.append(role)
+        return {"roles": roles}
+    finally:
+        db.close()
+
+
+@router.post("/roles")
+def create_role(req: dict, user=require_perm("role.manage")):
+    name = req.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "角色名不能为空")
+    user_type = req.get("user_type", "admin")
+    if user_type not in ("admin", "member"):
+        raise HTTPException(400, "user_type 必须是 admin 或 member")
+    description = req.get("description", "")
+    role_id = str(uuid.uuid4())
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM roles WHERE name = ?", (name,)).fetchone()
+        if existing:
+            raise HTTPException(400, "角色名已存在")
+        db.execute(
+            "INSERT INTO roles (id, name, description, user_type) VALUES (?, ?, ?, ?)",
+            (role_id, name, description, user_type))
+        db.commit()
+        row = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@router.get("/roles/{role_id}")
+def get_role(role_id: str):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "角色不存在")
+        role = dict(row)
+        perms = db.execute(
+            "SELECT permission FROM role_permissions WHERE role_id = ?",
+            (role_id,)).fetchall()
+        role["permissions"] = [p["permission"] for p in perms]
+        return role
+    finally:
+        db.close()
+
+
+@router.put("/roles/{role_id}")
+def update_role(role_id: str, req: dict, user=require_perm("role.manage")):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "角色不存在")
+        if existing["is_system"]:
+            raise HTTPException(403, "系统角色不可编辑")
+        if "name" in req:
+            db.execute("UPDATE roles SET name = ?, updated_at = datetime('now') WHERE id = ?",
+                       (req["name"], role_id))
+        if "description" in req:
+            db.execute("UPDATE roles SET description = ?, updated_at = datetime('now') WHERE id = ?",
+                       (req["description"], role_id))
+        db.commit()
+        row = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@router.delete("/roles/{role_id}")
+def delete_role(role_id: str, user=require_perm("role.manage")):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "角色不存在")
+        if existing["is_system"]:
+            raise HTTPException(403, "系统角色不可删除")
+        db.execute("DELETE FROM role_permissions WHERE role_id = ?", (role_id,))
+        db.execute("DELETE FROM user_roles WHERE role_id = ?", (role_id,))
+        db.execute("DELETE FROM roles WHERE id = ?", (role_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@router.post("/roles/{role_id}/permissions/add")
+def add_role_permission(role_id: str, req: dict, user=require_perm("role.manage")):
+    permission = req.get("permission", "")
+    if not permission:
+        raise HTTPException(400, "权限码不能为空")
+    db = get_db()
+    try:
+        role = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
+        if not role:
+            raise HTTPException(404, "角色不存在")
+        if role["is_system"]:
+            raise HTTPException(403, "系统角色不可修改权限")
+        existing = db.execute(
+            "SELECT 1 FROM role_permissions WHERE role_id = ? AND permission = ?",
+            (role_id, permission)).fetchone()
+        if existing:
+            raise HTTPException(400, "权限已存在")
+        db.execute(
+            "INSERT INTO role_permissions (role_id, permission) VALUES (?, ?)",
+            (role_id, permission))
+        db.commit()
+        # Bump token_version for all users with this role
+        users = db.execute(
+            "SELECT user_id FROM user_roles WHERE role_id = ?", (role_id,)).fetchall()
+        for u in users:
+            db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?",
+                       (u["user_id"],))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@router.post("/roles/{role_id}/permissions/remove")
+def remove_role_permission(role_id: str, req: dict, user=require_perm("role.manage")):
+    permission = req.get("permission", "")
+    if not permission:
+        raise HTTPException(400, "权限码不能为空")
+    db = get_db()
+    try:
+        role = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
+        if not role:
+            raise HTTPException(404, "角色不存在")
+        if role["is_system"]:
+            raise HTTPException(403, "系统角色不可修改权限")
+        db.execute(
+            "DELETE FROM role_permissions WHERE role_id = ? AND permission = ?",
+            (role_id, permission))
+        db.commit()
+        users = db.execute(
+            "SELECT user_id FROM user_roles WHERE role_id = ?", (role_id,)).fetchall()
+        for u in users:
+            db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?",
+                       (u["user_id"],))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+# ── Users ──
+
+@router.get("/users")
+def list_users(user_type: str = None, status: str = None, search: str = None,
+               page: int = 1, page_size: int = 20):
+    db = get_db()
+    try:
+        where = []
+        params = []
+        if user_type:
+            where.append("user_type = ?")
+            params.append(user_type)
+        if status:
+            if status == "pending":
+                where.append("is_approved = 0")
+            elif status == "approved":
+                where.append("is_approved = 1")
+            elif status == "rejected":
+                where.append("is_approved = 2")
+            elif status == "active":
+                where.append("is_active = 1")
+            elif status == "disabled":
+                where.append("is_active = 0")
+            elif status == "expired":
+                where.append("expires_at IS NOT NULL AND expires_at < datetime('now')")
+        if search:
+            where.append("(username LIKE ? OR display_name LIKE ? OR email LIKE ?)")
+            like = f"%{search}%"
+            params.extend([like, like, like])
+
+        where_clause = ("WHERE " + " AND ".join(where)) if where else ""
+        count_row = db.execute(
+            f"SELECT COUNT(*) as cnt FROM users {where_clause}", params).fetchone()
+        total = count_row["cnt"] if count_row else 0
+
+        offset = (page - 1) * page_size
+        rows = db.execute(
+            f"SELECT * FROM users {where_clause} ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            params + [page_size, offset]).fetchall()
+
+        users = []
+        for r in rows:
+            user = {
+                "id": r["id"], "username": r["username"], "display_name": r["display_name"],
+                "email": r["email"], "user_type": r["user_type"],
+                "is_active": r["is_active"], "is_approved": r["is_approved"],
+                "expires_at": r["expires_at"], "created_at": r["created_at"],
+            }
+            # Get roles
+            role_rows = db.execute(
+                "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
+                (r["id"],)).fetchall()
+            user["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
+            users.append(user)
+
+        return {"users": users, "total": total, "page": page, "page_size": page_size}
+    finally:
+        db.close()
+
+
+@router.get("/users/{user_id}")
+def get_user(user_id: str):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "用户不存在")
+        user = dict(row)
+        user.pop("password_hash", None)
+        role_rows = db.execute(
+            "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
+            (user_id,)).fetchall()
+        user["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
+        proj_rows = db.execute(
+            "SELECT p.id, p.name FROM projects p JOIN member_projects mp ON p.id = mp.project_id WHERE mp.user_id = ?",
+            (user_id,)).fetchall()
+        user["projects"] = [{"id": pr["id"], "name": pr["name"]} for pr in proj_rows]
+        return user
+    finally:
+        db.close()
+
+
+@router.post("/users")
+def create_user(req: dict, user=require_perm("member.manage")):
+    from app import _hash_password
+    username = req.get("username", "").strip()
+    password = req.get("password", "")
+    display_name = req.get("display_name", "").strip()
+    user_type = req.get("user_type", "member")
+    email = req.get("email", "").strip()
+
+    if not username or not password or not display_name:
+        raise HTTPException(400, "用户名、密码、显示名不能为空")
+    if len(password) < 8:
+        raise HTTPException(400, "密码至少8位")
+    if user_type not in ("admin", "member"):
+        raise HTTPException(400, "user_type 必须是 admin 或 member")
+
+    user_id = str(uuid.uuid4())
+    password_hash = _hash_password(password)
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM users WHERE username = ? COLLATE NOCASE",
+                              (username,)).fetchone()
+        if existing:
+            raise HTTPException(400, "用户名已存在")
+        if email:
+            email_exist = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
+            if email_exist:
+                raise HTTPException(400, "邮箱已被注册")
+        db.execute(
+            """INSERT INTO users (id, username, password_hash, display_name, email, user_type,
+               is_active, is_approved, approved_by, approved_at, expires_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, datetime('now'),
+               datetime('now', '+30 days'), datetime('now'), datetime('now'))""",
+            (user_id, username, password_hash, display_name, email, user_type,
+             user["user_id"]))
+        db.commit()
+        row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        result = dict(row)
+        result.pop("password_hash", None)
+        return result
+    finally:
+        db.close()
+
+
+@router.put("/users/{user_id}")
+def update_user(user_id: str, req: dict, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "用户不存在")
+        if "display_name" in req:
+            db.execute("UPDATE users SET display_name = ?, updated_at = datetime('now') WHERE id = ?",
+                       (req["display_name"], user_id))
+        if "email" in req:
+            db.execute("UPDATE users SET email = ?, updated_at = datetime('now') WHERE id = ?",
+                       (req["email"], user_id))
+        if "is_active" in req:
+            if existing["user_type"] == "admin" and existing["username"] == "admin":
+                raise HTTPException(403, "超级管理员不可停用")
+            db.execute("UPDATE users SET is_active = ?, updated_at = datetime('now') WHERE id = ?",
+                       (req["is_active"], user_id))
+        db.commit()
+        row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        result = dict(row)
+        result.pop("password_hash", None)
+        return result
+    finally:
+        db.close()
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: str, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "用户不存在")
+        if existing["user_type"] == "admin" and existing["username"] == "admin":
+            raise HTTPException(403, "超级管理员不可删除")
+        db.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
+        db.execute("DELETE FROM member_projects WHERE user_id = ?", (user_id,))
+        db.execute("DELETE FROM payment_records WHERE user_id = ?", (user_id,))
+        db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@router.put("/users/{user_id}/active")
+def toggle_user_active(user_id: str, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "用户不存在")
+        if existing["user_type"] == "admin" and existing["username"] == "admin":
+            raise HTTPException(403, "超级管理员不可停用")
+        new_val = 0 if existing["is_active"] else 1
+        db.execute("UPDATE users SET is_active = ?, updated_at = datetime('now') WHERE id = ?",
+                   (new_val, user_id))
+        # Bump token_version to force re-login
+        db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (user_id,))
+        db.commit()
+        return {"ok": True, "is_active": new_val}
+    finally:
+        db.close()
+
+
+@router.post("/users/{user_id}/roles/add")
+def add_user_role(user_id: str, req: dict, user=require_perm("role.manage")):
+    role_id = req.get("role_id", "")
+    if not role_id:
+        raise HTTPException(400, "role_id 不能为空")
+    db = get_db()
+    try:
+        u = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not u:
+            raise HTTPException(404, "用户不存在")
+        r = db.execute("SELECT id FROM roles WHERE id = ?", (role_id,)).fetchone()
+        if not r:
+            raise HTTPException(404, "角色不存在")
+        existing = db.execute(
+            "SELECT 1 FROM user_roles WHERE user_id = ? AND role_id = ?",
+            (user_id, role_id)).fetchone()
+        if existing:
+            raise HTTPException(400, "角色已分配")
+        db.execute("INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                   (user_id, role_id))
+        db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (user_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@router.post("/users/{user_id}/roles/remove")
+def remove_user_role(user_id: str, req: dict, user=require_perm("role.manage")):
+    role_id = req.get("role_id", "")
+    if not role_id:
+        raise HTTPException(400, "role_id 不能为空")
+    db = get_db()
+    try:
+        db.execute("DELETE FROM user_roles WHERE user_id = ? AND role_id = ?",
+                   (user_id, role_id))
+        db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (user_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@router.get("/users/{user_id}/projects")
+def get_user_projects(user_id: str):
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT p.id, p.name FROM projects p JOIN member_projects mp ON p.id = mp.project_id WHERE mp.user_id = ?",
+            (user_id,)).fetchall()
+        return {"projects": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@router.post("/users/{user_id}/projects/add")
+def add_user_projects(user_id: str, req: dict, user=require_perm("member.manage")):
+    project_ids = req.get("project_ids", [])
+    if not project_ids:
+        raise HTTPException(400, "project_ids 不能为空")
+    db = get_db()
+    try:
+        for pid in project_ids:
+            existing = db.execute(
+                "SELECT 1 FROM member_projects WHERE user_id = ? AND project_id = ?",
+                (user_id, pid)).fetchone()
+            if not existing:
+                db.execute("INSERT INTO member_projects (user_id, project_id) VALUES (?, ?)",
+                           (user_id, pid))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@router.post("/users/{user_id}/projects/remove")
+def remove_user_project(user_id: str, req: dict, user=require_perm("member.manage")):
+    project_id = req.get("project_id", "")
+    if not project_id:
+        raise HTTPException(400, "project_id 不能为空")
+    db = get_db()
+    try:
+        db.execute("DELETE FROM member_projects WHERE user_id = ? AND project_id = ?",
+                   (user_id, project_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()

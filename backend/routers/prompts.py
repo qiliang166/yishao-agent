@@ -2,7 +2,7 @@
 import os
 import json
 import logging
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger("prompts_router")
@@ -11,6 +11,7 @@ from services.prompt_service import (
     list_prompts, get_prompt, create_prompt, update_prompt, delete_prompt,
     rollback_version, diff_versions, set_default, export_prompts, import_prompts,
 )
+from permissions import require_perm
 
 router = APIRouter(prefix="/api")
 
@@ -44,7 +45,7 @@ def api_export_prompts():
 
 
 @router.post("/prompts/import")
-def api_import_prompts(req: PromptImport):
+def api_import_prompts(req: PromptImport, user=require_perm("prompt.manage")):
     return import_prompts(req.data)
 
 
@@ -54,7 +55,7 @@ def api_list_prompts(category: str = None):
 
 
 @router.post("/prompts")
-def api_create_prompt(req: PromptCreate):
+def api_create_prompt(req: PromptCreate, user=require_perm("prompt.manage")):
     prompt = create_prompt(req.name, req.category, req.system_prompt, req.skill_template)
     return prompt
 
@@ -68,7 +69,7 @@ def api_get_prompt(prompt_id: str):
 
 
 @router.put("/prompts/{prompt_id}")
-def api_update_prompt(prompt_id: str, req: PromptUpdate):
+def api_update_prompt(prompt_id: str, req: PromptUpdate, user=require_perm("prompt.manage")):
     prompt = update_prompt(
         prompt_id, req.name, req.category,
         req.system_prompt, req.skill_template, req.change_note)
@@ -78,7 +79,7 @@ def api_update_prompt(prompt_id: str, req: PromptUpdate):
 
 
 @router.delete("/prompts/{prompt_id}")
-def api_delete_prompt(prompt_id: str):
+def api_delete_prompt(prompt_id: str, user=require_perm("prompt.manage")):
     delete_prompt(prompt_id)
     return {"ok": True}
 
@@ -92,7 +93,7 @@ def api_list_versions(prompt_id: str):
 
 
 @router.post("/prompts/{prompt_id}/rollback")
-def api_rollback(prompt_id: str, req: dict):
+def api_rollback(prompt_id: str, req: dict, user=require_perm("prompt.manage")):
     prompt = rollback_version(prompt_id, req["version"])
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt or version not found")
@@ -108,7 +109,7 @@ def api_diff(prompt_id: str, req: dict):
 
 
 @router.post("/prompts/{prompt_id}/set-default")
-def api_set_default(prompt_id: str):
+def api_set_default(prompt_id: str, user=require_perm("prompt.manage")):
     set_default(prompt_id)
     return {"ok": True}
 
@@ -196,7 +197,7 @@ def list_column_configs(workspace_id: str = None):
 
 
 @router.put("/column-configs/{config_id}")
-def update_column_config(config_id: str, req: dict):
+def update_column_config(config_id: str, req: dict, user=require_perm("config.project")):
     db = get_db()
     try:
         existing = db.execute("SELECT id, column_id, workspace_id FROM column_configs WHERE id = ?", (config_id,)).fetchone()
@@ -256,7 +257,7 @@ def update_column_config(config_id: str, req: dict):
 
 
 @router.post("/column-configs/{config_id}/upload-template")
-async def upload_column_template(config_id: str, file: UploadFile = File(...)):
+async def upload_column_template(config_id: str, file: UploadFile = File(...), user=require_perm("config.project")):
     db = get_db()
     try:
         existing = db.execute("SELECT id, has_template FROM column_configs WHERE id = ?", (config_id,)).fetchone()
@@ -310,7 +311,7 @@ def list_speech_configs(workspace_id: str = None):
 
 
 @router.put("/speech-configs/{config_id}")
-def update_speech_config(config_id: str, req: dict):
+def update_speech_config(config_id: str, req: dict, user=require_perm("config.project")):
     db = get_db()
     try:
         existing = db.execute("SELECT id FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
@@ -346,7 +347,7 @@ def list_tts_configs(workspace_id: str = None):
 
 
 @router.put("/tts-configs/{config_id}")
-def update_tts_config(config_id: str, req: dict):
+def update_tts_config(config_id: str, req: dict, user=require_perm("config.project")):
     db = get_db()
     try:
         existing = db.execute("SELECT id FROM tts_configs WHERE id = ?", (config_id,)).fetchone()
@@ -382,7 +383,7 @@ def list_core_prompt_configs(workspace_id: str = None):
 
 
 @router.put("/core-prompt-configs/{config_id}")
-def update_core_prompt_config(config_id: str, req: dict):
+def update_core_prompt_config(config_id: str, req: dict, user=require_perm("config.project")):
     db = get_db()
     try:
         existing = db.execute("SELECT id FROM core_prompt_configs WHERE id = ?", (config_id,)).fetchone()
