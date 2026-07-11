@@ -6,7 +6,7 @@ const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
 export default function LoginPage() {
-  const { user, login, loading: authLoading } = useAuth()
+  const { user, login, authLogin, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [brandName, setBrandName] = useState('')
   const [brandLogo, setBrandLogo] = useState('')
@@ -54,7 +54,7 @@ export default function LoginPage() {
     setError('')
     try {
       if (hasRbac && username.trim()) {
-        await useAuth().authLogin(username.trim(), password)
+        await authLogin(username.trim(), password)
       } else {
         await login(password)
       }
