@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import { usePermission } from '../hooks/usePermission'
 import Col3StructureEditor from '../components/Col3StructureEditor'
 
 type MainTab = 'project' | 'columns' | 'core'
@@ -40,6 +41,7 @@ const CORE_CATEGORIES = [
 export default function ProjItemSettingsPage() {
   const { id: projectId } = useParams<{ id: string }>()
   const modal = useModal()
+  const canSaveProject = usePermission('config.project')
   const [mainTab, setMainTab] = useState<MainTab>('project')
 
   // All project items
@@ -265,9 +267,9 @@ export default function ProjItemSettingsPage() {
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                <button className="btn btn-primary btn-sm" onClick={saveProjectConfig} disabled={projSaving}>
+                {canSaveProject && <button className="btn btn-primary btn-sm" onClick={saveProjectConfig} disabled={projSaving}>
                   {projSaving ? '保存中...' : '保存项目配置'}
-                </button>
+                </button>}
               </div>
             </div>
           </div>
@@ -352,11 +354,11 @@ export default function ProjItemSettingsPage() {
                             </div>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                            <button className="btn btn-primary btn-sm"
+                            {canSaveProject && <button className="btn btn-primary btn-sm"
                               disabled={colSaving[item.id]}
                               onClick={() => saveColumnItem(item.id)}>
                               {colSaving[item.id] ? '保存中...' : '保存'}
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       ))
@@ -413,10 +415,10 @@ export default function ProjItemSettingsPage() {
                           />
                           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
                             <button className="btn btn-ghost btn-sm" onClick={() => setEditingCoreId(null)}>取消</button>
-                            <button className="btn btn-primary btn-sm" disabled={coreSaving[item.id]}
+                            {canSaveProject && <button className="btn btn-primary btn-sm" disabled={coreSaving[item.id]}
                               onClick={() => saveCoreItem(item.id)}>
                               {coreSaving[item.id] ? '保存中...' : '保存'}
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       )}

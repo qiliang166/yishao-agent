@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { api, Project } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
+import { useAuth } from '../contexts/AuthContext'
 import HelpButton from '../components/HelpButton'
 
 const PAGE_SIZE = 20
@@ -15,6 +16,13 @@ export default function ProjectDashboard() {
   const canDeleteOwn = usePermission('project.delete_own')
   const canDownload = usePermission('stage5.download')
   const canView4 = usePermission('stage4.view')
+  const { user } = useAuth()
+  const isOwner = (createdBy: string | null | undefined): boolean => {
+    if (!user) return false
+    if (createdBy == null) return true
+    if (user.permissions?.includes('project.edit_all')) return true
+    return createdBy === user.user_id
+  }
   const [workspace, setWorkspace] = useState<any>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -416,9 +424,10 @@ export default function ProjectDashboard() {
                   <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 4 }} title="从其他明细复制">📋</span>
                 )}
                 <span className={`pc-status ${p.status}`}
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: (canEditOwn && isOwner(p.created_by)) ? 'pointer' : 'default' }}
                   onClick={async e => {
                     e.stopPropagation()
+                    if (!canEditOwn || !isOwner(p.created_by)) return
                     const newStatus = p.status === 'completed' ? 'draft' : 'completed'
                     await api.updateProject(p.id, { status: newStatus })
                     loadProjects(page)
@@ -443,7 +452,7 @@ export default function ProjectDashboard() {
                       style={{ color: 'var(--accent)', fontSize: 11 }}
                       title="复制明细及其配置">复制</button>
                   )}
-                  {canEditOwn ? (
+                  {canEditOwn && isOwner(p.created_by) ? (
                     <span style={{
                         cursor: 'pointer', fontSize: 11, marginLeft: 4,
                         color: p.is_locked ? 'var(--warning)' : 'var(--text-secondary)',
@@ -462,7 +471,7 @@ export default function ProjectDashboard() {
                       {p.is_locked ? '已锁定' : '—'}
                     </span>
                   )}
-                  {!p.is_locked && canDeleteOwn && (
+                  {!p.is_locked && canDeleteOwn && isOwner(p.created_by) && (
                     <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}
                       style={{ color: 'var(--warning)' }}>删除</button>
                   )}
@@ -498,7 +507,7 @@ export default function ProjectDashboard() {
                         {selectedFiles.size > 0 && (
                           <>
                             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>已选 {selectedFiles.size} 项</span>
-                            {canEditOwn && (
+                            {canEditOwn && isOwner(projects.find(p => p.id === expandedProject)?.created_by) && (
                               <button className="btn btn-sm" onClick={batchDeleteFiles}
                                 style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)', fontSize: 11, padding: '3px 10px' }}>
                                 删除选中
@@ -593,7 +602,7 @@ export default function ProjectDashboard() {
                                         style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent)' }}
                                         title="下载">⬇</button>
                                     )}
-                                    {canEditOwn && (
+                                    {canEditOwn && isOwner(projects.find(p => p.id === expandedProject)?.created_by) && (
                                       <button className="btn btn-ghost btn-sm"
                                         onClick={async () => {
                                           const ok = await modal.confirm(`确认删除「${f.display_name || f.filename}」？`)

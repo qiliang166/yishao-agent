@@ -128,6 +128,7 @@ export interface Project {
   is_locked?: number
   copied_from_project_id?: string
   workspace_id?: string
+  created_by?: string
   created_at: string
   updated_at: string
 }

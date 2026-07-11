@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import { usePermission } from '../hooks/usePermission'
 import Col3StructureEditor from '../components/Col3StructureEditor'
 
 type Tab = 'general' | 'columns' | 'core'
@@ -76,6 +77,7 @@ function mergeRules(typographySpec: string, outlinePrompt: string, cognitivePrin
 export default function WorkspaceSettingsPage() {
   const { wid } = useParams<{ wid: string }>()
   const modal = useModal()
+  const canSaveProject = usePermission('config.project')
   const [tab, setTab] = useState<Tab>('general')
 
   // Workspace info
@@ -367,7 +369,7 @@ export default function WorkspaceSettingsPage() {
                             </div>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                            <button className="btn btn-primary btn-sm" disabled={ttsSaving[config.id]}
+                            {canSaveProject && <button className="btn btn-primary btn-sm" disabled={ttsSaving[config.id]}
                               onClick={async () => {
                                 setTtsSaving(prev => ({ ...prev, [config.id]: true }))
                                 try {
@@ -377,7 +379,7 @@ export default function WorkspaceSettingsPage() {
                                 finally { setTtsSaving(prev => ({ ...prev, [config.id]: false })) }
                               }}>
                               {ttsSaving[config.id] ? '保存中...' : '保存'}
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       ))}
@@ -535,10 +537,10 @@ export default function WorkspaceSettingsPage() {
                                   </>
                                 )}
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                                  <button className="btn btn-primary btn-sm" disabled={colRulesSaving[config.id]}
+                                  {canSaveProject && <button className="btn btn-primary btn-sm" disabled={colRulesSaving[config.id]}
                                     onClick={() => saveColRules(config.id, col.id)}>
                                     {colRulesSaving[config.id] ? '保存中...' : '保存规则'}
-                                  </button>
+                                  </button>}
                                 </div>
                               </div>
                             )}

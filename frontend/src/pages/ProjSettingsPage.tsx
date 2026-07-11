@@ -568,9 +568,9 @@ export default function ProjSettingsPage() {
                       <button className="btn btn-ghost btn-sm" onClick={() => testProvider(p.id)} disabled={testingId === p.id}>
                         {testingId === p.id ? '测试中...' : '测试'}
                       </button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => openEditProvider(p)}>编辑</button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
-                        onClick={() => deleteProvider(p.id, p.name)}>删除</button>
+                      {canSaveProject && <button className="btn btn-ghost btn-sm" onClick={() => openEditProvider(p)}>编辑</button>}
+                      {canSaveProject && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
+                        onClick={() => deleteProvider(p.id, p.name)}>删除</button>}
                     </td>
                   </tr>
                 ))}
@@ -579,7 +579,7 @@ export default function ProjSettingsPage() {
                 )}
               </tbody>
             </table>
-            <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewProvider}>+ 添加 LLM 提供商</button>
+            {canSaveProject && <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewProvider}>+ 添加 LLM 提供商</button>}
 
             {/* TTS Providers */}
             <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
@@ -596,8 +596,8 @@ export default function ProjSettingsPage() {
                         <button className="btn btn-ghost btn-sm" onClick={() => testTtsProvider(p.id)} disabled={ttsTestingId === p.id}>
                           {ttsTestingId === p.id ? '测试中...' : '测试'}
                         </button>
-                        <button className="btn btn-ghost btn-sm" onClick={() => openEditTtsProvider(p)}>编辑</button>
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deleteTtsProvider(p.id, p.name)}>删除</button>
+                        {canSaveProject && <button className="btn btn-ghost btn-sm" onClick={() => openEditTtsProvider(p)}>编辑</button>}
+                        {canSaveProject && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deleteTtsProvider(p.id, p.name)}>删除</button>}
                       </td>
                     </tr>
                   ))}
@@ -606,7 +606,7 @@ export default function ProjSettingsPage() {
                   )}
                 </tbody>
               </table>
-              <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewTtsProvider}>+ 添加 TTS 提供商</button>
+              {canSaveProject && <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewTtsProvider}>+ 添加 TTS 提供商</button>}
 
               {/* ASR Providers */}
               <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
@@ -623,8 +623,8 @@ export default function ProjSettingsPage() {
                           <button className="btn btn-ghost btn-sm" onClick={() => testAsrProvider(p.id)} disabled={asrTestingId === p.id}>
                             {asrTestingId === p.id ? '测试中...' : '测试'}
                           </button>
-                          <button className="btn btn-ghost btn-sm" onClick={() => openEditAsrProvider(p)}>编辑</button>
-                          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deleteAsrProvider(p.id, p.name)}>删除</button>
+                          {canSaveProject && <button className="btn btn-ghost btn-sm" onClick={() => openEditAsrProvider(p)}>编辑</button>}
+                          {canSaveProject && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deleteAsrProvider(p.id, p.name)}>删除</button>}
                         </td>
                       </tr>
                     ))}
@@ -633,7 +633,7 @@ export default function ProjSettingsPage() {
                     )}
                   </tbody>
                 </table>
-                <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewAsrProvider}>+ 添加 ASR 提供商</button>
+                {canSaveProject && <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewAsrProvider}>+ 添加 ASR 提供商</button>}
 
                 {/* Image Providers */}
                 <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
@@ -650,8 +650,8 @@ export default function ProjSettingsPage() {
                             <button className="btn btn-ghost btn-sm" onClick={() => testImageProvider(p.id)} disabled={imageTestingId === p.id}>
                               {imageTestingId === p.id ? '测试中...' : '测试'}
                             </button>
-                            <button className="btn btn-ghost btn-sm" onClick={() => openEditImageProvider(p)}>编辑</button>
-                            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deleteImageProvider(p.id, p.name)}>删除</button>
+                            {canSaveProject && <button className="btn btn-ghost btn-sm" onClick={() => openEditImageProvider(p)}>编辑</button>}
+                            {canSaveProject && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }} onClick={() => deleteImageProvider(p.id, p.name)}>删除</button>}
                           </td>
                         </tr>
                       ))}
@@ -660,7 +660,7 @@ export default function ProjSettingsPage() {
                       )}
                     </tbody>
                   </table>
-                  <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewImageProvider}>+ 添加图片生成提供商</button>
+                  {canSaveProject && <button className="btn btn-outline btn-sm" style={{ marginBottom: 12 }} onClick={openNewImageProvider}>+ 添加图片生成提供商</button>}
                 </div>
               </div>
             </div>
@@ -721,7 +721,7 @@ export default function ProjSettingsPage() {
                               </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                              <button className="btn btn-primary btn-sm" disabled={ttsSaving[config.id]}
+                              {canSaveProject && <button className="btn btn-primary btn-sm" disabled={ttsSaving[config.id]}
                                 onClick={async () => {
                                   setTtsSaving(prev => ({ ...prev, [config.id]: true }))
                                   try {
@@ -731,7 +731,7 @@ export default function ProjSettingsPage() {
                                   finally { setTtsSaving(prev => ({ ...prev, [config.id]: false })) }
                                 }}>
                                 {ttsSaving[config.id] ? '保存中...' : '保存'}
-                              </button>
+                              </button>}
                             </div>
                           </div>
                         ))}
@@ -763,7 +763,7 @@ export default function ProjSettingsPage() {
                               </div>
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                              <button className="btn btn-primary btn-sm" disabled={speechSaving[config.id]}
+                              {canSaveProject && <button className="btn btn-primary btn-sm" disabled={speechSaving[config.id]}
                                 onClick={async () => {
                                   setSpeechSaving(prev => ({ ...prev, [config.id]: true }))
                                   try {
@@ -773,7 +773,7 @@ export default function ProjSettingsPage() {
                                   finally { setSpeechSaving(prev => ({ ...prev, [config.id]: false })) }
                                 }}>
                                 {speechSaving[config.id] ? '保存中...' : '保存'}
-                              </button>
+                              </button>}
                             </div>
                           </div>
                         ))}
@@ -831,7 +831,7 @@ export default function ProjSettingsPage() {
                             </div>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                            <button className="btn btn-primary btn-sm" disabled={colSaving[config.id]}
+                            {canSaveProject && <button className="btn btn-primary btn-sm" disabled={colSaving[config.id]}
                               onClick={async () => {
                                 setColSaving(prev => ({ ...prev, [config.id]: true }))
                                 try {
@@ -841,7 +841,7 @@ export default function ProjSettingsPage() {
                                 finally { setColSaving(prev => ({ ...prev, [config.id]: false })) }
                               }}>
                               {colSaving[config.id] ? '保存中...' : '保存'}
-                            </button>
+                            </button>}
                           </div>
                         </div>
                       ))}
@@ -892,10 +892,10 @@ export default function ProjSettingsPage() {
                                 </>
                               )}
                               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                                <button className="btn btn-primary btn-sm" disabled={colRulesSaving[col.id]}
+                                {canSaveProject && <button className="btn btn-primary btn-sm" disabled={colRulesSaving[col.id]}
                                   onClick={() => saveColRules(col.id, cfgId)}>
                                   {colRulesSaving[col.id] ? '保存中...' : '保存规则'}
-                                </button>
+                                </button>}
                               </div>
                             </div>
                           )}
@@ -924,9 +924,9 @@ export default function ProjSettingsPage() {
                                 style={{ width: '100%', minHeight: 260, fontFamily: 'monospace', fontSize: 11 }} />
                               <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
                                 <button className="btn btn-ghost btn-sm" onClick={() => setEditingScFile(null)}>取消</button>
-                                <button className="btn btn-primary btn-sm" onClick={saveScenarioFile} disabled={scFileSaving}>
+                                {canSaveProject && <button className="btn btn-primary btn-sm" onClick={saveScenarioFile} disabled={scFileSaving}>
                                   {scFileSaving ? '保存中...' : '保存文件'}
-                                </button>
+                                </button>}
                               </div>
                             </div>
                           )}
@@ -986,10 +986,10 @@ export default function ProjSettingsPage() {
                                     />
                                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
                                       <button className="btn btn-ghost btn-sm" onClick={() => setEditingCoreId(null)}>取消</button>
-                                      <button className="btn btn-primary btn-sm" disabled={coreSaving[config.id]}
+                                      {canSaveProject && <button className="btn btn-primary btn-sm" disabled={coreSaving[config.id]}
                                         onClick={() => saveCorePrompt(config.id)}>
                                         {coreSaving[config.id] ? '保存中...' : '保存'}
-                                      </button>
+                                      </button>}
                                     </div>
                                   </div>
                                 )}

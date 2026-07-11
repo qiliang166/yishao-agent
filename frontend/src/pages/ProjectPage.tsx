@@ -306,7 +306,7 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
 }
 
 // ── Project Output List (Stage 5) ──
-function ProjectOutputList({ projectId, projectName, readOnly }: { projectId: string; projectName: string; readOnly?: boolean }) {
+function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { projectId: string; projectName: string; readOnly?: boolean; canEditOwn?: boolean }) {
   const modal = useModal()
   const [files, setFiles] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -464,7 +464,7 @@ function ProjectOutputList({ projectId, projectName, readOnly }: { projectId: st
               onClick={toggleSelectAll}>
               {selected.size === filtered.length && filtered.length > 0 ? '取消全选' : '全选'}
             </button>
-            {!readOnly && selected.size > 0 && (
+            {canEditOwn !== false && selected.size > 0 && (
               <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)' }}
                 onClick={batchDelete}>
                 删除选中 ({selected.size})
@@ -529,7 +529,7 @@ function ProjectOutputList({ projectId, projectName, readOnly }: { projectId: st
                               }
                             } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
                           }}>下载</button>
-                        {!readOnly && (
+                        {canEditOwn !== false && (
                         <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--warning)', flexShrink: 0 }}
                           onClick={() => deleteFile(f)}>✕</button>
                         )}
@@ -562,8 +562,21 @@ export default function ProjectPage() {
   const canViewStage3 = usePermission('stage3.view')
   const canViewStage4 = usePermission('stage4.view')
   const canViewStage5 = usePermission('stage5.view')
+  const canGenerate1 = usePermission('stage1.generate')
+  const canGenerate2 = usePermission('stage2.generate')
+  const canGenerate3 = usePermission('stage3.generate')
+  const canGenerate4 = usePermission('stage4.generate')
+  const canDownload5 = usePermission('stage5.download')
+  const canEditOwn = usePermission('project.edit_own')
   const stageViewPerms: Record<number, boolean> = { 1: canViewStage1, 2: canViewStage2, 3: canViewStage3, 4: canViewStage4, 5: canViewStage5 }
+  const stageGeneratePerms: Record<number, boolean> = { 1: canGenerate1, 2: canGenerate2, 3: canGenerate3, 4: canGenerate4 }
   const visibleStages = STAGES.filter(s => stageViewPerms[s.id] !== false)
+
+  function CanEdit({ children, perm }: { children: React.ReactNode; perm?: boolean }) {
+    if (readOnly) return null
+    if (perm !== undefined && !perm) return null
+    return <>{children}</>
+  }
 
   async function downloadFile(url: string, filename: string) {
     const token = localStorage.getItem('auth_token')
@@ -2184,7 +2197,7 @@ export default function ProjectPage() {
             await api.updateProject(id, { status: newStatus })
             setProject(prev => prev ? { ...prev, status: newStatus } : prev)
           }}>{project?.status === 'completed' ? '已完成' : '草稿'}</span>
-        {!readOnly && (
+        <CanEdit perm={canEditOwn}>
         <button style={{
             fontSize: 12, padding: '4px 12px', borderRadius: 4, cursor: 'pointer',
             border: (project as any)?.is_locked ? '1px solid var(--warning)' : '1px solid var(--border)',
@@ -2199,7 +2212,7 @@ export default function ProjectPage() {
           }}>
           {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 锁定'}
         </button>
-        )}
+        </CanEdit>
         {readOnly && (
           <span style={{ fontSize: 11, color: 'var(--warning)', marginLeft: 8, fontWeight: 600 }}>只读模式</span>
         )}
@@ -2360,12 +2373,12 @@ export default function ProjectPage() {
                       ))}
                     </select>
                   </div>
-                  {!readOnly && (
+                  <CanEdit perm={canGenerate1}>
                   <button className="btn btn-primary btn-sm w-full"
                     onClick={handleVideoDownload} disabled={dlStatus === 'downloading'}>
                     ▶ 下载并识别
                   </button>
-                  )}
+                  </CanEdit>
                   {dlStatus === 'downloading' && (
                     <div style={{ marginTop: 8 }}>
                       <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 4 }}>⏳ 正在下载... {dlPercent}%</div>
@@ -2389,13 +2402,13 @@ export default function ProjectPage() {
                     }} >
                     📺 播放校验
                   </button>
-                  {!readOnly && (
+                  <CanEdit perm={canGenerate1}>
                   <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 8 }}
                     disabled={step1Generating['1a'] || !step1Model || !videoText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating['1a'] ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
-                  )}
+                  </CanEdit>
                   {step1Generating['1a'] && (
                     <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
                       onClick={() => { abortRef.current['step1_1a']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -2435,11 +2448,13 @@ export default function ProjectPage() {
                       value={videoText} readOnly={readOnly}
                       onChange={e => setVideoText(e.target.value)}
                       placeholder="视频字幕将显示在此..." />
+                    <CanEdit perm={canGenerate1}>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>🗑 清空</button>
                       <button className={`btn btn-primary btn-sm ${getSaveBtnClass(videoText, 'video_text')}`} disabled={!videoText.trim()}
                         onClick={() => { if (id && videoText.trim()) { saveStep('video_text', videoText); saveStep('raw_video', videoText); flashSave() } }}>{getSaveBtnLabel(videoText, 'video_text')}</button>
                     </div>
+                    </CanEdit>
                   </div>
                 )}
                 <div className="card">
@@ -2491,16 +2506,18 @@ export default function ProjectPage() {
                     placeholder="在此粘贴或输入内容..."
                     value={textInput} readOnly={readOnly} onChange={e => setTextInput(e.target.value)} />
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
-                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'raw_text')}`} disabled={!textInput.trim()}
-                      onClick={() => { if (id && textInput.trim()) { saveStep('raw_text', textInput); flashSave() } }}>{getSaveBtnLabel(textInput, 'raw_text')}</button>
-                    {!readOnly && (
+                    <CanEdit>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
+                      <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'raw_text')}`} disabled={!textInput.trim()}
+                        onClick={() => { if (id && textInput.trim()) { saveStep('raw_text', textInput); flashSave() } }}>{getSaveBtnLabel(textInput, 'raw_text')}</button>
+                    </CanEdit>
+                    <CanEdit perm={canGenerate1}>
                     <button className="btn btn-primary btn-sm"
                       disabled={step1Generating['1b'] || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
                       {step1Generating['1b'] ? '⏳ 生成中...' : '⚙ 整理文档'}
                     </button>
-                    )}
+                    </CanEdit>
                     {step1Generating['1b'] && (
                       <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff' }}
                         onClick={() => { abortRef.current['step1_1b']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -2565,13 +2582,13 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, raw_file: text }))
                       }
                     }} />
-                  {!readOnly && (
+                  <CanEdit perm={canGenerate1}>
                   <button className="btn btn-primary btn-sm w-full"
                     disabled={step1Generating['1c'] || !step1Model || !fileText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating['1c'] ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
-                  )}
+                  </CanEdit>
                   {step1Generating['1c'] && (
                     <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
                       onClick={() => { abortRef.current['step1_1c']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -2584,11 +2601,13 @@ export default function ProjectPage() {
                     value={fileText} readOnly={readOnly}
                     onChange={e => setFileText(e.target.value)}
                     placeholder="文件内容将显示在此..." />
+                  <CanEdit perm={canGenerate1}>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setFileText('')}>🗑 清空</button>
                     <button className={`btn btn-primary btn-sm ${getSaveBtnClass(fileText, 'raw_file')}`} disabled={!fileText.trim()}
                       onClick={() => { if (id && fileText.trim()) { saveStep('raw_file', fileText); flashSave() } }}>{getSaveBtnLabel(fileText, 'raw_file')}</button>
                   </div>
+                  </CanEdit>
                 </div>
                 <div className="card">
                   <div className="card-title">📁 项目保存路径</div>
@@ -2709,23 +2728,25 @@ export default function ProjectPage() {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
                       }}>📥 保存到项目</button>
-                    {!readOnly && (
+                    <CanEdit perm={canGenerate2}>
                     <button className="btn btn-outline btn-sm"
                       disabled={!!Object.values(step2Generating).some(Boolean) || (!steps.raw_video && !steps.raw_text && !steps.raw_file && !steps.step1_video && !steps.step1_text && !steps.step1_file && !steps.step2_sop && !steps.step2_daoshuyi && !steps.step2_yanxi)}
                       onClick={doBatchGenerate}>
                       {Object.values(step2Generating).some(Boolean) ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>
-                    )}
+                    </CanEdit>
                     {Object.values(step2Generating).some(Boolean) && (
                       <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff' }}
                         onClick={() => { abortRef.current['step2_batch']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
                     )}
+                    <CanEdit perm={canGenerate2}>
                     <button className={`btn btn-primary btn-sm ${getSaveBtnClass(steps[step1Key()] || '', step1Key())}`}
                       disabled={!steps[step1Key()]}
                       onClick={() => { saveStep(step1Key(), steps[step1Key()] || ''); flashSave() }}>{getSaveBtnLabel(steps[step1Key()] || '', step1Key())}</button>
                     <button className="btn btn-ghost btn-sm"
                       disabled={!steps[step1Key()]}
                       onClick={() => { setSteps(prev => ({ ...prev, [step1Key()]: '' })); saveStep(step1Key(), '') }}>✕ 清空</button>
+                    </CanEdit>
                   </span>
                 </div>
               </div>
@@ -2912,7 +2933,7 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3SopTempOpen(true)}>⚙温度设置</button>
-                {!readOnly && (
+                <CanEdit perm={canGenerate3}>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -2935,7 +2956,7 @@ export default function ProjectPage() {
                     {pptGenerating['step3_sop_doc'] ? '⏳ 合成中...' : '📄 合成课件'}
                   </button>
                 </div>
-                )}
+                </CanEdit>
                 {(pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']) && (
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
                     onClick={() => handleCancelGenerate('step3_sop_doc')}>取消</button>
@@ -3278,7 +3299,7 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3DaoTempOpen(true)}>⚙温度设置</button>
-                {!readOnly && (
+                <CanEdit perm={canGenerate3}>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -3295,7 +3316,7 @@ export default function ProjectPage() {
                     {pptGenerating['step3_dao_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
-                )}
+                </CanEdit>
                 {(pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']) && (
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
                     onClick={() => handleCancelGenerate('step3_dao_ppt')}>取消</button>
@@ -3638,7 +3659,7 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3YanxiTempOpen(true)}>⚙温度设置</button>
-                {!readOnly && (
+                <CanEdit perm={canGenerate3}>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -3655,7 +3676,7 @@ export default function ProjectPage() {
                     {pptGenerating['step3_yan_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
-                )}
+                </CanEdit>
                 {(pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']) && (
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
                     onClick={() => handleCancelGenerate('step3_yan_ppt')}>取消</button>
@@ -4013,7 +4034,7 @@ export default function ProjectPage() {
                           )) : null
                         ))}
                       </select>
-                      {!readOnly && (
+                      <CanEdit perm={canGenerate4}>
                       <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
                         disabled={isGenerating}
                         onClick={async () => {
@@ -4036,7 +4057,7 @@ export default function ProjectPage() {
                         }}>
                         {isGenerating ? '⏳ 生成中...' : '📢 生成演讲稿'}
                       </button>
-                      )}
+                      </CanEdit>
                       {isGenerating && (
                         <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
                           onClick={() => { abortRef.current[t.stepKey]?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -4365,7 +4386,7 @@ export default function ProjectPage() {
                     )}
                   </div>
 
-                  {!readOnly && (
+                  <CanEdit perm={canGenerate4}>
                   <button className="btn btn-primary btn-sm" style={{ width: '100%', fontSize: 11 }}
                     onClick={() => {
                       setNameInput(cloneName)
@@ -4373,7 +4394,7 @@ export default function ProjectPage() {
                     }} disabled={cloning || (cloneMode === 'clone' && !cloneFile)}>
                     {cloning ? '处理中...' : (cloneMode === 'design' ? '开始设计' : '开始克隆')}
                   </button>
-                  )}
+                  </CanEdit>
                 </div>
               </div>
             </div>
@@ -4440,19 +4461,21 @@ export default function ProjectPage() {
                               </button>
                             )
                           })()}
-                          <button className="btn btn-ghost btn-sm"
-                            style={{ color: 'var(--warning)' }}
-                            onClick={() => setTtsInputText('')}>🗑 清空</button>
-                          <button className="btn btn-ghost btn-sm"
-                            style={{ color: 'var(--primary)' }}
-                            onClick={doSplit}>✂ 分割</button>
+                          <CanEdit>
+                            <button className="btn btn-ghost btn-sm"
+                              style={{ color: 'var(--warning)' }}
+                              onClick={() => setTtsInputText('')}>🗑 清空</button>
+                            <button className="btn btn-ghost btn-sm"
+                              style={{ color: 'var(--primary)' }}
+                              onClick={doSplit}>✂ 分割</button>
+                          </CanEdit>
                         </div>
-                        {!readOnly && (
+                        <CanEdit perm={canGenerate4}>
                         <button className="btn btn-primary btn-sm w-full"
                           disabled={ttsGenerating} onClick={doTTS}>
                           {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
                         </button>
-                        )}
+                        </CanEdit>
                       </>
                     ) : (
                       <>
@@ -4566,10 +4589,14 @@ export default function ProjectPage() {
                                 )}
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
                                   onClick={() => downloadFile(h.audioUrl, h.filename)}>💾</button>
+                                <CanEdit perm={canGenerate4}>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
                                   onClick={() => { setEditingHistoryIdx(i); setEditHistoryName(h.filename) }}>✏</button>
+                                </CanEdit>
+                                <CanEdit perm={canGenerate4}>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)', padding: '0 4px' }}
                                   onClick={() => { if (confirm('确定删除此合成记录？')) { api.deleteTtsHistory(h.id).then(() => loadTtsHistory()) } }}>✕</button>
+                                </CanEdit>
                               </div>
                             </div>
                           )}
@@ -4747,7 +4774,7 @@ export default function ProjectPage() {
 
         {/* ====== STAGE 5: 输出列表 ====== */}
         {stage === 5 && (
-          <ProjectOutputList projectId={id!} projectName={project?.name || '项目'} readOnly={readOnly} />
+          <ProjectOutputList projectId={id!} projectName={project?.name || '项目'} readOnly={readOnly} canEditOwn={canEditOwn} />
         )}
       </div>
 
