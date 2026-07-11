@@ -8,7 +8,7 @@ import { usePermission } from '../hooks/usePermission'
 import { DEFAULT_THEMES, applyThemeToDOM, resetThemeToDefault } from '../services/theme'
 import type { ThemePreset } from '../services/theme'
 
-type SettingsTab = 'general' | 'appearance' | 'manual'
+type SettingsTab = 'general' | 'appearance' | 'manual' | 'plan'
 
 interface HelpSection {
   location: string
@@ -99,6 +99,19 @@ function SettingsPage() {
   const [adminPhone, setAdminPhone] = useState('')
   const [qrWechat, setQrWechat] = useState('')
   const [qrAlipay, setQrAlipay] = useState('')
+  // 会员套餐
+  const [planName, setPlanName] = useState('标准套餐')
+  const [planPrice, setPlanPrice] = useState('29.90')
+  const [planDays, setPlanDays] = useState('90')
+
+  const [adminPasswordEnabled, setAdminPasswordEnabled] = useState(true)
+
+  // -- 修改密码 state --
+  const [oldPw, setOldPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [pwMsg, setPwMsg] = useState('')
+  const [pwChanging, setPwChanging] = useState(false)
   const [appVersion, setAppVersion] = useState('1.0.0')
 
   // License state
@@ -133,6 +146,16 @@ function SettingsPage() {
       if (s.admin_phone) setAdminPhone(s.admin_phone)
       if (s.payment_qr_wechat) setQrWechat(s.payment_qr_wechat)
       if (s.payment_qr_alipay) setQrAlipay(s.payment_qr_alipay)
+      if (s.member_plan) {
+        try {
+          const p = JSON.parse(s.member_plan)
+          const q = p.quarterly || p[Object.keys(p)[0]] || {}
+          if (q.name) setPlanName(q.name)
+          if (q.amount_cents) setPlanPrice((q.amount_cents / 100).toFixed(2))
+          if (q.duration_days) setPlanDays(String(q.duration_days))
+        } catch {}
+      }
+      setAdminPasswordEnabled(s.admin_password_enabled !== '0')
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
 
@@ -240,7 +263,19 @@ function SettingsPage() {
   const handleGlobalSave = async () => {
     setSaveMsg('')
     try {
-      await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature, admin_phone: adminPhone, app_version: appVersion, payment_qr_wechat: qrWechat, payment_qr_alipay: qrAlipay })
+      await api.updateSettings({
+        brand_logo: brandLogo, brand_name: brandName, save_path: savePath,
+        branding_copyright: brandingCopyright, branding_signature: brandingSignature,
+        admin_phone: adminPhone, app_version: appVersion,
+        payment_qr_wechat: qrWechat, payment_qr_alipay: qrAlipay,
+        admin_password_enabled: adminPasswordEnabled ? '1' : '0',
+        member_plan: JSON.stringify({
+          quarterly: {
+            name: planName, amount_cents: Math.round(parseFloat(planPrice) * 100),
+            duration_days: parseInt(planDays, 10) || 90,
+          }
+        }),
+      })
       const fallback = (await api.getVersion()).app || ''
       document.title = brandName || fallback
       setSaveMsg('保存成功')
@@ -363,6 +398,8 @@ function SettingsPage() {
             onClick={() => setActiveTab('appearance')}>网站风格</button>
           <button className={`mgmt-tab${activeTab === 'manual' ? ' active' : ''}`}
             onClick={() => setActiveTab('manual')}>操作说明</button>
+          <button className={`mgmt-tab${activeTab === 'plan' ? ' active' : ''}`}
+            onClick={() => setActiveTab('plan')}>会员套餐</button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', marginRight: 50 }}>
           {saveMsg && (
@@ -442,6 +479,19 @@ function SettingsPage() {
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
             <h3>账户管理</h3>
             <div className="settings-row">
+              <label>密码保护</label>
+              <button
+                className={adminPasswordEnabled ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
+                onClick={() => setAdminPasswordEnabled(!adminPasswordEnabled)}
+                style={{ minWidth: 80 }}
+              >
+                {adminPasswordEnabled ? '已开启' : '已关闭'}
+              </button>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                {adminPasswordEnabled ? '访问系统需要登录' : '任何人可直接访问系统'}
+              </span>
+            </div>
+            <div className="settings-row">
               <label>管理员手机号</label>
               <input className="form-input" type="text" value={adminPhone}
                 onChange={e => setAdminPhone(e.target.value)} placeholder="用于身份验证" style={{ maxWidth: 220 }} disabled={!canSaveGlobal} />
@@ -451,6 +501,53 @@ function SettingsPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => navigate('/users')}>
                 用户管理 →
               </button>
+            </div>
+
+            <h4 style={{ marginTop: 20, marginBottom: 8, fontSize: 13 }}>修改密码</h4>
+            <div className="settings-row">
+              <label>当前密码</label>
+              <input className="form-input" type="password" value={oldPw}
+                onChange={e => setOldPw(e.target.value)} placeholder="输入当前密码" style={{ maxWidth: 200 }} />
+            </div>
+            <div className="settings-row">
+              <label>新密码</label>
+              <input className="form-input" type="password" value={newPw}
+                onChange={e => setNewPw(e.target.value)} placeholder="至少 8 位" style={{ maxWidth: 200 }} />
+            </div>
+            <div className="settings-row">
+              <label>确认新密码</label>
+              <input className="form-input" type="password" value={confirmPw}
+                onChange={e => setConfirmPw(e.target.value)} placeholder="再次输入新密码" style={{ maxWidth: 200 }} />
+            </div>
+            <div className="settings-row">
+              <label></label>
+              <button className="btn btn-primary btn-sm" disabled={pwChanging}
+                onClick={async () => {
+                  setPwMsg('')
+                  if (!oldPw) { setPwMsg('请输入当前密码'); return }
+                  if (newPw.length < 8) { setPwMsg('新密码至少 8 位'); return }
+                  if (newPw !== confirmPw) { setPwMsg('两次输入的新密码不一致'); return }
+                  setPwChanging(true)
+                  try {
+                    await api.changePassword(oldPw, newPw)
+                    setPwMsg('密码修改成功')
+                    setOldPw(''); setNewPw(''); setConfirmPw('')
+                  } catch (e: any) {
+                    setPwMsg(e.message || '修改失败')
+                  } finally {
+                    setPwChanging(false)
+                  }
+                }}>
+                {pwChanging ? '修改中...' : '修改密码'}
+              </button>
+              {pwMsg && (
+                <span style={{
+                  fontSize: 11, marginLeft: 8,
+                  color: pwMsg.includes('成功') ? 'var(--success)' : 'var(--warning)',
+                }}>
+                  {pwMsg}
+                </span>
+              )}
             </div>
           </div>
 
@@ -874,6 +971,36 @@ function SettingsPage() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ TAB: 会员套餐 ═══ */}
+        {activeTab === 'plan' && (
+          <div className="settings-section">
+            <h3>套餐配置</h3>
+            <div className="settings-row">
+              <label>套餐名称</label>
+              <input className="form-input" value={planName}
+                onChange={e => setPlanName(e.target.value)}
+                disabled={!canSaveGlobal} style={{ maxWidth: 200 }} />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>如"标准套餐"，会员注册/续费时展示</span>
+            </div>
+            <div className="settings-row">
+              <label>价格（元）</label>
+              <input className="form-input" type="number" step="0.01" min="0.01"
+                value={planPrice}
+                onChange={e => setPlanPrice(e.target.value)}
+                disabled={!canSaveGlobal} style={{ maxWidth: 120 }} />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>会员支付金额</span>
+            </div>
+            <div className="settings-row">
+              <label>有效天数</label>
+              <input className="form-input" type="number" step="1" min="1"
+                value={planDays}
+                onChange={e => setPlanDays(e.target.value)}
+                disabled={!canSaveGlobal} style={{ maxWidth: 100 }} />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>从审批通过当天起算</span>
             </div>
           </div>
         )}

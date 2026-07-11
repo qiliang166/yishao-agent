@@ -1260,6 +1260,14 @@ def _migrate_v1_create_tables(conn):
     except Exception as e:
         print(f"[DB] Warning: could not add must_change_password to users: {e}")
 
+    # Migrate: add phone to users
+    try:
+        users_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "phone" not in users_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''")
+    except Exception as e:
+        print(f"[DB] Warning: could not add phone to users: {e}")
+
     # Migrate: add payment_ref to payment_records (user-submitted payment proof)
     try:
         pr_cols = [r[1] for r in conn.execute("PRAGMA table_info(payment_records)").fetchall()]

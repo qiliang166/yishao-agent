@@ -14,6 +14,7 @@ interface PendingMember {
   username: string
   display_name: string
   email: string
+  phone: string
   is_approved: number
   created_at: string
   payment: PaymentInfo | null
@@ -67,9 +68,7 @@ export default function MemberApprovalPage() {
     setActionLoading(true)
     setError('')
     try {
-      const m = getSelectedMember()
-      const days = m?.payment ? (m.payment.duration_days || 90) : durationDays
-      await api.approveMember(approveId, days)
+      await api.approveMember(approveId, durationDays)
       showToast('审批通过')
       setApproveId(null)
       setDurationDays(7)
@@ -116,7 +115,7 @@ export default function MemberApprovalPage() {
         <div style={{
           position: 'fixed', top: 24, right: 24, zIndex: 9999,
           background: 'var(--primary)', color: '#fff', padding: '10px 20px',
-          borderRadius: 8, fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          borderRadius: 8, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         }}>
           {toast}
         </div>
@@ -127,7 +126,7 @@ export default function MemberApprovalPage() {
       ) : members.length === 0 ? (
         <div style={{
           textAlign: 'center', padding: 64,
-          color: 'var(--text-secondary)', fontSize: 14,
+          color: 'var(--text-secondary)', fontSize: 12,
         }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
           <p>全部已处理</p>
@@ -145,7 +144,7 @@ export default function MemberApprovalPage() {
                 }}
               >
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>
                     {m.display_name}
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
                       @{m.username}
@@ -167,7 +166,7 @@ export default function MemberApprovalPage() {
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    {m.email} · 注册于 {new Date(m.created_at).toLocaleString('zh-CN')}
+                    {m.email || '无邮箱'}{m.phone ? ` · ${m.phone}` : ''} · 注册于 {new Date(m.created_at).toLocaleString('zh-CN')}
                   </div>
                   {m.payment && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
@@ -219,11 +218,12 @@ export default function MemberApprovalPage() {
             {/* Member info summary */}
             <div style={{
               background: '#f8fafc', borderRadius: 8, padding: 12, marginBottom: 16,
-              fontSize: 13, lineHeight: 1.8,
+              fontSize: 12, lineHeight: 1.8,
             }}>
               <div><strong>用户名：</strong>{selectedMember.username}</div>
               <div><strong>显示名：</strong>{selectedMember.display_name}</div>
               {selectedMember.email && <div><strong>邮箱：</strong>{selectedMember.email}</div>}
+              {selectedMember.phone && <div><strong>手机号：</strong>{selectedMember.phone}</div>}
               <div><strong>注册时间：</strong>{new Date(selectedMember.created_at).toLocaleString('zh-CN')}</div>
             </div>
 
@@ -233,7 +233,7 @@ export default function MemberApprovalPage() {
                 background: 'rgba(59,130,246,0.05)', borderRadius: 8, padding: 12, marginBottom: 16,
                 border: '1px solid rgba(59,130,246,0.15)',
               }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--primary)' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: 'var(--primary)' }}>
                   付款信息
                 </div>
                 <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--text)' }}>
@@ -248,7 +248,7 @@ export default function MemberApprovalPage() {
                 background: 'rgba(148,163,184,0.05)', borderRadius: 8, padding: 12, marginBottom: 16,
                 border: '1px solid var(--border)',
               }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
                   试用会员
                 </div>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
@@ -270,7 +270,7 @@ export default function MemberApprovalPage() {
               max={3650}
               value={durationDays}
               onChange={e => setDurationDays(Number(e.target.value))}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }}
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
             />
             {error && (
               <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>{error}</div>
@@ -301,7 +301,7 @@ export default function MemberApprovalPage() {
               rows={3}
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, resize: 'vertical' }}
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, resize: 'vertical' }}
             />
             {error && (
               <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>{error}</div>

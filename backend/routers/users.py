@@ -220,7 +220,7 @@ def list_users(user_type: str = None, status: str = None, search: str = None,
         for r in rows:
             u = {
                 "id": r["id"], "username": r["username"], "display_name": r["display_name"],
-                "email": r["email"], "user_type": r["user_type"],
+                "email": r["email"], "phone": dict(r).get("phone", ""), "user_type": r["user_type"],
                 "is_active": r["is_active"], "is_approved": r["is_approved"],
                 "expires_at": r["expires_at"], "created_at": r["created_at"],
             }
@@ -290,13 +290,14 @@ def create_user(req: dict, user=require_perm("member.manage")):
             email_exist = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             if email_exist:
                 raise HTTPException(400, "邮箱已被注册")
+        expires_val = None if user_type == "admin" else "datetime('now', '+30 days')"
         db.execute(
-            """INSERT INTO users (id, username, password_hash, display_name, email, user_type,
+            f"""INSERT INTO users (id, username, password_hash, display_name, email, user_type,
                is_active, is_approved, approved_by, approved_at, expires_at, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, datetime('now'),
-               datetime('now', '+30 days'), datetime('now'), datetime('now'))""",
+               {expires_val}, datetime('now'), datetime('now'))""",
             (user_id, username, password_hash, display_name, email, user_type,
-             user["user_id"]))
+             user["sub"]))
         db.commit()
         row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         result = dict(row)
@@ -317,8 +318,9 @@ def update_user(user_id: str, req: dict, user=require_perm("member.manage")):
             db.execute("UPDATE users SET display_name = ?, updated_at = datetime('now') WHERE id = ?",
                        (req["display_name"], user_id))
         if "email" in req:
+            email_val = req["email"].strip() if req["email"] else None
             db.execute("UPDATE users SET email = ?, updated_at = datetime('now') WHERE id = ?",
-                       (req["email"], user_id))
+                       (email_val, user_id))
         if "is_active" in req:
             if existing["user_type"] == "admin" and existing["username"] == "admin":
                 raise HTTPException(403, "超级管理员不可停用")
@@ -368,6 +370,29 @@ def toggle_user_active(user_id: str, user=require_perm("member.manage")):
         db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (user_id,))
         db.commit()
         return {"ok": True, "is_active": new_val}
+    finally:
+        db.close()
+
+
+@router.post("/users/{user_id}/reset-password")
+def reset_user_password(user_id: str, req: dict, user=require_perm("member.manage")):
+    """Admin resets a user's password."""
+    from app import _hash_password
+    new_password = req.get("password", "")
+    if len(new_password) < 8:
+        raise HTTPException(400, "密码至少 8 位")
+    db = get_db()
+    try:
+        existing = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "用户不存在")
+        if existing["user_type"] == "admin" and existing["username"] == "admin":
+            raise HTTPException(403, "超级管理员密码请在设置页自行修改")
+        pw_hash = _hash_password(new_password)
+        db.execute("UPDATE users SET password_hash=?, token_version=token_version+1, updated_at=datetime('now') WHERE id=?",
+                   (pw_hash, user_id))
+        db.commit()
+        return {"ok": True}
     finally:
         db.close()
 

@@ -17,6 +17,7 @@ export default function MemberRegisterPage() {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
   const [planType, setPlanType] = useState<PlanType>('trial')
   const [paymentMethod, setPaymentMethod] = useState('wechat')
   const [paymentRef, setPaymentRef] = useState('')
@@ -25,6 +26,8 @@ export default function MemberRegisterPage() {
   const [loading, setLoading] = useState(false)
   const [qrCodes, setQrCodes] = useState<QRState>({ wechat: '', alipay: '' })
   const [brandName, setBrandName] = useState('')
+  const [planPrice, setPlanPrice] = useState('29.90')
+  const [planDays, setPlanDays] = useState('90')
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(data => {
@@ -32,6 +35,14 @@ export default function MemberRegisterPage() {
       if (s.brand_name) setBrandName(s.brand_name)
       if (s.payment_qr_wechat) setQrCodes(prev => ({ ...prev, wechat: s.payment_qr_wechat }))
       if (s.payment_qr_alipay) setQrCodes(prev => ({ ...prev, alipay: s.payment_qr_alipay }))
+      if (s.member_plan) {
+        try {
+          const p = JSON.parse(s.member_plan)
+          const q = p.quarterly || p[Object.keys(p)[0]] || {}
+          if (q.amount_cents) setPlanPrice((q.amount_cents / 100).toFixed(2))
+          if (q.duration_days) setPlanDays(String(q.duration_days))
+        } catch {}
+      }
     }).catch(() => {})
   }, [])
 
@@ -69,6 +80,7 @@ export default function MemberRegisterPage() {
         password,
         display_name: displayName.trim() || username.trim(),
         email: email.trim(),
+        phone: phone.trim(),
         plan_type: planType,
         ...(planType === 'paid' ? {
           plan_id: 'quarterly',
@@ -164,6 +176,9 @@ export default function MemberRegisterPage() {
               style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10 }} />
             <input className="form-input" type="email" placeholder="邮箱（可选）" value={email}
               onChange={e => { setEmail(e.target.value); setError('') }}
+              style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10 }} />
+            <input className="form-input" type="tel" placeholder="手机号（可选，用于接收审批通知）" value={phone}
+              onChange={e => { setPhone(e.target.value); setError('') }}
               style={{ width: '100%', boxSizing: 'border-box' }} />
 
             {error && (
@@ -237,10 +252,10 @@ export default function MemberRegisterPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700 }}>
-                    付费开通 <span style={{ fontSize: 13, color: 'var(--primary)' }}>￥29.90/季</span>
+                    付费开通 <span style={{ fontSize: 13, color: 'var(--primary)' }}>￥{planPrice}</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    全部功能含文件下载，90 天有效期
+                    全部功能含文件下载，{planDays} 天有效期
                   </div>
                 </div>
                 <div style={{

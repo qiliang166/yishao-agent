@@ -110,6 +110,12 @@ export default function LandingPage() {
             marginTop: 10, textAlign: 'center',
           }}>
             {error}
+            {error.includes('已到期') && (
+              <> <Link to={`/member/renew?username=${encodeURIComponent(username)}`}
+                      style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
+                续费 →
+              </Link></>
+            )}
           </div>
         )}
 

@@ -163,7 +163,7 @@ export default function RoleManagePage() {
         <div style={{
           position: 'fixed', top: 24, right: 24, zIndex: 9999,
           background: 'var(--primary)', color: '#fff', padding: '10px 20px',
-          borderRadius: 8, fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          borderRadius: 8, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         }}>
           {toast}
         </div>
@@ -174,7 +174,7 @@ export default function RoleManagePage() {
       ) : (
         <>
           {/* Admin roles */}
-          <h2 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>管理员角色</h2>
+          <h2 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>管理员角色</h2>
           {adminRoles.length === 0 ? (
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 24 }}>暂无管理员角色</p>
           ) : (
@@ -188,7 +188,7 @@ export default function RoleManagePage() {
           )}
 
           {/* Member roles */}
-          <h2 style={{ fontSize: 14, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>会员角色</h2>
+          <h2 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>会员角色</h2>
           {memberRoles.length === 0 ? (
             <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>暂无会员角色</p>
           ) : (
@@ -203,7 +203,7 @@ export default function RoleManagePage() {
 
           {roles.length === 0 && (
             <div style={{
-              textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 14,
+              textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12,
             }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🛡</div>
               <p>暂无自定义角色</p>
@@ -220,15 +220,15 @@ export default function RoleManagePage() {
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>角色名</label>
             <input className="form-input" value={createName} onChange={e => setCreateName(e.target.value)}
-              placeholder="如：高级编辑员" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              placeholder="如：高级编辑员" style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>描述（可选）</label>
             <input className="form-input" value={createDesc} onChange={e => setCreateDesc(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>用户层级</label>
             <select className="form-input" value={createType} onChange={e => setCreateType(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }}>
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}>
               <option value="admin">管理员 (admin)</option>
               <option value="member">会员 (member)</option>
             </select>
@@ -266,7 +266,7 @@ function RoleCard({ role, expanded, onToggle, onTogglePerm, onDelete }: {
         }}
       >
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>
+          <div style={{ fontWeight: 600, fontSize: 12 }}>
             {role.is_system ? '🔒 ' : ''}{role.name}
           </div>
           {role.description && (

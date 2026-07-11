@@ -22,7 +22,7 @@ interface AuthState {
   authLogin: (username: string, password: string) => Promise<void>
   memberLogin: (username: string, password: string) => Promise<void>
   memberRegister: (data: {
-    username: string; password: string; display_name: string; email: string
+    username: string; password: string; display_name: string; email: string; phone?: string
     plan_type?: string; plan_id?: string; payment_method?: string; payment_ref?: string
   }) => Promise<void>
   logout: () => void
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(data => {
         const s = data.settings || {}
         if (s.db_schema_version) {
-          setAuthRequired(true)
+          setAuthRequired(s.admin_password_enabled !== '0')
         } else if (s.admin_password_enabled === '1') {
           setAuthRequired(true)
         } else {
@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [saveToken])
 
   const memberRegister = useCallback(async (data: {
-    username: string; password: string; display_name: string; email: string
+    username: string; password: string; display_name: string; email: string; phone?: string
     plan_type?: string; plan_id?: string; payment_method?: string; payment_ref?: string
   }) => {
     const res = await fetch('/api/member/register', {

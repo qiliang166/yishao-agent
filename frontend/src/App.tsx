@@ -11,6 +11,7 @@ import ManualPage from './pages/ManualPage'
 import LoginPage from './pages/LoginPage'
 import MemberLoginPage from './pages/MemberLoginPage'
 import MemberRegisterPage from './pages/MemberRegisterPage'
+import MemberRenewPage from './pages/MemberRenewPage'
 import MemberCenterPage from './pages/MemberCenterPage'
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
 import PromptStudioPage from './pages/PromptStudioPage'
@@ -579,12 +580,32 @@ function AppShell() {
             <Route path="/roles" element={<RoleManagePage />} />
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
             <Route path="/" element={<HomePage />} />
+            <Route path="/home" element={<HomePage />} />
           </Routes>
         </div>
       </div>
     </div>
     </>
   )
+}
+
+function RootRoute() {
+  const { user, loading } = useAuth()
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', color: 'var(--text-secondary)', fontSize: 14,
+      }}>
+        加载中...
+      </div>
+    )
+  }
+  if (user) {
+    if (user.user_type === 'member') return <Navigate to="/app" replace />
+    return <Navigate to="/home" replace />
+  }
+  return <LandingPage />
 }
 
 function App() {
@@ -618,11 +639,12 @@ function App() {
       <LicenseProvider>
         <ModalProvider>
           <Routes>
-            <Route path="/" element={<LandingPage />} />
+            <Route path="/" element={<RootRoute />} />
             <Route path="/setup" element={<FirstTimeSetupPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/member" element={<MemberLoginPage />} />
             <Route path="/member/register" element={<MemberRegisterPage />} />
+            <Route path="/member/renew" element={<MemberRenewPage />} />
             <Route path="/app/*" element={
               <ProtectedRoute requiredType="member">
                 <MemberAppShell />

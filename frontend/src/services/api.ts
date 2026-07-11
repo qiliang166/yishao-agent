@@ -961,6 +961,15 @@ export const api = {
     }).then(d => d as { ok: boolean; expires_before: string; expires_after: string }),
   listPayments: (userId: string) =>
     request('/api/members/' + userId + '/payments').then(d => d as { payments: any[] }),
+  memberRenew: (data: {
+    username: string; password: string; plan_type?: string;
+    plan_id?: string; payment_method?: string; payment_ref?: string;
+  }) =>
+    request('/api/member/renew', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean; message: string }),
 
   // Roles
   listRoles: (userType?: string) => {
@@ -1051,4 +1060,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ workspace_id: workspaceId }),
     }).then(d => d as any),
+
+  resetUserPassword: (userId: string, password: string) =>
+    request('/api/users/' + userId + '/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }).then(d => d as { ok: boolean }),
+
+  changePassword: (oldPassword: string, newPassword: string) =>
+    request('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+    }).then(d => d as { ok: boolean }),
 }

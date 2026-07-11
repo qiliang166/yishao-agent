@@ -33,11 +33,22 @@ from services.license_service import (
 
 DEFAULT_SITE_NAME = "Yishao Agent"
 
-# Server-authoritative plan definitions — client submits plan_id, server computes price/duration.
-# Adding a new plan only requires a new entry here; the frontend hardcodes plan_id in its UI.
-PLANS: dict[str, dict] = {
-    "quarterly": {"amount_cents": 2990, "duration_days": 90, "name": "标准套餐"},
-}
+# Server-authoritative plan definitions — stored in settings table, editable via UI.
+# Falls back to default if not configured.
+DEFAULT_PLAN = {"quarterly": {"amount_cents": 2990, "duration_days": 90, "name": "标准套餐"}}
+
+def _load_plans() -> dict:
+    """Load plan config from settings table, with fallback to default."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT value FROM settings WHERE key='member_plan'").fetchone()
+        if row and row["value"]:
+            return json.loads(row["value"])
+    except Exception:
+        pass
+    finally:
+        db.close()
+    return DEFAULT_PLAN
 
 # Allowed domains for TTS audio download (SSRF prevention)
 _AUDIO_ALLOWED_HOSTS = {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "aliyuncs.com"}
@@ -6173,11 +6184,7 @@ def member_login(req: dict, request: Request):
         if not _verify_password(password, user["password_hash"]):
             _check_login_lockout(user)
             raise HTTPException(status_code=403, detail="用户名或密码错误")
-        if not user["is_approved"]:
-            raise HTTPException(status_code=403, detail="账户尚未通过审批，请等待管理员审核")
-        if user["is_approved"] == 2:
-            raise HTTPException(status_code=403, detail="注册申请已被拒绝，请联系管理员")
-        # Check expiry
+        # Check expiry before is_approved — so renewing users see "已到期" not "未审批"
         if user["expires_at"]:
             try:
                 expires = datetime.fromisoformat(user["expires_at"])
@@ -6185,6 +6192,10 @@ def member_login(req: dict, request: Request):
                     raise HTTPException(status_code=403, detail="会员已到期，请联系管理员续费")
             except (ValueError, TypeError):
                 pass
+        if not user["is_approved"]:
+            raise HTTPException(status_code=403, detail="账户尚未通过审批，请等待管理员审核")
+        if user["is_approved"] == 2:
+            raise HTTPException(status_code=403, detail="注册申请已被拒绝，请联系管理员")
         _reset_failed_attempts(user["id"])
         token = _create_jwt(user)
         return {
@@ -6219,6 +6230,7 @@ def member_register(req: dict, request: Request):
     password = req.get("password", "") or ""
     display_name = (req.get("display_name", "") or "").strip() or username
     email = (req.get("email", "") or "").strip() or None
+    phone = (req.get("phone", "") or "").strip() or None
     plan_type = (req.get("plan_type", "") or "trial").strip()  # "trial" or "paid"
 
     if not username or not password:
@@ -6252,18 +6264,19 @@ def member_register(req: dict, request: Request):
         now = datetime.utcnow().isoformat()
         pw_hash = _hash_password(password)
         db.execute(
-            """INSERT INTO users (id, username, password_hash, display_name, email, user_type,
+            """INSERT INTO users (id, username, password_hash, display_name, email, phone, user_type,
                is_active, is_approved, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 'member', 1, 0, ?, ?)""",
-            (user_id, username, pw_hash, display_name, email, now, now),
+               VALUES (?, ?, ?, ?, ?, ?, 'member', 1, 0, ?, ?)""",
+            (user_id, username, pw_hash, display_name, email, phone, now, now),
         )
 
-        audit_detail = {"username": username, "email": email, "plan_type": plan_type}
+        audit_detail = {"username": username, "email": email, "phone": phone, "plan_type": plan_type}
 
         if plan_type == "paid":
             # Client only provides plan_id and payment_ref — price/duration are server-authoritative.
             plan_id = (req.get("plan_id", "") or "").strip()
-            plan = PLANS.get(plan_id) if plan_id else None
+            plans = _load_plans()
+            plan = plans.get(plan_id) if plan_id else None
             if not plan:
                 raise HTTPException(status_code=400, detail="无效的套餐")
             payment_method = (req.get("payment_method", "") or "").strip()
@@ -6296,6 +6309,70 @@ def member_register(req: dict, request: Request):
     return {"ok": True, "message": "注册成功，请等待管理员审批"}
 
 
+@app.post("/api/member/renew")
+def member_renew(req: dict, request: Request):
+    """Self-service renewal for expired members. Creates payment record and
+    sets is_approved=0 so admin must re-approve."""
+    ip = _get_client_ip(request)
+
+    username = (req.get("username", "") or "").strip()
+    password = req.get("password", "") or ""
+    plan_type = (req.get("plan_type", "") or "paid").strip()
+
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
+
+    db = get_db()
+    try:
+        user = db.execute(
+            "SELECT * FROM users WHERE username=? COLLATE NOCASE AND user_type='member'",
+            (username,),
+        ).fetchone()
+        if not user:
+            raise HTTPException(status_code=403, detail="用户名或密码错误")
+        if not user["is_active"]:
+            raise HTTPException(status_code=403, detail="账户已被停用")
+        if not _verify_password(password, user["password_hash"]):
+            _check_login_lockout(user)
+            raise HTTPException(status_code=403, detail="用户名或密码错误")
+
+        # Only paid plan supported for renewal
+        plan_id = (req.get("plan_id", "") or "").strip()
+        plans = _load_plans()
+        plan = plans.get(plan_id) if plan_id else None
+        if not plan:
+            raise HTTPException(status_code=400, detail="无效的套餐")
+        payment_method = (req.get("payment_method", "") or "").strip()
+        payment_ref = (req.get("payment_ref", "") or "").strip()
+        if not payment_ref:
+            raise HTTPException(status_code=400, detail="请填写付款单号")
+
+        now = datetime.utcnow().isoformat()
+        import uuid as _uuid
+        db.execute(
+            """INSERT INTO payment_records
+               (id, user_id, amount_cents, plan_name, duration_days,
+                payment_method, payment_ref, paid_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (str(_uuid.uuid4()), user["id"], plan["amount_cents"], plan["name"],
+             plan["duration_days"], payment_method, payment_ref, now),
+        )
+
+        # Mark for admin re-approval
+        db.execute("UPDATE users SET is_approved=0, updated_at=? WHERE id=?",
+                   (now, user["id"]))
+        db.execute("UPDATE users SET token_version=token_version+1 WHERE id=?", (user["id"],))
+
+        _write_audit(db, user["id"], "member.renew", "user", user["id"],
+                      json.dumps({"plan_id": plan_id, "payment_method": payment_method,
+                                  "payment_ref": payment_ref,
+                                  "amount_cents": plan["amount_cents"]}), ip)
+        db.commit()
+    finally:
+        db.close()
+    return {"ok": True, "message": "续费申请已提交，请等待管理员审批"}
+
+
 # ── Member management endpoints ─────────────────────────────────────
 
 @app.get("/api/members/pending")
@@ -6307,7 +6384,7 @@ def list_pending_members(page: int = 1, page_size: int = 20, user=require_perm("
             "SELECT COUNT(*) FROM users WHERE user_type='member' AND is_approved=0"
         ).fetchone()[0]
         rows = db.execute(
-            "SELECT id, username, display_name, email, is_approved, created_at "
+            "SELECT id, username, display_name, email, phone, is_approved, created_at "
             "FROM users WHERE user_type='member' AND is_approved=0 "
             "ORDER BY created_at DESC LIMIT ? OFFSET ?",
             (page_size, offset),
@@ -6374,10 +6451,8 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
         # Determine which role to assign
         if payment and payment["amount_cents"] > 0:
             role_name = "付费会员"
-            duration_days = payment["duration_days"]
         else:
             role_name = "试用会员"
-            duration_days = body.duration_days
 
         expires_at = (_dt.utcnow() + _td(days=int(duration_days))).isoformat()
 

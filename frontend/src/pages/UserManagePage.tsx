@@ -39,6 +39,16 @@ export default function UserManagePage() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
 
+  // Create dialog
+  const [showCreate, setShowCreate] = useState(false)
+  const [createUsername, setCreateUsername] = useState('')
+  const [createPassword, setCreatePassword] = useState('')
+  const [createDisplayName, setCreateDisplayName] = useState('')
+  const [createEmail, setCreateEmail] = useState('')
+  const [createUserType, setCreateUserType] = useState<'admin' | 'member'>('admin')
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+
   // Edit dialog
   const [editUser, setEditUser] = useState<UserItem | null>(null)
   const [editDisplayName, setEditDisplayName] = useState('')
@@ -49,6 +59,8 @@ export default function UserManagePage() {
   const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceItem[]>([])
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState('')
+  const [resetPwValue, setResetPwValue] = useState('')
+  const [resetPwLoading, setResetPwLoading] = useState(false)
 
   // Payment dialog
   const [payUser, setPayUser] = useState<UserItem | null>(null)
@@ -122,6 +134,36 @@ export default function UserManagePage() {
       setEditError(e.message || '保存失败')
     } finally {
       setEditLoading(false)
+    }
+  }
+
+  const handleCreate = async () => {
+    setCreateError('')
+    if (!createUsername.trim() || !createPassword || !createDisplayName.trim()) {
+      setCreateError('用户名、密码、显示名不能为空')
+      return
+    }
+    if (createPassword.length < 8) {
+      setCreateError('密码至少 8 位')
+      return
+    }
+    setCreateLoading(true)
+    try {
+      await api.createUser({
+        username: createUsername.trim(),
+        password: createPassword,
+        display_name: createDisplayName.trim(),
+        user_type: createUserType,
+        email: createEmail.trim() || undefined,
+      })
+      showToast('创建成功')
+      setShowCreate(false)
+      setCreateUsername(''); setCreatePassword(''); setCreateDisplayName(''); setCreateEmail('')
+      loadUsers()
+    } catch (e: any) {
+      setCreateError(e.message || '创建失败')
+    } finally {
+      setCreateLoading(false)
     }
   }
 
@@ -264,35 +306,42 @@ export default function UserManagePage() {
         <div style={{
           position: 'fixed', top: 24, right: 24, zIndex: 9999,
           background: 'var(--primary)', color: '#fff', padding: '10px 20px',
-          borderRadius: 8, fontSize: 13, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          borderRadius: 8, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
         }}>
           {toast}
         </div>
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
-        <button
-          onClick={() => { setTab('admin'); setPage(1) }}
-          style={{
-            padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
-            fontSize: 13, fontWeight: tab === 'admin' ? 700 : 400,
-            color: tab === 'admin' ? 'var(--primary)' : 'var(--text-secondary)',
-            borderBottom: tab === 'admin' ? '2px solid var(--primary)' : '2px solid transparent',
-          }}
-        >
-          管理员
-        </button>
-        <button
-          onClick={() => { setTab('member'); setPage(1) }}
-          style={{
-            padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
-            fontSize: 13, fontWeight: tab === 'member' ? 700 : 400,
-            color: tab === 'member' ? 'var(--primary)' : 'var(--text-secondary)',
-            borderBottom: tab === 'member' ? '2px solid var(--primary)' : '2px solid transparent',
-          }}
-        >
-          会员
+      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid var(--border)', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex' }}>
+          <button
+            onClick={() => { setTab('admin'); setPage(1) }}
+            style={{
+              padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: tab === 'admin' ? 700 : 400,
+              color: tab === 'admin' ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: tab === 'admin' ? '2px solid var(--primary)' : '2px solid transparent',
+            }}
+          >
+            管理员
+          </button>
+          <button
+            onClick={() => { setTab('member'); setPage(1) }}
+            style={{
+              padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: tab === 'member' ? 700 : 400,
+              color: tab === 'member' ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: tab === 'member' ? '2px solid var(--primary)' : '2px solid transparent',
+            }}
+          >
+            会员
+          </button>
+        </div>
+        <button className="btn btn-primary btn-sm"
+          onClick={() => { setShowCreate(true); setCreateUserType(tab); setCreateError('') }}
+          style={{ marginRight: 8 }}>
+          + 新建用户
         </button>
       </div>
 
@@ -300,7 +349,7 @@ export default function UserManagePage() {
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
       ) : users.length === 0 ? (
         <div style={{
-          textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 14,
+          textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12,
         }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>{tab === 'admin' ? '🛡' : '👤'}</div>
           <p>{tab === 'admin' ? '暂无其他管理员账号' : '暂无会员'}</p>
@@ -319,7 +368,7 @@ export default function UserManagePage() {
                 }}
               >
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>
                     {u.display_name}
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
                       @{u.username}
@@ -377,11 +426,11 @@ export default function UserManagePage() {
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>显示名</label>
             <input className="form-input" value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>邮箱</label>
             <input className="form-input" value={editEmail} onChange={e => setEditEmail(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             {/* Roles */}
             {canManageRoles && (
@@ -450,6 +499,29 @@ export default function UserManagePage() {
               </div>
             )}
 
+            {/* Reset Password */}
+            <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 6 }}>重置密码</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input className="form-input" type="password" placeholder="新密码（至少 8 位）"
+                  value={resetPwValue}
+                  onChange={e => setResetPwValue(e.target.value)}
+                  style={{ flex: 1, fontSize: 12 }} />
+                <button className="btn btn-ghost btn-sm" onClick={async () => {
+                  if (resetPwValue.length < 8) { setEditError('密码至少 8 位'); return }
+                  setResetPwLoading(true); setEditError('')
+                  try {
+                    await api.resetUserPassword(editUser.id, resetPwValue)
+                    showToast('密码已重置'); setResetPwValue('')
+                  } catch (e: any) {
+                    setEditError(e.message || '重置失败')
+                  } finally { setResetPwLoading(false) }
+                }} disabled={resetPwLoading || !resetPwValue}>
+                  {resetPwLoading ? '...' : '重置'}
+                </button>
+              </div>
+            </div>
+
             {editError && (
               <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 12, textAlign: 'center' }}>{editError}</div>
             )}
@@ -474,24 +546,24 @@ export default function UserManagePage() {
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>金额（元）</label>
             <input className="form-input" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>套餐名</label>
             <input className="form-input" value={payPlan} onChange={e => setPayPlan(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>续期天数</label>
             <input className="form-input" type="number" min={1} max={3650} value={payDays}
               onChange={e => setPayDays(Number(e.target.value))}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>支付方式</label>
             <input className="form-input" value={payMethod} onChange={e => setPayMethod(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>备注（可选）</label>
             <textarea className="form-input" rows={2} value={payNote} onChange={e => setPayNote(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, resize: 'vertical' }} />
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, resize: 'vertical' }} />
 
             {payError && (
               <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 12, textAlign: 'center' }}>{payError}</div>
@@ -500,6 +572,34 @@ export default function UserManagePage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setPayUser(null)}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={handlePayment} disabled={payLoading}>
                 {payLoading ? '处理中...' : '确认记录'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create User Dialog */}
+      {showCreate && (
+        <div className="dialog-overlay" onClick={() => setShowCreate(false)}>
+          <div className="dialog-box" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">新建{createUserType === 'admin' ? '管理员' : '会员'}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input className="form-input" type="text" placeholder="用户名 *" value={createUsername}
+                onChange={e => setCreateUsername(e.target.value)} autoFocus />
+              <input className="form-input" type="password" placeholder="密码（至少 8 位）*" value={createPassword}
+                onChange={e => setCreatePassword(e.target.value)} />
+              <input className="form-input" type="text" placeholder="显示名 *" value={createDisplayName}
+                onChange={e => setCreateDisplayName(e.target.value)} />
+              <input className="form-input" type="email" placeholder="邮箱（可选）" value={createEmail}
+                onChange={e => setCreateEmail(e.target.value)} />
+              {createError && (
+                <div style={{ fontSize: 11, color: 'var(--warning)', textAlign: 'center' }}>{createError}</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowCreate(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleCreate} disabled={createLoading}>
+                {createLoading ? '创建中...' : '创建'}
               </button>
             </div>
           </div>
