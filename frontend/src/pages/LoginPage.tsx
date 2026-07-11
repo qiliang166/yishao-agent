@@ -13,6 +13,15 @@ export default function LoginPage() {
   const [storedPhone, setStoredPhone] = useState('')
   const [hasRbac, setHasRbac] = useState(false)
 
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [showHint, setShowHint] = useState(false)
+  const [phoneInput, setPhoneInput] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+  const [phoneVerified, setPhoneVerified] = useState(false)
+
   useEffect(() => {
     Promise.all([
       fetch('/api/settings').then(r => r.json()),
@@ -35,15 +44,6 @@ export default function LoginPage() {
     }
     return <Navigate to="/" replace />
   }
-
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [showHint, setShowHint] = useState(false)
-  const [phoneInput, setPhoneInput] = useState('')
-  const [phoneError, setPhoneError] = useState('')
-  const [phoneVerified, setPhoneVerified] = useState(false)
 
   const handleSubmit = async () => {
     if (!password.trim()) {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/api'
+import { usePermission } from '../hooks/usePermission'
 
 interface UserItem {
   id: string
@@ -23,12 +24,14 @@ interface RoleItem {
   permissions: string[]
 }
 
-interface ProjectItem {
+interface WorkspaceItem {
   id: string
   name: string
 }
 
 export default function UserManagePage() {
+  const canManageMembers = usePermission('member.manage')
+  const canManageRoles = usePermission('role.manage')
   const [tab, setTab] = useState<'admin' | 'member'>('admin')
   const [users, setUsers] = useState<UserItem[]>([])
   const [total, setTotal] = useState(0)
@@ -42,8 +45,8 @@ export default function UserManagePage() {
   const [editEmail, setEditEmail] = useState('')
   const [userRoles, setUserRoles] = useState<{id:string;name:string}[]>([])
   const [allRoles, setAllRoles] = useState<RoleItem[]>([])
-  const [userProjects, setUserProjects] = useState<ProjectItem[]>([])
-  const [allProjects, setAllProjects] = useState<ProjectItem[]>([])
+  const [userWorkspaces, setUserWorkspaces] = useState<WorkspaceItem[]>([])
+  const [allWorkspaces, setAllWorkspaces] = useState<WorkspaceItem[]>([])
   const [editLoading, setEditLoading] = useState(false)
   const [editError, setEditError] = useState('')
 
@@ -61,10 +64,9 @@ export default function UserManagePage() {
   const [selectedRoleId, setSelectedRoleId] = useState('')
   const [roleAssignLoading, setRoleAssignLoading] = useState(false)
 
-  // Project assignment popup
-  const [showProjAssign, setShowProjAssign] = useState(false)
-  const [selectedProjId, setSelectedProjId] = useState('')
-  const [projAssignLoading, setProjAssignLoading] = useState(false)
+  // Workspace assignment
+  const [selectedWsId, setSelectedWsId] = useState('')
+  const [wsAssignLoading, setWsAssignLoading] = useState(false)
 
   const pageSize = 20
 
@@ -89,19 +91,18 @@ export default function UserManagePage() {
     setEditEmail(u.email || '')
     setEditError('')
     setSelectedRoleId('')
+    setSelectedWsId('')
 
     try {
-      const [rolesData, projectsData] = await Promise.all([
+      const [rolesData, wsData, wsListData] = await Promise.all([
         api.listRoles(tab),
-        api.getUserProjects(u.id),
-        api.listProjects(1, 1000),
+        api.getUserWorkspaces(u.id),
+        api.listWorkspaces(1, 1000),
       ])
       setAllRoles(rolesData)
       setUserRoles(u.roles || [])
-      setUserProjects(projectsData)
-      // fetch all projects for assignment
-      const allP = await api.listProjects(1, 1000)
-      setAllProjects(allP.projects || [])
+      setUserWorkspaces(wsData)
+      setAllWorkspaces(wsListData.workspaces || [])
     } catch {}
   }
 
@@ -174,27 +175,27 @@ export default function UserManagePage() {
     }
   }
 
-  const handleAddProject = async () => {
-    if (!editUser || !selectedProjId) return
-    setProjAssignLoading(true)
+  const handleAddWorkspace = async () => {
+    if (!editUser || !selectedWsId) return
+    setWsAssignLoading(true)
     try {
-      await api.addUserProjects(editUser.id, [selectedProjId])
-      const proj = allProjects.find(p => p.id === selectedProjId)
-      if (proj) setUserProjects(prev => [...prev, proj])
-      setSelectedProjId('')
+      await api.addUserWorkspaces(editUser.id, [selectedWsId])
+      const ws = allWorkspaces.find(w => w.id === selectedWsId)
+      if (ws) setUserWorkspaces(prev => [...prev, ws])
+      setSelectedWsId('')
     } catch (e: any) {
       showToast(e.message || '添加失败')
     } finally {
-      setProjAssignLoading(false)
+      setWsAssignLoading(false)
     }
   }
 
-  const handleRemoveProject = async (projectId: string) => {
+  const handleRemoveWorkspace = async (workspaceId: string) => {
     if (!editUser) return
     try {
-      await api.removeUserProject(editUser.id, projectId)
-      setUserProjects(prev => prev.filter(p => p.id !== projectId))
-      showToast('项目已移除')
+      await api.removeUserWorkspace(editUser.id, workspaceId)
+      setUserWorkspaces(prev => prev.filter(w => w.id !== workspaceId))
+      showToast('工作区已移除')
     } catch (e: any) {
       showToast(e.message || '移除失败')
     }
@@ -336,12 +337,14 @@ export default function UserManagePage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>编辑</button>
-                  {tab === 'member' && (
+                  {(canManageMembers || canManageRoles) && (
+                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>编辑</button>
+                  )}
+                  {tab === 'member' && canManageMembers && (
                     <button className="btn btn-ghost btn-sm" onClick={() => openPayment(u)}
                       style={{ color: 'var(--primary)' }}>付费</button>
                   )}
-                  {u.username !== 'admin' && (
+                  {u.username !== 'admin' && canManageMembers && (
                     <>
                       <button className="btn btn-ghost btn-sm" onClick={() => handleToggleActive(u)}
                         style={{ color: u.is_active ? 'var(--warning)' : '#5cb85c' }}>
@@ -381,6 +384,7 @@ export default function UserManagePage() {
               style={{ width: '100%', boxSizing: 'border-box', fontSize: 13 }} />
 
             {/* Roles */}
+            {canManageRoles && (
             <div style={{ marginTop: 16 }}>
               <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 6 }}>角色</label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
@@ -409,37 +413,38 @@ export default function UserManagePage() {
                 </button>
               </div>
             </div>
+            )}
 
-            {/* Projects (member only) */}
-            {editUser.user_type === 'member' && (
+            {/* Workspaces (member only) */}
+            {editUser.user_type === 'member' && canManageMembers && (
               <div style={{ marginTop: 16 }}>
-                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 6 }}>可访问项目</label>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 6 }}>可访问工作区</label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                  {userProjects.map(p => (
-                    <span key={p.id} style={{
+                  {userWorkspaces.map(w => (
+                    <span key={w.id} style={{
                       fontSize: 11, padding: '3px 8px', background: 'var(--card-bg)', borderRadius: 4,
                       display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid var(--border)',
                     }}>
-                      {p.name}
-                      <span onClick={() => handleRemoveProject(p.id)}
+                      {w.name}
+                      <span onClick={() => handleRemoveWorkspace(w.id)}
                         style={{ cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1 }}>×</span>
                     </span>
                   ))}
-                  {userProjects.length === 0 && (
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>未分配项目</span>
+                  {userWorkspaces.length === 0 && (
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>未分配工作区</span>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <select className="form-input" value={selectedProjId}
-                    onChange={e => setSelectedProjId(e.target.value)}
+                  <select className="form-input" value={selectedWsId}
+                    onChange={e => setSelectedWsId(e.target.value)}
                     style={{ flex: 1, fontSize: 12 }}>
-                    <option value="">添加项目...</option>
-                    {allProjects.filter(p => !userProjects.some(up => up.id === p.id))
-                      .map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    <option value="">添加工作区...</option>
+                    {allWorkspaces.filter(w => !userWorkspaces.some(uw => uw.id === w.id))
+                      .map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                   </select>
-                  <button className="btn btn-primary btn-sm" onClick={handleAddProject}
-                    disabled={!selectedProjId || projAssignLoading}>
-                    {projAssignLoading ? '...' : '添加'}
+                  <button className="btn btn-primary btn-sm" onClick={handleAddWorkspace}
+                    disabled={!selectedWsId || wsAssignLoading}>
+                    {wsAssignLoading ? '...' : '添加'}
                   </button>
                 </div>
               </div>

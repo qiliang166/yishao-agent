@@ -11,7 +11,7 @@ export function useOwnership(createdBy: string | null | undefined): boolean {
   const { user, loading } = useAuth()
   if (loading) return false
   if (!user) return false
-  if (createdBy == null) return true // historical data
+  if (createdBy == null) return user.permissions?.includes('project.edit_all') ?? false
   if (user.permissions?.includes('project.edit_all')) return true
   return createdBy === user.user_id
 }

@@ -19,10 +19,12 @@ export default function ProjectDashboard() {
   const { user } = useAuth()
   const isOwner = (createdBy: string | null | undefined): boolean => {
     if (!user) return false
-    if (createdBy == null) return true
+    if (createdBy == null) return user.permissions?.includes('project.edit_all') ?? false
     if (user.permissions?.includes('project.edit_all')) return true
     return createdBy === user.user_id
   }
+  const isMember = user?.user_type === 'member'
+  const projectUrl = (id: string) => isMember ? `/app/project/${id}` : `/project/${id}/workspace`
   const [workspace, setWorkspace] = useState<any>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -123,7 +125,7 @@ export default function ProjectDashboard() {
         }
       }
       setShowCreate(false)
-      navigate(`/project/${project.id}/workspace`)
+      navigate(projectUrl(project.id))
     } catch (err: any) {
       modal.toast('创建失败：' + err.message, 'error')
     } finally {
@@ -137,7 +139,7 @@ export default function ProjectDashboard() {
       const newId = (result as any).project?.id
       modal.toast(`已复制明细「${name}」`, 'success')
       loadProjects(page)
-      if (newId) navigate(`/project/${newId}/workspace`)
+      if (newId) navigate(projectUrl(newId))
     } catch (err: any) {
       modal.toast('复制失败：' + err.message, 'error')
     }
@@ -419,7 +421,7 @@ export default function ProjectDashboard() {
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginRight: 4 }}>{p.project_code}</span>
                 )}
                 <span className="pc-name" style={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/project/${p.id}/workspace`)}>{p.name}</span>
+                  onClick={() => navigate(projectUrl(p.id))}>{p.name}</span>
                 {p.copied_from_project_id && (
                   <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 4 }} title="从其他明细复制">📋</span>
                 )}

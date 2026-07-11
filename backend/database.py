@@ -1208,15 +1208,15 @@ def _migrate_v1_create_tables(conn):
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_ur_user_id ON user_roles(user_id)")
 
-    # 5. member_projects table
+    # 5. member_workspaces table — member access is at workspace level
     conn.execute("""
-        CREATE TABLE IF NOT EXISTS member_projects (
+        CREATE TABLE IF NOT EXISTS member_workspaces (
             user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-            PRIMARY KEY (user_id, project_id)
+            workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            PRIMARY KEY (user_id, workspace_id)
         )
     """)
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_mp_user_id ON member_projects(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_mw_user_id ON member_workspaces(user_id)")
 
     # 6. payment_records table
     conn.execute("""

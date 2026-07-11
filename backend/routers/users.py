@@ -218,7 +218,7 @@ def list_users(user_type: str = None, status: str = None, search: str = None,
 
         users = []
         for r in rows:
-            user = {
+            u = {
                 "id": r["id"], "username": r["username"], "display_name": r["display_name"],
                 "email": r["email"], "user_type": r["user_type"],
                 "is_active": r["is_active"], "is_approved": r["is_approved"],
@@ -228,8 +228,8 @@ def list_users(user_type: str = None, status: str = None, search: str = None,
             role_rows = db.execute(
                 "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
                 (r["id"],)).fetchall()
-            user["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
-            users.append(user)
+            u["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
+            users.append(u)
 
         return {"users": users, "total": total, "page": page, "page_size": page_size}
     finally:
@@ -243,17 +243,17 @@ def get_user(user_id: str, user=require_perm("member.manage")):
         row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not row:
             raise HTTPException(404, "用户不存在")
-        user = dict(row)
-        user.pop("password_hash", None)
+        u = dict(row)
+        u.pop("password_hash", None)
         role_rows = db.execute(
             "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
             (user_id,)).fetchall()
-        user["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
-        proj_rows = db.execute(
-            "SELECT p.id, p.name FROM projects p JOIN member_projects mp ON p.id = mp.project_id WHERE mp.user_id = ?",
+        u["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
+        ws_rows = db.execute(
+            "SELECT w.id, w.name FROM workspaces w JOIN member_workspaces mw ON w.id = mw.workspace_id WHERE mw.user_id = ?",
             (user_id,)).fetchall()
-        user["projects"] = [{"id": pr["id"], "name": pr["name"]} for pr in proj_rows]
-        return user
+        u["workspaces"] = [{"id": wr["id"], "name": wr["name"]} for wr in ws_rows]
+        return u
     finally:
         db.close()
 
@@ -343,7 +343,7 @@ def delete_user(user_id: str, user=require_perm("member.manage")):
         if existing["user_type"] == "admin" and existing["username"] == "admin":
             raise HTTPException(403, "超级管理员不可删除")
         db.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
-        db.execute("DELETE FROM member_projects WHERE user_id = ?", (user_id,))
+        db.execute("DELETE FROM member_workspaces WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM payment_records WHERE user_id = ?", (user_id,))
         db.execute("DELETE FROM users WHERE id = ?", (user_id,))
         db.commit()
@@ -415,47 +415,47 @@ def remove_user_role(user_id: str, req: dict, user=require_perm("role.manage")):
         db.close()
 
 
-@router.get("/users/{user_id}/projects")
-def get_user_projects(user_id: str, user=require_perm("member.manage")):
+@router.get("/users/{user_id}/workspaces")
+def get_user_workspaces(user_id: str, user=require_perm("member.manage")):
     db = get_db()
     try:
         rows = db.execute(
-            "SELECT p.id, p.name FROM projects p JOIN member_projects mp ON p.id = mp.project_id WHERE mp.user_id = ?",
+            "SELECT w.id, w.name FROM workspaces w JOIN member_workspaces mw ON w.id = mw.workspace_id WHERE mw.user_id = ?",
             (user_id,)).fetchall()
-        return {"projects": [dict(r) for r in rows]}
+        return {"workspaces": [dict(r) for r in rows]}
     finally:
         db.close()
 
 
-@router.post("/users/{user_id}/projects/add")
-def add_user_projects(user_id: str, req: dict, user=require_perm("member.manage")):
-    project_ids = req.get("project_ids", [])
-    if not project_ids:
-        raise HTTPException(400, "project_ids 不能为空")
+@router.post("/users/{user_id}/workspaces/add")
+def add_user_workspaces(user_id: str, req: dict, user=require_perm("member.manage")):
+    workspace_ids = req.get("workspace_ids", [])
+    if not workspace_ids:
+        raise HTTPException(400, "workspace_ids 不能为空")
     db = get_db()
     try:
-        for pid in project_ids:
+        for wid in workspace_ids:
             existing = db.execute(
-                "SELECT 1 FROM member_projects WHERE user_id = ? AND project_id = ?",
-                (user_id, pid)).fetchone()
+                "SELECT 1 FROM member_workspaces WHERE user_id = ? AND workspace_id = ?",
+                (user_id, wid)).fetchone()
             if not existing:
-                db.execute("INSERT INTO member_projects (user_id, project_id) VALUES (?, ?)",
-                           (user_id, pid))
+                db.execute("INSERT INTO member_workspaces (user_id, workspace_id) VALUES (?, ?)",
+                           (user_id, wid))
         db.commit()
         return {"ok": True}
     finally:
         db.close()
 
 
-@router.post("/users/{user_id}/projects/remove")
-def remove_user_project(user_id: str, req: dict, user=require_perm("member.manage")):
-    project_id = req.get("project_id", "")
-    if not project_id:
-        raise HTTPException(400, "project_id 不能为空")
+@router.post("/users/{user_id}/workspaces/remove")
+def remove_user_workspace(user_id: str, req: dict, user=require_perm("member.manage")):
+    workspace_id = req.get("workspace_id", "")
+    if not workspace_id:
+        raise HTTPException(400, "workspace_id 不能为空")
     db = get_db()
     try:
-        db.execute("DELETE FROM member_projects WHERE user_id = ? AND project_id = ?",
-                   (user_id, project_id))
+        db.execute("DELETE FROM member_workspaces WHERE user_id = ? AND workspace_id = ?",
+                   (user_id, workspace_id))
         db.commit()
         return {"ok": True}
     finally:

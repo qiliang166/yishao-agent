@@ -31,7 +31,9 @@ def check_ownership(resource_created_by: str | None, user: dict,
                     edit_all_perm: str = "project.edit_all") -> None:
     """Raise 403 if user doesn't own the resource and lacks edit_all permission."""
     if resource_created_by is None:
-        return  # historical data
+        if edit_all_perm in user.get("permissions", []):
+            return
+        raise HTTPException(status_code=403, detail="历史数据仅超级管理员可编辑")
     uid = user.get("user_id", user.get("sub", ""))
     if resource_created_by == uid and uid:
         return
@@ -46,7 +48,7 @@ def check_ownership(resource_created_by: str | None, user: dict,
 
 
 def verify_project_access(project_id: str, user: dict) -> None:
-    """Raise 403 if user (member) doesn't have access to this project."""
+    """Raise 403 if user (member) doesn't have access to this project's workspace."""
     if user.get("user_type") == "admin":
         return
     # Legacy JWT from old POST /api/login only has {"sub":"admin"} — treat as admin
@@ -55,7 +57,9 @@ def verify_project_access(project_id: str, user: dict) -> None:
     db = get_db()
     try:
         row = db.execute(
-            "SELECT 1 FROM member_projects WHERE user_id=? AND project_id=?",
+            "SELECT 1 FROM member_workspaces mw "
+            "JOIN projects p ON p.workspace_id = mw.workspace_id "
+            "WHERE mw.user_id=? AND p.id=?",
             (user.get("user_id", user.get("sub", "")), project_id),
         ).fetchone()
         if not row:

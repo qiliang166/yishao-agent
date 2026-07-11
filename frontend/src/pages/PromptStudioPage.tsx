@@ -689,6 +689,7 @@ export default function PromptStudioPage() {
             </div>
           </div>
 
+          {canManagePrompt && (
           <button
             className="btn btn-primary"
             onClick={handleGenerate}
@@ -697,6 +698,7 @@ export default function PromptStudioPage() {
           >
             {generating ? '生成中...' : '生成全部配置'}
           </button>
+          )}
 
           <div className="form-hint">
             生成 44 条配置（5个栏目 + 3个演讲 + 3个语音 + 33个核心提示词），预计需 30-60 秒。生成后请在右侧逐项审核再应用。
@@ -864,7 +866,7 @@ export default function PromptStudioPage() {
                   {saving ? '保存中...' : '保存到列表'}
                 </button>
               )}
-              <button className="btn btn-ghost" onClick={handleExport}>导出 JSON</button>
+              {canManagePrompt && <button className="btn btn-ghost" onClick={handleExport}>导出 JSON</button>}
               {canManagePrompt && (
                 <button className="btn btn-ghost" onClick={handleImport}>导入 JSON</button>
               )}

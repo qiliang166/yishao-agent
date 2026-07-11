@@ -382,13 +382,13 @@ function SettingsPage() {
             <div className="settings-row">
               <label>LOGO 图标</label>
               <input className="form-input" type="text" value={brandLogo}
-                onChange={e => setBrandLogo(e.target.value)} style={{ maxWidth: 200 }} />
+                onChange={e => setBrandLogo(e.target.value)} style={{ maxWidth: 200 }} disabled={!canSaveGlobal} />
               <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
                 onChange={handleLogoUpload} />
-              <button className="btn btn-ghost btn-sm" onClick={() => fileInputRef.current?.click()}
+              {canSaveGlobal && <button className="btn btn-ghost btn-sm" onClick={() => fileInputRef.current?.click()}
                 disabled={logoUploading}>
                 {logoUploading ? '上传中...' : '本地上传'}
-              </button>
+              </button>}
               {isImagePath(brandLogo) && (
                 <img src={brandLogo} alt="Logo预览" style={{
                   width: 28, height: 28, borderRadius: 4, objectFit: 'cover',
@@ -400,12 +400,12 @@ function SettingsPage() {
             <div className="settings-row">
               <label>应用名称</label>
               <input className="form-input" type="text" value={brandName}
-                onChange={e => setBrandName(e.target.value)} style={{ maxWidth: 300 }} />
+                onChange={e => setBrandName(e.target.value)} style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
             </div>
             <div className="settings-row">
               <label>版本号</label>
               <input className="form-input" type="text" value={appVersion}
-                onChange={e => setAppVersion(e.target.value)} style={{ maxWidth: 120 }} />
+                onChange={e => setAppVersion(e.target.value)} style={{ maxWidth: 120 }} disabled={!canSaveGlobal} />
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 8px' }}>
               以下信息将作为页脚嵌入导出的文档 / PPT 中。
@@ -413,12 +413,12 @@ function SettingsPage() {
             <div className="settings-row">
               <label>版权信息</label>
               <input className="form-input" type="text" value={brandingCopyright}
-                onChange={e => setBrandingCopyright(e.target.value)} placeholder="例如：© 2026 你的站点名称" style={{ maxWidth: 300 }} />
+                onChange={e => setBrandingCopyright(e.target.value)} placeholder="例如：© 2026 你的站点名称" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
             </div>
             <div className="settings-row">
               <label>签名/作者</label>
               <input className="form-input" type="text" value={brandingSignature}
-                onChange={e => setBrandingSignature(e.target.value)} placeholder="例如：作者名称" style={{ maxWidth: 300 }} />
+                onChange={e => setBrandingSignature(e.target.value)} placeholder="例如：作者名称" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
             </div>
           </div>
 
@@ -427,8 +427,8 @@ function SettingsPage() {
             <div className="settings-row">
               <label>默认保存路径</label>
               <input className="form-input" type="text" value={savePath}
-                onChange={e => setSavePath(e.target.value)} />
-              <button className="btn btn-ghost btn-sm" onClick={handleBrowseFolder}>浏览...</button>
+                onChange={e => setSavePath(e.target.value)} disabled={!canSaveGlobal} />
+              {canSaveGlobal && <button className="btn btn-ghost btn-sm" onClick={handleBrowseFolder}>浏览...</button>}
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               此路径作为所有项目的默认存储根目录，每个项目将在此路径下创建独立子文件夹。
@@ -440,7 +440,7 @@ function SettingsPage() {
             <div className="settings-row">
               <label>管理员手机号</label>
               <input className="form-input" type="text" value={adminPhone}
-                onChange={e => setAdminPhone(e.target.value)} placeholder="用于身份验证" style={{ maxWidth: 220 }} />
+                onChange={e => setAdminPhone(e.target.value)} placeholder="用于身份验证" style={{ maxWidth: 220 }} disabled={!canSaveGlobal} />
             </div>
             <div className="settings-row">
               <label></label>
@@ -481,10 +481,10 @@ function SettingsPage() {
                     <div>激活时间：{licenseStatus.activated_at}</div>
                   )}
                 </div>
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
+                {canSaveGlobal && <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
                   onClick={handleLicenseDeactivate}>
                   解除激活
-                </button>
+                </button>}
               </>
             ) : (
               <>
@@ -502,14 +502,15 @@ function SettingsPage() {
                     placeholder="YSAG-XXXXX-XXXXX-..."
                     style={{ maxWidth: 380, fontFamily: 'monospace', fontSize: 12 }}
                     onKeyDown={e => { if (e.key === 'Enter') handleLicenseActivate() }}
+                    disabled={!canSaveGlobal}
                   />
                 </div>
                 <div className="settings-row">
                   <label></label>
-                  <button className="btn btn-primary btn-sm" onClick={handleLicenseActivate}
+                  {canSaveGlobal && <button className="btn btn-primary btn-sm" onClick={handleLicenseActivate}
                     disabled={licenseLoading}>
                     {licenseLoading ? '激活中...' : '激活'}
-                  </button>
+                  </button>}
                 </div>
               </>
             )}
@@ -572,10 +573,11 @@ function SettingsPage() {
                       {/* 按钮 */}
                       <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                         <button className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline'}`}
-                          onClick={() => handleThemeSelect(preset)}>
+                          onClick={() => handleThemeSelect(preset)}
+                          disabled={!canSaveGlobal}>
                           {isActive ? '✓ 使用中' : '启用'}
                         </button>
-                        {!preset.isDefault && (
+                        {canSaveGlobal && !preset.isDefault && (
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => {
                               if (isEditing) {
@@ -730,6 +732,7 @@ function SettingsPage() {
                   className="form-input"
                   value={editSectionTitle}
                   onChange={e => setEditSectionTitle(e.target.value)}
+                  disabled={!canSaveGlobal}
                   style={{ maxWidth: 200, fontSize: 11 }}
                 />
                 <div style={{ flex: 1 }} />
@@ -738,9 +741,11 @@ function SettingsPage() {
                     {manualMsg}
                   </span>
                 )}
-                <button className="btn btn-primary btn-sm" onClick={handleManualSave} disabled={manualSaving}>
-                  {manualSaving ? '保存中...' : '保存当前章节'}
-                </button>
+                {canSaveGlobal && (
+                  <button className="btn btn-primary btn-sm" onClick={handleManualSave} disabled={manualSaving}>
+                    {manualSaving ? '保存中...' : '保存当前章节'}
+                  </button>
+                )}
               </div>
 
               {/* Editor + Preview split */}
@@ -757,6 +762,7 @@ function SettingsPage() {
                     className="form-textarea"
                     value={editSectionContent}
                     onChange={e => setEditSectionContent(e.target.value)}
+                    disabled={!canSaveGlobal}
                     style={{
                       flex: 1, minHeight: 0, border: 'none', borderRadius: 0,
                       fontSize: 11, fontFamily: 'var(--mono)', lineHeight: 1.6,

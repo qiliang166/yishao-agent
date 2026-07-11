@@ -481,15 +481,30 @@ def health():
 # ── Workspaces ──
 
 @app.get("/api/workspaces")
-def list_workspaces(page: int = 1, page_size: int = 20):
+def list_workspaces(page: int = 1, page_size: int = 20, request: Request = None):
     db = get_db()
     try:
-        total = db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
-        offset = (page - 1) * page_size
-        rows = db.execute(
-            "SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-            (page_size, offset)
-        ).fetchall()
+        user = getattr(request.state, "user", None) if request else None
+        if user and user.get("user_type") == "member":
+            total = db.execute("""
+                SELECT COUNT(*) FROM workspaces w
+                JOIN member_workspaces mw ON mw.workspace_id = w.id
+                WHERE mw.user_id = ?
+            """, (user.get("user_id", user.get("sub", "")),)).fetchone()[0]
+            offset = (page - 1) * page_size
+            rows = db.execute("""
+                SELECT w.* FROM workspaces w
+                JOIN member_workspaces mw ON mw.workspace_id = w.id
+                WHERE mw.user_id = ?
+                ORDER BY w.updated_at DESC LIMIT ? OFFSET ?
+            """, (user.get("user_id", user.get("sub", "")), page_size, offset)).fetchall()
+        else:
+            total = db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
+            offset = (page - 1) * page_size
+            rows = db.execute(
+                "SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                (page_size, offset)
+            ).fetchall()
         return {"workspaces": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
@@ -537,7 +552,19 @@ def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
 
 
 @app.get("/api/workspaces/{workspace_id}")
-def get_workspace(workspace_id: str):
+def get_workspace(workspace_id: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if user is not None and user.get("user_type") == "member":
+        db = get_db()
+        try:
+            row = db.execute(
+                "SELECT 1 FROM member_workspaces WHERE user_id=? AND workspace_id=?",
+                (user.get("user_id", user.get("sub", "")), workspace_id),
+            ).fetchone()
+            if not row:
+                raise HTTPException(403, "无权访问此工作区")
+        finally:
+            db.close()
     db = get_db()
     try:
         row = db.execute(
@@ -623,33 +650,34 @@ def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", re
     try:
         user = getattr(request.state, "user", None) if request else None
         if user and user.get("user_type") == "member":
-            # Member: only projects assigned via member_projects
+            # Member: only projects in assigned workspaces
+            uid = user.get("user_id", user.get("sub", ""))
             if workspace_id:
                 total = db.execute("""
                     SELECT COUNT(*) FROM projects p
-                    JOIN member_projects mp ON mp.project_id = p.id
-                    WHERE mp.user_id = ? AND p.workspace_id = ?
-                """, (user["sub"], workspace_id)).fetchone()[0]
+                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
+                    WHERE mw.user_id = ? AND p.workspace_id = ?
+                """, (uid, workspace_id)).fetchone()[0]
                 offset = (page - 1) * page_size
                 rows = db.execute("""
                     SELECT p.* FROM projects p
-                    JOIN member_projects mp ON mp.project_id = p.id
-                    WHERE mp.user_id = ? AND p.workspace_id = ?
+                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
+                    WHERE mw.user_id = ? AND p.workspace_id = ?
                     ORDER BY p.updated_at DESC LIMIT ? OFFSET ?
-                """, (user["sub"], workspace_id, page_size, offset)).fetchall()
+                """, (uid, workspace_id, page_size, offset)).fetchall()
             else:
                 total = db.execute("""
                     SELECT COUNT(*) FROM projects p
-                    JOIN member_projects mp ON mp.project_id = p.id
-                    WHERE mp.user_id = ?
-                """, (user["sub"],)).fetchone()[0]
+                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
+                    WHERE mw.user_id = ?
+                """, (uid,)).fetchone()[0]
                 offset = (page - 1) * page_size
                 rows = db.execute("""
                     SELECT p.* FROM projects p
-                    JOIN member_projects mp ON mp.project_id = p.id
-                    WHERE mp.user_id = ?
+                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
+                    WHERE mw.user_id = ?
                     ORDER BY p.updated_at DESC LIMIT ? OFFSET ?
-                """, (user["sub"], page_size, offset)).fetchall()
+                """, (uid, page_size, offset)).fetchall()
         else:
             if workspace_id:
                 total = db.execute("SELECT COUNT(*) FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
@@ -805,8 +833,11 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
 
 
 @app.get("/api/projects/{project_id}/videos")
-def api_project_videos(project_id: str):
+def api_project_videos(project_id: str, request: Request):
     """List video files in the project's storage folder."""
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     path = resolve_project_storage(project_id, auto_create=False)
     videos = []
     if os.path.exists(path):
@@ -1210,8 +1241,11 @@ async def api_create_fs_dir(request: Request, user=require_perm("config.project"
 
 
 @app.get("/api/projects/{project_id}/directories")
-def api_list_project_directories(project_id: str, subdir: str = ""):
+def api_list_project_directories(project_id: str, subdir: str = "", request: Request = None):
     """List subdirectories under the project storage path (or a subdirectory thereof)."""
+    user = getattr(request.state, "user", None) if request else None
+    if user is not None:
+        verify_project_access(project_id, user)
     base = resolve_project_storage(project_id, auto_create=False)
     if not os.path.exists(base):
         return {"ok": True, "dirs": [], "base": base, "subdir": subdir}
@@ -1783,7 +1817,7 @@ def delete_llm_provider(provider_id: str, user=require_perm("config.global")):
 
 
 @app.post("/api/llm/providers/{provider_id}/test")
-async def test_provider(provider_id: str):
+async def test_provider(provider_id: str, user=require_perm("config.global")):
     db = get_db()
     try:
         row = db.execute("SELECT * FROM llm_providers WHERE id = ?", (provider_id,)).fetchone()
@@ -1885,7 +1919,7 @@ def delete_tts_provider(provider_id: str, user=require_perm("config.global")):
 
 
 @app.post("/api/tts/providers/{provider_id}/test")
-async def test_tts_provider(provider_id: str):
+async def test_tts_provider(provider_id: str, user=require_perm("config.global")):
     import httpx
     db = get_db()
     try:
@@ -1986,7 +2020,7 @@ def delete_asr_provider(provider_id: str, user=require_perm("config.global")):
 
 
 @app.post("/api/asr/providers/{provider_id}/test")
-async def test_asr_provider(provider_id: str):
+async def test_asr_provider(provider_id: str, user=require_perm("config.global")):
     import httpx
     db = get_db()
     try:
@@ -2107,7 +2141,7 @@ def delete_image_provider(provider_id: str, user=require_perm("config.global")):
 
 
 @app.post("/api/image/providers/{provider_id}/test")
-async def test_image_provider(provider_id: str):
+async def test_image_provider(provider_id: str, user=require_perm("config.global")):
     import httpx
     db = get_db()
     try:
@@ -2211,7 +2245,7 @@ def delete_voice(voice_id: str, user=require_perm("stage4.generate")):
 
 
 @app.post("/api/voices/{voice_id}/preview")
-def preview_voice(voice_id: str):
+def preview_voice(voice_id: str, user=require_perm("stage4.view")):
     """Generate a short preview audio for a voice (local cache first, TTS API fallback)"""
     db = get_db()
     try:
@@ -3257,7 +3291,7 @@ def get_template_slides_content(template_id: str):
 
 
 @app.post("/api/templates/{template_id}/preview-slides")
-def preview_template_slides(template_id: str):
+def preview_template_slides(template_id: str, user=require_perm("template.manage")):
     """Export all slides as images and return their URLs."""
     db = get_db()
     try:
@@ -3437,7 +3471,7 @@ def extract_pptx_structure(file_path: str) -> dict:
 
 @app.post("/api/templates/{template_id}/analyze")
 async def analyze_template(template_id: str, stage_type: str = "daoPpt",
-                            provider_id: str = "", model: str = ""):
+                            provider_id: str = "", model: str = "", user=require_perm("template.manage")):
     """Mechanically extract visual data from PPTX and save to template.
 
     No AI call — colors, fonts, and typography are extracted directly from
@@ -3633,8 +3667,11 @@ def api_extract_subtitles(req: dict, user=require_perm("stage1.generate")):
 from services.ppt_service import generate_ppt, _extract_typography
 
 @app.get("/api/projects/{project_id}/ppt-results")
-def api_ppt_results(project_id: str):
+def api_ppt_results(project_id: str, request: Request):
     """Return all saved PPT generation results for a project (survives page reload)."""
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     db = get_db()
     try:
         rows = db.execute(
@@ -3663,9 +3700,12 @@ def api_ppt_results(project_id: str):
         db.close()
 
 @app.get("/api/projects/{project_id}/ppt-status")
-def api_ppt_status(project_id: str):
+def api_ppt_status(project_id: str, request: Request):
     """Polled by frontend every 10s during PPT generation.
     Returns current phase, slide counts, preview URL if ready."""
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     from services.ppt_service import get_ppt_status
     status = get_ppt_status(project_id)
     if not status:
@@ -3674,7 +3714,10 @@ def api_ppt_status(project_id: str):
 
 
 @app.get("/api/projects/{project_id}/ppt-log")
-def api_ppt_log(project_id: str):
+def api_ppt_log(project_id: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     """Polled by frontend every 60s during PPT/outline generation.
     Returns timestamped log entries."""
     from services.ppt_service import get_ppt_log
@@ -5146,7 +5189,7 @@ def api_get_scenario_file(column_id: str, filename: str):
 
 
 @app.put("/api/scenarios/{column_id}/files/{filename}")
-def api_save_scenario_file(column_id: str, filename: str, body: VIFileUpdate):
+def api_save_scenario_file(column_id: str, filename: str, body: VIFileUpdate, user=require_perm("config.project")):
     """Save a scenario file to the per-column custom directory."""
     p = _scenario_file_path(column_id, filename, for_write=True)
     with open(p, "w", encoding="utf-8") as f:
@@ -5599,7 +5642,10 @@ async def api_tts_synthesize(req: SynthesizeRequest, user=require_perm("stage4.g
 # ── TTS History CRUD ──
 
 @app.get("/api/projects/{project_id}/tts-history")
-def api_tts_history_list(project_id: str):
+def api_tts_history_list(project_id: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     db = get_db()
     try:
         rows = db.execute(
@@ -6007,16 +6053,36 @@ def auth_login(req: dict, request: Request):
 
 @app.get("/api/auth/me")
 def auth_me(request: Request):
-    """Return current user info from JWT in auth middleware."""
+    """Return current user info from JWT + full profile from DB."""
     user = getattr(request.state, "user", None)
     if user is None:
         raise HTTPException(status_code=401, detail="请先登录")
+    uid = user.get("sub")
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT display_name, email, expires_at, created_at, is_approved, is_active FROM users WHERE id=?",
+            (uid,),
+        ).fetchone()
+        profile = {}
+        if row:
+            profile = {
+                "display_name": row["display_name"],
+                "email": row["email"],
+                "expires_at": row["expires_at"],
+                "created_at": row["created_at"],
+                "is_approved": row["is_approved"],
+                "is_active": row["is_active"],
+            }
+    finally:
+        db.close()
     return {
-        "user_id": user.get("sub"),
+        "user_id": uid,
         "username": user.get("username"),
         "user_type": user.get("user_type"),
         "permissions": user.get("permissions", []),
         "roles": user.get("roles", []),
+        **profile,
     }
 
 
@@ -6213,11 +6279,25 @@ def list_pending_members(page: int = 1, page_size: int = 20, user=require_perm("
         db.close()
 
 
+class ApproveMemberReq(BaseModel):
+    duration_days: int = 30
+
+class RejectMemberReq(BaseModel):
+    reason: str = ""
+
+class PaymentRecordReq(BaseModel):
+    amount_cents: int = 0
+    plan_name: str = ""
+    duration_days: int = 0
+    payment_method: str = ""
+    note: str = ""
+
 @app.put("/api/members/{user_id}/approve")
-def approve_member(user_id: str, req: dict = None, user=require_perm("member.manage")):
+async def approve_member(user_id: str, request: Request, user=require_perm("member.manage")):
     """Approve a pending member. Assigns '基础会员' role and sets expiry."""
     import uuid as _uuid
-    duration_days = (req or {}).get("duration_days", 30)
+    body = await request.json()
+    duration_days = body.get("duration_days", 30)
     db = get_db()
     try:
         m = db.execute(
@@ -6260,9 +6340,10 @@ def approve_member(user_id: str, req: dict = None, user=require_perm("member.man
 
 
 @app.put("/api/members/{user_id}/reject")
-def reject_member(user_id: str, req: dict = None, user=require_perm("member.manage")):
+async def reject_member(user_id: str, request: Request, user=require_perm("member.manage")):
     """Reject a pending member."""
-    reason = (req or {}).get("reason", "")
+    body = await request.json()
+    reason = body.get("reason", "")
     db = get_db()
     try:
         m = db.execute(
@@ -6290,14 +6371,15 @@ def reject_member(user_id: str, req: dict = None, user=require_perm("member.mana
 
 
 @app.post("/api/members/{user_id}/payment")
-def record_payment(user_id: str, req: dict, user=require_perm("member.manage")):
+async def record_payment(user_id: str, request: Request, user=require_perm("member.manage")):
     """Record a payment and extend member expiry."""
     import uuid as _uuid
-    amount_cents = req.get("amount_cents", 0)
-    plan_name = req.get("plan_name", "")
-    duration_days = int(req.get("duration_days", 0))
-    payment_method = req.get("payment_method", "")
-    note = req.get("note", "")
+    body = await request.json()
+    amount_cents = body.get("amount_cents", 0)
+    plan_name = body.get("plan_name", "")
+    duration_days = int(body.get("duration_days", 0))
+    payment_method = body.get("payment_method", "")
+    note = body.get("note", "")
 
     if not plan_name or duration_days <= 0:
         raise HTTPException(400, "请填写套餐名和有效续期天数")

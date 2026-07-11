@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { api, Workspace } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
+import { useAuth } from '../contexts/AuthContext'
 import HelpButton from '../components/HelpButton'
 import SetupWizard from '../components/SetupWizard'
 
@@ -13,6 +14,13 @@ function HomePage() {
   const canCreate = usePermission('project.create')
   const canEditOwn = usePermission('project.edit_own')
   const canDeleteOwn = usePermission('project.delete_own')
+  const { user } = useAuth()
+  const isOwner = (createdBy: string | null | undefined): boolean => {
+    if (!user) return false
+    if (createdBy == null) return user.permissions?.includes('project.edit_all') ?? false
+    if (user.permissions?.includes('project.edit_all')) return true
+    return createdBy === user.user_id
+  }
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -169,7 +177,7 @@ function HomePage() {
                   onClick={e => e.stopPropagation()}>
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
                     onClick={() => navigate(`/workspace/${w.id}`)}>进入</button>
-                  {canDeleteOwn && (
+                  {canDeleteOwn && isOwner(w.created_by) && (
                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--warning)' }}
                       onClick={() => deleteWorkspace(w.id, w.name)}>删除</button>
                   )}

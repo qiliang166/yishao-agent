@@ -139,6 +139,7 @@ export interface Workspace {
   status: string
   description: string
   logo: string
+  created_by?: string
   created_at: string
   updated_at: string
 }
@@ -1036,18 +1037,18 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role_id: roleId }),
     }).then(d => d as any),
-  getUserProjects: (userId: string) =>
-    request('/api/users/' + userId + '/projects').then(d => d.projects as any[]),
-  addUserProjects: (userId: string, projectIds: string[]) =>
-    request('/api/users/' + userId + '/projects/add', {
+  getUserWorkspaces: (userId: string) =>
+    request('/api/users/' + userId + '/workspaces').then(d => d.workspaces as any[]),
+  addUserWorkspaces: (userId: string, workspaceIds: string[]) =>
+    request('/api/users/' + userId + '/workspaces/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_ids: projectIds }),
+      body: JSON.stringify({ workspace_ids: workspaceIds }),
     }).then(d => d as any),
-  removeUserProject: (userId: string, projectId: string) =>
-    request('/api/users/' + userId + '/projects/remove', {
+  removeUserWorkspace: (userId: string, workspaceId: string) =>
+    request('/api/users/' + userId + '/workspaces/remove', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_id: projectId }),
+      body: JSON.stringify({ workspace_id: workspaceId }),
     }).then(d => d as any),
 }

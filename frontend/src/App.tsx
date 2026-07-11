@@ -11,7 +11,7 @@ import ManualPage from './pages/ManualPage'
 import LoginPage from './pages/LoginPage'
 import MemberLoginPage from './pages/MemberLoginPage'
 import MemberRegisterPage from './pages/MemberRegisterPage'
-import MemberDashboard from './pages/MemberDashboard'
+import MemberCenterPage from './pages/MemberCenterPage'
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
 import PromptStudioPage from './pages/PromptStudioPage'
 import MemberApprovalPage from './pages/MemberApprovalPage'
@@ -24,7 +24,7 @@ import SetupWizard from './components/SetupWizard'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LicenseProvider } from './contexts/LicenseContext'
 import { usePermission } from './hooks/usePermission'
-import { api } from './services/api'
+import { api, Workspace } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
 
@@ -238,6 +238,267 @@ function LogoutButton() {
   )
 }
 
+function MemberLogoutButton() {
+  const { logout, user } = useAuth()
+  const navigate = useNavigate()
+
+  if (!user) return null
+
+  const handleLogout = () => {
+    logout()
+    sessionStorage.removeItem('settings_token')
+    navigate('/member', { replace: true })
+  }
+
+  return (
+    <button
+      onClick={handleLogout}
+      style={{
+        display: 'block', width: '100%', padding: 0,
+        marginTop: 4,
+        fontSize: 10, color: 'var(--text-secondary)',
+        background: 'transparent', border: 'none', cursor: 'pointer',
+        textAlign: 'left', borderRadius: 0,
+      }}
+      title="退出登录"
+    >
+      <span className="ico">🚪</span> 退出登录
+    </button>
+  )
+}
+
+// ── Member sidebar (simplified, same layout) ──
+
+function MemberSidebar() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  const [brandLogo, setBrandLogo] = useState('⚡')
+  const [brandName, setBrandName] = useState('')
+  const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
+  const [projName, setProjName] = useState('')
+  const isWorkspace = location.pathname.startsWith('/app/workspace/') || location.pathname.startsWith('/app/project/')
+
+  useEffect(() => {
+    Promise.all([api.getSettings(), api.getVersion()]).then(([data, ver]) => {
+      const s = data.settings || {}
+      const fallback = (ver as any).app || ''
+      if (s.brand_logo) setBrandLogo(s.brand_logo)
+      if (s.brand_name) { setBrandName(s.brand_name); document.title = s.brand_name }
+      else if (fallback) { document.title = fallback }
+      if ((ver as any).version) setSidebarVersion((ver as any).version)
+      if (s.app_version) setSidebarVersion(s.app_version)
+    }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    const parts = location.pathname.split('/')
+    const wsIdx = parts.indexOf('workspace')
+    const projIdx = parts.indexOf('project')
+    if (wsIdx >= 0 && parts[wsIdx + 1]) {
+      api.getWorkspace(parts[wsIdx + 1]).then((ws: any) => {
+        setProjName(ws.name || '')
+      }).catch(() => setProjName(''))
+    } else if (projIdx >= 0 && parts[projIdx + 1]) {
+      api.getProject(parts[projIdx + 1]).then((p: any) => {
+        setProjName(p.name || '')
+      }).catch(() => setProjName(''))
+    } else {
+      setProjName('')
+    }
+  }, [location.pathname])
+
+  const isImagePath = (v: string) => v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
+
+  const renderLogo = () => {
+    if (isImagePath(brandLogo)) {
+      return <img src={brandLogo} alt="Logo" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover', verticalAlign: 'middle' }} />
+    }
+    return <span style={{ fontSize: 15 }}>{brandLogo || '🍽'}</span>
+  }
+
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-head">
+        <div className="sidebar-logo">{renderLogo()} {brandName}</div>
+      </div>
+      <nav className="sidebar-nav">
+        <button
+          className={`sidebar-item ${location.pathname === '/app' || isWorkspace ? 'active' : ''}`}
+          onClick={() => navigate('/app')}>
+          <span className="ico">📋</span> 项目管理
+        </button>
+        <button
+          className={`sidebar-item ${location.pathname === '/app/center' ? 'active' : ''}`}
+          onClick={() => navigate('/app/center')}>
+          <span className="ico">👤</span> 会员中心
+        </button>
+        <button
+          className={`sidebar-item ${location.pathname === '/app/manual' ? 'active' : ''}`}
+          onClick={() => navigate('/app/manual')}>
+          <span className="ico">📖</span> 操作说明
+        </button>
+      </nav>
+      <div className="sidebar-foot" style={{ padding: '8px 16px 8px 10px', marginBottom: 50, lineHeight: 2.2 }}>
+        {isWorkspace && (
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+            当前项目：<strong>{projName || '—'}</strong>
+          </div>
+        )}
+        <div style={{
+          display: 'block', width: '100%', padding: 0,
+          fontSize: 10,
+          color: 'var(--text-secondary)',
+          textAlign: 'left',
+        }}>
+          <span style={{
+            display: 'inline-block', width: 6, height: 6,
+            borderRadius: '50%', background: 'transparent', border: '1.5px solid var(--primary)',
+            verticalAlign: 'middle', marginRight: 5,
+          }} />
+          {brandName} {sidebarVersion}
+        </div>
+        <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 8 }}>
+          <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
+          <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
+        </div>
+        <MemberLogoutButton />
+      </div>
+    </aside>
+  )
+}
+
+// ── Member workspace list (home page for members) ──
+
+function MemberHomePage() {
+  const navigate = useNavigate()
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token')
+    fetch('/api/workspaces', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then(data => setWorkspaces(data.workspaces || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const statusLabel = (s: string) => {
+    const map: Record<string, string> = { draft: '草稿', completed: '已完成' }
+    return map[s] || s
+  }
+
+  return (
+    <div>
+      <div className="proj-list-header">
+        <span style={{ fontSize: 14, fontWeight: 600 }}>我的项目</span>
+      </div>
+      {loading ? (
+        <p style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>加载中...</p>
+      ) : workspaces.length === 0 ? (
+        <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
+          <div style={{ fontSize: 14 }}>暂无可用项目，请联系管理员分配</div>
+        </div>
+      ) : (
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderRadius: 12,
+          padding: 20,
+          margin: '16px 20px',
+        }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: 20,
+          }}>
+            {workspaces.map(w => (
+              <div key={w.id}
+                style={{
+                  border: '1px solid var(--border)',
+                  borderRadius: 10,
+                  padding: 24,
+                  cursor: 'pointer',
+                  background: 'var(--bg)',
+                  transition: 'box-shadow 0.15s, transform 0.15s',
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.08)'
+                  ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLElement).style.boxShadow = ''
+                  ;(e.currentTarget as HTMLElement).style.transform = ''
+                }}
+                onClick={() => navigate(`/app/workspace/${w.id}`)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  {w.logo ? (
+                    <img src={w.logo} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }} alt="" />
+                  ) : (
+                    <span style={{ fontSize: 28 }}>📁</span>
+                  )}
+                  <span style={{
+                    marginLeft: 'auto', fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                    background: w.status === 'completed' ? 'rgba(34,197,94,0.12)' : 'rgba(148,163,184,0.12)',
+                    color: w.status === 'completed' ? 'var(--success)' : 'var(--text-secondary)'
+                  }}>
+                    {statusLabel(w.status)}
+                  </span>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 600, wordBreak: 'break-word' }}>
+                  {w.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Member App Shell (sidebar + content area) ──
+
+function MemberAppShell() {
+  const { user, loading: authLoading, authRequired } = useAuth()
+  const location = useLocation()
+  const isWorkspace = location.pathname.startsWith('/app/workspace/') || location.pathname.startsWith('/app/project/')
+
+  if (authLoading) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', color: 'var(--text-secondary)', fontSize: 14,
+      }}>
+        加载中...
+      </div>
+    )
+  }
+
+  if (authRequired && !user) {
+    return <Navigate to="/member" replace />
+  }
+
+  return (
+    <div className="app-layout">
+      <MemberSidebar />
+      <div className="main-area">
+        <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
+          <Routes>
+            <Route path="/workspace/:wid" element={<ProjectDashboard />} />
+            <Route path="/project/:id" element={<ProjectPage />} />
+            <Route path="/manual" element={<ManualPage />} />
+            <Route path="/center" element={<MemberCenterPage />} />
+            <Route path="/" element={<MemberHomePage />} />
+          </Routes>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PhoneReminder() {
   const [show, setShow] = useState(false)
   const navigate = useNavigate()
@@ -358,14 +619,9 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/member" element={<MemberLoginPage />} />
             <Route path="/member/register" element={<MemberRegisterPage />} />
-            <Route path="/app" element={
+            <Route path="/app/*" element={
               <ProtectedRoute requiredType="member">
-                <MemberDashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="/app/:pid" element={
-              <ProtectedRoute requiredType="member">
-                <ProjectPage />
+                <MemberAppShell />
               </ProtectedRoute>
             } />
             <Route path="*" element={

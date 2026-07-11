@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
+import { useAuth } from '../contexts/AuthContext'
 import Col3StructureEditor from '../components/Col3StructureEditor'
 
 type MainTab = 'project' | 'columns' | 'core'
@@ -42,6 +43,15 @@ export default function ProjItemSettingsPage() {
   const { id: projectId } = useParams<{ id: string }>()
   const modal = useModal()
   const canSaveProject = usePermission('config.project')
+  const { user } = useAuth()
+  const [projCreatedBy, setProjCreatedBy] = useState<string | null>(null)
+  const isOwner = () => {
+    if (!user) return false
+    if (projCreatedBy == null) return user.permissions?.includes('project.edit_all') ?? false
+    if (user.permissions?.includes('project.edit_all')) return true
+    return projCreatedBy === user.user_id
+  }
+  const canEdit = canSaveProject && isOwner()
   const [mainTab, setMainTab] = useState<MainTab>('project')
 
   // All project items
@@ -112,7 +122,7 @@ export default function ProjItemSettingsPage() {
   // Load project name
   useEffect(() => {
     if (!projectId) return
-    api.getProject(projectId).then((d: any) => setProjName(d.name || '')).catch(() => {})
+    api.getProject(projectId).then((d: any) => { setProjName(d.name || ''); setProjCreatedBy(d.created_by ?? null) }).catch(() => {})
   }, [projectId])
 
   const handleInitFromFactory = async () => {
@@ -251,23 +261,23 @@ export default function ProjItemSettingsPage() {
               <div className="ac-field-row">
                 <div className="ac-field">
                   <label>项目名称</label>
-                  <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} />
+                  <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} disabled={!canEdit} />
                 </div>
               </div>
               <div className="ac-field-row">
                 <div className="ac-field">
                   <label>版权信息 (Copyright)</label>
                   <input className="form-input" value={projCopyright} onChange={e => setProjCopyright(e.target.value)}
-                    placeholder="如: Copyright 2026 Your Company" />
+                    placeholder="如: Copyright 2026 Your Company" disabled={!canEdit} />
                 </div>
                 <div className="ac-field">
                   <label>签名/署名</label>
                   <input className="form-input" value={projSignature} onChange={e => setProjSignature(e.target.value)}
-                    placeholder="如: 培训课件组" />
+                    placeholder="如: 培训课件组" disabled={!canEdit} />
                 </div>
               </div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                {canSaveProject && <button className="btn btn-primary btn-sm" onClick={saveProjectConfig} disabled={projSaving}>
+                {canEdit && <button className="btn btn-primary btn-sm" onClick={saveProjectConfig} disabled={projSaving}>
                   {projSaving ? '保存中...' : '保存项目配置'}
                 </button>}
               </div>
@@ -354,7 +364,7 @@ export default function ProjItemSettingsPage() {
                             </div>
                           )}
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                            {canSaveProject && <button className="btn btn-primary btn-sm"
+                            {canEdit && <button className="btn btn-primary btn-sm"
                               disabled={colSaving[item.id]}
                               onClick={() => saveColumnItem(item.id)}>
                               {colSaving[item.id] ? '保存中...' : '保存'}
@@ -415,7 +425,7 @@ export default function ProjItemSettingsPage() {
                           />
                           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6 }}>
                             <button className="btn btn-ghost btn-sm" onClick={() => setEditingCoreId(null)}>取消</button>
-                            {canSaveProject && <button className="btn btn-primary btn-sm" disabled={coreSaving[item.id]}
+                            {canEdit && <button className="btn btn-primary btn-sm" disabled={coreSaving[item.id]}
                               onClick={() => saveCoreItem(item.id)}>
                               {coreSaving[item.id] ? '保存中...' : '保存'}
                             </button>}

@@ -2,28 +2,29 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
-interface MemberProject {
+interface MemberWorkspace {
   id: string
   name: string
-  project_code?: string
   status: string
+  description?: string
+  logo?: string
   created_at: string
 }
 
 export default function MemberDashboard() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const [projects, setProjects] = useState<MemberProject[]>([])
+  const [workspaces, setWorkspaces] = useState<MemberWorkspace[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
-    fetch('/api/projects', {
+    fetch('/api/workspaces', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
       .then(r => r.json())
       .then(data => {
-        setProjects(data.projects || [])
+        setWorkspaces(data.workspaces || [])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -32,6 +33,11 @@ export default function MemberDashboard() {
   const handleLogout = () => {
     logout()
     navigate('/member', { replace: true })
+  }
+
+  const statusLabel = (s: string) => {
+    const map: Record<string, string> = { draft: '草稿', completed: '已完成' }
+    return map[s] || s
   }
 
   return (
@@ -52,7 +58,7 @@ export default function MemberDashboard() {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
-      ) : projects.length === 0 ? (
+      ) : workspaces.length === 0 ? (
         <div style={{
           textAlign: 'center', padding: 64,
           color: 'var(--text-secondary)', fontSize: 14,
@@ -62,26 +68,26 @@ export default function MemberDashboard() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {projects.map((p) => (
+          {workspaces.map((w) => (
             <div
-              key={p.id}
+              key={w.id}
               className="card"
-              onClick={() => navigate(`/app/${p.id}`)}
+              onClick={() => navigate(`/app/workspace/${w.id}`)}
               style={{
                 padding: '16px 20px', cursor: 'pointer',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}
             >
               <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
-                {p.project_code && (
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{w.name}</div>
+                {w.description && (
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                    {p.project_code}
+                    {w.description}
                   </div>
                 )}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                {p.status === 'published' ? '✅ 已发布' : p.status === 'draft' ? '📝 草稿' : p.status}
+                {statusLabel(w.status)}
               </div>
             </div>
           ))}

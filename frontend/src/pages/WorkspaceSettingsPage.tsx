@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
+import { useAuth } from '../contexts/AuthContext'
 import Col3StructureEditor from '../components/Col3StructureEditor'
 
 type Tab = 'general' | 'columns' | 'core'
@@ -78,6 +79,15 @@ export default function WorkspaceSettingsPage() {
   const { wid } = useParams<{ wid: string }>()
   const modal = useModal()
   const canSaveProject = usePermission('config.project')
+  const { user } = useAuth()
+  const [wsCreatedBy, setWsCreatedBy] = useState<string | null>(null)
+  const isOwner = () => {
+    if (!user) return false
+    if (wsCreatedBy == null) return user.permissions?.includes('project.edit_all') ?? false
+    if (user.permissions?.includes('project.edit_all')) return true
+    return wsCreatedBy === user.user_id
+  }
+  const canEdit = canSaveProject && isOwner()
   const [tab, setTab] = useState<Tab>('general')
 
   // Workspace info
@@ -133,6 +143,7 @@ export default function WorkspaceSettingsPage() {
       setWsStatus(ws.status || 'draft')
       setWsDesc(ws.description || '')
       setWsLogo(ws.logo || '')
+      setWsCreatedBy(ws.created_by ?? null)
 
       // Try loading workspace configs; if empty, copy from seed
       let cc = await api.listColumnConfigs(wid)
@@ -310,7 +321,7 @@ export default function WorkspaceSettingsPage() {
               <textarea className="form-input" rows={4} value={wsDesc}
                 onChange={e => setWsDesc(e.target.value)}
                 placeholder="简要描述该项目的用途和内容..."
-                style={{ resize: 'vertical' }} />
+                style={{ resize: 'vertical' }} disabled={!canEdit} />
             </div>
             <div className="form-group">
               <label className="form-label">状态</label>
@@ -320,9 +331,9 @@ export default function WorkspaceSettingsPage() {
                 <option value="completed">已完成</option>
               </select>
             </div>
-            <button className="btn btn-primary btn-sm" onClick={saveWorkspace} disabled={wsSaving}>
+            {canEdit && <button className="btn btn-primary btn-sm" onClick={saveWorkspace} disabled={wsSaving}>
               {wsSaving ? '保存中...' : '保存'}
-            </button>
+            </button>}
           </div>
         )}
 
@@ -369,7 +380,7 @@ export default function WorkspaceSettingsPage() {
                             </div>
                           </div>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-                            {canSaveProject && <button className="btn btn-primary btn-sm" disabled={ttsSaving[config.id]}
+                            {canEdit && <button className="btn btn-primary btn-sm" disabled={ttsSaving[config.id]}
                               onClick={async () => {
                                 setTtsSaving(prev => ({ ...prev, [config.id]: true }))
                                 try {
@@ -410,7 +421,7 @@ export default function WorkspaceSettingsPage() {
                               />
                             </div>
                           </div>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                          {canEdit && <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                             <button className="btn btn-primary btn-sm" disabled={speechSaving[config.id]}
                               onClick={async () => {
                                 setSpeechSaving(prev => ({ ...prev, [config.id]: true }))
@@ -422,7 +433,7 @@ export default function WorkspaceSettingsPage() {
                               }}>
                               {speechSaving[config.id] ? '保存中...' : '保存'}
                             </button>
-                          </div>
+                          </div>}
                         </div>
                       ))}
                       {speechConfigs.length === 0 && (
@@ -478,7 +489,7 @@ export default function WorkspaceSettingsPage() {
                             )}
                           </div>
                         )}
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+                        {canEdit && <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
                           <button className="btn btn-primary btn-sm" disabled={colSaving[config.id]}
                             onClick={async () => {
                               setColSaving(prev => ({ ...prev, [config.id]: true }))
@@ -490,7 +501,7 @@ export default function WorkspaceSettingsPage() {
                             }}>
                             {colSaving[config.id] ? '保存中...' : '保存'}
                           </button>
-                        </div>
+                        </div>}
                         {RULES_COLUMNS.includes(col.id as any) && (() => {
                           const isCol3 = col.id === 'col3'
                           return (
@@ -537,7 +548,7 @@ export default function WorkspaceSettingsPage() {
                                   </>
                                 )}
                                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                                  {canSaveProject && <button className="btn btn-primary btn-sm" disabled={colRulesSaving[config.id]}
+                                  {canEdit && <button className="btn btn-primary btn-sm" disabled={colRulesSaving[config.id]}
                                     onClick={() => saveColRules(config.id, col.id)}>
                                     {colRulesSaving[config.id] ? '保存中...' : '保存规则'}
                                   </button>}
@@ -579,7 +590,7 @@ export default function WorkspaceSettingsPage() {
                         <div key={config.id} style={{ border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden', flexShrink: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', padding: '10px 12px', cursor: 'pointer',
                             background: editingCoreId === config.id ? 'var(--bg-secondary)' : 'transparent' }}
-                            onClick={() => setEditingCoreId(editingCoreId === config.id ? null : config.id)}>
+                            onClick={() => canEdit && setEditingCoreId(editingCoreId === config.id ? null : config.id)}>
                             <span style={{ flex: 1, fontSize: 12, fontWeight: 500 }}>
                               <span style={{ fontSize: 9, color: 'var(--text-secondary)', background: 'var(--bg-tertiary)', padding: '1px 6px', borderRadius: 3, marginRight: 8 }}>
                                 {config.category}
