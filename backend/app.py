@@ -1605,6 +1605,7 @@ def delete_project_item(project_id: str, item_id: str, user=require_perm("projec
 @app.post("/api/projects/{project_id}/items/copy-from/{source_project_id}")
 def copy_project_items(project_id: str, source_project_id: str, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
+    verify_project_access(source_project_id, user)
     """Copy all project_items from source project to target project."""
     db = get_db()
     try:
