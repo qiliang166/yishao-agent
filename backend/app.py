@@ -33,6 +33,12 @@ from services.license_service import (
 
 DEFAULT_SITE_NAME = "Yishao Agent"
 
+# Server-authoritative plan definitions — client submits plan_id, server computes price/duration.
+# Adding a new plan only requires a new entry here; the frontend hardcodes plan_id in its UI.
+PLANS: dict[str, dict] = {
+    "quarterly": {"amount_cents": 2990, "duration_days": 90, "name": "标准套餐"},
+}
+
 # Allowed domains for TTS audio download (SSRF prevention)
 _AUDIO_ALLOWED_HOSTS = {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "aliyuncs.com"}
 
@@ -6255,12 +6261,18 @@ def member_register(req: dict, request: Request):
         audit_detail = {"username": username, "email": email, "plan_type": plan_type}
 
         if plan_type == "paid":
-            # Create payment record with user-submitted proof
+            # Client only provides plan_id and payment_ref — price/duration are server-authoritative.
+            plan_id = (req.get("plan_id", "") or "").strip()
+            plan = PLANS.get(plan_id) if plan_id else None
+            if not plan:
+                raise HTTPException(status_code=400, detail="无效的套餐")
             payment_method = (req.get("payment_method", "") or "").strip()
             payment_ref = (req.get("payment_ref", "") or "").strip()
-            amount_cents = req.get("amount_cents", 0)
-            plan_name = (req.get("plan_name", "") or "").strip()
-            duration_days = req.get("duration_days", 0)
+            if not payment_ref:
+                raise HTTPException(status_code=400, detail="请填写付款单号")
+            amount_cents = plan["amount_cents"]
+            plan_name = plan["name"]
+            duration_days = plan["duration_days"]
 
             import uuid as _uuid2
             db.execute(
@@ -6271,6 +6283,7 @@ def member_register(req: dict, request: Request):
                 (str(_uuid2.uuid4()), user_id, amount_cents, plan_name,
                  duration_days, payment_method, payment_ref, now),
             )
+            audit_detail["plan_id"] = plan_id
             audit_detail["payment_method"] = payment_method
             audit_detail["payment_ref"] = payment_ref
             audit_detail["amount_cents"] = amount_cents

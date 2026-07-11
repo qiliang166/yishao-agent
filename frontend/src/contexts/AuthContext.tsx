@@ -23,8 +23,7 @@ interface AuthState {
   memberLogin: (username: string, password: string) => Promise<void>
   memberRegister: (data: {
     username: string; password: string; display_name: string; email: string
-    plan_type?: string; payment_method?: string; payment_ref?: string
-    amount_cents?: number; plan_name?: string; duration_days?: number
+    plan_type?: string; plan_id?: string; payment_method?: string; payment_ref?: string
   }) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
@@ -188,8 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const memberRegister = useCallback(async (data: {
     username: string; password: string; display_name: string; email: string
-    plan_type?: string; payment_method?: string; payment_ref?: string
-    amount_cents?: number; plan_name?: string; duration_days?: number
+    plan_type?: string; plan_id?: string; payment_method?: string; payment_ref?: string
   }) => {
     const res = await fetch('/api/member/register', {
       method: 'POST',

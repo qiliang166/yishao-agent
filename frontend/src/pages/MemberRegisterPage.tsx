@@ -71,11 +71,9 @@ export default function MemberRegisterPage() {
         email: email.trim(),
         plan_type: planType,
         ...(planType === 'paid' ? {
+          plan_id: 'quarterly',
           payment_method: paymentMethod,
           payment_ref: paymentRef.trim(),
-          amount_cents: 2990,
-          plan_name: '标准套餐',
-          duration_days: 90,
         } : {}),
       })
       setSuccess((result as any).message || '注册成功，请等待管理员审批')
