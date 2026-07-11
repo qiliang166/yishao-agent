@@ -28,11 +28,12 @@ export default function MemberLoginPage() {
     }).catch(() => {})
   }, [])
 
-  // Already logged in → redirect
-  if (user) {
-    if (user.user_type === 'member') return null // Will be handled by parent route
-    return null
-  }
+  // Already logged in → redirect to appropriate home
+  useEffect(() => {
+    if (user) {
+      navigate(user.user_type === 'member' ? '/app' : '/', { replace: true })
+    }
+  }, [user, navigate])
 
   const handleSubmit = async () => {
     if (!username.trim() || !password.trim()) {
