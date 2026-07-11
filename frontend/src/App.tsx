@@ -154,18 +154,18 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
               </button>
             )}
             {canMember && (
-              <>
-                <button
-                  className={`sidebar-item ${location.pathname === '/members/pending' ? 'active' : ''}`}
-                  onClick={() => navigate('/members/pending')}>
-                  <span className="ico">✅</span> 会员审批
-                </button>
-                <button
-                  className={`sidebar-item ${location.pathname === '/members' ? 'active' : ''}`}
-                  onClick={() => navigate('/members')}>
-                  <span className="ico">👥</span> 用户管理
-                </button>
-              </>
+              <button
+                className={`sidebar-item ${location.pathname === '/members/pending' ? 'active' : ''}`}
+                onClick={() => navigate('/members/pending')}>
+                <span className="ico">✅</span> 会员审批
+              </button>
+            )}
+            {(canMember || canRole) && (
+              <button
+                className={`sidebar-item ${location.pathname === '/members' ? 'active' : ''}`}
+                onClick={() => navigate('/members')}>
+                <span className="ico">👥</span> 用户管理
+              </button>
             )}
           </>
         )}

@@ -25,6 +25,7 @@ from routers.prompts import router as prompts_router
 from routers.users import router as users_router
 from routers.prompt_studio import router as prompt_studio_router
 from routers.scenarios import router as scenarios_router
+from permissions import require_perm, check_ownership, verify_project_access
 from services.license_service import (
     validate_license_key, activate as license_activate,
     check_activation, deactivate as license_deactivate, get_license_status,
@@ -305,64 +306,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="无效或过期的令牌")
 
 
-# ── Permission enforcement ───────────────────────────────────────────
-
-def require_perm(permission: str):
-    """FastAPI dependency: check current user has the required permission."""
-    def checker(request: Request):
-        user = getattr(request.state, "user", None)
-        if user is None:
-            raise HTTPException(status_code=401, detail="请先登录")
-        perms = set(user.get("permissions", []))
-        # Rule 3: admin always view_all
-        if user.get("user_type") == "admin":
-            perms.add("project.view_all")
-        # Rule 5: role.manage → member.manage
-        if "role.manage" in perms:
-            perms.add("member.manage")
-        # Rule 4: generate requires view
-        if permission.endswith(".generate"):
-            view_perm = permission.replace(".generate", ".view")
-            if view_perm not in perms:
-                raise HTTPException(status_code=403, detail=f"缺少权限: {view_perm}")
-        if permission not in perms:
-            raise HTTPException(status_code=403, detail=f"缺少权限: {permission}")
-        return user
-    return Depends(checker)
-
-
-def check_ownership(resource_created_by: str | None, user: dict,
-                    edit_all_perm: str = "project.edit_all") -> None:
-    """Raise 403 if user doesn't own the resource and lacks edit_all permission."""
-    if resource_created_by is None:
-        return  # historical data
-    uid = user.get("user_id", user.get("sub", ""))
-    if resource_created_by == uid and uid:
-        return
-    if user.get("user_type", "admin") == "admin":
-        return  # admin (or legacy JWT without user_type) always passes ownership
-    if edit_all_perm in user.get("permissions", []):
-        return
-    raise HTTPException(status_code=403, detail="只能操作自己创建的内容")
-
-
-def verify_project_access(project_id: str, user: dict) -> None:
-    """Raise 403 if user (member) doesn't have access to this project."""
-    if user.get("user_type", "admin") == "admin":
-        return  # admin (or legacy JWT without user_type) bypasses project access check
-    db = get_db()
-    try:
-        uid = user.get("user_id", user.get("sub", ""))
-        row = db.execute(
-            "SELECT 1 FROM member_projects WHERE user_id=? AND project_id=?",
-            (uid, project_id),
-        ).fetchone()
-        if not row:
-            raise HTTPException(status_code=403, detail="无权访问此项目资源")
-    finally:
-        db.close()
-
-
 def _write_audit(conn, actor_id: str, action: str, target_type: str = "",
                  target_id: str = "", detail: str = "{}", ip_address: str = ""):
     """Write an audit log entry."""
@@ -579,12 +522,12 @@ def _copy_seed_configs(db, workspace_id: str):
 
 
 @app.post("/api/workspaces")
-def create_workspace(req: WorkspaceCreate):
+def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
     wid = uuid.uuid4().hex[:12]
     db = get_db()
     try:
-        db.execute("INSERT INTO workspaces (id, name, description, logo, status) VALUES (?, ?, ?, ?, ?)",
-                   (wid, req.name, req.description or '', req.logo or '', req.status or 'draft'))
+        db.execute("INSERT INTO workspaces (id, name, description, logo, status, created_by) VALUES (?, ?, ?, ?, ?, ?)",
+                   (wid, req.name, req.description or '', req.logo or '', req.status or 'draft', user.get("sub", "")))
         db.commit()
         _copy_seed_configs(db, wid)
         row = db.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
@@ -607,12 +550,13 @@ def get_workspace(workspace_id: str):
 
 
 @app.put("/api/workspaces/{workspace_id}")
-def update_workspace(workspace_id: str, req: WorkspaceUpdate):
+def update_workspace(workspace_id: str, req: WorkspaceUpdate, user=require_perm("project.edit_own")):
     db = get_db()
     try:
         row = db.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         if not row:
             raise HTTPException(404, "workspace not found")
+        check_ownership(row["created_by"], user)
         if req.name is not None:
             db.execute("UPDATE workspaces SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                        (req.name, workspace_id))
@@ -633,12 +577,13 @@ def update_workspace(workspace_id: str, req: WorkspaceUpdate):
 
 
 @app.delete("/api/workspaces/{workspace_id}")
-def delete_workspace(workspace_id: str):
+def delete_workspace(workspace_id: str, user=require_perm("project.edit_own")):
     db = get_db()
     try:
         row = db.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         if not row:
             raise HTTPException(404, "workspace not found")
+        check_ownership(row["created_by"], user)
         # Cascade: delete all projects under this workspace
         proj_rows = db.execute(
             "SELECT id FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchall()
@@ -653,10 +598,13 @@ def delete_workspace(workspace_id: str):
 
 
 @app.post("/api/workspaces/{workspace_id}/copy-seed-configs")
-def copy_seed_configs_to_workspace(workspace_id: str):
+def copy_seed_configs_to_workspace(workspace_id: str, user=require_perm("project.edit_own")):
     """Copy seed configs to a workspace (idempotent — skips if already exists)."""
     db = get_db()
     try:
+        ws = db.execute("SELECT created_by FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        if ws:
+            check_ownership(ws["created_by"], user)
         existing = db.execute(
             "SELECT COUNT(*) FROM column_configs WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
         if existing > 0:
@@ -1148,8 +1096,9 @@ async def api_download_selected(project_id: str, request: Request, user=require_
 
 
 @app.delete("/api/projects/{project_id}/files/{filename:path}")
-def api_delete_project_file(project_id: str, filename: str):
+def api_delete_project_file(project_id: str, filename: str, user=require_perm("project.edit_own")):
     """Delete a single file from project storage."""
+    verify_project_access(project_id, user)
     path = resolve_project_storage(project_id, auto_create=False)
     filepath = os.path.join(path, filename)
     if not os.path.exists(filepath):
@@ -1241,7 +1190,7 @@ def api_list_fs_dirs(path: str = ""):
 
 
 @app.post("/api/fs/mkdir")
-async def api_create_fs_dir(request: Request):
+async def api_create_fs_dir(request: Request, user=require_perm("config.project")):
     """Create a new directory at the given parent path."""
     req = await request.json()
     parent = req.get("parent", "")
@@ -1287,7 +1236,8 @@ def api_list_project_directories(project_id: str, subdir: str = ""):
 
 
 @app.post("/api/projects/{project_id}/save-file")
-def api_save_file_to_project(project_id: str, req: dict):
+def api_save_file_to_project(project_id: str, req: dict, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     """Save content to a file. If target_dir is provided (absolute path), use it directly.
     Otherwise resolve relative to the project's storage directory."""
     filename = req.get("filename", "document.txt")
@@ -1404,7 +1354,10 @@ def batch_delete_projects(req: dict, user=require_perm("project.delete_own")):
 # ── Step Results ──
 
 @app.get("/api/projects/{project_id}/steps")
-def get_steps(project_id: str):
+def get_steps(project_id: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     db = get_db()
     try:
         rows = db.execute(
@@ -1416,7 +1369,8 @@ def get_steps(project_id: str):
 
 
 @app.put("/api/projects/{project_id}/steps/{step_name}")
-def save_step(project_id: str, step_name: str, req: StepResultSave):
+def save_step(project_id: str, step_name: str, req: StepResultSave, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         existing = db.execute(
@@ -1462,7 +1416,10 @@ def save_step_meta(project_id: str, step_name: str, content: str):
 # ── Source Materials (multi-format input) ──
 
 @app.get("/api/projects/{project_id}/materials")
-def list_materials(project_id: str):
+def list_materials(project_id: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     db = get_db()
     try:
         rows = db.execute(
@@ -1474,7 +1431,8 @@ def list_materials(project_id: str):
 
 
 @app.post("/api/projects/{project_id}/materials")
-def add_material(project_id: str, req: SourceMaterialCreate):
+def add_material(project_id: str, req: SourceMaterialCreate, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         mat_id = f"sm-{project_id}-{uuid.uuid4().hex[:8]}"
@@ -1491,7 +1449,8 @@ def add_material(project_id: str, req: SourceMaterialCreate):
 
 
 @app.post("/api/projects/{project_id}/materials/upload")
-async def upload_material(project_id: str, file: UploadFile = File(...)):
+async def upload_material(project_id: str, file: UploadFile = File(...), user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     from services.file_parser import parse_bytes
 
     data = await file.read()
@@ -1518,7 +1477,8 @@ async def upload_material(project_id: str, file: UploadFile = File(...)):
 
 
 @app.delete("/api/projects/{project_id}/materials/{material_id}")
-def delete_material(project_id: str, material_id: str):
+def delete_material(project_id: str, material_id: str, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         db.execute("DELETE FROM source_materials WHERE id = ? AND project_id = ?",
@@ -1530,7 +1490,8 @@ def delete_material(project_id: str, material_id: str):
 
 
 @app.put("/api/projects/{project_id}/materials/{material_id}")
-def update_material(project_id: str, material_id: str, req: SourceMaterialUpdate):
+def update_material(project_id: str, material_id: str, req: SourceMaterialUpdate, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         existing = db.execute("SELECT id FROM source_materials WHERE id = ? AND project_id = ?",
@@ -1556,7 +1517,11 @@ def update_material(project_id: str, material_id: str, req: SourceMaterialUpdate
 # ── Project Items (dynamic output steps) ──
 
 @app.get("/api/projects/{project_id}/items")
-def list_project_items(project_id: str, output_mode: str = ""):
+def list_project_items(project_id: str, output_mode: str = "", request: Request = None):
+    if request is not None:
+        user = getattr(request.state, "user", None)
+        if user is not None:
+            verify_project_access(project_id, user)
     db = get_db()
     try:
         if output_mode:
@@ -1577,7 +1542,8 @@ def list_project_items(project_id: str, output_mode: str = ""):
 
 
 @app.post("/api/projects/{project_id}/items")
-def create_project_item(project_id: str, req: ProjectItemCreate):
+def create_project_item(project_id: str, req: ProjectItemCreate, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         item_id = f"pi-{project_id}-{uuid.uuid4().hex[:8]}"
@@ -1595,7 +1561,8 @@ def create_project_item(project_id: str, req: ProjectItemCreate):
 
 
 @app.put("/api/projects/{project_id}/items/{item_id}")
-def update_project_item(project_id: str, item_id: str, req: ProjectItemUpdate):
+def update_project_item(project_id: str, item_id: str, req: ProjectItemUpdate, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         existing = db.execute("SELECT id FROM project_items WHERE id = ? AND project_id = ?",
@@ -1622,7 +1589,8 @@ def update_project_item(project_id: str, item_id: str, req: ProjectItemUpdate):
 
 
 @app.delete("/api/projects/{project_id}/items/{item_id}")
-def delete_project_item(project_id: str, item_id: str):
+def delete_project_item(project_id: str, item_id: str, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         db.execute("DELETE FROM project_item_results WHERE project_item_id = ?", (item_id,))
@@ -1635,7 +1603,8 @@ def delete_project_item(project_id: str, item_id: str):
 
 
 @app.post("/api/projects/{project_id}/items/copy-from/{source_project_id}")
-def copy_project_items(project_id: str, source_project_id: str):
+def copy_project_items(project_id: str, source_project_id: str, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     """Copy all project_items from source project to target project."""
     db = get_db()
     try:
@@ -1665,7 +1634,8 @@ def copy_project_items(project_id: str, source_project_id: str):
 
 
 @app.post("/api/projects/{project_id}/items/init-from-factory")
-def init_project_items_from_factory(project_id: str):
+def init_project_items_from_factory(project_id: str, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     """Initialize project_items from global factory configs for an existing project.
     Skips items that already exist (based on standard ID pattern).
     """
@@ -1676,7 +1646,10 @@ def init_project_items_from_factory(project_id: str):
 # ── Project Item Results ──
 
 @app.get("/api/projects/{project_id}/items/{item_id}/results")
-def list_item_results(project_id: str, item_id: str):
+def list_item_results(project_id: str, item_id: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     db = get_db()
     try:
         rows = db.execute(
@@ -1688,7 +1661,8 @@ def list_item_results(project_id: str, item_id: str):
 
 
 @app.post("/api/projects/{project_id}/items/{item_id}/results")
-def save_item_result(project_id: str, item_id: str, req: ProjectItemResultSave):
+def save_item_result(project_id: str, item_id: str, req: ProjectItemResultSave, user=require_perm("project.edit_own")):
+    verify_project_access(project_id, user)
     db = get_db()
     try:
         existing = db.execute(
@@ -1711,7 +1685,8 @@ def save_item_result(project_id: str, item_id: str, req: ProjectItemResultSave):
 # ── Project Copy ──
 
 @app.post("/api/projects/{project_id}/copy")
-def copy_project(project_id: str):
+def copy_project(project_id: str, user=require_perm("project.create")):
+    verify_project_access(project_id, user)
     """Copy a project and all its items (the project IS the template)."""
     db = get_db()
     try:
@@ -1769,7 +1744,7 @@ def list_llm_providers():
 
 
 @app.post("/api/llm/providers")
-def create_llm_provider(req: LLMProviderCreate):
+def create_llm_provider(req: LLMProviderCreate, user=require_perm("config.global")):
     pid = uuid.uuid4().hex[:8]
     db = get_db()
     try:
@@ -1783,7 +1758,7 @@ def create_llm_provider(req: LLMProviderCreate):
 
 
 @app.put("/api/llm/providers/{provider_id}")
-def update_llm_provider(provider_id: str, req: LLMProviderCreate):
+def update_llm_provider(provider_id: str, req: LLMProviderCreate, user=require_perm("config.global")):
     db = get_db()
     try:
         db.execute(
@@ -1796,7 +1771,7 @@ def update_llm_provider(provider_id: str, req: LLMProviderCreate):
 
 
 @app.delete("/api/llm/providers/{provider_id}")
-def delete_llm_provider(provider_id: str):
+def delete_llm_provider(provider_id: str, user=require_perm("config.global")):
     db = get_db()
     try:
         db.execute("DELETE FROM llm_providers WHERE id = ?", (provider_id,))
@@ -1867,7 +1842,7 @@ def list_tts_providers():
 
 
 @app.post("/api/tts/providers")
-def create_tts_provider(req: TTSProviderCreate):
+def create_tts_provider(req: TTSProviderCreate, user=require_perm("config.global")):
     pid = uuid.uuid4().hex[:8]
     db = get_db()
     try:
@@ -1883,7 +1858,7 @@ def create_tts_provider(req: TTSProviderCreate):
 
 
 @app.put("/api/tts/providers/{provider_id}")
-def update_tts_provider(provider_id: str, req: TTSProviderCreate):
+def update_tts_provider(provider_id: str, req: TTSProviderCreate, user=require_perm("config.global")):
     db = get_db()
     try:
         if req.is_default:
@@ -1898,7 +1873,7 @@ def update_tts_provider(provider_id: str, req: TTSProviderCreate):
 
 
 @app.delete("/api/tts/providers/{provider_id}")
-def delete_tts_provider(provider_id: str):
+def delete_tts_provider(provider_id: str, user=require_perm("config.global")):
     db = get_db()
     try:
         db.execute("DELETE FROM tts_providers WHERE id = ?", (provider_id,))
@@ -1968,7 +1943,7 @@ def list_asr_providers():
 
 
 @app.post("/api/asr/providers")
-def create_asr_provider(req: ASRProviderCreate):
+def create_asr_provider(req: ASRProviderCreate, user=require_perm("config.global")):
     pid = uuid.uuid4().hex[:8]
     db = get_db()
     try:
@@ -1984,7 +1959,7 @@ def create_asr_provider(req: ASRProviderCreate):
 
 
 @app.put("/api/asr/providers/{provider_id}")
-def update_asr_provider(provider_id: str, req: ASRProviderCreate):
+def update_asr_provider(provider_id: str, req: ASRProviderCreate, user=require_perm("config.global")):
     db = get_db()
     try:
         if req.is_default:
@@ -1999,7 +1974,7 @@ def update_asr_provider(provider_id: str, req: ASRProviderCreate):
 
 
 @app.delete("/api/asr/providers/{provider_id}")
-def delete_asr_provider(provider_id: str):
+def delete_asr_provider(provider_id: str, user=require_perm("config.global")):
     db = get_db()
     try:
         db.execute("DELETE FROM asr_providers WHERE id = ?", (provider_id,))
@@ -2073,7 +2048,7 @@ def list_image_providers():
 
 
 @app.post("/api/image/providers")
-def create_image_provider(req: ImageProviderCreate):
+def create_image_provider(req: ImageProviderCreate, user=require_perm("config.global")):
     pid = uuid.uuid4().hex[:8]
     db = get_db()
     try:
@@ -2089,7 +2064,7 @@ def create_image_provider(req: ImageProviderCreate):
 
 
 @app.put("/api/image/providers/{provider_id}")
-def update_image_provider(provider_id: str, req: ImageProviderCreate):
+def update_image_provider(provider_id: str, req: ImageProviderCreate, user=require_perm("config.global")):
     db = get_db()
     try:
         if req.is_default:
@@ -2120,7 +2095,7 @@ def get_image_provider(provider_id: str):
 
 
 @app.delete("/api/image/providers/{provider_id}")
-def delete_image_provider(provider_id: str):
+def delete_image_provider(provider_id: str, user=require_perm("config.global")):
     db = get_db()
     try:
         db.execute("DELETE FROM image_providers WHERE id = ?", (provider_id,))
@@ -2172,7 +2147,7 @@ def list_voices(provider_id: str = ""):
 
 
 @app.post("/api/voices")
-def create_voice(data: VoiceCreate):
+def create_voice(data: VoiceCreate, user=require_perm("stage4.generate")):
     import uuid
     db = get_db()
     try:
@@ -2190,7 +2165,7 @@ def create_voice(data: VoiceCreate):
 
 
 @app.put("/api/voices/{voice_id}")
-def update_voice(voice_id: str, data: VoiceUpdate):
+def update_voice(voice_id: str, data: VoiceUpdate, user=require_perm("stage4.generate")):
     db = get_db()
     try:
         existing = db.execute("SELECT * FROM voices WHERE id = ?", (voice_id,)).fetchone()
@@ -2224,7 +2199,7 @@ def update_voice(voice_id: str, data: VoiceUpdate):
 
 
 @app.delete("/api/voices/{voice_id}")
-def delete_voice(voice_id: str):
+def delete_voice(voice_id: str, user=require_perm("stage4.generate")):
     db = get_db()
     try:
         db.execute("DELETE FROM voices WHERE id = ?", (voice_id,))
@@ -2297,7 +2272,8 @@ class VoiceDesignRequest(BaseModel):
 
 @app.post("/api/voices/clone")
 async def api_voice_clone(name: str = Form(...), model: str = Form("cosyvoice-v3.5-plus"),
-                          audio: UploadFile = File(...), provider_id: str = Form("")):
+                          audio: UploadFile = File(...), provider_id: str = Form(""),
+                          user=require_perm("stage4.generate")):
     """Clone a voice from an audio sample."""
     audio_bytes = await audio.read()
     ext = (audio.filename or "voice.wav").rsplit(".", 1)[-1] if "." in (audio.filename or "") else "wav"
@@ -2353,7 +2329,7 @@ async def api_voice_clone(name: str = Form(...), model: str = Form("cosyvoice-v3
 
 
 @app.post("/api/voices/design")
-async def api_voice_design(req: VoiceDesignRequest, provider_id: str = ""):
+async def api_voice_design(req: VoiceDesignRequest, provider_id: str = "", user=require_perm("stage4.generate")):
     """Design a voice from text description."""
     api_key = ""
     base_url = "https://dashscope.aliyuncs.com/api/v1"
@@ -2448,7 +2424,7 @@ def list_cloned_voices(provider_id: str = "", page: int = 1, size: int = 20):
 
 
 @app.delete("/api/voices/clone/{voice_id}")
-def delete_cloned_voice(voice_id: str):
+def delete_cloned_voice(voice_id: str, user=require_perm("stage4.generate")):
     """Delete a cloned voice and its sample audio."""
     db = get_db()
     try:
@@ -2469,7 +2445,7 @@ def delete_cloned_voice(voice_id: str):
 # ── LLM Calls ──
 
 @app.post("/api/llm/generate")
-async def llm_generate(req: LLMGenerateRequest):
+async def llm_generate(req: LLMGenerateRequest, user=require_perm("stage2.generate")):
     import time, sys
     t0 = time.time()
     print(f"[LLM-REQ] {time.strftime('%H:%M:%S')} provider={req.provider_id} model={req.model} "
@@ -2489,7 +2465,7 @@ async def llm_generate(req: LLMGenerateRequest):
 
 
 @app.post("/api/llm/generate-stream")
-async def llm_generate_stream(req: LLMGenerateRequest):
+async def llm_generate_stream(req: LLMGenerateRequest, user=require_perm("stage2.generate")):
     """Streaming LLM generate via SSE — provider-aware routing."""
     async def event_stream():
         try:
@@ -2507,7 +2483,7 @@ async def llm_generate_stream(req: LLMGenerateRequest):
 
 
 @app.post("/api/llm/refine")
-async def llm_refine(req: LLMRefineRequest):
+async def llm_refine(req: LLMRefineRequest, user=require_perm("stage2.generate")):
     try:
         result = await refine(req.provider_id, req.model, req.instruction, req.selected_text, req.full_context)
         return {"content": result}
@@ -2535,7 +2511,7 @@ PPT_IMAGE_SIZES = {
 
 
 @app.post("/api/image/generate")
-async def image_generate(req: ImageGenerateRequest):
+async def image_generate(req: ImageGenerateRequest, user=require_perm("stage1.generate")):
     import httpx
     db = get_db()
     try:
@@ -2652,7 +2628,7 @@ def list_templates(type: str = None):
 
 
 @app.post("/api/templates")
-def create_template(req: TemplateCreate):
+def create_template(req: TemplateCreate, user=require_perm("template.manage")):
     tid = uuid.uuid4().hex[:8]
     db = get_db()
     try:
@@ -2666,7 +2642,7 @@ def create_template(req: TemplateCreate):
 
 
 @app.put("/api/templates/{template_id}/toggle-enabled")
-def toggle_template_enabled(template_id: str):
+def toggle_template_enabled(template_id: str, user=require_perm("template.manage")):
     """Toggle the enabled state of a template.
 
     Only enabled templates appear in the Step 3 style selector.
@@ -2689,7 +2665,7 @@ def toggle_template_enabled(template_id: str):
 
 
 @app.put("/api/templates/{template_id}")
-def update_template(template_id: str, req: TemplateCreate):
+def update_template(template_id: str, req: TemplateCreate, user=require_perm("template.manage")):
     db = get_db()
     try:
         existing = db.execute("SELECT file_path, thumbnail_path FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -2707,7 +2683,7 @@ def update_template(template_id: str, req: TemplateCreate):
 
 
 @app.delete("/api/templates/{template_id}")
-def delete_template(template_id: str):
+def delete_template(template_id: str, user=require_perm("template.manage")):
     db = get_db()
     try:
         row = db.execute("SELECT is_default FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -2723,7 +2699,7 @@ def delete_template(template_id: str):
 
 
 @app.post("/api/templates/{template_id}/set-default")
-def set_template_default(template_id: str):
+def set_template_default(template_id: str, user=require_perm("template.manage")):
     db = get_db()
     try:
         row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -2796,7 +2772,7 @@ Write-Output "1"
 
 
 @app.post("/api/templates/{template_id}/upload")
-async def upload_template_file(template_id: str, file: UploadFile = File(...)):
+async def upload_template_file(template_id: str, file: UploadFile = File(...), user=require_perm("template.manage")):
     db = get_db()
     try:
         existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -2824,7 +2800,7 @@ async def upload_template_file(template_id: str, file: UploadFile = File(...)):
 
 
 @app.post("/api/templates/{template_id}/upload-thumbnail")
-async def upload_template_thumbnail(template_id: str, file: UploadFile = File(...)):
+async def upload_template_thumbnail(template_id: str, file: UploadFile = File(...), user=require_perm("template.manage")):
     db = get_db()
     try:
         existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -2848,7 +2824,7 @@ async def upload_template_thumbnail(template_id: str, file: UploadFile = File(..
 
 
 @app.post("/api/templates/{template_id}/reset-thumbnail")
-def reset_template_thumbnail(template_id: str):
+def reset_template_thumbnail(template_id: str, user=require_perm("template.manage")):
     db = get_db()
     try:
         row = db.execute("SELECT id, file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -3563,7 +3539,7 @@ COOKIES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "
 os.makedirs(COOKIES_DIR, exist_ok=True)
 
 @app.post("/api/video/upload-cookies")
-async def api_upload_cookies(file: UploadFile = File(...)):
+async def api_upload_cookies(file: UploadFile = File(...), user=require_perm("stage1.generate")):
     if not file.filename or not file.filename.endswith('.txt'):
         raise HTTPException(400, "请上传 .txt 格式的 cookies 文件")
     file_id = uuid.uuid4().hex[:8]
@@ -3575,7 +3551,7 @@ async def api_upload_cookies(file: UploadFile = File(...)):
 
 
 @app.post("/api/video/download")
-def api_download_video(req: VideoDownloadRequest):
+def api_download_video(req: VideoDownloadRequest, user=require_perm("stage1.generate")):
     result = download_video(req.url, req.cookies_path, req.project_id, req.asr_model or "fun-asr", req.asr_provider_id)
     return result
 
@@ -3622,7 +3598,7 @@ def api_video_file(path: str = ""):
 
 
 @app.post("/api/video/extract-subtitles")
-def api_extract_subtitles(req: dict):
+def api_extract_subtitles(req: dict, user=require_perm("stage1.generate")):
     """Manually extract subtitles from a previously downloaded video task."""
     task_id = req["task_id"]
     project_id = req.get("project_id")
@@ -3705,7 +3681,7 @@ def api_ppt_log(project_id: str):
 
 
 @app.post("/api/ppt/generate")
-def api_generate_ppt(req: PPTGenerateRequest):
+def api_generate_ppt(req: PPTGenerateRequest, user=require_perm("stage3.generate")):
     import time, sys, datetime as _dt
     t0 = time.time()
     print(f"[PPT-REQ] {time.strftime('%H:%M:%S')} provider={req.provider_id} model={req.model} "
@@ -3850,7 +3826,7 @@ def api_generate_ppt(req: PPTGenerateRequest):
 
 
 @app.post("/api/ppt/outline")
-def api_ppt_outline(req: PPTPlanRequest):
+def api_ppt_outline(req: PPTPlanRequest, user=require_perm("stage3.generate")):
     """Generate outline only (Phase 2 Research + Phase 4 Outline+Content).
 
     Returns outline_json (structured) and outline_text (natural-language,
@@ -3919,7 +3895,7 @@ def api_ppt_outline(req: PPTPlanRequest):
 
 
 @app.post("/api/ppt/outline/convert")
-def api_ppt_outline_convert(req: PPTPlanRequest):
+def api_ppt_outline_convert(req: PPTPlanRequest, user=require_perm("stage3.generate")):
     """Convert edited natural-language text back to structured JSON via LLM.
 
     Called when user saves edited outline content. Uses low-temperature LLM
@@ -3936,7 +3912,7 @@ def api_ppt_outline_convert(req: PPTPlanRequest):
 
 
 @app.post("/api/ppt/plan")
-def api_ppt_plan(req: PPTPlanRequest):
+def api_ppt_plan(req: PPTPlanRequest, user=require_perm("stage3.generate")):
     """Generate slide plan only (no PPTX file). Returns JSON for user review.
 
     Uses column config's prompt + skill as AI system message and structure
@@ -4074,7 +4050,7 @@ def _ensure_backup(run_dir: str):
 
 @app.post("/api/ppt/recolor-slide")
 def api_ppt_recolor_slide(
-    run_id: str = Body(...),
+    run_id: str = Body(...), user=require_perm("stage3.generate"),
     slide_seq: int = Body(...),
     style: str = Body("business"),
     color_scheme: str = Body("deep-blue"),
@@ -4187,7 +4163,7 @@ def api_ppt_recolor_slide(
 
 
 @app.post("/api/ppt/edit-slide")
-def api_ppt_edit_slide(req: PPTEditSlideRequest):
+def api_ppt_edit_slide(req: PPTEditSlideRequest, user=require_perm("stage3.generate")):
     """Edit a single slide via natural language instruction.
 
     Flow:
@@ -4309,13 +4285,13 @@ def api_ppt_edit_slide(req: PPTEditSlideRequest):
 
 
 @app.post("/api/ppt/save-edit/{run_id}")
-def api_save_edit(run_id: str):
+def api_save_edit(run_id: str, user=require_perm("stage3.generate")):
     """No-op: edits now write directly to index.html."""
     return {"ok": True, "saved": True}
 
 
 @app.post("/api/ppt/discard-edit/{run_id}")
-def api_discard_edit(run_id: str):
+def api_discard_edit(run_id: str, user=require_perm("stage3.generate")):
     """Restore index.html from index_backup.html."""
     run_dir = _run_dirs.get(run_id)
     if not run_dir:
@@ -4335,7 +4311,7 @@ def api_discard_edit(run_id: str):
 
 
 @app.put("/api/ppt/slide-source/{run_id}")
-def api_slide_source(run_id: str, req: PPTSlideSourceRequest):
+def api_slide_source(run_id: str, req: PPTSlideSourceRequest, user=require_perm("stage3.generate")):
     """Write the full HTML document directly to index.html.
 
     Used by the source-code editor tab — the user edits the complete
@@ -4358,7 +4334,7 @@ def api_slide_source(run_id: str, req: PPTSlideSourceRequest):
 
 
 @app.post("/api/ppt/regenerate-slide")
-def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
+def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest, user=require_perm("stage3.generate")):
     """Regenerate selected slides via the standard two-phase HTML pipeline.
 
     Reads existing slide structures from result.json, runs
@@ -4655,7 +4631,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest):
 
 
 @app.put("/api/ppt/splice-slides/{run_id}")
-def api_ppt_splice_slides(run_id: str, req: dict):
+def api_ppt_splice_slides(run_id: str, req: dict, user=require_perm("stage3.generate")):
     """Rebuild index.html from individual slide files after regeneration.
 
     The new flow:
@@ -4905,7 +4881,7 @@ def _find_run_dir(run_id: str):
 
 
 @app.get("/api/ppt/regenerate-state/{run_id}")
-def api_ppt_get_regenerate_state(run_id: str):
+def api_ppt_get_regenerate_state(run_id: str, user=require_perm("stage3.view")):
     """Load persisted regenerate-tab state so it survives modal close/reopen."""
     run_dir = _find_run_dir(run_id)
     if not run_dir:
@@ -4921,7 +4897,7 @@ def api_ppt_get_regenerate_state(run_id: str):
 
 
 @app.post("/api/ppt/regenerate-state/{run_id}")
-def api_ppt_save_regenerate_state(run_id: str, req: dict):
+def api_ppt_save_regenerate_state(run_id: str, req: dict, user=require_perm("stage3.generate")):
     """Persist regenerate-tab state to disk so it survives modal close/reopen."""
     run_dir = _find_run_dir(run_id)
     if not run_dir:
@@ -4933,7 +4909,7 @@ def api_ppt_save_regenerate_state(run_id: str, req: dict):
 
 
 @app.delete("/api/ppt/regenerate-state/{run_id}")
-def api_ppt_clear_regenerate_state(run_id: str):
+def api_ppt_clear_regenerate_state(run_id: str, user=require_perm("stage3.generate")):
     """Clear persisted regenerate-tab state (user clicked discard)."""
     run_dir = _find_run_dir(run_id)
     if not run_dir:
@@ -5094,7 +5070,7 @@ def api_get_style_vi_section(style_id: str, section: str, color_scheme: str = ""
 
 
 @app.put("/api/ppt/styles/{style_id}/vi/{section:path}")
-def api_save_style_vi_section(style_id: str, section: str, body: VIFileUpdate):
+def api_save_style_vi_section(style_id: str, section: str, body: VIFileUpdate, user=require_perm("template.manage")):
     """Save a specific VI sub-file. Supports subdirectory sections."""
     d = _style_dir(style_id)
     os.makedirs(d, exist_ok=True)
@@ -5209,7 +5185,7 @@ def api_get_style_vi(style_id: str, color_scheme: str = ""):
 
 
 @app.put("/api/ppt/styles/{style_id}/vi")
-def api_save_style_vi(style_id: str, body: VIFileUpdate):
+def api_save_style_vi(style_id: str, body: VIFileUpdate, user=require_perm("template.manage")):
     """Save VI — writes to vi.md in directory structure."""
     d = _style_dir(style_id)
     os.makedirs(d, exist_ok=True)
@@ -5234,7 +5210,7 @@ def api_get_style_prompt(style_id: str):
 
 
 @app.put("/api/ppt/styles/{style_id}/prompt")
-def api_save_style_prompt(style_id: str, body: VIFileUpdate):
+def api_save_style_prompt(style_id: str, body: VIFileUpdate, user=require_perm("template.manage")):
     """Save a style's AI prompt markdown file."""
     d = _style_dir(style_id)
     os.makedirs(d, exist_ok=True)
@@ -5286,7 +5262,7 @@ def api_export_svg_zip(run_id: str):
 
 
 @app.post("/api/ppt/save-images/{run_id}")
-async def api_save_slide_images(run_id: str):
+async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate")):
     """Render each slide as a 1280x720 PNG and save to the export directory."""
     import asyncio
 
@@ -5329,7 +5305,7 @@ async def api_save_slide_images(run_id: str):
 
 
 @app.post("/api/open-folder")
-async def api_open_folder(req: dict):
+async def api_open_folder(req: dict, user=require_perm("config.project")):
     path = req.get("path", "")
     if not path or not os.path.isdir(path):
         raise HTTPException(status_code=400, detail="Path not found")
@@ -5348,7 +5324,7 @@ class SOPExportRequest(BaseModel):
 
 
 @app.post("/api/export/sop")
-def api_export_sop(req: SOPExportRequest):
+def api_export_sop(req: SOPExportRequest, user=require_perm("stage5.download")):
     try:
         output_dir = None
         project_name = ""
@@ -5512,14 +5488,14 @@ def split_text(text: str, max_chunk: int = 290) -> list:
 
 
 @app.post("/api/tts/split")
-def api_tts_split(req: TtsSplitRequest):
+def api_tts_split(req: TtsSplitRequest, user=require_perm("stage4.view")):
     """Split text into segments for per-segment synthesis."""
     segments = split_text(req.text, req.max_chunk)
     return {"segments": [{"index": i + 1, "text": s} for i, s in enumerate(segments)], "total": len(segments)}
 
 
 @app.post("/api/tts/synthesize")
-async def api_tts_synthesize(req: SynthesizeRequest):
+async def api_tts_synthesize(req: SynthesizeRequest, user=require_perm("stage4.generate")):
     import httpx
     try:
         # Resolve TTS API key and base_url from provider or fallback to settings
@@ -5645,7 +5621,7 @@ def api_tts_history_list(project_id: str):
 
 
 @app.put("/api/tts-history/{history_id}")
-def api_tts_history_update(history_id: int, req: TtsHistoryUpdate):
+def api_tts_history_update(history_id: int, req: TtsHistoryUpdate, user=require_perm("stage4.generate")):
     db = get_db()
     try:
         row = db.execute("SELECT id FROM tts_history WHERE id = ?", (history_id,)).fetchone()
@@ -5660,7 +5636,7 @@ def api_tts_history_update(history_id: int, req: TtsHistoryUpdate):
 
 
 @app.delete("/api/tts-history/{history_id}")
-def api_tts_history_delete(history_id: int):
+def api_tts_history_delete(history_id: int, user=require_perm("stage4.generate")):
     db = get_db()
     try:
         row = db.execute("SELECT id, audio_path, project_id FROM tts_history WHERE id = ?", (history_id,)).fetchone()
@@ -5717,7 +5693,7 @@ def serve_audio(filename: str, project_id: str = None, name: str = None, request
 # ── Logo Upload ──
 
 @app.post("/api/upload/logo")
-async def upload_logo(file: UploadFile = File(...)):
+async def upload_logo(file: UploadFile = File(...), user=require_perm("config.global")):
     """Upload a logo image file. Returns the filename for later retrieval."""
     import uuid as _uuid
     ext = os.path.splitext(file.filename or "logo.png")[1] or ".png"
@@ -5815,7 +5791,7 @@ def get_help_section(location: str):
 
 
 @app.put("/api/help-manual/sections/{location}")
-def upsert_help_section(location: str, req: dict):
+def upsert_help_section(location: str, req: dict, user=require_perm("config.global")):
     db = get_db()
     try:
         title = req.get("title", "")
@@ -6566,7 +6542,7 @@ class OpenFolderRequest(BaseModel):
     path: str
 
 @app.post("/api/open-folder")
-def open_folder(req: OpenFolderRequest):
+def open_folder(req: OpenFolderRequest, user=require_perm("config.project")):
     p = req.path.strip()
     if not p:
         raise HTTPException(400, "path required")

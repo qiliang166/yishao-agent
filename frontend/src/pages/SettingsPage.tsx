@@ -4,7 +4,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
-import { useAuth } from '../contexts/AuthContext'
+import { usePermission } from '../hooks/usePermission'
 import { DEFAULT_THEMES, applyThemeToDOM, resetThemeToDefault } from '../services/theme'
 import type { ThemePreset } from '../services/theme'
 
@@ -82,7 +82,6 @@ const COLOR_LABELS = [
 
 function SettingsPage() {
   const modal = useModal()
-  const { logout } = useAuth()
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
@@ -96,10 +95,7 @@ function SettingsPage() {
   const [logoUploading, setLogoUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [passwordEnabled, setPasswordEnabled] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [passwordMsg, setPasswordMsg] = useState('')
+  const canSaveGlobal = usePermission('config.global')
   const [adminPhone, setAdminPhone] = useState('')
   const [appVersion, setAppVersion] = useState('1.0.0')
 
@@ -132,7 +128,6 @@ function SettingsPage() {
       if (s.save_path) setSavePath(s.save_path)
       if (s.branding_copyright) setBrandingCopyright(s.branding_copyright)
       if (s.branding_signature) setBrandingSignature(s.branding_signature)
-      if (s.admin_password_enabled === '1') setPasswordEnabled(true)
       if (s.admin_phone) setAdminPhone(s.admin_phone)
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
@@ -236,32 +231,6 @@ function SettingsPage() {
       setLogoUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
     }
-  }
-
-  const handlePasswordSave = async () => {
-    setPasswordMsg('')
-    if (!newPassword.trim()) { setPasswordMsg('密码不能为空'); return }
-    if (newPassword !== confirmPassword) { setPasswordMsg('两次输入的密码不一致'); return }
-    if (newPassword.length < 4) { setPasswordMsg('密码至少需要4个字符'); return }
-    try {
-      await api.updateSettings({ admin_password: newPassword, admin_password_enabled: '1' })
-      setPasswordEnabled(true)
-      setNewPassword(''); setConfirmPassword('')
-      logout()
-      setPasswordMsg('密码已更新')
-      navigate('/', { replace: true })
-    } catch (err: any) { setPasswordMsg('保存失败: ' + err.message) }
-  }
-
-  const handlePasswordDisable = async () => {
-    const ok = await modal.confirm('确定要关闭密码保护吗？关闭后无需密码即可访问系统。')
-    if (!ok) return
-    try {
-      await api.updateSettings({ admin_password: '', admin_password_enabled: '0' })
-      setPasswordEnabled(false)
-      setNewPassword(''); setConfirmPassword('')
-      setPasswordMsg('密码保护已关闭')
-    } catch (err: any) { setPasswordMsg('操作失败: ' + err.message) }
   }
 
   const handleGlobalSave = async () => {
@@ -397,7 +366,7 @@ function SettingsPage() {
               {saveMsg}
             </span>
           )}
-          {activeTab !== 'manual' && (
+          {activeTab !== 'manual' && canSaveGlobal && (
             <button className="btn btn-primary btn-sm" onClick={handleGlobalSave}>
               全局保存
             </button>
@@ -467,45 +436,18 @@ function SettingsPage() {
           </div>
 
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
-            <h3>安全设置</h3>
-            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
-              开启密码保护后，登录和项目配置需要输入密码。
-            </p>
+            <h3>账户管理</h3>
             <div className="settings-row">
               <label>管理员手机号</label>
               <input className="form-input" type="text" value={adminPhone}
-                onChange={e => setAdminPhone(e.target.value)} placeholder="忘记密码时用于验证身份" style={{ maxWidth: 220 }} />
+                onChange={e => setAdminPhone(e.target.value)} placeholder="用于身份验证" style={{ maxWidth: 220 }} />
             </div>
             <div className="settings-row">
-              <label>密码保护</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', minWidth: 'auto' }}>
-                <input type="checkbox" checked={passwordEnabled}
-                  onChange={e => { if (e.target.checked) setPasswordEnabled(true); else handlePasswordDisable() }} />
-                <span style={{ fontSize: 12 }}>启用密码</span>
-              </label>
+              <label></label>
+              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/users')}>
+                用户管理 →
+              </button>
             </div>
-            {passwordEnabled && (<>
-              <div className="settings-row">
-                <label>新密码</label>
-                <input className="form-input" type="password" value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)} placeholder="至少4位字符" style={{ maxWidth: 220 }} />
-              </div>
-              <div className="settings-row">
-                <label>确认密码</label>
-                <input className="form-input" type="password" value={confirmPassword}
-                  onChange={e => setConfirmPassword(e.target.value)} placeholder="再次输入密码" style={{ maxWidth: 220 }} />
-              </div>
-              <div className="settings-row">
-                <label></label>
-                <button className="btn btn-primary btn-sm" onClick={handlePasswordSave}>保存密码</button>
-                {passwordMsg && (
-                  <span style={{ marginLeft: 8, fontSize: 11,
-                    color: passwordMsg.includes('失败') || passwordMsg.includes('错误') || passwordMsg.includes('不能') || passwordMsg.includes('不一致') ? 'var(--warning)' : 'var(--success)' }}>
-                    {passwordMsg}
-                  </span>
-                )}
-              </div>
-            </>)}
           </div>
 
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
