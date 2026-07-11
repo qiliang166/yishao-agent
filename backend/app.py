@@ -6342,10 +6342,12 @@ class PaymentRecordReq(BaseModel):
     note: str = ""
 
 @app.put("/api/members/{user_id}/approve")
-async def approve_member(user_id: str, body: ApproveMemberReq, user=require_perm("member.manage")):
+async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
+                          user=require_perm("member.manage")):
     """Approve a pending member. Auto-detects trial vs paid and assigns correct role."""
     import uuid as _uuid
     duration_days = body.duration_days  # default 30 from model, overridden below for paid
+    ip = _get_client_ip(request)
     db = get_db()
     try:
         m = db.execute(
@@ -6407,7 +6409,8 @@ async def approve_member(user_id: str, body: ApproveMemberReq, user=require_perm
         _write_audit(db, user["sub"], "member.approve", "user", user_id,
                       json.dumps({"role": role_name, "duration_days": duration_days,
                                   "expires_at": expires_at,
-                                  "has_payment": payment is not None}))
+                                  "has_payment": payment is not None}),
+                      ip_address=ip)
         db.commit()
         return {
             "ok": True, "message": "审批通过", "expires_at": expires_at,
@@ -6424,9 +6427,11 @@ async def approve_member(user_id: str, body: ApproveMemberReq, user=require_perm
 
 
 @app.put("/api/members/{user_id}/reject")
-async def reject_member(user_id: str, body: RejectMemberReq, user=require_perm("member.manage")):
+async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
+                         user=require_perm("member.manage")):
     """Reject a pending member."""
     reason = body.reason
+    ip = _get_client_ip(request)
     db = get_db()
     try:
         m = db.execute(
@@ -6446,7 +6451,7 @@ async def reject_member(user_id: str, body: RejectMemberReq, user=require_perm("
             (user["sub"], _dt.utcnow().isoformat(), _dt.utcnow().isoformat(), user_id),
         )
         _write_audit(db, user["sub"], "member.reject", "user", user_id,
-                      json.dumps({"reason": reason}))
+                      json.dumps({"reason": reason}), ip_address=ip)
         db.commit()
         return {"ok": True, "message": "已拒绝"}
     finally:
@@ -6454,7 +6459,8 @@ async def reject_member(user_id: str, body: RejectMemberReq, user=require_perm("
 
 
 @app.post("/api/members/{user_id}/payment")
-async def record_payment(user_id: str, body: PaymentRecordReq, user=require_perm("member.manage")):
+async def record_payment(user_id: str, body: PaymentRecordReq, request: Request,
+                           user=require_perm("member.manage")):
     """Record a payment and extend member expiry."""
     import uuid as _uuid
     amount_cents = body.amount_cents
@@ -6462,6 +6468,7 @@ async def record_payment(user_id: str, body: PaymentRecordReq, user=require_perm
     duration_days = body.duration_days
     payment_method = body.payment_method
     note = body.note
+    ip = _get_client_ip(request)
 
     if not plan_name or duration_days <= 0:
         raise HTTPException(400, "请填写套餐名和有效续期天数")
@@ -6505,7 +6512,8 @@ async def record_payment(user_id: str, body: PaymentRecordReq, user=require_perm
         )
         _write_audit(db, user["sub"], "member.payment", "user", user_id,
                       json.dumps({"amount_cents": amount_cents, "plan": plan_name,
-                                  "days": duration_days, "new_expires": new_expires_str}))
+                                  "days": duration_days, "new_expires": new_expires_str}),
+                      ip_address=ip)
         db.commit()
         return {"ok": True, "expires_after": new_expires_str,
                 "expires_before": m["expires_at"], "duration_days": duration_days}
