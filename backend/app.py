@@ -6218,7 +6218,7 @@ def member_register(req: dict, request: Request):
     username = (req.get("username", "") or "").strip()
     password = req.get("password", "") or ""
     display_name = (req.get("display_name", "") or "").strip() or username
-    email = (req.get("email", "") or "").strip()
+    email = (req.get("email", "") or "").strip() or None
     plan_type = (req.get("plan_type", "") or "trial").strip()  # "trial" or "paid"
 
     if not username or not password:
@@ -6342,11 +6342,10 @@ class PaymentRecordReq(BaseModel):
     note: str = ""
 
 @app.put("/api/members/{user_id}/approve")
-async def approve_member(user_id: str, request: Request, user=require_perm("member.manage")):
+async def approve_member(user_id: str, body: ApproveMemberReq, user=require_perm("member.manage")):
     """Approve a pending member. Auto-detects trial vs paid and assigns correct role."""
     import uuid as _uuid
-    body = await request.json()
-    duration_days = body.get("duration_days", 7)  # default 7 for trial
+    duration_days = body.duration_days  # default 30 from model, overridden below for paid
     db = get_db()
     try:
         m = db.execute(
@@ -6376,7 +6375,7 @@ async def approve_member(user_id: str, request: Request, user=require_perm("memb
             duration_days = payment["duration_days"]
         else:
             role_name = "试用会员"
-            duration_days = body.get("duration_days", 7)
+            duration_days = body.duration_days
 
         expires_at = (_dt.utcnow() + _td(days=int(duration_days))).isoformat()
 
@@ -6425,10 +6424,9 @@ async def approve_member(user_id: str, request: Request, user=require_perm("memb
 
 
 @app.put("/api/members/{user_id}/reject")
-async def reject_member(user_id: str, request: Request, user=require_perm("member.manage")):
+async def reject_member(user_id: str, body: RejectMemberReq, user=require_perm("member.manage")):
     """Reject a pending member."""
-    body = await request.json()
-    reason = body.get("reason", "")
+    reason = body.reason
     db = get_db()
     try:
         m = db.execute(
@@ -6456,15 +6454,14 @@ async def reject_member(user_id: str, request: Request, user=require_perm("membe
 
 
 @app.post("/api/members/{user_id}/payment")
-async def record_payment(user_id: str, request: Request, user=require_perm("member.manage")):
+async def record_payment(user_id: str, body: PaymentRecordReq, user=require_perm("member.manage")):
     """Record a payment and extend member expiry."""
     import uuid as _uuid
-    body = await request.json()
-    amount_cents = body.get("amount_cents", 0)
-    plan_name = body.get("plan_name", "")
-    duration_days = int(body.get("duration_days", 0))
-    payment_method = body.get("payment_method", "")
-    note = body.get("note", "")
+    amount_cents = body.amount_cents
+    plan_name = body.plan_name
+    duration_days = body.duration_days
+    payment_method = body.payment_method
+    note = body.note
 
     if not plan_name or duration_days <= 0:
         raise HTTPException(400, "请填写套餐名和有效续期天数")

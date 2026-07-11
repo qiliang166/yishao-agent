@@ -265,7 +265,7 @@ def create_user(req: dict, user=require_perm("member.manage")):
     password = req.get("password", "")
     display_name = req.get("display_name", "").strip()
     user_type = req.get("user_type", "member")
-    email = req.get("email", "").strip()
+    email = req.get("email", "").strip() or None
 
     if not username or not password or not display_name:
         raise HTTPException(400, "用户名、密码、显示名不能为空")
