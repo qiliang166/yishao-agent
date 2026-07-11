@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api")
 # ── Roles ──
 
 @router.get("/roles")
-def list_roles(user_type: str = None):
+def list_roles(user_type: str = None, user=require_perm("member.manage")):
     db = get_db()
     try:
         if user_type:
@@ -60,7 +60,7 @@ def create_role(req: dict, user=require_perm("role.manage")):
 
 
 @router.get("/roles/{role_id}")
-def get_role(role_id: str):
+def get_role(role_id: str, user=require_perm("member.manage")):
     db = get_db()
     try:
         row = db.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
@@ -180,7 +180,7 @@ def remove_role_permission(role_id: str, req: dict, user=require_perm("role.mana
 
 @router.get("/users")
 def list_users(user_type: str = None, status: str = None, search: str = None,
-               page: int = 1, page_size: int = 20):
+               page: int = 1, page_size: int = 20, user=require_perm("member.manage")):
     db = get_db()
     try:
         where = []
@@ -237,7 +237,7 @@ def list_users(user_type: str = None, status: str = None, search: str = None,
 
 
 @router.get("/users/{user_id}")
-def get_user(user_id: str):
+def get_user(user_id: str, user=require_perm("member.manage")):
     db = get_db()
     try:
         row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
@@ -273,6 +273,10 @@ def create_user(req: dict, user=require_perm("member.manage")):
         raise HTTPException(400, "密码至少8位")
     if user_type not in ("admin", "member"):
         raise HTTPException(400, "user_type 必须是 admin 或 member")
+    if user_type == "admin":
+        perms = set(user.get("permissions", []))
+        if "role.manage" not in perms:
+            raise HTTPException(403, "缺少权限: role.manage（创建管理员账号需要角色管理权限）")
 
     user_id = str(uuid.uuid4())
     password_hash = _hash_password(password)
@@ -412,7 +416,7 @@ def remove_user_role(user_id: str, req: dict, user=require_perm("role.manage")):
 
 
 @router.get("/users/{user_id}/projects")
-def get_user_projects(user_id: str):
+def get_user_projects(user_id: str, user=require_perm("member.manage")):
     db = get_db()
     try:
         rows = db.execute(

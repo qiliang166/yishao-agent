@@ -336,8 +336,11 @@ def check_ownership(resource_created_by: str | None, user: dict,
     """Raise 403 if user doesn't own the resource and lacks edit_all permission."""
     if resource_created_by is None:
         return  # historical data
-    if resource_created_by == user.get("user_id"):
+    uid = user.get("user_id", user.get("sub", ""))
+    if resource_created_by == uid and uid:
         return
+    if user.get("user_type", "admin") == "admin":
+        return  # admin (or legacy JWT without user_type) always passes ownership
     if edit_all_perm in user.get("permissions", []):
         return
     raise HTTPException(status_code=403, detail="只能操作自己创建的内容")
@@ -345,13 +348,14 @@ def check_ownership(resource_created_by: str | None, user: dict,
 
 def verify_project_access(project_id: str, user: dict) -> None:
     """Raise 403 if user (member) doesn't have access to this project."""
-    if user.get("user_type") == "admin":
-        return
+    if user.get("user_type", "admin") == "admin":
+        return  # admin (or legacy JWT without user_type) bypasses project access check
     db = get_db()
     try:
+        uid = user.get("user_id", user.get("sub", ""))
         row = db.execute(
             "SELECT 1 FROM member_projects WHERE user_id=? AND project_id=?",
-            (user["user_id"], project_id),
+            (uid, project_id),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=403, detail="无权访问此项目资源")
@@ -904,8 +908,11 @@ def _ppt_display_name(filename: str, prefix: str = "") -> str:
 
 
 @app.get("/api/projects/{project_id}/files")
-def api_project_files(project_id: str):
+def api_project_files(project_id: str, request: Request):
     """List all generated output files in the project's storage folder."""
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     path = resolve_project_storage(project_id, auto_create=False)
     files = []
 
@@ -1155,7 +1162,10 @@ def api_delete_project_file(project_id: str, filename: str):
 
 
 @app.get("/api/projects/{project_id}")
-def get_project(project_id: str):
+def get_project(project_id: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if user is not None:
+        verify_project_access(project_id, user)
     db = get_db()
     try:
         row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()

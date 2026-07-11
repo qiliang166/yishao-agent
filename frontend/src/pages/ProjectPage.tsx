@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import { api, Voice, TTSProvider, LLMProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import TeachingDocPanel from '../components/TeachingDocPanel'
@@ -108,6 +109,7 @@ const DOC_COLORS_S2: Record<string, string> = {
 
 function Stage2Controls({
   docType, label, steps, llmProviders,
+  readOnly,
   dataSource, onDataSourceChange,
   generating, prompt, skill, projectId,
   panelRef, setGenerating, onRefresh,
@@ -124,6 +126,7 @@ function Stage2Controls({
   onRefresh: () => Promise<void>
   logEntries?: { time: string; message: string }[]
   progress?: string
+  readOnly?: boolean
 }) {
   const tempKey = `_temp_s2_${docType}`
   const modal = useModal()
@@ -229,11 +232,13 @@ function Stage2Controls({
       <div style={{ marginBottom: 8 }}>
         <TemperatureInput value={temperature} onChange={v => { setTemperature(v); api.saveStep(projectId, tempKey, String(v)).then(onRefresh) }} id={`temp-s2-${docType}`} />
       </div>
+      {!readOnly && (
       <button className="btn btn-primary btn-sm w-full"
         disabled={!getSourceText(dataSource) || !model || generating}
         onClick={handleGenerate}>
         {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
       </button>
+      )}
       {generating && (
         <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
           onClick={() => { panelRef.current?.cancel(); setGenerating(false); modal.toast('生成已取消', 'success') }}>取消</button>
@@ -300,7 +305,7 @@ function audioBufferToWav(buffer: AudioBuffer): Blob {
 }
 
 // ── Project Output List (Stage 5) ──
-function ProjectOutputList({ projectId, projectName }: { projectId: string; projectName: string }) {
+function ProjectOutputList({ projectId, projectName, readOnly }: { projectId: string; projectName: string; readOnly?: boolean }) {
   const modal = useModal()
   const [files, setFiles] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -384,6 +389,7 @@ function ProjectOutputList({ projectId, projectName }: { projectId: string; proj
     else setExpanded(new Set(Object.keys(grouped)))
   }
   const deleteFile = async (f: any) => {
+    if (readOnly) return
     const key = fileKey(f)
     const ok = await modal.confirm(`确认删除「${f.display_name || f.filename}」？`)
     if (!ok) return
@@ -394,7 +400,7 @@ function ProjectOutputList({ projectId, projectName }: { projectId: string; proj
     } catch (e: any) { modal.toast('删除失败: ' + (e?.message || e), 'error') }
   }
   const batchDelete = async () => {
-    if (selected.size === 0) return
+    if (readOnly || selected.size === 0) return
     const keys = [...selected]
     const ok = await modal.confirm(`确认删除 ${keys.length} 个文件？`)
     if (!ok) return
@@ -457,7 +463,7 @@ function ProjectOutputList({ projectId, projectName }: { projectId: string; proj
               onClick={toggleSelectAll}>
               {selected.size === filtered.length && filtered.length > 0 ? '取消全选' : '全选'}
             </button>
-            {selected.size > 0 && (
+            {!readOnly && selected.size > 0 && (
               <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)' }}
                 onClick={batchDelete}>
                 删除选中 ({selected.size})
@@ -522,8 +528,10 @@ function ProjectOutputList({ projectId, projectName }: { projectId: string; proj
                               }
                             } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
                           }}>下载</button>
+                        {!readOnly && (
                         <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--warning)', flexShrink: 0 }}
                           onClick={() => deleteFile(f)}>✕</button>
+                        )}
                       </div>
                     )})}
                   </div>
@@ -546,6 +554,8 @@ export default function ProjectPage() {
   const modal = useModal()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const readOnly = user?.user_type === 'member'
 
   async function downloadFile(url: string, filename: string) {
     const token = localStorage.getItem('auth_token')
@@ -2151,13 +2161,14 @@ export default function ProjectPage() {
       <div className="proj-header-bar">
         <span className="proj-header-name">{project?.name || '加载中...'}</span>
         <span className={`pc-status ${project?.status || 'draft'}`}
-          style={{ cursor: 'pointer' }}
+          style={{ cursor: readOnly ? 'default' : 'pointer' }}
           onClick={async () => {
-            if (!id) return
+            if (!id || readOnly) return
             const newStatus = (project?.status === 'completed') ? 'draft' : 'completed'
             await api.updateProject(id, { status: newStatus })
             setProject(prev => prev ? { ...prev, status: newStatus } : prev)
           }}>{project?.status === 'completed' ? '已完成' : '草稿'}</span>
+        {!readOnly && (
         <button style={{
             fontSize: 12, padding: '4px 12px', borderRadius: 4, cursor: 'pointer',
             border: (project as any)?.is_locked ? '1px solid var(--warning)' : '1px solid var(--border)',
@@ -2172,6 +2183,10 @@ export default function ProjectPage() {
           }}>
           {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 锁定'}
         </button>
+        )}
+        {readOnly && (
+          <span style={{ fontSize: 11, color: 'var(--warning)', marginLeft: 8, fontWeight: 600 }}>只读模式</span>
+        )}
         {isGlobalGenerating && (
           <span style={{
             marginLeft: 12, fontSize: 11, color: 'var(--primary)',
@@ -2213,6 +2228,17 @@ export default function ProjectPage() {
           </span>
         )}
       </div>
+
+      {readOnly && (
+        <div style={{
+          background: 'linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%)',
+          border: '1px solid #f0ad4e', borderRadius: 6,
+          padding: '8px 16px', marginBottom: 8,
+          fontSize: 12, color: '#856404', textAlign: 'center',
+        }}>
+          只读模式 — 您只能查看和下载已生成的内容，无法创建、编辑或删除。
+        </div>
+      )}
 
       {/* ═══ Top Nav ═══ */}
       <div className="top-nav">
@@ -2316,10 +2342,12 @@ export default function ProjectPage() {
                       ))}
                     </select>
                   </div>
+                  {!readOnly && (
                   <button className="btn btn-primary btn-sm w-full"
                     onClick={handleVideoDownload} disabled={dlStatus === 'downloading'}>
                     ▶ 下载并识别
                   </button>
+                  )}
                   {dlStatus === 'downloading' && (
                     <div style={{ marginTop: 8 }}>
                       <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 4 }}>⏳ 正在下载... {dlPercent}%</div>
@@ -2343,11 +2371,13 @@ export default function ProjectPage() {
                     }} >
                     📺 播放校验
                   </button>
+                  {!readOnly && (
                   <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 8 }}
                     disabled={step1Generating['1a'] || !step1Model || !videoText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating['1a'] ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
+                  )}
                   {step1Generating['1a'] && (
                     <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
                       onClick={() => { abortRef.current['step1_1a']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -2446,11 +2476,13 @@ export default function ProjectPage() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
                     <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'raw_text')}`} disabled={!textInput.trim()}
                       onClick={() => { if (id && textInput.trim()) { saveStep('raw_text', textInput); flashSave() } }}>{getSaveBtnLabel(textInput, 'raw_text')}</button>
+                    {!readOnly && (
                     <button className="btn btn-primary btn-sm"
                       disabled={step1Generating['1b'] || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
                       {step1Generating['1b'] ? '⏳ 生成中...' : '⚙ 整理文档'}
                     </button>
+                    )}
                     {step1Generating['1b'] && (
                       <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff' }}
                         onClick={() => { abortRef.current['step1_1b']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -2503,6 +2535,7 @@ export default function ProjectPage() {
                   <div className="card-title">📄 文件提取<HelpButton location="project-stage-1c" /></div>
                   <div className="card-hint">支持 .txt / .md / .docx 文件，读取后内容在下方编辑</div>
                   <input type="file" accept=".txt,.md,.docx" style={{ fontSize: 10, marginBottom: 6 }}
+                    disabled={readOnly}
                     onChange={async e => {
                       const f = e.target.files?.[0]
                       if (!f) return
@@ -2514,11 +2547,13 @@ export default function ProjectPage() {
                         setSavedSteps(prev => ({ ...prev, raw_file: text }))
                       }
                     }} />
+                  {!readOnly && (
                   <button className="btn btn-primary btn-sm w-full"
                     disabled={step1Generating['1c'] || !step1Model || !fileText.trim()}
                     onClick={doGenerateStep1}>
                     {step1Generating['1c'] ? '⏳ 生成中...' : '⚙ 整理文档'}
                   </button>
+                  )}
                   {step1Generating['1c'] && (
                     <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
                       onClick={() => { abortRef.current['step1_1c']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -2656,11 +2691,13 @@ export default function ProjectPage() {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
                       }}>📥 保存到项目</button>
+                    {!readOnly && (
                     <button className="btn btn-outline btn-sm"
                       disabled={!!Object.values(step2Generating).some(Boolean) || (!steps.raw_video && !steps.raw_text && !steps.raw_file && !steps.step1_video && !steps.step1_text && !steps.step1_file && !steps.step2_sop && !steps.step2_daoshuyi && !steps.step2_yanxi)}
                       onClick={doBatchGenerate}>
                       {Object.values(step2Generating).some(Boolean) ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>
+                    )}
                     {Object.values(step2Generating).some(Boolean) && (
                       <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff' }}
                         onClick={() => { abortRef.current['step2_batch']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -2684,7 +2721,7 @@ export default function ProjectPage() {
             <div className="panel-left">
               <div className="card">
                 <div style={{ display: sub === '2a' ? 'contents' : 'none' }}>
-                  <Stage2Controls docType="sop" label="标准文档"
+                  <Stage2Controls docType="sop" label="标准文档" readOnly={readOnly}
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['sop'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('sop', v)}
                     generating={!!step2Generating['2a']}
@@ -2705,7 +2742,7 @@ export default function ProjectPage() {
                     }} />
                 </div>
                 <div style={{ display: sub === '2b' ? 'contents' : 'none' }}>
-                  <Stage2Controls docType="dao" label="分析文档"
+                  <Stage2Controls docType="dao" label="分析文档" readOnly={readOnly}
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['dao'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('dao', v)}
                     generating={!!step2Generating['2b']}
@@ -2726,7 +2763,7 @@ export default function ProjectPage() {
                     }} />
                 </div>
                 <div style={{ display: sub === '2c' ? 'contents' : 'none' }}>
-                  <Stage2Controls docType="yanxi" label="综合文档"
+                  <Stage2Controls docType="yanxi" label="综合文档" readOnly={readOnly}
                     steps={steps} llmProviders={llmProviders}
                     dataSource={s2DataSources['yanxi'] || 'video'} onDataSourceChange={(v) => handleS2DataSourceChange('yanxi', v)}
                     generating={!!step2Generating['2c']}
@@ -2857,6 +2894,7 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3SopTempOpen(true)}>⚙温度设置</button>
+                {!readOnly && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -2879,6 +2917,7 @@ export default function ProjectPage() {
                     {pptGenerating['step3_sop_doc'] ? '⏳ 合成中...' : '📄 合成课件'}
                   </button>
                 </div>
+                )}
                 {(pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']) && (
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
                     onClick={() => handleCancelGenerate('step3_sop_doc')}>取消</button>
@@ -3221,6 +3260,7 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3DaoTempOpen(true)}>⚙温度设置</button>
+                {!readOnly && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -3237,6 +3277,7 @@ export default function ProjectPage() {
                     {pptGenerating['step3_dao_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
+                )}
                 {(pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']) && (
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
                     onClick={() => handleCancelGenerate('step3_dao_ppt')}>取消</button>
@@ -3579,6 +3620,7 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3YanxiTempOpen(true)}>⚙温度设置</button>
+                {!readOnly && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
                     style={{ flex: 1 }}
@@ -3595,6 +3637,7 @@ export default function ProjectPage() {
                     {pptGenerating['step3_yan_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
+                )}
                 {(pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']) && (
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)', width: '100%', marginTop: 4 }}
                     onClick={() => handleCancelGenerate('step3_yan_ppt')}>取消</button>
@@ -3952,6 +3995,7 @@ export default function ProjectPage() {
                           )) : null
                         ))}
                       </select>
+                      {!readOnly && (
                       <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 10 }}
                         disabled={isGenerating}
                         onClick={async () => {
@@ -3974,6 +4018,7 @@ export default function ProjectPage() {
                         }}>
                         {isGenerating ? '⏳ 生成中...' : '📢 生成演讲稿'}
                       </button>
+                      )}
                       {isGenerating && (
                         <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
                           onClick={() => { abortRef.current[t.stepKey]?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
@@ -4302,6 +4347,7 @@ export default function ProjectPage() {
                     )}
                   </div>
 
+                  {!readOnly && (
                   <button className="btn btn-primary btn-sm" style={{ width: '100%', fontSize: 11 }}
                     onClick={() => {
                       setNameInput(cloneName)
@@ -4309,6 +4355,7 @@ export default function ProjectPage() {
                     }} disabled={cloning || (cloneMode === 'clone' && !cloneFile)}>
                     {cloning ? '处理中...' : (cloneMode === 'design' ? '开始设计' : '开始克隆')}
                   </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -4382,10 +4429,12 @@ export default function ProjectPage() {
                             style={{ color: 'var(--primary)' }}
                             onClick={doSplit}>✂ 分割</button>
                         </div>
+                        {!readOnly && (
                         <button className="btn btn-primary btn-sm w-full"
                           disabled={ttsGenerating} onClick={doTTS}>
                           {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
                         </button>
+                        )}
                       </>
                     ) : (
                       <>
@@ -4680,7 +4729,7 @@ export default function ProjectPage() {
 
         {/* ====== STAGE 5: 输出列表 ====== */}
         {stage === 5 && (
-          <ProjectOutputList projectId={id!} projectName={project?.name || '项目'} />
+          <ProjectOutputList projectId={id!} projectName={project?.name || '项目'} readOnly={readOnly} />
         )}
       </div>
 
