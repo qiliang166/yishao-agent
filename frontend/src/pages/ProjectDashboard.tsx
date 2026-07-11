@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { api, Project } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import { usePermission } from '../hooks/usePermission'
 import HelpButton from '../components/HelpButton'
 
 const PAGE_SIZE = 20
@@ -9,6 +10,11 @@ const PAGE_SIZE = 20
 export default function ProjectDashboard() {
   const { wid } = useParams<{ wid: string }>()
   const modal = useModal()
+  const canCreate = usePermission('project.create')
+  const canEditOwn = usePermission('project.edit_own')
+  const canDeleteOwn = usePermission('project.delete_own')
+  const canDownload = usePermission('stage5.download')
+  const canView4 = usePermission('stage4.view')
   const [workspace, setWorkspace] = useState<any>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -326,7 +332,7 @@ export default function ProjectDashboard() {
           style={{ flex: 1, maxWidth: 300 }}
           value={search} onChange={e => setSearch(e.target.value)} />
         <HelpButton location="dashboard" />
-        <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建明细</button>
+        {canCreate && <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建明细</button>}
 
       </div>
 
@@ -345,38 +351,44 @@ export default function ProjectDashboard() {
               </span>
               {selected.size > 0 && (
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                  <button className="btn btn-outline btn-sm" onClick={async () => {
-                    const ids = [...selected]
-                    await Promise.all(ids.map(id => api.updateProject(id, { status: 'completed' })))
-                    loadProjects(page)
-                    setSelected(new Set())
-                    modal.toast(`已标记 ${ids.length} 条明细为已完成`, 'success')
-                  }}>批量完成</button>
-                  <button className="btn btn-outline btn-sm" onClick={async () => {
-                    const ids = [...selected]
-                    await Promise.all(ids.map(id => api.updateProject(id, { status: 'draft' })))
-                    loadProjects(page)
-                    setSelected(new Set())
-                    modal.toast(`已标记 ${ids.length} 条明细为草稿`, 'success')
-                  }}>批量草稿</button>
-                  <button className="btn btn-outline btn-sm" onClick={async () => {
-                    const ids = [...selected]
-                    await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 1 })))
-                    loadProjects(page)
-                    setSelected(new Set())
-                    modal.toast(`已锁定 ${ids.length} 条明细`, 'success')
-                  }}>批量锁定</button>
-                  <button className="btn btn-outline btn-sm" onClick={async () => {
-                    const ids = [...selected]
-                    await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 0 })))
-                    loadProjects(page)
-                    setSelected(new Set())
-                    modal.toast(`已解锁 ${ids.length} 条明细`, 'success')
-                  }}>批量解锁</button>
-                  <button className="btn btn-sm" onClick={batchDelete}
-                    style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)' }}>
-                    删除选中({selected.size})
-                  </button>
+                  {canEditOwn && (
+                    <>
+                      <button className="btn btn-outline btn-sm" onClick={async () => {
+                        const ids = [...selected]
+                        await Promise.all(ids.map(id => api.updateProject(id, { status: 'completed' })))
+                        loadProjects(page)
+                        setSelected(new Set())
+                        modal.toast(`已标记 ${ids.length} 条明细为已完成`, 'success')
+                      }}>批量完成</button>
+                      <button className="btn btn-outline btn-sm" onClick={async () => {
+                        const ids = [...selected]
+                        await Promise.all(ids.map(id => api.updateProject(id, { status: 'draft' })))
+                        loadProjects(page)
+                        setSelected(new Set())
+                        modal.toast(`已标记 ${ids.length} 条明细为草稿`, 'success')
+                      }}>批量草稿</button>
+                      <button className="btn btn-outline btn-sm" onClick={async () => {
+                        const ids = [...selected]
+                        await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 1 })))
+                        loadProjects(page)
+                        setSelected(new Set())
+                        modal.toast(`已锁定 ${ids.length} 条明细`, 'success')
+                      }}>批量锁定</button>
+                      <button className="btn btn-outline btn-sm" onClick={async () => {
+                        const ids = [...selected]
+                        await Promise.all(ids.map(id => api.updateProject(id, { is_locked: 0 })))
+                        loadProjects(page)
+                        setSelected(new Set())
+                        modal.toast(`已解锁 ${ids.length} 条明细`, 'success')
+                      }}>批量解锁</button>
+                    </>
+                  )}
+                  {canDeleteOwn && (
+                    <button className="btn btn-sm" onClick={batchDelete}
+                      style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)' }}>
+                      删除选中({selected.size})
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -419,30 +431,38 @@ export default function ProjectDashboard() {
                       style={{ color: 'var(--accent)', fontSize: 11 }}
                       title="查看输出文件">📦 输出</button>
                   )}
-                  {expandedProject === p.id && selectedFiles.size > 0 && (
+                  {expandedProject === p.id && selectedFiles.size > 0 && canDownload && (
                     <button className="btn btn-ghost btn-sm"
                       onClick={e => { e.stopPropagation(); downloadSelectedFiles() }}
                       style={{ color: 'var(--accent)', fontSize: 11 }}
                       title="下载选中文件">📥 下载选中 ({selectedFiles.size})</button>
                   )}
-                  <button className="btn btn-ghost btn-sm"
-                    onClick={e => { e.stopPropagation(); copyProject(p.id, p.name) }}
-                    style={{ color: 'var(--accent)', fontSize: 11 }}
-                    title="复制明细及其配置">复制</button>
-                  <span style={{
-                      cursor: 'pointer', fontSize: 11, marginLeft: 4,
-                      color: p.is_locked ? 'var(--warning)' : 'var(--text-secondary)',
-                      fontWeight: p.is_locked ? 500 : 400,
-                    }}
-                    onClick={async e => {
-                      e.stopPropagation()
-                      const locked = p.is_locked ? 0 : 1
-                      await api.updateProject(p.id, { is_locked: locked })
-                      loadProjects(page)
-                    }} title={p.is_locked ? '点击解锁' : '点击锁定'}>
-                    {p.is_locked ? '已锁定' : '锁定'}
-                  </span>
-                  {!p.is_locked && (
+                  {canCreate && (
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={e => { e.stopPropagation(); copyProject(p.id, p.name) }}
+                      style={{ color: 'var(--accent)', fontSize: 11 }}
+                      title="复制明细及其配置">复制</button>
+                  )}
+                  {canEditOwn ? (
+                    <span style={{
+                        cursor: 'pointer', fontSize: 11, marginLeft: 4,
+                        color: p.is_locked ? 'var(--warning)' : 'var(--text-secondary)',
+                        fontWeight: p.is_locked ? 500 : 400,
+                      }}
+                      onClick={async e => {
+                        e.stopPropagation()
+                        const locked = p.is_locked ? 0 : 1
+                        await api.updateProject(p.id, { is_locked: locked })
+                        loadProjects(page)
+                      }} title={p.is_locked ? '点击解锁' : '点击锁定'}>
+                      {p.is_locked ? '已锁定' : '锁定'}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, marginLeft: 4, color: p.is_locked ? 'var(--warning)' : 'var(--text-secondary)' }}>
+                      {p.is_locked ? '已锁定' : '—'}
+                    </span>
+                  )}
+                  {!p.is_locked && canDeleteOwn && (
                     <button className="btn btn-ghost btn-sm" onClick={e => { e.stopPropagation(); deleteProject(p.id, p.name) }}
                       style={{ color: 'var(--warning)' }}>删除</button>
                   )}
@@ -478,10 +498,12 @@ export default function ProjectDashboard() {
                         {selectedFiles.size > 0 && (
                           <>
                             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>已选 {selectedFiles.size} 项</span>
-                            <button className="btn btn-sm" onClick={batchDeleteFiles}
-                              style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)', fontSize: 11, padding: '3px 10px' }}>
-                              删除选中
-                            </button>
+                            {canEditOwn && (
+                              <button className="btn btn-sm" onClick={batchDeleteFiles}
+                                style={{ background: 'var(--warning)', color: '#fff', borderColor: 'var(--warning)', fontSize: 11, padding: '3px 10px' }}>
+                                删除选中
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -541,7 +563,7 @@ export default function ProjectDashboard() {
                                     <span style={{ fontSize: 10, color: 'var(--text-secondary)', minWidth: 38, textAlign: 'right' }}>
                                       {formatSize(f.size)}
                                     </span>
-                                    {isAudio && f.audio_url && (() => {
+                                    {isAudio && f.audio_url && canView4 && (() => {
                                       const url = (f.audio_url as string).startsWith('/') ? f.audio_url : '/' + (f.audio_url as string).replace(/^\//, '')
                                       const isPlaying = playingAudio === url
                                       return (
@@ -553,29 +575,33 @@ export default function ProjectDashboard() {
                                       </button>
                                       )
                                     })()}
-                                    <button className="btn btn-ghost btn-sm"
-                                      onClick={async () => {
-                                        try {
-                                          const dlName = f.display_name || f.filename
-                                          if (f.download_url) {
-                                            await api.downloadWithName(f.download_url, dlName)
-                                          } else {
-                                            await api.downloadWithName(
-                                              `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`,
-                                              dlName
-                                            )
-                                          }
-                                        } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
-                                      }}
-                                      style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent)' }}
-                                      title="下载">⬇</button>
-                                    <button className="btn btn-ghost btn-sm"
-                                      onClick={async () => {
-                                        const ok = await modal.confirm(`确认删除「${f.display_name || f.filename}」？`)
-                                        if (ok) deleteFile(expandedProject, f)
-                                      }}
-                                      style={{ fontSize: 10, padding: '2px 6px', color: 'var(--warning)' }}
-                                      title="删除">✕</button>
+                                    {canDownload && (
+                                      <button className="btn btn-ghost btn-sm"
+                                        onClick={async () => {
+                                          try {
+                                            const dlName = f.display_name || f.filename
+                                            if (f.download_url) {
+                                              await api.downloadWithName(f.download_url, dlName)
+                                            } else {
+                                              await api.downloadWithName(
+                                                `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`,
+                                                dlName
+                                              )
+                                            }
+                                          } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
+                                        }}
+                                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent)' }}
+                                        title="下载">⬇</button>
+                                    )}
+                                    {canEditOwn && (
+                                      <button className="btn btn-ghost btn-sm"
+                                        onClick={async () => {
+                                          const ok = await modal.confirm(`确认删除「${f.display_name || f.filename}」？`)
+                                          if (ok) deleteFile(expandedProject, f)
+                                        }}
+                                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--warning)' }}
+                                        title="删除">✕</button>
+                                    )}
                                   </div>
                                 )})}
                               </div>

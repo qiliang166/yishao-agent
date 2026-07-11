@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import { usePermission } from '../hooks/usePermission'
 import HelpButton from '../components/HelpButton'
 import Col3StructureEditor from '../components/Col3StructureEditor'
 
@@ -122,6 +123,7 @@ function mergeRules(typographySpec: string, outlinePrompt: string, cognitivePrin
 
 export default function ProjSettingsPage() {
   const modal = useModal()
+  const canSaveProject = usePermission('config.project')
   const [mainTab, setMainTab] = useState<MainTab>('models')
   const [seedSubTab, setSeedSubTab] = useState<SeedSubTab>('columns')
 
@@ -1032,7 +1034,7 @@ export default function ProjSettingsPage() {
             <ModelTags models={RECOMMENDED_MODELS.llm} onAdd={m => setPvModels(prev => appendModel(prev, m))} />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowProviderForm(false)}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={saveProvider} disabled={pvSaving}>{pvSaving ? '保存中...' : '保存'}</button>
+              {canSaveProject && <button className="btn btn-primary btn-sm" onClick={saveProvider} disabled={pvSaving}>{pvSaving ? '保存中...' : '保存'}</button>}
             </div>
           </div>
         </div>
@@ -1053,7 +1055,7 @@ export default function ProjSettingsPage() {
             </label>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowTtsProviderForm(false)}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={saveTtsProvider} disabled={tpvSaving}>{tpvSaving ? '保存中...' : '保存'}</button>
+              {canSaveProject && <button className="btn btn-primary btn-sm" onClick={saveTtsProvider} disabled={tpvSaving}>{tpvSaving ? '保存中...' : '保存'}</button>}
             </div>
           </div>
         </div>
@@ -1074,7 +1076,7 @@ export default function ProjSettingsPage() {
             </label>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowAsrProviderForm(false)}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={saveAsrProvider} disabled={apvSaving}>{apvSaving ? '保存中...' : '保存'}</button>
+              {canSaveProject && <button className="btn btn-primary btn-sm" onClick={saveAsrProvider} disabled={apvSaving}>{apvSaving ? '保存中...' : '保存'}</button>}
             </div>
           </div>
         </div>
@@ -1095,7 +1097,7 @@ export default function ProjSettingsPage() {
             </label>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setShowImageProviderForm(false)}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={saveImageProvider} disabled={ipvSaving}>{ipvSaving ? '保存中...' : '保存'}</button>
+              {canSaveProject && <button className="btn btn-primary btn-sm" onClick={saveImageProvider} disabled={ipvSaving}>{ipvSaving ? '保存中...' : '保存'}</button>}
             </div>
           </div>
         </div>

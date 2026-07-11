@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api, Workspace } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import { usePermission } from '../hooks/usePermission'
 import HelpButton from '../components/HelpButton'
 import SetupWizard from '../components/SetupWizard'
 
@@ -9,6 +10,9 @@ const PAGE_SIZE = 16
 
 function HomePage() {
   const modal = useModal()
+  const canCreate = usePermission('project.create')
+  const canEditOwn = usePermission('project.edit_own')
+  const canDeleteOwn = usePermission('project.delete_own')
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -94,7 +98,9 @@ function HomePage() {
             style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', fontWeight: 600 }}>
             🚀 快速上手
           </button>
-          <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建项目</button>
+          {canCreate && (
+            <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建项目</button>
+          )}
         </div>
       </div>
 
@@ -107,7 +113,7 @@ function HomePage() {
           <div style={{ fontSize: 12, marginBottom: 16 }}>点击「快速上手」跟随向导完成第一个培训项目</div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
             <button className="btn btn-primary" onClick={() => setShowWizard(true)}>快速上手</button>
-            <button className="btn btn-ghost" onClick={openCreateDialog}>+ 新建项目</button>
+            {canCreate && <button className="btn btn-ghost" onClick={openCreateDialog}>+ 新建项目</button>}
           </div>
         </div>
       ) : (
@@ -163,8 +169,10 @@ function HomePage() {
                   onClick={e => e.stopPropagation()}>
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
                     onClick={() => navigate(`/workspace/${w.id}`)}>进入</button>
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--warning)' }}
-                    onClick={() => deleteWorkspace(w.id, w.name)}>删除</button>
+                  {canDeleteOwn && (
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--warning)' }}
+                      onClick={() => deleteWorkspace(w.id, w.name)}>删除</button>
+                  )}
                 </div>
               </div>
               ))}

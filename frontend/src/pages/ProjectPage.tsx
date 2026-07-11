@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { usePermission } from '../hooks/usePermission'
 import { api, Voice, TTSProvider, LLMProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import TeachingDocPanel from '../components/TeachingDocPanel'
@@ -556,6 +557,13 @@ export default function ProjectPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const readOnly = user?.user_type === 'member'
+  const canViewStage1 = usePermission('stage1.view')
+  const canViewStage2 = usePermission('stage2.view')
+  const canViewStage3 = usePermission('stage3.view')
+  const canViewStage4 = usePermission('stage4.view')
+  const canViewStage5 = usePermission('stage5.view')
+  const stageViewPerms: Record<number, boolean> = { 1: canViewStage1, 2: canViewStage2, 3: canViewStage3, 4: canViewStage4, 5: canViewStage5 }
+  const visibleStages = STAGES.filter(s => stageViewPerms[s.id] !== false)
 
   async function downloadFile(url: string, filename: string) {
     const token = localStorage.getItem('auth_token')
@@ -1269,10 +1277,18 @@ export default function ProjectPage() {
 
   // ── Stage nav ──
   const switchStage = (s: StageId) => {
+    if (!stageViewPerms[s]) return
     setStage(s)
     const stageDef = STAGES.find(x => x.id === s)
     if (stageDef && stageDef.subs.length > 0) setSub(stageDef.subs[0].id)
   }
+
+  // Auto-redirect to first visible stage if current stage has no view permission
+  useEffect(() => {
+    if (!stageViewPerms[stage] && visibleStages.length > 0) {
+      switchStage(visibleStages[0].id)
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Video download ──
   const handleVideoDownload = async () => {
@@ -2242,7 +2258,7 @@ export default function ProjectPage() {
 
       {/* ═══ Top Nav ═══ */}
       <div className="top-nav">
-        {STAGES.filter(s => s.id <= 3).map((s, i) => (
+        {visibleStages.filter(s => s.id <= 3).map((s, i) => (
           <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {i > 0 && <span className="tn-arrow">→</span>}
             <div className={`tn-item${stage === s.id ? ' active' : ''}`}
@@ -2252,8 +2268,10 @@ export default function ProjectPage() {
             </div>
           </span>
         ))}
-        <span style={{ borderLeft: '1px solid var(--border)', height: 20, margin: '0 6px', alignSelf: 'center' }} />
-        {STAGES.filter(s => s.id >= 4).map((s, i) => (
+        {visibleStages.some(s => s.id >= 4) && (
+          <span style={{ borderLeft: '1px solid var(--border)', height: 20, margin: '0 6px', alignSelf: 'center' }} />
+        )}
+        {visibleStages.filter(s => s.id >= 4).map((s, i) => (
           <span key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {i > 0 && <span className="tn-arrow">→</span>}
             <div className={`tn-item${stage === s.id ? ' active' : ''}`}
@@ -2414,7 +2432,7 @@ export default function ProjectPage() {
                       </div>
                     )}
                     <textarea className="form-textarea" style={{ flex: 1, minHeight: 150 }}
-                      value={videoText}
+                      value={videoText} readOnly={readOnly}
                       onChange={e => setVideoText(e.target.value)}
                       placeholder="视频字幕将显示在此..." />
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
@@ -2471,7 +2489,7 @@ export default function ProjectPage() {
                   <div className="card-hint">直接粘贴或输入内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
                     placeholder="在此粘贴或输入内容..."
-                    value={textInput} onChange={e => setTextInput(e.target.value)} />
+                    value={textInput} readOnly={readOnly} onChange={e => setTextInput(e.target.value)} />
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
                     <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'raw_text')}`} disabled={!textInput.trim()}
@@ -2563,7 +2581,7 @@ export default function ProjectPage() {
                   <div className="card-title">📝 文件原始内容</div>
                   <div className="card-hint">文件读取的原始内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-                    value={fileText}
+                    value={fileText} readOnly={readOnly}
                     onChange={e => setFileText(e.target.value)}
                     placeholder="文件内容将显示在此..." />
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
@@ -2655,7 +2673,7 @@ export default function ProjectPage() {
                 </div>
                 {s1View === 'edit' ? (
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
-                    value={s1Content}
+                    value={s1Content} readOnly={readOnly}
                     onChange={e => { setSteps(prev => ({ ...prev, [step1Key()]: e.target.value })) }}
                     placeholder="点击左侧「生成」按钮，AI 整理后的标准文档将显示在此..." />
                 ) : (
@@ -3008,7 +3026,7 @@ export default function ProjectPage() {
                           outline: 'none', padding: 8, borderRadius: 4,
                         }}
                         value={pptOutline[step3Key()].outline_text}
-                        readOnly={!pptEditMode[step3Key()]}
+                        readOnly={readOnly || !pptEditMode[step3Key()]}
                         onChange={(e) => {
                           const md = e.target.value
                           setPptOutline(prev => ({
@@ -3368,7 +3386,7 @@ export default function ProjectPage() {
                           outline: 'none', padding: 8, borderRadius: 4,
                         }}
                         value={pptOutline[step3Key()].outline_text}
-                        readOnly={!pptEditMode[step3Key()]}
+                        readOnly={readOnly || !pptEditMode[step3Key()]}
                         onChange={(e) => {
                           const md = e.target.value
                           setPptOutline(prev => ({
@@ -3728,7 +3746,7 @@ export default function ProjectPage() {
                           outline: 'none', padding: 8, borderRadius: 4,
                         }}
                         value={pptOutline[step3Key()].outline_text}
-                        readOnly={!pptEditMode[step3Key()]}
+                        readOnly={readOnly || !pptEditMode[step3Key()]}
                         onChange={(e) => {
                           const md = e.target.value
                           setPptOutline(prev => ({
@@ -4030,7 +4048,7 @@ export default function ProjectPage() {
                         return (
                           <div style={{ marginTop: 10 }}>
                             <div className="form-label">来源文档（可编辑）</div>
-                            <textarea className="form-textarea"
+                            <textarea className="form-textarea" readOnly={readOnly}
                               style={{ width: '100%', minHeight: 320, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, resize: 'vertical' }}
                               value={editVal}
                               onChange={e => setS4SourceEdits(prev => ({ ...prev, [editKey]: e.target.value }))}
@@ -4092,7 +4110,7 @@ export default function ProjectPage() {
                       const activeTab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
                       const content = steps[activeTab?.stepKey || 'step4_speech_doc'] || ''
                       return (
-                        <textarea className="form-textarea"
+                        <textarea className="form-textarea" readOnly={readOnly}
                           style={{ flex: 1, width: '100%', minHeight: 0, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, border: '1px solid var(--border)', borderRadius: 4, padding: 8, background: 'var(--bg)', color: 'var(--text-primary)', resize: 'none', outline: 'none' }}
                           value={content}
                           placeholder="点击「生成演讲稿」生成..."
@@ -4210,7 +4228,7 @@ export default function ProjectPage() {
                       <div style={{ marginBottom: 8 }}>
                         <label style={{ fontSize: 10, fontWeight: 500, color: 'var(--text-secondary)', display: 'block', marginBottom: 3 }}>声音描述</label>
                         <textarea className="form-textarea" style={{ width: '100%', minHeight: 60, resize: 'vertical', fontSize: 11 }}
-                          value={voicePrompt} onChange={e => setVoicePrompt(e.target.value)}
+                          value={voicePrompt} readOnly={readOnly} onChange={e => setVoicePrompt(e.target.value)}
                           placeholder="例如: 沉稳的中年男性，音色低沉有磁性" />
                       </div>
                       <div style={{ marginBottom: 8 }}>
@@ -4400,7 +4418,7 @@ export default function ProjectPage() {
                             <option value="split">文案分割 ({splitSegments.length}段)</option>
                           )}
                         </select>
-                        <textarea className="form-textarea"
+                        <textarea className="form-textarea" readOnly={readOnly}
                           style={{ width: '100%', flex: 1, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, resize: 'vertical' }}
                           value={ttsInputText}
                           onChange={e => setTtsInputText(e.target.value)}
@@ -4466,7 +4484,7 @@ export default function ProjectPage() {
                                         段{seg.index}
                                         {seg.audioUrl && <span style={{ color: 'var(--success)', marginLeft: 6, fontSize: 10 }}>✅</span>}
                                       </div>
-                                      <textarea
+                                      <textarea readOnly={readOnly}
                                         style={{ color: 'var(--text-secondary)', fontSize: 10, lineHeight: 1.4, width: '100%', minHeight: 36, height: 36, resize: 'vertical', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 3, padding: '2px 4px', fontFamily: 'inherit' }}
                                         value={seg.text}
                                         onClick={e => e.stopPropagation()}
@@ -4792,7 +4810,7 @@ export default function ProjectPage() {
               </div>
               <div style={{ flex: 2, display: 'flex', flexDirection: 'column' }}>
                 <textarea className="form-textarea" style={{ flex: 1, minHeight: 360 }}
-                  value={videoText}
+                  value={videoText} readOnly={readOnly}
                   onChange={e => setVideoText(e.target.value)} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
                   <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>

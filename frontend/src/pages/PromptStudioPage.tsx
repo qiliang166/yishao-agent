@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, LLMProvider } from '../services/api'
+import { usePermission } from '../hooks/usePermission'
 import Col3StructureEditor from '../components/Col3StructureEditor'
 
 interface GeneratedConfigs {
@@ -33,6 +34,7 @@ const SECTION_LABELS: Record<string, string> = {
 const DRAFT_KEY = 'prompt_studio_draft'
 
 export default function PromptStudioPage() {
+  const canManagePrompt = usePermission('prompt.manage')
   // ── Top tab ──
   const [topTab, setTopTab] = useState<'generate' | 'saves'>('generate')
 
@@ -674,14 +676,16 @@ export default function PromptStudioPage() {
                 onKeyDown={e => e.key === 'Enter' && handleCreateWorkspace()}
                 placeholder="工作区名称..."
               />
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={handleCreateWorkspace}
-                disabled={creatingWs || !newWsName.trim()}
-                style={{ flex: 'none' }}
-              >
-                {creatingWs ? '...' : '创建'}
-              </button>
+              {canManagePrompt && (
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleCreateWorkspace}
+                  disabled={creatingWs || !newWsName.trim()}
+                  style={{ flex: 'none' }}
+                >
+                  {creatingWs ? '...' : '创建'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -729,14 +733,16 @@ export default function PromptStudioPage() {
                   rows={5}
                   style={{ fontSize: 10, fontFamily: 'monospace' }}
                 />
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={handleSaveTemplates}
-                  disabled={templateSaving}
-                  style={{ marginTop: 6, width: '100%' }}
-                >
-                  {templateSaving ? '保存中...' : '保存模板'}
-                </button>
+                {canManagePrompt && (
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={handleSaveTemplates}
+                    disabled={templateSaving}
+                    style={{ marginTop: 6, width: '100%' }}
+                  >
+                    {templateSaving ? '保存中...' : '保存模板'}
+                  </button>
+                )}
                 <div className="form-hint" style={{ marginTop: 4 }}>
                   占位符 {'{{'}industry_topic{'}}'} {'{{'}purpose_description{'}}'} {'{{'}ref_summary{'}}'} {'{{'}ref_json{'}}'} 将在生成时自动替换。
                 </div>
@@ -825,21 +831,25 @@ export default function PromptStudioPage() {
                 placeholder="新建..."
                 style={{ width: 100 }}
               />
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={handleCreateWorkspace}
-                disabled={creatingWs || !newWsName.trim()}
-                style={{ flex: 'none' }}
-              >
-                + 新建
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleApply}
-                disabled={applying || !applyTarget}
-              >
-                {applying ? '应用中...' : '应用到工作区'}
-              </button>
+              {canManagePrompt && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={handleCreateWorkspace}
+                  disabled={creatingWs || !newWsName.trim()}
+                  style={{ flex: 'none' }}
+                >
+                  + 新建
+                </button>
+              )}
+              {canManagePrompt && (
+                <button
+                  className="btn btn-primary"
+                  onClick={handleApply}
+                  disabled={applying || !applyTarget}
+                >
+                  {applying ? '应用中...' : '应用到工作区'}
+                </button>
+              )}
               <div style={{ flex: 1 }} />
               <input
                 type="text"
@@ -849,11 +859,15 @@ export default function PromptStudioPage() {
                 placeholder="保存名称..."
                 style={{ width: 160 }}
               />
-              <button className="btn btn-ghost" onClick={handleSaveToList} disabled={saving}>
-                {saving ? '保存中...' : '保存到列表'}
-              </button>
+              {canManagePrompt && (
+                <button className="btn btn-ghost" onClick={handleSaveToList} disabled={saving}>
+                  {saving ? '保存中...' : '保存到列表'}
+                </button>
+              )}
               <button className="btn btn-ghost" onClick={handleExport}>导出 JSON</button>
-              <button className="btn btn-ghost" onClick={handleImport}>导入 JSON</button>
+              {canManagePrompt && (
+                <button className="btn btn-ghost" onClick={handleImport}>导入 JSON</button>
+              )}
             </div>
           </div>
         )}
@@ -919,13 +933,15 @@ export default function PromptStudioPage() {
                 >
                   {saveApplying ? '...' : '应用'}
                 </button>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: 11, padding: '2px 8px', color: 'var(--danger)' }}
-                  onClick={(e) => { e.stopPropagation(); handleDeleteSave(s.id) }}
-                >
-                  删除
-                </button>
+                {canManagePrompt && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: 11, padding: '2px 8px', color: 'var(--danger)' }}
+                    onClick={(e) => { e.stopPropagation(); handleDeleteSave(s.id) }}
+                  >
+                    删除
+                  </button>
+                )}
               </div>
             </div>
           ))}

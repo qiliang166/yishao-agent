@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api, StyleItem } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import { usePermission } from '../hooks/usePermission'
 import HelpButton from '../components/HelpButton'
 
 const VI_LABELS: Record<string, string> = {
@@ -1675,6 +1676,7 @@ ${allItems.map((it,i)=>`
 // ---------- component ----------
 
 function TemplateManager() {
+  const canManageTemplate = usePermission('template.manage')
   const STYLE_GROUPS = ['professional', 'creative', 'tech', 'thematic'] as const
   const GROUP_META: Record<string, { label: string; desc: string; apiGroup: string }> = {
     professional: { label: '商务专业', desc: '干净、权威、可信赖', apiGroup: 'Professional' },
@@ -2272,11 +2274,13 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
 
                           {/* Action buttons */}
                           <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                            <button
-                              className="btn btn-xs"
-                              style={{ flex: 1, fontSize: 10, padding: '4px 0' }}
-                              onClick={(e) => { e.stopPropagation(); openEditor(style.id, style.name, 'vi') }}
-                            >编辑VI</button>
+                            {canManageTemplate && (
+                              <button
+                                className="btn btn-xs"
+                                style={{ flex: 1, fontSize: 10, padding: '4px 0' }}
+                                onClick={(e) => { e.stopPropagation(); openEditor(style.id, style.name, 'vi') }}
+                              >编辑VI</button>
+                            )}
                             <button
                               className="btn btn-xs"
                               style={{ flex: 1, fontSize: 10, padding: '4px 0', opacity: 0.8 }}
@@ -2298,24 +2302,35 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                                 window.open(URL.createObjectURL(blob), '_blank')
                               }}
                             >预览VI</button>
-                            <button
-                              className="btn btn-xs"
-                              style={{ flex: 1, fontSize: 10, padding: '4px 0', opacity: 0.75 }}
-                              onClick={(e) => { e.stopPropagation(); openEditor(style.id, style.name, 'prompt') }}
-                            >提示词</button>
+                            {canManageTemplate && (
+                              <button
+                                className="btn btn-xs"
+                                style={{ flex: 1, fontSize: 10, padding: '4px 0', opacity: 0.75 }}
+                                onClick={(e) => { e.stopPropagation(); openEditor(style.id, style.name, 'prompt') }}
+                              >提示词</button>
+                            )}
                           </div>
                           <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
                             <span style={{ fontSize: 9, color: 'var(--text-muted)', flex: 1 }}>在模板选择中显示</span>
-                            <button
-                              className="btn btn-xs"
-                              style={{
+                            {canManageTemplate ? (
+                              <button
+                                className="btn btn-xs"
+                                style={{
+                                  fontSize: 9, padding: '2px 8px',
+                                  background: enabledMap[`style-${style.id}`] ? 'var(--primary)' : '#ccc',
+                                  color: enabledMap[`style-${style.id}`] ? '#fff' : '#666',
+                                  border: 'none', borderRadius: 3, cursor: 'pointer',
+                                }}
+                                onClick={(e) => { e.stopPropagation(); handleToggleEnabled(style.id) }}
+                              >{enabledMap[`style-${style.id}`] ? '已启用' : '已禁用'}</button>
+                            ) : (
+                              <span style={{
                                 fontSize: 9, padding: '2px 8px',
                                 background: enabledMap[`style-${style.id}`] ? 'var(--primary)' : '#ccc',
                                 color: enabledMap[`style-${style.id}`] ? '#fff' : '#666',
-                                border: 'none', borderRadius: 3, cursor: 'pointer',
-                              }}
-                              onClick={(e) => { e.stopPropagation(); handleToggleEnabled(style.id) }}
-                            >{enabledMap[`style-${style.id}`] ? '已启用' : '已禁用'}</button>
+                                border: 'none', borderRadius: 3,
+                              }}>{enabledMap[`style-${style.id}`] ? '已启用' : '已禁用'}</span>
+                            )}
                           </div>
 
                           {isExpanded && (
@@ -2438,15 +2453,17 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                                                 ))}
                                               </div>
                                             </div>
-                                            <button className="btn btn-xs"
-                                              onClick={(e) => { e.stopPropagation(); handleDeleteScheme(schemeId) }}
-                                              disabled={Object.keys(schemeData).length <= 1}
-                                              style={{
-                                                fontSize: 9, padding: '2px 8px', marginTop: 4,
-                                                background: Object.keys(schemeData).length <= 1 ? '#ddd' : '#e74c3c',
-                                                color: '#fff', border: 'none', borderRadius: 3,
-                                                cursor: Object.keys(schemeData).length <= 1 ? 'not-allowed' : 'pointer',
-                                              }}>删除</button>
+                                            {canManageTemplate && (
+                                              <button className="btn btn-xs"
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteScheme(schemeId) }}
+                                                disabled={Object.keys(schemeData).length <= 1}
+                                                style={{
+                                                  fontSize: 9, padding: '2px 8px', marginTop: 4,
+                                                  background: Object.keys(schemeData).length <= 1 ? '#ddd' : '#e74c3c',
+                                                  color: '#fff', border: 'none', borderRadius: 3,
+                                                  cursor: Object.keys(schemeData).length <= 1 ? 'not-allowed' : 'pointer',
+                                                }}>删除</button>
+                                            )}
                                           </div>
                                         )}
                                       </div>
@@ -2465,19 +2482,21 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                                       <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); setShowNewSchemeInput(false); setNewSchemeName('') }}
                                         style={{ fontSize: 9, padding: '2px 6px' }}>取消</button>
                                     </div>
-                                  ) : (
+                                  ) : canManageTemplate ? (
                                     <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); setShowNewSchemeInput(true) }}
                                       style={{ fontSize: 9, padding: '2px 8px', marginTop: 4 }}>+ 新增色系</button>
+                                  ) : null}
+                                  {canManageTemplate && (
+                                    <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                                      <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); saveSchemes() }}
+                                        disabled={schemesSaving}
+                                        style={{ flex: 1, fontSize: 10, padding: '4px 0', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4 }}>
+                                        {schemesSaving ? '保存中...' : '保存色系'}
+                                      </button>
+                                      <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); loadSchemes(style.id) }}
+                                        style={{ fontSize: 10, padding: '4px 8px', opacity: 0.7 }}>取消</button>
+                                    </div>
                                   )}
-                                  <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
-                                    <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); saveSchemes() }}
-                                      disabled={schemesSaving}
-                                      style={{ flex: 1, fontSize: 10, padding: '4px 0', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4 }}>
-                                      {schemesSaving ? '保存中...' : '保存色系'}
-                                    </button>
-                                    <button className="btn btn-xs" onClick={(e) => { e.stopPropagation(); loadSchemes(style.id) }}
-                                      style={{ fontSize: 10, padding: '4px 8px', opacity: 0.7 }}>取消</button>
-                                  </div>
                                 </>
                               )}
                               {!schemesLoading && Object.keys(schemeData).length === 0 && (
@@ -2674,11 +2693,13 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                   onClick={copyContent}>复制</button>
                 <button className="btn" style={{ fontSize: 12, padding: '6px 12px' }}
                   onClick={downloadContent}>下载</button>
-                <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 20px' }}
-                  disabled={editorSaving}
-                  onClick={saveEditor}>
-                  {editorSaving ? '保存中...' : '保存'}
-                </button>
+                {canManageTemplate && (
+                  <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 20px' }}
+                    disabled={editorSaving}
+                    onClick={saveEditor}>
+                    {editorSaving ? '保存中...' : '保存'}
+                  </button>
+                )}
               </div>
             </div>
             {/* Resize handle — bottom-right corner */}
