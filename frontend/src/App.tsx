@@ -17,6 +17,8 @@ import PromptStudioPage from './pages/PromptStudioPage'
 import MemberApprovalPage from './pages/MemberApprovalPage'
 import UserManagePage from './pages/UserManagePage'
 import RoleManagePage from './pages/RoleManagePage'
+import LandingPage from './pages/LandingPage'
+import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
 import { ModalProvider } from './components/ModalProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import SettingsLock from './components/SettingsLock'
@@ -616,6 +618,8 @@ function App() {
       <LicenseProvider>
         <ModalProvider>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/setup" element={<FirstTimeSetupPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/member" element={<MemberLoginPage />} />
             <Route path="/member/register" element={<MemberRegisterPage />} />

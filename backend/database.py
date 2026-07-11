@@ -1252,6 +1252,22 @@ def _migrate_v1_create_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)")
 
+    # Migrate: add must_change_password to users (first-time setup wizard flag)
+    try:
+        users_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "must_change_password" not in users_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+    except Exception as e:
+        print(f"[DB] Warning: could not add must_change_password to users: {e}")
+
+    # Migrate: add payment_ref to payment_records (user-submitted payment proof)
+    try:
+        pr_cols = [r[1] for r in conn.execute("PRAGMA table_info(payment_records)").fetchall()]
+        if "payment_ref" not in pr_cols:
+            conn.execute("ALTER TABLE payment_records ADD COLUMN payment_ref TEXT DEFAULT ''")
+    except Exception as e:
+        print(f"[DB] Warning: could not add payment_ref to payment_records: {e}")
+
     # Add created_by to existing tables (NULL = super admin)
     _tables_for_created_by = [
         "workspaces", "projects", "project_items",
@@ -1296,7 +1312,12 @@ def _migrate_v1_seed_roles(conn):
         "stage5.view", "stage5.download",
     ]
 
-    BASIC_MEMBER_PERMS = [
+    TRIAL_MEMBER_PERMS = [
+        "stage1.view", "stage2.view", "stage3.view",
+        "stage4.view", "stage5.view",
+    ]
+
+    PAID_MEMBER_PERMS = [
         "stage1.view", "stage2.view", "stage3.view",
         "stage4.view", "stage5.view", "stage5.download",
     ]
@@ -1304,8 +1325,8 @@ def _migrate_v1_seed_roles(conn):
     _seed_roles = [
         ("超级管理员", "admin", ALL_PERMISSIONS),
         ("内容管理员", "admin", CONTENT_ADMIN_PERMS),
-        ("基础会员", "member", BASIC_MEMBER_PERMS),
-        ("高级会员", "member", BASIC_MEMBER_PERMS),
+        ("试用会员", "member", TRIAL_MEMBER_PERMS),
+        ("付费会员", "member", PAID_MEMBER_PERMS),
     ]
 
     for name, utype, perms in _seed_roles:
@@ -1364,9 +1385,14 @@ def _migrate_v1_create_admin(conn):
     admin_id = str(_uuid.uuid4())
     conn.execute(
         """INSERT INTO users (id, username, password_hash, display_name, email, user_type,
-           is_active, is_approved, token_version)
-           VALUES (?, 'admin', ?, '超级管理员', NULL, 'admin', 1, 1, 1)""",
+           is_active, is_approved, token_version, must_change_password)
+           VALUES (?, 'admin', ?, '超级管理员', NULL, 'admin', 1, 1, 1, 1)""",
         (admin_id, password_hash),
+    )
+
+    # Mark setup as not completed (forces setup wizard on first login)
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('setup_completed', '0')"
     )
 
     # Find super admin role

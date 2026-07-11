@@ -6199,7 +6199,7 @@ def member_login(req: dict, request: Request):
 
 @app.post("/api/member/register")
 def member_register(req: dict, request: Request):
-    """Self-registration for members. Creates user with is_approved=0."""
+    """Self-registration for members. Supports trial and paid plans."""
     ip = _get_client_ip(request)
     allowed, retry = _check_rate_limit(f"register:{ip}", _REGISTER_RATE_MAX, _REGISTER_RATE_WINDOW)
     if not allowed:
@@ -6213,6 +6213,7 @@ def member_register(req: dict, request: Request):
     password = req.get("password", "") or ""
     display_name = (req.get("display_name", "") or "").strip() or username
     email = (req.get("email", "") or "").strip()
+    plan_type = (req.get("plan_type", "") or "trial").strip()  # "trial" or "paid"
 
     if not username or not password:
         raise HTTPException(status_code=400, detail="用户名和密码不能为空")
@@ -6250,8 +6251,32 @@ def member_register(req: dict, request: Request):
                VALUES (?, ?, ?, ?, ?, 'member', 1, 0, ?, ?)""",
             (user_id, username, pw_hash, display_name, email, now, now),
         )
+
+        audit_detail = {"username": username, "email": email, "plan_type": plan_type}
+
+        if plan_type == "paid":
+            # Create payment record with user-submitted proof
+            payment_method = (req.get("payment_method", "") or "").strip()
+            payment_ref = (req.get("payment_ref", "") or "").strip()
+            amount_cents = req.get("amount_cents", 0)
+            plan_name = (req.get("plan_name", "") or "").strip()
+            duration_days = req.get("duration_days", 0)
+
+            import uuid as _uuid2
+            db.execute(
+                """INSERT INTO payment_records
+                   (id, user_id, amount_cents, plan_name, duration_days,
+                    payment_method, payment_ref, paid_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (str(_uuid2.uuid4()), user_id, amount_cents, plan_name,
+                 duration_days, payment_method, payment_ref, now),
+            )
+            audit_detail["payment_method"] = payment_method
+            audit_detail["payment_ref"] = payment_ref
+            audit_detail["amount_cents"] = amount_cents
+
         _write_audit(db, user_id, "member.register", "user", user_id,
-                      json.dumps({"username": username, "email": email}), ip)
+                      json.dumps(audit_detail), ip)
         db.commit()
     finally:
         db.close()
@@ -6274,7 +6299,18 @@ def list_pending_members(page: int = 1, page_size: int = 20, user=require_perm("
             "ORDER BY created_at DESC LIMIT ? OFFSET ?",
             (page_size, offset),
         ).fetchall()
-        return {"members": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+        members = []
+        for r in rows:
+            m = dict(r)
+            # Check if there's a payment record for this user
+            payment = db.execute(
+                "SELECT plan_name, amount_cents, duration_days, payment_method, "
+                "payment_ref FROM payment_records WHERE user_id=? ORDER BY paid_at DESC LIMIT 1",
+                (m["id"],),
+            ).fetchone()
+            m["payment"] = dict(payment) if payment else None
+            members.append(m)
+        return {"members": members, "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
 
@@ -6294,10 +6330,10 @@ class PaymentRecordReq(BaseModel):
 
 @app.put("/api/members/{user_id}/approve")
 async def approve_member(user_id: str, request: Request, user=require_perm("member.manage")):
-    """Approve a pending member. Assigns '基础会员' role and sets expiry."""
+    """Approve a pending member. Auto-detects trial vs paid and assigns correct role."""
     import uuid as _uuid
     body = await request.json()
-    duration_days = body.get("duration_days", 30)
+    duration_days = body.get("duration_days", 7)  # default 7 for trial
     db = get_db()
     try:
         m = db.execute(
@@ -6314,6 +6350,23 @@ async def approve_member(user_id: str, request: Request, user=require_perm("memb
         from datetime import datetime as _dt, timedelta as _td
         expires_at = (_dt.utcnow() + _td(days=int(duration_days))).isoformat()
 
+        # Check if user submitted a payment record (paid plan)
+        payment = db.execute(
+            "SELECT id, plan_name, amount_cents, duration_days, payment_method, "
+            "payment_ref FROM payment_records WHERE user_id=? ORDER BY paid_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+
+        # Determine which role to assign
+        if payment and payment["amount_cents"] > 0:
+            role_name = "付费会员"
+            duration_days = payment["duration_days"]
+        else:
+            role_name = "试用会员"
+            duration_days = body.get("duration_days", 7)
+
+        expires_at = (_dt.utcnow() + _td(days=int(duration_days))).isoformat()
+
         db.execute(
             "UPDATE users SET is_approved=1, approved_by=?, approved_at=?, "
             "expires_at=?, updated_at=? WHERE id=?",
@@ -6321,9 +6374,9 @@ async def approve_member(user_id: str, request: Request, user=require_perm("memb
              _dt.utcnow().isoformat(), user_id),
         )
 
-        # Assign 基础会员 role
+        # Assign role
         role = db.execute(
-            "SELECT id FROM roles WHERE name='基础会员' AND is_system=1"
+            "SELECT id FROM roles WHERE name=? AND is_system=1", (role_name,)
         ).fetchone()
         if role:
             db.execute(
@@ -6331,10 +6384,29 @@ async def approve_member(user_id: str, request: Request, user=require_perm("memb
                 (user_id, role["id"]),
             )
 
+        # If paid, update payment record with approval info
+        if payment:
+            db.execute(
+                "UPDATE payment_records SET recorded_by=?, expires_before=NULL, "
+                "expires_after=? WHERE id=?",
+                (user["sub"], expires_at, payment["id"]),
+            )
+
         _write_audit(db, user["sub"], "member.approve", "user", user_id,
-                      json.dumps({"duration_days": duration_days, "expires_at": expires_at}))
+                      json.dumps({"role": role_name, "duration_days": duration_days,
+                                  "expires_at": expires_at,
+                                  "has_payment": payment is not None}))
         db.commit()
-        return {"ok": True, "message": "审批通过", "expires_at": expires_at}
+        return {
+            "ok": True, "message": "审批通过", "expires_at": expires_at,
+            "role": role_name,
+            "payment": {
+                "plan_name": payment["plan_name"],
+                "amount_cents": payment["amount_cents"],
+                "payment_method": payment["payment_method"],
+                "payment_ref": payment["payment_ref"],
+            } if payment else None,
+        }
     finally:
         db.close()
 
@@ -6447,6 +6519,101 @@ def list_payments(user_id: str, user=require_perm("member.manage")):
 @app.get("/api/auth/check")
 def auth_check(payload: dict = Depends(get_current_user)):
     return {"ok": True}
+
+
+# ── First-time setup wizard ──────────────────────────────────────────
+
+@app.get("/api/setup/status")
+def setup_status(user: dict = Depends(get_current_user)):
+    """Check whether first-time setup wizard is needed."""
+    db = get_db()
+    try:
+        must_change = False
+        setup_done = True
+        if user:
+            row = db.execute(
+                "SELECT must_change_password FROM users WHERE id=?", (user["sub"],)
+            ).fetchone()
+            if row and row["must_change_password"] == 1:
+                must_change = True
+        sc_row = db.execute(
+            "SELECT value FROM settings WHERE key='setup_completed'"
+        ).fetchone()
+        if sc_row and sc_row["value"] == "0":
+            setup_done = False
+        return {
+            "must_change_password": must_change,
+            "setup_completed": setup_done,
+            "need_setup": must_change or not setup_done,
+        }
+    finally:
+        db.close()
+
+
+class SetupCompleteReq(BaseModel):
+    new_password: str
+    brand_name: str = ""
+    brand_logo: str = ""        # base64 encoded image or empty
+    payment_qr_wechat: str = ""  # base64 encoded image or empty
+    payment_qr_alipay: str = ""  # base64 encoded image or empty
+
+@app.post("/api/setup/complete")
+def setup_complete(req: SetupCompleteReq, user: dict = Depends(get_current_user)):
+    """Complete first-time setup: change password, set brand, upload QR codes."""
+    db = get_db()
+    try:
+        urow = db.execute(
+            "SELECT must_change_password FROM users WHERE id=?", (user["sub"],)
+        ).fetchone()
+        if not urow or urow["must_change_password"] != 1:
+            raise HTTPException(403, "无需执行首次设置")
+
+        if not req.new_password or len(req.new_password) < 8:
+            raise HTTPException(400, "密码长度不能少于 8 位")
+
+        pw_hash = _hash_password(req.new_password)
+        now = datetime.utcnow().isoformat()
+        db.execute(
+            "UPDATE users SET password_hash=?, must_change_password=0, "
+            "password_changed_at=?, token_version=token_version+1, "
+            "updated_at=? WHERE id=?",
+            (pw_hash, now, now, user["sub"]),
+        )
+
+        # Update brand settings
+        if req.brand_name:
+            db.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('brand_name', ?)",
+                (req.brand_name,),
+            )
+        if req.brand_logo:
+            db.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('brand_logo', ?)",
+                (req.brand_logo,),
+            )
+
+        # Store payment QR codes
+        if req.payment_qr_wechat:
+            db.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('payment_qr_wechat', ?)",
+                (req.payment_qr_wechat,),
+            )
+        if req.payment_qr_alipay:
+            db.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('payment_qr_alipay', ?)",
+                (req.payment_qr_alipay,),
+            )
+
+        # Mark setup as done
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('setup_completed', '1')"
+        )
+
+        _write_audit(db, user["sub"], "setup.complete", "user", user["sub"], "{}")
+        db.commit()
+        return {"ok": True, "message": "设置完成，请使用新密码重新登录"}
+    finally:
+        db.close()
 
 
 # ── License activation endpoints ────────────────────────────────────

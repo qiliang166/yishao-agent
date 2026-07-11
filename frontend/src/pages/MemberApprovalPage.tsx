@@ -1,6 +1,14 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 
+interface PaymentInfo {
+  plan_name: string
+  amount_cents: number
+  duration_days: number
+  payment_method: string
+  payment_ref: string
+}
+
 interface PendingMember {
   id: string
   username: string
@@ -8,6 +16,15 @@ interface PendingMember {
   email: string
   is_approved: number
   created_at: string
+  payment: PaymentInfo | null
+}
+
+function formatAmount(cents: number): string {
+  return (cents / 100).toFixed(2)
+}
+
+function paymentMethodLabel(m: string): string {
+  return m === 'wechat' ? '微信支付' : m === 'alipay' ? '支付宝' : m || '—'
 }
 
 export default function MemberApprovalPage() {
@@ -17,7 +34,7 @@ export default function MemberApprovalPage() {
   const [loading, setLoading] = useState(true)
   const [approveId, setApproveId] = useState<string | null>(null)
   const [rejectId, setRejectId] = useState<string | null>(null)
-  const [durationDays, setDurationDays] = useState(30)
+  const [durationDays, setDurationDays] = useState(7)
   const [rejectReason, setRejectReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
@@ -43,15 +60,19 @@ export default function MemberApprovalPage() {
     setTimeout(() => setToast(''), 3000)
   }
 
+  const getSelectedMember = () => members.find(m => m.id === approveId)
+
   const handleApprove = async () => {
     if (!approveId) return
     setActionLoading(true)
     setError('')
     try {
-      await api.approveMember(approveId, durationDays)
+      const m = getSelectedMember()
+      const days = m?.payment ? (m.payment.duration_days || 90) : durationDays
+      await api.approveMember(approveId, days)
       showToast('审批通过')
       setApproveId(null)
-      setDurationDays(30)
+      setDurationDays(7)
       loadMembers()
     } catch (e: any) {
       setError(e.message || '操作失败')
@@ -77,7 +98,15 @@ export default function MemberApprovalPage() {
     }
   }
 
+  const openApprove = (m: PendingMember) => {
+    setApproveId(m.id)
+    setDurationDays(m.payment ? (m.payment.duration_days || 90) : 7)
+    setError('')
+  }
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  const selectedMember = getSelectedMember()
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
@@ -115,21 +144,41 @@ export default function MemberApprovalPage() {
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}
               >
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>
                     {m.display_name}
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
                       @{m.username}
                     </span>
+                    {m.payment ? (
+                      <span style={{
+                        marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                        background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600,
+                      }}>
+                        付费
+                      </span>
+                    ) : (
+                      <span style={{
+                        marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                        background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600,
+                      }}>
+                        试用
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                     {m.email} · 注册于 {new Date(m.created_at).toLocaleString('zh-CN')}
                   </div>
+                  {m.payment && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      付款单号：{m.payment.payment_ref || '—'} · {paymentMethodLabel(m.payment.payment_method)} · ￥{formatAmount(m.payment.amount_cents)}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={() => { setApproveId(m.id); setDurationDays(30); setError('') }}
+                    onClick={() => openApprove(m)}
                   >
                     通过
                   </button>
@@ -162,15 +211,57 @@ export default function MemberApprovalPage() {
       )}
 
       {/* Approve Dialog */}
-      {approveId && (
+      {approveId && selectedMember && (
         <div className="dialog-overlay" onClick={() => setApproveId(null)}>
-          <div className="dialog-box" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
+          <div className="dialog-box" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
             <div className="dialog-title">审批通过</div>
-            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              通过后将自动分配"基础会员"角色，设置到期时间并开放登录。
+
+            {/* Member info summary */}
+            <div style={{
+              background: '#f8fafc', borderRadius: 8, padding: 12, marginBottom: 16,
+              fontSize: 13, lineHeight: 1.8,
+            }}>
+              <div><strong>用户名：</strong>{selectedMember.username}</div>
+              <div><strong>显示名：</strong>{selectedMember.display_name}</div>
+              {selectedMember.email && <div><strong>邮箱：</strong>{selectedMember.email}</div>}
+              <div><strong>注册时间：</strong>{new Date(selectedMember.created_at).toLocaleString('zh-CN')}</div>
+            </div>
+
+            {/* Payment info */}
+            {selectedMember.payment ? (
+              <div style={{
+                background: 'rgba(59,130,246,0.05)', borderRadius: 8, padding: 12, marginBottom: 16,
+                border: '1px solid rgba(59,130,246,0.15)',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: 'var(--primary)' }}>
+                  付款信息
+                </div>
+                <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--text)' }}>
+                  <div>套餐：{selectedMember.payment.plan_name}</div>
+                  <div>金额：￥{formatAmount(selectedMember.payment.amount_cents)}</div>
+                  <div>支付方式：{paymentMethodLabel(selectedMember.payment.payment_method)}</div>
+                  <div>付款单号：<strong>{selectedMember.payment.payment_ref || '—'}</strong></div>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                background: 'rgba(148,163,184,0.05)', borderRadius: 8, padding: 12, marginBottom: 16,
+                border: '1px solid var(--border)',
+              }}>
+                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
+                  试用会员
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  无付款信息，通过后将分配"试用会员"角色（7 天到期，仅可查看）。
+                </div>
+              </div>
+            )}
+
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              通过后将自动分配"{selectedMember.payment ? '付费会员' : '试用会员'}"角色，设置到期时间并开放登录。
             </p>
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-              首次到期天数
+              到期天数
             </label>
             <input
               className="form-input"

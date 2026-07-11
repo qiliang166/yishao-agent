@@ -97,6 +97,8 @@ function SettingsPage() {
 
   const canSaveGlobal = usePermission('config.global')
   const [adminPhone, setAdminPhone] = useState('')
+  const [qrWechat, setQrWechat] = useState('')
+  const [qrAlipay, setQrAlipay] = useState('')
   const [appVersion, setAppVersion] = useState('1.0.0')
 
   // License state
@@ -129,6 +131,8 @@ function SettingsPage() {
       if (s.branding_copyright) setBrandingCopyright(s.branding_copyright)
       if (s.branding_signature) setBrandingSignature(s.branding_signature)
       if (s.admin_phone) setAdminPhone(s.admin_phone)
+      if (s.payment_qr_wechat) setQrWechat(s.payment_qr_wechat)
+      if (s.payment_qr_alipay) setQrAlipay(s.payment_qr_alipay)
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
 
@@ -236,7 +240,7 @@ function SettingsPage() {
   const handleGlobalSave = async () => {
     setSaveMsg('')
     try {
-      await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature, admin_phone: adminPhone, app_version: appVersion })
+      await api.updateSettings({ brand_logo: brandLogo, brand_name: brandName, save_path: savePath, branding_copyright: brandingCopyright, branding_signature: brandingSignature, admin_phone: adminPhone, app_version: appVersion, payment_qr_wechat: qrWechat, payment_qr_alipay: qrAlipay })
       const fallback = (await api.getVersion()).app || ''
       document.title = brandName || fallback
       setSaveMsg('保存成功')
@@ -447,6 +451,80 @@ function SettingsPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => navigate('/users')}>
                 用户管理 →
               </button>
+            </div>
+          </div>
+
+          <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
+            <h3>收款码配置</h3>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              会员注册付费套餐时展示的付款二维码。支持上传图片或直接粘贴 base64。
+            </p>
+            <div className="settings-row">
+              <label>微信收款码</label>
+              <input className="form-input" type="text" value={qrWechat}
+                onChange={e => setQrWechat(e.target.value)} placeholder="粘贴 base64 或通过文件上传"
+                style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input type="file" accept="image/*" style={{ display: 'none' }}
+                id="qr-wechat-file"
+                onChange={async e => {
+                  const f = e.target.files?.[0]
+                  if (f) {
+                    const reader = new FileReader()
+                    reader.onload = () => setQrWechat(reader.result as string)
+                    reader.readAsDataURL(f)
+                  }
+                }} />
+              {canSaveGlobal && (
+                <button className="btn btn-ghost btn-sm"
+                  onClick={() => (document.getElementById('qr-wechat-file') as HTMLInputElement)?.click()}>
+                  上传
+                </button>
+              )}
+              {qrWechat && (
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
+                  onClick={() => setQrWechat('')}>清除</button>
+              )}
+              {qrWechat && (
+                <img src={qrWechat} alt="微信收款码" style={{
+                  width: 100, height: 100, objectFit: 'contain', marginLeft: 8,
+                  border: '1px solid var(--border)', borderRadius: 6,
+                }} />
+              )}
+            </div>
+            <div className="settings-row">
+              <label>支付宝收款码</label>
+              <input className="form-input" type="text" value={qrAlipay}
+                onChange={e => setQrAlipay(e.target.value)} placeholder="粘贴 base64 或通过文件上传"
+                style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input type="file" accept="image/*" style={{ display: 'none' }}
+                id="qr-alipay-file"
+                onChange={async e => {
+                  const f = e.target.files?.[0]
+                  if (f) {
+                    const reader = new FileReader()
+                    reader.onload = () => setQrAlipay(reader.result as string)
+                    reader.readAsDataURL(f)
+                  }
+                }} />
+              {canSaveGlobal && (
+                <button className="btn btn-ghost btn-sm"
+                  onClick={() => (document.getElementById('qr-alipay-file') as HTMLInputElement)?.click()}>
+                  上传
+                </button>
+              )}
+              {qrAlipay && (
+                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
+                  onClick={() => setQrAlipay('')}>清除</button>
+              )}
+              {qrAlipay && (
+                <img src={qrAlipay} alt="支付宝收款码" style={{
+                  width: 100, height: 100, objectFit: 'contain', marginLeft: 8,
+                  border: '1px solid var(--border)', borderRadius: 6,
+                }} />
+              )}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+              会员注册时将展示这些收款码。如不配置，付费选项将提示用户联系管理员。
             </div>
           </div>
 
