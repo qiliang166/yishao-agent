@@ -676,6 +676,10 @@ def init_db():
                 conn.execute("ALTER TABLE tts_history ADD COLUMN name TEXT DEFAULT ''")
             if 'voice_name' not in existing_cols:
                 conn.execute("ALTER TABLE tts_history ADD COLUMN voice_name TEXT DEFAULT ''")
+            if 'segment_index' not in existing_cols:
+                conn.execute("ALTER TABLE tts_history ADD COLUMN segment_index INTEGER DEFAULT 0")
+            if 'group_id' not in existing_cols:
+                conn.execute("ALTER TABLE tts_history ADD COLUMN group_id TEXT DEFAULT ''")
         except Exception:
             pass
         # Add volume and speed columns to voices if missing (migration, 2026-07-01)

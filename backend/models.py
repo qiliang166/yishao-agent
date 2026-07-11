@@ -97,6 +97,11 @@ class LLMRefineRequest(BaseModel):
     full_context: str = ""
 
 
+class TtsSplitRequest(BaseModel):
+    text: str
+    max_chunk: int = 290
+
+
 class SynthesizeRequest(BaseModel):
     text: str
     model: str = "cosyvoice-v3-flash"

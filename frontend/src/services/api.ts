@@ -304,7 +304,7 @@ export const api = {
   updateVoice: (id: string, data: { name?: string; provider_id?: string; voice_id?: string; description?: string; is_default?: number; volume?: number; speed?: number }) =>
     request(`/api/voices/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteVoice: (id: string) => request(`/api/voices/${id}`, { method: 'DELETE' }),
-  previewVoice: (id: string) => request(`/api/voices/${id}/preview`, { method: 'POST' }),
+  previewVoice: (id: string) => request(`/api/voices/${id}/preview`, { method: 'POST', timeoutMs: 120000 }),
   cloneVoice: (name: string, model: string, audioFile: File, providerId?: string) => {
     const fd = new FormData()
     fd.append('name', name)
@@ -739,8 +739,10 @@ export const api = {
     request('/api/export/sop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, branding, project_id: projectId || null}) }),
 
   // TTS
+  ttsSplit: (text: string, maxChunk?: number) =>
+    request('/api/tts/split', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, max_chunk: maxChunk || 290}) }),
   ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number, projectId?: string, providerId?: string, voiceName?: string, sourceName?: string) =>
-    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null, voice_name: voiceName || null, source_name: sourceName || null}) }),
+    request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null, voice_name: voiceName || null, source_name: sourceName || null}), timeoutMs: 120000 }),
 
   // TTS History
   listTtsHistory: (projectId: string) =>

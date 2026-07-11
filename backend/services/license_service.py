@@ -207,12 +207,28 @@ def check_activation() -> dict:
     if existing.get("machine_id") != current_machine_id:
         return {"activated": False, "reason": "machine_mismatch"}
 
+    # Skip server verification if checked within the last hour
+    last_checked = existing.get("last_checked_at")
+    if last_checked:
+        try:
+            last_dt = datetime.fromisoformat(last_checked)
+            if (datetime.utcnow() - last_dt).total_seconds() < 3600:
+                return {
+                    "activated": True,
+                    "product_id": existing.get("product_id"),
+                    "serial_number": existing.get("serial_number"),
+                    "activated_at": existing.get("activated_at"),
+                    "last_checked_at": last_checked,
+                }
+        except Exception:
+            pass
+
     # Verify with activation server
     try:
         data = _api_post("/api/check", {
             "key": existing["license_key"],
             "machine_id": current_machine_id,
-        }, timeout=10)
+        }, timeout=5)
         if data.get("activated"):
             _update_last_checked()
             return {

@@ -13,7 +13,7 @@ from jose import JWTError, jwt
 from database import init_db, get_db
 from services.cosyvoice_service import clone_voice, design_voice
 from models import (WorkspaceCreate, WorkspaceUpdate, ProjectCreate, ProjectUpdate, StepResultSave, LLMGenerateRequest,
-    LLMRefineRequest, SynthesizeRequest, PPTGenerateRequest, PPTPlanRequest, PPTEditSlideRequest,
+    LLMRefineRequest, SynthesizeRequest, TtsSplitRequest, PPTGenerateRequest, PPTPlanRequest, PPTEditSlideRequest,
     PPTSlideSourceRequest, PPTRegenerateSlideRequest, TtsHistoryUpdate,
     ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
     ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave)
@@ -2018,9 +2018,8 @@ def delete_voice(voice_id: str):
 
 
 @app.post("/api/voices/{voice_id}/preview")
-async def preview_voice(voice_id: str):
-    """Generate a short preview audio for a voice"""
-    import httpx
+def preview_voice(voice_id: str):
+    """Generate a short preview audio for a voice (local cache first, TTS API fallback)"""
     db = get_db()
     try:
         voice = db.execute(
@@ -2028,17 +2027,35 @@ async def preview_voice(voice_id: str):
             (voice_id,)).fetchone()
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
+
+        # Return cached local preview file if it exists
+        preview_path = voice["preview_audio_path"]
+        if preview_path and os.path.exists(preview_path):
+            filename = os.path.basename(preview_path)
+            return {"audio_url": f"/api/audio/{filename}"}
+
         if not voice["api_key"]:
             raise HTTPException(status_code=400, detail="关联的 TTS 提供商未配置 API Key")
 
+        import httpx
         base_url = voice["base_url"].rstrip("/")
         tts_url = f"{base_url}/services/audio/tts/SpeechSynthesizer"
+
+        # Determine model from the voice_id prefix (voice_id is always {model}-{suffix})
+        _known_models = ["cosyvoice-v3-flash", "cosyvoice-v3-plus", "cosyvoice-v3.5-plus"]
+        model = "cosyvoice-v3-flash"  # default
+        vid = voice["voice_id"]
+        for m in _known_models:
+            if vid.startswith(m):
+                model = m
+                break
+
         payload = {
-            "model": "cosyvoice-v3-flash",
-            "input": {"text": "你好，这是一条音色预览测试。", "voice": voice["voice_id"], "format": "mp3"},
+            "model": model,
+            "input": {"text": "你好，这是一条音色预览测试。", "voice": vid, "format": "mp3"},
         }
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
+        with httpx.Client(timeout=120) as client:
+            resp = client.post(
                 tts_url,
                 headers={"Authorization": f"Bearer {voice['api_key']}", "Content-Type": "application/json"},
                 json=payload,
@@ -5203,6 +5220,77 @@ def download_file(filename: str, project_id: str = None, name: str = None):
 
 
 # ── TTS ──
+
+def split_text(text: str, max_chunk: int = 290) -> list:
+    """Split text into chunks at natural boundaries (paragraph → sentence → comma → hard)."""
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+
+    chunks = []
+    current = ""
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            if current:
+                current += '\n'
+            continue
+
+        sep = '\n' if current else ''
+        if len(current) + len(sep) + len(stripped) <= max_chunk:
+            current += sep + stripped
+        else:
+            if current:
+                chunks.append(current)
+            if len(stripped) > max_chunk:
+                parts = re.split(r'(?<=[。！？.!?])', stripped)
+                sub = ""
+                for p in parts:
+                    p = p.strip()
+                    if not p:
+                        continue
+                    sep2 = '\n' if sub else ''
+                    if len(sub) + len(sep2) + len(p) <= max_chunk:
+                        sub += sep2 + p
+                    else:
+                        if sub:
+                            chunks.append(sub)
+                        if len(p) > max_chunk:
+                            comma_parts = re.split(r'(?<=[，,；;：:])', p)
+                            cs = ""
+                            for cp in comma_parts:
+                                cp = cp.strip()
+                                if not cp:
+                                    continue
+                                sep3 = '\n' if cs else ''
+                                if len(cs) + len(sep3) + len(cp) <= max_chunk:
+                                    cs += sep3 + cp
+                                else:
+                                    if cs:
+                                        chunks.append(cs)
+                                    if len(cp) > max_chunk:
+                                        for i in range(0, len(cp), max_chunk):
+                                            chunks.append(cp[i:i+max_chunk])
+                                        cs = ""
+                                    else:
+                                        cs = cp
+                            sub = cs if cs else p
+                        else:
+                            sub = p
+                current = sub
+            else:
+                current = stripped
+
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+@app.post("/api/tts/split")
+def api_tts_split(req: TtsSplitRequest):
+    """Split text into segments for per-segment synthesis."""
+    segments = split_text(req.text, req.max_chunk)
+    return {"segments": [{"index": i + 1, "text": s} for i, s in enumerate(segments)], "total": len(segments)}
+
 
 @app.post("/api/tts/synthesize")
 async def api_tts_synthesize(req: SynthesizeRequest):

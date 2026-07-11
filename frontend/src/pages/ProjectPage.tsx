@@ -719,6 +719,10 @@ export default function ProjectPage() {
   const [ttsVolume, setTtsVolume] = useState(50)
   const [ttsSpeed, setTtsSpeed] = useState(1.0)
   const [ttsHistory, setTtsHistory] = useState<{ id: number; voice: string; audioUrl: string; audioPath: string; filename: string; time: string }[]>([])
+  const [ttsEditorTab, setTtsEditorTab] = useState<'edit' | 'split'>('edit')
+  const [splitSegments, setSplitSegments] = useState<{ index: number; text: string; audioUrl?: string }[]>([])
+  const [selectedSegments, setSelectedSegments] = useState<Set<number>>(new Set())
+  const [splitGenerating, setSplitGenerating] = useState(false)
   const [projStoragePath, setProjStoragePath] = useState('')
   const [savingPath, setSavingPath] = useState(false)
   // Voice clone states
@@ -891,9 +895,9 @@ export default function ProjectPage() {
           if (pid.endsWith('-col3')) s3p['sop'] = { prompt: item.prompt, skill: item.skill }
           if (pid.endsWith('-col4')) s3p['daoPpt'] = { prompt: item.prompt, skill: item.skill }
           if (pid.endsWith('-col5')) s3p['yanxiPpt'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-tts-doc')) s4p['doc'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-tts-analysis')) s4p['analysis'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-tts-comprehensive')) s4p['comprehensive'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-speech-doc')) s4p['doc'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-speech-analysis')) s4p['analysis'] = { prompt: item.prompt, skill: item.skill }
+          if (pid.endsWith('-speech-comprehensive')) s4p['comprehensive'] = { prompt: item.prompt, skill: item.skill }
         })
         setStage3Prompts(s3p)
         if (Object.keys(s4p).length > 0) setStage4Prompts(s4p)
@@ -928,15 +932,6 @@ export default function ProjectPage() {
         const s4p: Record<string, { prompt: string; skill: string }> = {}
         configs.forEach((c: any) => {
           const key = c.id === 'speech-doc' ? 'doc' : c.id === 'speech-analysis' ? 'analysis' : c.id === 'speech-comprehensive' ? 'comprehensive' : ''
-          if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
-        })
-        if (Object.keys(s4p).length > 0) setStage4Prompts(prev => ({ ...prev, ...s4p }))
-      }).catch(() => {})
-      // Load TTS configs (col7) from workspace
-      api.listTtsConfigs(wid).then((configs: any[]) => {
-        const s4p: Record<string, { prompt: string; skill: string }> = {}
-        configs.forEach((c: any) => {
-          const key = c.id === 'tts-doc' ? 'doc' : c.id === 'tts-analysis' ? 'analysis' : c.id === 'tts-comprehensive' ? 'comprehensive' : ''
           if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
         })
         if (Object.keys(s4p).length > 0) setStage4Prompts(prev => ({ ...prev, ...s4p }))
@@ -1814,18 +1809,29 @@ export default function ProjectPage() {
       setPlayingVoiceId('')
       setPlayingHistoryIdx(null)
     }
-    a.play().catch(() => { stopAudio() })
+    a.play().catch(() => {
+      stopAudio()
+      modal.toast('播放失败：浏览器可能阻止了音频自动播放', 'error')
+    })
   }
 
   const doTTS = async () => {
     if (!ttsInputText.trim()) return
     setTtsGenerating(true)
     try {
-      const selectedVoice = ttsVoices.find(v => v.id === voiceId) || clonedVoices.find(v => v.id === voiceId)
+      // Prefer clonedVoices (has latest volume/speed from sliders)
+      const selectedVoice = clonedVoices.find(v => v.id === voiceId) || ttsVoices.find(v => v.id === voiceId)
+      // Auto-detect model from voice_id prefix (same logic as backend preview)
+      const _knownModels = ['cosyvoice-v3-flash', 'cosyvoice-v3-plus', 'cosyvoice-v3.5-plus']
+      const _vid = selectedVoice?.voice_id || selectedVoice?.id || ''
+      let _model = cloneModel
+      for (const m of _knownModels) {
+        if (_vid.startsWith(m)) { _model = m; break }
+      }
       const sourceLabels: Record<string, string> = { doc: '文档演讲', analysis: '分析演讲', comprehensive: '综合演讲', blank: '白板编辑' }
       const sourceLabel = sourceLabels[ttsSourceTab] || '演讲'
       const result: any = await api.ttsSynthesize(
-        ttsInputText, cloneModel,
+        ttsInputText, _model,
         selectedVoice?.voice_id,
         selectedVoice?.volume ?? ttsVolume, selectedVoice?.speed ?? ttsSpeed,
         id, ttsProviderId || undefined,
@@ -1844,6 +1850,51 @@ export default function ProjectPage() {
       }])
     } catch (e: any) { modal.toast('TTS失败: ' + e.message, 'error') }
     finally { setTtsGenerating(false) }
+  }
+
+  // ── Split & Segmented Synthesis ──
+  const doSplit = async () => {
+    if (!ttsInputText.trim()) return
+    try {
+      const res: any = await api.ttsSplit(ttsInputText)
+      setSplitSegments(res.segments.map((s: any) => ({ index: s.index, text: s.text })))
+      setSelectedSegments(new Set())
+      setTtsEditorTab('split')
+    } catch (e: any) { modal.toast('分割失败: ' + (e?.message || '未知错误'), 'error') }
+  }
+
+  const synthesizeSegment = async (segIndex: number) => {
+    const seg = splitSegments.find(s => s.index === segIndex)
+    if (!seg) return
+    setSplitGenerating(true)
+    try {
+      // Prefer clonedVoices (has latest volume/speed from sliders)
+      const selectedVoice = clonedVoices.find(v => v.id === voiceId) || ttsVoices.find(v => v.id === voiceId)
+      const _knownModels = ['cosyvoice-v3-flash', 'cosyvoice-v3-plus', 'cosyvoice-v3.5-plus']
+      const _vid = selectedVoice?.voice_id || selectedVoice?.id || ''
+      let _model = cloneModel
+      for (const m of _knownModels) { if (_vid.startsWith(m)) { _model = m; break } }
+      const result: any = await api.ttsSynthesize(
+        seg.text, _model,
+        selectedVoice?.voice_id,
+        selectedVoice?.volume ?? ttsVolume, selectedVoice?.speed ?? ttsSpeed,
+        id, ttsProviderId || undefined,
+        selectedVoice?.name,
+        '分割段落',
+      )
+      setSplitSegments(prev => prev.map(s => s.index === segIndex ? { ...s, audioUrl: result.audio_url } : s))
+      loadTtsHistory()
+      modal.toast(`段${segIndex} 合成完成`, 'success')
+    } catch (e: any) { modal.toast(`段${segIndex} 合成失败: ` + (e?.message || '未知错误'), 'error') }
+    finally { setSplitGenerating(false) }
+  }
+
+  const synthesizeSelected = async () => {
+    if (selectedSegments.size === 0) return
+    const sorted = [...selectedSegments].sort((a, b) => a - b)
+    for (const idx of sorted) {
+      await synthesizeSegment(idx)
+    }
   }
 
   // ── Voice Clone ──
@@ -4181,15 +4232,17 @@ export default function ProjectPage() {
                             </div>
                             <div style={{ display: 'flex', gap: 3, marginTop: 2, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
                               {playingVoiceId === v.id ? (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
+                                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
                                   onClick={stopAudio}>■</button>
                               ) : (
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
+                                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
                                   onClick={async () => {
                                     try {
                                       const res = await api.previewVoice(v.id)
                                       playAudio(res.audio_url, v.id, undefined, v.volume, v.speed)
-                                    } catch {}
+                                    } catch (e: any) {
+                                      modal.toast('试听失败: ' + (e?.message || '未知错误'), 'error')
+                                    }
                                   }}>
                                 ▶</button>
                               )}
@@ -4223,10 +4276,21 @@ export default function ProjectPage() {
                                 </>
                               ) : (
                                 <>
-                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
+                                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
                                     onClick={() => { setEditingVoiceId(v.id); setEditVoiceName(v.name) }}>✏</button>
-                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
-                                    onClick={() => { if (confirm('确定删除此音色？')) { api.deleteVoice(v.id).then(() => loadClonedVoices()) } }}>✕</button>
+                                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
+                                    onClick={async () => {
+                                      if (!confirm('确定删除此音色？')) return
+                                      try {
+                                        await api.deleteVoice(v.id)
+                                        setClonedVoices(prev => prev.filter(x => x.id !== v.id))
+                                        api.listVoices(ttsProviderId || undefined).then(setTtsVoices).catch(() => {})
+                                        modal.toast('音色已删除', 'success')
+                                        loadClonedVoices()
+                                      } catch (e: any) {
+                                        modal.toast('删除失败: ' + (e?.message || '未知错误'), 'error')
+                                      }
+                                    }}>✕</button>
                                 </>
                               )}
                             </div>
@@ -4251,58 +4315,144 @@ export default function ProjectPage() {
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'auto' }}>
-                  {/* 文案编辑 */}
+                  {/* 左侧编辑区 */}
                   <div style={{ padding: 10, borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>文案编辑</div>
-                    <div className="form-label" style={{ fontSize: 10 }}>来源</div>
-                    <select className="form-select" style={{ marginBottom: 8, fontSize: 11 }}
-                      value={ttsSourceTab} onChange={e => {
-                        const val = e.target.value as typeof ttsSourceTab
-                        setTtsSourceTab(val)
-                        if (val === 'blank') {
-                          setTtsInputText(steps['step4_tts_blank'] || '')
-                        } else {
-                          const tab = S4_SPEECH_TABS.find(t => t.key === val)
-                          setTtsInputText(steps[tab?.stepKey || 'step4_speech_comprehensive'] || '')
-                        }
-                      }}>
-                      {S4_SPEECH_TABS.map(t => (
-                        <option key={t.key} value={t.key}>{t.label}{steps[t.stepKey] ? ' ✓' : ' (暂无内容)'}</option>
-                      ))}
-                      <option value="blank">白板编辑</option>
-                    </select>
-                    <textarea className="form-textarea"
-                      style={{ width: '100%', flex: 1, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, resize: 'vertical' }}
-                      value={ttsInputText}
-                      onChange={e => setTtsInputText(e.target.value)}
-                    />
-                    <div style={{ display: 'flex', gap: 6, marginTop: 4, marginBottom: 8 }}>
-                      {(() => {
-                        const tab = S4_SPEECH_TABS.find(t => t.key === ttsSourceTab)
-                        const stepKey = ttsSourceTab === 'blank' ? 'step4_tts_blank' : (tab?.stepKey || 'step4_speech_comprehensive')
-                        return (
-                          <button className="btn btn-ghost btn-sm"
-                            onClick={() => {
-                              if (ttsInputText.trim()) {
-                                saveStep(stepKey, ttsInputText)
-                                setSteps(prev => ({ ...prev, [stepKey]: ttsInputText }))
-                                flashSave()
-                              }
-                            }}>
-                            {getSaveBtnLabel(ttsInputText, stepKey)}
-                          </button>
-                        )
-                      })()}
-                      <button className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--warning)' }}
-                        onClick={() => setTtsInputText('')}>
-                        🗑 清空
-                      </button>
+                    {/* Tab 切换 */}
+                    <div style={{ display: 'flex', gap: 0, marginBottom: 8, borderBottom: '1px solid var(--border)' }}>
+                      <button type="button"
+                        style={{ flex: 1, padding: '6px 0', fontSize: 11, fontWeight: ttsEditorTab === 'edit' ? 600 : 400, color: ttsEditorTab === 'edit' ? 'var(--primary)' : 'var(--text-secondary)', background: 'none', border: 'none', borderBottom: ttsEditorTab === 'edit' ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer' }}
+                        onClick={() => setTtsEditorTab('edit')}>文案编辑</button>
+                      <button type="button"
+                        style={{ flex: 1, padding: '6px 0', fontSize: 11, fontWeight: ttsEditorTab === 'split' ? 600 : 400, color: ttsEditorTab === 'split' ? 'var(--primary)' : 'var(--text-secondary)', background: 'none', border: 'none', borderBottom: ttsEditorTab === 'split' ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer' }}
+                        onClick={() => setTtsEditorTab('split')}>文案分割</button>
                     </div>
-                    <button className="btn btn-primary btn-sm w-full"
-                      disabled={ttsGenerating} onClick={doTTS}>
-                      {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
-                    </button>
+
+                    {ttsEditorTab === 'edit' ? (
+                      <>
+                        <div className="form-label" style={{ fontSize: 10 }}>来源</div>
+                        <select className="form-select" style={{ marginBottom: 8, fontSize: 11 }}
+                          value={ttsSourceTab} onChange={e => {
+                            const val = e.target.value
+                            if (val === 'split') {
+                              setTtsSourceTab('blank')
+                              setTtsInputText(splitSegments.map(s => `【段${s.index}】${s.text}`).join('\n\n'))
+                            } else if (val === 'blank') {
+                              setTtsSourceTab(val)
+                              setTtsInputText(steps['step4_tts_blank'] || '')
+                            } else {
+                              setTtsSourceTab(val as typeof ttsSourceTab)
+                              const tab = S4_SPEECH_TABS.find(t => t.key === val)
+                              setTtsInputText(steps[tab?.stepKey || 'step4_speech_comprehensive'] || '')
+                            }
+                          }}>
+                          {S4_SPEECH_TABS.map(t => (
+                            <option key={t.key} value={t.key}>{t.label}{steps[t.stepKey] ? ' ✓' : ' (暂无内容)'}</option>
+                          ))}
+                          <option value="blank">白板编辑</option>
+                          {splitSegments.length > 0 && (
+                            <option value="split">文案分割 ({splitSegments.length}段)</option>
+                          )}
+                        </select>
+                        <textarea className="form-textarea"
+                          style={{ width: '100%', flex: 1, fontFamily: 'monospace', fontSize: 11, lineHeight: 1.6, resize: 'vertical' }}
+                          value={ttsInputText}
+                          onChange={e => setTtsInputText(e.target.value)}
+                        />
+                        <div style={{ display: 'flex', gap: 6, marginTop: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+                          {(() => {
+                            const tab = S4_SPEECH_TABS.find(t => t.key === ttsSourceTab)
+                            const stepKey = ttsSourceTab === 'blank' ? 'step4_tts_blank' : (tab?.stepKey || 'step4_speech_comprehensive')
+                            return (
+                              <button className="btn btn-ghost btn-sm"
+                                onClick={() => {
+                                  if (ttsInputText.trim()) {
+                                    saveStep(stepKey, ttsInputText)
+                                    setSteps(prev => ({ ...prev, [stepKey]: ttsInputText }))
+                                    flashSave()
+                                  }
+                                }}>
+                                {getSaveBtnLabel(ttsInputText, stepKey)}
+                              </button>
+                            )
+                          })()}
+                          <button className="btn btn-ghost btn-sm"
+                            style={{ color: 'var(--warning)' }}
+                            onClick={() => setTtsInputText('')}>🗑 清空</button>
+                          <button className="btn btn-ghost btn-sm"
+                            style={{ color: 'var(--primary)' }}
+                            onClick={doSplit}>✂ 分割</button>
+                        </div>
+                        <button className="btn btn-primary btn-sm w-full"
+                          disabled={ttsGenerating} onClick={doTTS}>
+                          {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {splitSegments.length === 0 ? (
+                          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>
+                            暂无分割段落，请先在"文案编辑"中点击"✂ 分割"
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                              共 {splitSegments.length} 段 · 已选 {selectedSegments.size} 段
+                            </div>
+                            <div style={{ flex: 1, overflow: 'auto', marginBottom: 8 }}>
+                              {splitSegments.map(seg => (
+                                <div key={seg.index}
+                                  style={{ fontSize: 11, marginBottom: 6, padding: 6, background: 'var(--bg)', borderRadius: 4, border: selectedSegments.has(seg.index) ? '1px solid var(--primary)' : '1px solid var(--border)', cursor: 'pointer' }}
+                                  onClick={() => {
+                                    const next = new Set(selectedSegments)
+                                    if (next.has(seg.index)) next.delete(seg.index)
+                                    else next.add(seg.index)
+                                    setSelectedSegments(next)
+                                  }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 4 }}>
+                                    <div style={{ flex: 1 }}>
+                                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>
+                                        <input type="checkbox" checked={selectedSegments.has(seg.index)} readOnly
+                                          style={{ marginRight: 6, verticalAlign: 'middle', cursor: 'pointer' }}
+                                          onClick={e => e.stopPropagation()} />
+                                        段{seg.index}
+                                        {seg.audioUrl && <span style={{ color: 'var(--success)', marginLeft: 6, fontSize: 10 }}>✅</span>}
+                                      </div>
+                                      <textarea
+                                        style={{ color: 'var(--text-secondary)', fontSize: 10, lineHeight: 1.4, width: '100%', minHeight: 36, height: 36, resize: 'vertical', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 3, padding: '2px 4px', fontFamily: 'inherit' }}
+                                        value={seg.text}
+                                        onClick={e => e.stopPropagation()}
+                                        onChange={e => {
+                                          e.stopPropagation()
+                                          setSplitSegments(prev => prev.map(s => s.index === seg.index ? { ...s, text: e.target.value } : s))
+                                        }} />
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                      {seg.audioUrl ? (
+                                        <button type="button" className="btn btn-ghost btn-sm"
+                                          style={{ fontSize: 9, padding: '0 3px' }}
+                                          onClick={e => { e.stopPropagation(); playAudio(seg.audioUrl!) }}>▶</button>
+                                      ) : (
+                                        <button type="button" className="btn btn-ghost btn-sm"
+                                          style={{ fontSize: 9, padding: '0 3px', color: 'var(--primary)' }}
+                                          disabled={splitGenerating}
+                                          onClick={e => { e.stopPropagation(); synthesizeSegment(seg.index) }}>
+                                          {splitGenerating ? '⏳' : '合成'}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            <button className="btn btn-primary btn-sm w-full"
+                              disabled={splitGenerating || selectedSegments.size === 0}
+                              onClick={synthesizeSelected}>
+                              {splitGenerating ? '⏳ 合成中...' : `🔊 合成选中段落 (${selectedSegments.size})`}
+                            </button>
+                          </>
+                        )}
+                      </>
+                    )}
                   </div>
                   {/* 合成列表 */}
                   <div style={{ padding: 10, overflow: 'auto' }}>
