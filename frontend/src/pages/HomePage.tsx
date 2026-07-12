@@ -28,12 +28,15 @@ function HomePage() {
   const [total, setTotal] = useState(0)
   const navigate = useNavigate()
 
+  const canManageMembers = usePermission('member.manage')
   const [showCreate, setShowCreate] = useState(false)
   const [createName, setCreateName] = useState('')
   const [createDesc, setCreateDesc] = useState('')
   const [createLogo, setCreateLogo] = useState('')
   const [createLogoUploading, setCreateLogoUploading] = useState(false)
   const [createStatus, setCreateStatus] = useState('draft')
+  const [createRoleIds, setCreateRoleIds] = useState<string[]>([])
+  const [memberRoles, setMemberRoles] = useState<{id:string;name:string}[]>([])
   const [creating, setCreating] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
 
@@ -63,13 +66,17 @@ function HomePage() {
     setCreateDesc('')
     setCreateLogo('')
     setCreateStatus('draft')
+    setCreateRoleIds([])
+    if (canManageMembers) {
+      api.listRoles('member').then(roles => setMemberRoles(roles as {id:string;name:string}[])).catch(() => {})
+    }
   }
 
   const handleCreate = async () => {
     if (!createName.trim()) return
     setCreating(true)
     try {
-      const ws = await api.createWorkspace(createName.trim(), createDesc.trim(), createLogo.trim(), createStatus)
+      const ws = await api.createWorkspace(createName.trim(), createDesc.trim(), createLogo.trim(), createStatus, createRoleIds.length > 0 ? createRoleIds : undefined)
       setShowCreate(false)
       navigate(`/workspace/${ws.id}`)
     } catch (err: any) {
@@ -255,6 +262,36 @@ function HomePage() {
                 placeholder="简要描述该项目的用途和内容..."
                 style={{ resize: 'vertical' }} />
             </div>
+            {canManageMembers && memberRoles.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">可见角色</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {memberRoles.map(r => {
+                    const checked = createRoleIds.includes(r.id)
+                    return (
+                      <label key={r.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 4, fontSize: 12,
+                        padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                        background: checked ? 'var(--primary-light)' : 'var(--card-bg)',
+                        border: checked ? '1px solid var(--primary)' : '1px solid var(--border)',
+                        color: checked ? 'var(--primary)' : 'var(--text-secondary)',
+                        fontWeight: checked ? 600 : 400,
+                      }}>
+                        <input type="checkbox" checked={checked}
+                          onChange={() => setCreateRoleIds(prev =>
+                            prev.includes(r.id) ? prev.filter(id => id !== r.id) : [...prev, r.id]
+                          )}
+                          style={{ display: 'none' }} />
+                        {r.name}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  勾选后，该角色下所有会员将自动可见此项目
+                </div>
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">状态</label>
               <select className="form-input" value={createStatus} onChange={e => setCreateStatus(e.target.value)}>

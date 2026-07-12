@@ -509,18 +509,24 @@ def list_workspaces(page: int = 1, page_size: int = 20, request: Request = None)
     try:
         user = getattr(request.state, "user", None) if request else None
         if user and user.get("user_type") == "member":
+            uid = user.get("user_id", user.get("sub", ""))
+            # member sees workspaces via personal assignment OR role-based assignment
             total = db.execute("""
-                SELECT COUNT(*) FROM workspaces w
-                JOIN member_workspaces mw ON mw.workspace_id = w.id
-                WHERE mw.user_id = ?
-            """, (user.get("user_id", user.get("sub", "")),)).fetchone()[0]
+                SELECT COUNT(DISTINCT w.id) FROM workspaces w
+                LEFT JOIN member_workspaces mw ON mw.workspace_id = w.id AND mw.user_id = ?
+                LEFT JOIN workspace_roles wr ON wr.workspace_id = w.id
+                LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ?
+                WHERE mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL
+            """, (uid, uid)).fetchone()[0]
             offset = (page - 1) * page_size
             rows = db.execute("""
-                SELECT w.* FROM workspaces w
-                JOIN member_workspaces mw ON mw.workspace_id = w.id
-                WHERE mw.user_id = ?
+                SELECT DISTINCT w.* FROM workspaces w
+                LEFT JOIN member_workspaces mw ON mw.workspace_id = w.id AND mw.user_id = ?
+                LEFT JOIN workspace_roles wr ON wr.workspace_id = w.id
+                LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ?
+                WHERE mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL
                 ORDER BY w.updated_at DESC LIMIT ? OFFSET ?
-            """, (user.get("user_id", user.get("sub", "")), page_size, offset)).fetchall()
+            """, (uid, uid, page_size, offset)).fetchall()
         else:
             total = db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
             offset = (page - 1) * page_size
@@ -568,8 +574,21 @@ def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
                    (wid, req.name, req.description or '', req.logo or '', req.status or 'draft', user.get("sub", "")))
         db.commit()
         _copy_seed_configs(db, wid)
+
+        # Role-based visibility — requires member.manage permission
+        if req.role_ids and "member.manage" in (user.get("permissions") or []):
+            db.executemany(
+                "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
+                [(wid, rid) for rid in req.role_ids]
+            )
+            db.commit()
+
         row = db.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
-        return dict(row)
+        result = dict(row)
+        result["role_ids"] = [r[0] for r in db.execute(
+            "SELECT role_id FROM workspace_roles WHERE workspace_id = ?", (wid,)
+        ).fetchall()]
+        return result
     finally:
         db.close()
 
@@ -578,12 +597,16 @@ def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
 def get_workspace(workspace_id: str, request: Request):
     user = getattr(request.state, "user", None)
     if user is not None and user.get("user_type") == "member":
+        uid = user.get("user_id", user.get("sub", ""))
         db = get_db()
         try:
-            row = db.execute(
-                "SELECT 1 FROM member_workspaces WHERE user_id=? AND workspace_id=?",
-                (user.get("user_id", user.get("sub", "")), workspace_id),
-            ).fetchone()
+            row = db.execute("""
+                SELECT 1 FROM member_workspaces WHERE user_id=? AND workspace_id=?
+                UNION
+                SELECT 1 FROM workspace_roles wr
+                JOIN user_roles ur ON ur.role_id = wr.role_id
+                WHERE ur.user_id = ? AND wr.workspace_id = ?
+            """, (uid, workspace_id, uid, workspace_id)).fetchone()
             if not row:
                 raise HTTPException(403, "无权访问此工作区")
         finally:
@@ -594,7 +617,11 @@ def get_workspace(workspace_id: str, request: Request):
             "SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         if not row:
             raise HTTPException(404, "workspace not found")
-        return dict(row)
+        result = dict(row)
+        result["role_ids"] = [r[0] for r in db.execute(
+            "SELECT role_id FROM workspace_roles WHERE workspace_id = ?", (workspace_id,)
+        ).fetchall()]
+        return result
     finally:
         db.close()
 
@@ -619,9 +646,21 @@ def update_workspace(workspace_id: str, req: WorkspaceUpdate, user=require_perm(
         if req.logo is not None:
             db.execute("UPDATE workspaces SET logo = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                        (req.logo, workspace_id))
+        # Role-based visibility — requires member.manage permission
+        if req.role_ids is not None and "member.manage" in (user.get("permissions") or []):
+            db.execute("DELETE FROM workspace_roles WHERE workspace_id = ?", (workspace_id,))
+            if req.role_ids:
+                db.executemany(
+                    "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
+                    [(workspace_id, rid) for rid in req.role_ids]
+                )
         db.commit()
         row = db.execute("SELECT * FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
-        return dict(row)
+        result = dict(row)
+        result["role_ids"] = [r[0] for r in db.execute(
+            "SELECT role_id FROM workspace_roles WHERE workspace_id = ?", (workspace_id,)
+        ).fetchall()]
+        return result
     finally:
         db.close()
 
@@ -673,34 +712,37 @@ def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", re
     try:
         user = getattr(request.state, "user", None) if request else None
         if user and user.get("user_type") == "member":
-            # Member: only projects in assigned workspaces
             uid = user.get("user_id", user.get("sub", ""))
+            # member sees projects in workspaces they can access (personal OR role-based)
+            base_from = """
+                FROM projects p
+                LEFT JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id AND mw.user_id = ?
+                LEFT JOIN workspace_roles wr ON wr.workspace_id = p.workspace_id
+                LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ?
+            """
+            access_clause = "WHERE (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)"
             if workspace_id:
-                total = db.execute("""
-                    SELECT COUNT(*) FROM projects p
-                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
-                    WHERE mw.user_id = ? AND p.workspace_id = ?
-                """, (uid, workspace_id)).fetchone()[0]
+                total = db.execute(
+                    "SELECT COUNT(*) " + base_from + " " + access_clause + " AND p.workspace_id = ?",
+                    (uid, uid, workspace_id)
+                ).fetchone()[0]
                 offset = (page - 1) * page_size
-                rows = db.execute("""
-                    SELECT p.* FROM projects p
-                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
-                    WHERE mw.user_id = ? AND p.workspace_id = ?
-                    ORDER BY p.updated_at DESC LIMIT ? OFFSET ?
-                """, (uid, workspace_id, page_size, offset)).fetchall()
+                rows = db.execute(
+                    "SELECT DISTINCT p.* " + base_from + " " + access_clause + " AND p.workspace_id = ?" +
+                    " ORDER BY p.updated_at DESC LIMIT ? OFFSET ?",
+                    (uid, uid, workspace_id, page_size, offset)
+                ).fetchall()
             else:
-                total = db.execute("""
-                    SELECT COUNT(*) FROM projects p
-                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
-                    WHERE mw.user_id = ?
-                """, (uid,)).fetchone()[0]
+                total = db.execute(
+                    "SELECT COUNT(*) " + base_from + " " + access_clause,
+                    (uid, uid)
+                ).fetchone()[0]
                 offset = (page - 1) * page_size
-                rows = db.execute("""
-                    SELECT p.* FROM projects p
-                    JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id
-                    WHERE mw.user_id = ?
-                    ORDER BY p.updated_at DESC LIMIT ? OFFSET ?
-                """, (uid, page_size, offset)).fetchall()
+                rows = db.execute(
+                    "SELECT DISTINCT p.* " + base_from + " " + access_clause +
+                    " ORDER BY p.updated_at DESC LIMIT ? OFFSET ?",
+                    (uid, uid, page_size, offset)
+                ).fetchall()
         else:
             if workspace_id:
                 total = db.execute("SELECT COUNT(*) FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]

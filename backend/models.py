@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 
 
 class WorkspaceCreate(BaseModel):
@@ -7,6 +7,7 @@ class WorkspaceCreate(BaseModel):
     description: Optional[str] = ''
     logo: Optional[str] = ''
     status: Optional[str] = 'draft'
+    role_ids: Optional[List[str]] = None
 
 
 class WorkspaceUpdate(BaseModel):
@@ -14,6 +15,7 @@ class WorkspaceUpdate(BaseModel):
     status: Optional[str] = None
     description: Optional[str] = None
     logo: Optional[str] = None
+    role_ids: Optional[List[str]] = None
 
 
 class ProjectCreate(BaseModel):

@@ -142,6 +142,7 @@ export interface Workspace {
   created_by?: string
   created_at: string
   updated_at: string
+  role_ids?: string[]
 }
 
 export interface Prompt {
@@ -196,13 +197,13 @@ export const api = {
     return request(`/api/workspaces${qs ? '?' + qs : ''}`).then(d => d as { workspaces: Workspace[]; total: number; page: number; page_size: number })
   },
   getWorkspace: (id: string) => request(`/api/workspaces/${id}`) as Promise<Workspace>,
-  createWorkspace: (name: string, description?: string, logo?: string, status?: string) =>
+  createWorkspace: (name: string, description?: string, logo?: string, status?: string, roleIds?: string[]) =>
     request('/api/workspaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: description || '', logo: logo || '', status: status || 'draft' }),
+      body: JSON.stringify({ name, description: description || '', logo: logo || '', status: status || 'draft', role_ids: roleIds }),
     }) as Promise<Workspace>,
-  updateWorkspace: (id: string, data: {name?: string; status?: string; description?: string; logo?: string}) =>
+  updateWorkspace: (id: string, data: {name?: string; status?: string; description?: string; logo?: string; role_ids?: string[]}) =>
     request(`/api/workspaces/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteWorkspace: (id: string) => request(`/api/workspaces/${id}`, { method: 'DELETE' }),
 

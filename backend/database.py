@@ -1110,6 +1110,17 @@ def init_db():
         # Always re-seed roles — idempotent (skips existing), catches new roles added in updates
         _migrate_v1_seed_roles(conn)
 
+        # Ensure workspace_roles table exists (added post-migration, idempotent)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS workspace_roles (
+                workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+                role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+                PRIMARY KEY (workspace_id, role_id)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_wr_workspace_id ON workspace_roles(workspace_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_wr_role_id ON workspace_roles(role_id)")
+
         conn.commit()
     finally:
         conn.close()
@@ -1220,6 +1231,17 @@ def _migrate_v1_create_tables(conn):
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_mw_user_id ON member_workspaces(user_id)")
+
+    # 5b. workspace_roles table — role-based workspace visibility
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS workspace_roles (
+            workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+            PRIMARY KEY (workspace_id, role_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wr_workspace_id ON workspace_roles(workspace_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_wr_role_id ON workspace_roles(role_id)")
 
     # 6. payment_records table
     conn.execute("""

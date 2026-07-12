@@ -79,6 +79,7 @@ export default function WorkspaceSettingsPage() {
   const { wid } = useParams<{ wid: string }>()
   const modal = useModal()
   const canSaveProject = usePermission('config.project')
+  const canManageMembers = usePermission('member.manage')
   const { user } = useAuth()
   const [wsCreatedBy, setWsCreatedBy] = useState<string | null>(null)
   const isOwner = () => {
@@ -96,6 +97,8 @@ export default function WorkspaceSettingsPage() {
   const [wsDesc, setWsDesc] = useState('')
   const [wsLogo, setWsLogo] = useState('')
   const [wsLogoUploading, setWsLogoUploading] = useState(false)
+  const [wsRoleIds, setWsRoleIds] = useState<string[]>([])
+  const [memberRoles, setMemberRoles] = useState<{id:string;name:string}[]>([])
   const [wsSaving, setWsSaving] = useState(false)
 
   // Column configs
@@ -143,6 +146,7 @@ export default function WorkspaceSettingsPage() {
       setWsStatus(ws.status || 'draft')
       setWsDesc(ws.description || '')
       setWsLogo(ws.logo || '')
+      setWsRoleIds(ws.role_ids || [])
       setWsCreatedBy(ws.created_by ?? null)
 
       // Try loading workspace configs; if empty, copy from seed
@@ -195,6 +199,11 @@ export default function WorkspaceSettingsPage() {
       ;(cpc as CorePromptConfig[]).forEach(c => { cpcv[c.id] = c.content || '' })
       setCoreValues(cpcv)
 
+      // Load member roles for role-based visibility editor
+      if (canManageMembers) {
+        api.listRoles('member').then(roles => setMemberRoles(roles as {id:string;name:string}[])).catch(() => {})
+      }
+
       setError('')
     } catch (e: any) {
       setError(e.message || '加载失败')
@@ -209,7 +218,7 @@ export default function WorkspaceSettingsPage() {
     if (!wid || !wsName.trim()) return
     setWsSaving(true)
     try {
-      await api.updateWorkspace(wid, { name: wsName.trim(), status: wsStatus, description: wsDesc.trim(), logo: wsLogo.trim() })
+      await api.updateWorkspace(wid, { name: wsName.trim(), status: wsStatus, description: wsDesc.trim(), logo: wsLogo.trim(), role_ids: wsRoleIds })
       modal.toast('已保存', 'success')
     } catch (e: any) {
       modal.toast('保存失败: ' + e.message, 'error')
@@ -331,6 +340,36 @@ export default function WorkspaceSettingsPage() {
                 <option value="completed">已完成</option>
               </select>
             </div>
+            {canManageMembers && memberRoles.length > 0 && (
+              <div className="form-group">
+                <label className="form-label">可见角色</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {memberRoles.map(r => {
+                    const checked = wsRoleIds.includes(r.id)
+                    return (
+                      <label key={r.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 4, fontSize: 12,
+                        padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                        background: checked ? 'var(--primary-light)' : 'var(--card-bg)',
+                        border: checked ? '1px solid var(--primary)' : '1px solid var(--border)',
+                        color: checked ? 'var(--primary)' : 'var(--text-secondary)',
+                        fontWeight: checked ? 600 : 400,
+                      }}>
+                        <input type="checkbox" checked={checked}
+                          onChange={() => setWsRoleIds(prev =>
+                            prev.includes(r.id) ? prev.filter(id => id !== r.id) : [...prev, r.id]
+                          )}
+                          style={{ display: 'none' }} />
+                        {r.name}
+                      </label>
+                    )
+                  })}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+                  勾选后，该角色下所有会员将自动可见此项目
+                </div>
+              </div>
+            )}
             {canEdit && <button className="btn btn-primary btn-sm" onClick={saveWorkspace} disabled={wsSaving}>
               {wsSaving ? '保存中...' : '保存'}
             </button>}
