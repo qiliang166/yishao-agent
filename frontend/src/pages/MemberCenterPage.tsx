@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
+import { api } from '../services/api'
 
 interface MemberProfile {
   user_id: string
@@ -28,6 +29,17 @@ export default function MemberCenterPage() {
   const [pwMsg, setPwMsg] = useState('')
   const [pwError, setPwError] = useState('')
 
+  // Upgrade
+  const [upgradePlan, setUpgradePlan] = useState<any>(null)
+  const [showUpgrade, setShowUpgrade] = useState(false)
+  const [upgradePaymentMethod, setUpgradePaymentMethod] = useState('wechat')
+  const [upgradePaymentRef, setUpgradePaymentRef] = useState('')
+  const [upgradeLoading, setUpgradeLoading] = useState(false)
+  const [upgradeError, setUpgradeError] = useState('')
+  const [upgradeSuccess, setUpgradeSuccess] = useState('')
+  const [qrCodes, setQrCodes] = useState<{ wechat: string; alipay: string }>({ wechat: '', alipay: '' })
+  const [truncateWarning, setTruncateWarning] = useState<{ remaining_days: number; upgrade_days: number; message: string } | null>(null)
+
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
     fetch('/api/auth/me', {
@@ -37,6 +49,18 @@ export default function MemberCenterPage() {
       .then(data => setProfile(data))
       .catch(() => {})
       .finally(() => setLoading(false))
+
+    fetch('/api/settings').then(r => r.json()).then(data => {
+      const s = data.settings || {}
+      if (s.payment_qr_wechat) setQrCodes(prev => ({ ...prev, wechat: s.payment_qr_wechat }))
+      if (s.payment_qr_alipay) setQrCodes(prev => ({ ...prev, alipay: s.payment_qr_alipay }))
+      if (s.member_plan) {
+        try {
+          const p = JSON.parse(s.member_plan)
+          if (p.upgrade) setUpgradePlan(p.upgrade)
+        } catch {}
+      }
+    }).catch(() => {})
   }, [])
 
   const handleChangePassword = async () => {
@@ -65,6 +89,33 @@ export default function MemberCenterPage() {
     }
   }
 
+  const handleUpgrade = async (confirmTruncate: boolean = false) => {
+    setUpgradeError('')
+    setUpgradeLoading(true)
+    try {
+      const result = await api.memberUpgrade({
+        payment_method: upgradePaymentMethod,
+        payment_ref: upgradePaymentRef,
+        confirm_truncate: confirmTruncate,
+      })
+      if (!result.ok && result.truncate_warning) {
+        setTruncateWarning({
+          remaining_days: result.remaining_days!,
+          upgrade_days: result.upgrade_days!,
+          message: result.message!,
+        })
+        return
+      }
+      setUpgradeSuccess(result.message || '升级申请已提交')
+      setShowUpgrade(false)
+      setTruncateWarning(null)
+    } catch (e: any) {
+      setUpgradeError(e.message || '操作失败')
+    } finally {
+      setUpgradeLoading(false)
+    }
+  }
+
   const expiresInfo = () => {
     if (!profile?.expires_at) {
       return <span style={{ color: 'var(--text-secondary)' }}>永久有效</span>
@@ -81,6 +132,13 @@ export default function MemberCenterPage() {
     }
     return <span style={{ color: 'var(--success)' }}>{new Date(profile.expires_at).toLocaleDateString('zh-CN')}（剩余 {days} 天）</span>
   }
+
+  const isPaid = profile?.permissions?.includes('stage5.download')
+  const isUpgraded = profile?.roles?.includes('开发体验员')
+  const isExpired = (() => {
+    if (!profile?.expires_at) return false
+    return new Date(profile.expires_at).getTime() < Date.now()
+  })()
 
   if (loading) {
     return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>加载中...</div>
@@ -107,6 +165,10 @@ export default function MemberCenterPage() {
             <span>{profile?.email || '未设置'}</span>
           </div>
           <div style={{ display: 'flex' }}>
+            <span style={{ width: 80, color: 'var(--text-secondary)', flexShrink: 0 }}>当前角色</span>
+            <span>{profile?.roles?.join('、') || '—'}</span>
+          </div>
+          <div style={{ display: 'flex' }}>
             <span style={{ width: 80, color: 'var(--text-secondary)', flexShrink: 0 }}>注册时间</span>
             <span>{profile?.created_at ? new Date(profile.created_at).toLocaleString('zh-CN') : '—'}</span>
           </div>
@@ -123,10 +185,163 @@ export default function MemberCenterPage() {
         <div style={{ fontSize: 13, padding: '4px 0' }}>
           {expiresInfo()}
         </div>
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
-          如需续期，请联系管理员
-        </div>
+        {!isExpired && (
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+            如需续期，请联系管理员
+          </div>
+        )}
       </div>
+
+      {/* Upgrade Section */}
+      {isPaid && !isUpgraded && !isExpired && upgradePlan && (
+        <div className="ac-sub-item" style={{ marginBottom: 16 }}>
+          <div className="ac-sub-item-header">角色升级</div>
+          <div style={{ fontSize: 13, padding: '4px 0' }}>
+            <p style={{ margin: '0 0 8px 0', color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.6 }}>
+              如果您希望搭建属于自己的智能食谱教案生成系统，可申请升级为"开发体验员"，完整体验内容创建、编辑、AI 生成等全部功能，帮助您了解系统能力与使用方法。确认需求后可联系管理员购买授权码并申请独立部署。升级按时间付费，有效期自动对齐会员到期时间。
+            </p>
+            {upgradeSuccess ? (
+              <div style={{ color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>{upgradeSuccess}</div>
+            ) : (
+              <button className="btn btn-primary btn-sm" onClick={() => {
+                setShowUpgrade(true)
+                setUpgradeError('')
+                setUpgradePaymentRef('')
+                setTruncateWarning(null)
+              }}>
+                申请升级为开发体验员
+              </button>
+            )}
+          </div>
+
+          {/* Upgrade Dialog (inline) */}
+          {showUpgrade && (
+            <div style={{
+              background: '#f8fafc', borderRadius: 8, padding: 16, marginTop: 12,
+              border: '1px solid var(--border)',
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                申请升级 · ￥{upgradePlan.amount_cents ? (upgradePlan.amount_cents / 100).toFixed(2) : '—'} / {upgradePlan.duration_days}天
+              </div>
+
+              {/* Truncate warning */}
+              {truncateWarning && (
+                <div style={{
+                  background: '#fef3c7', borderRadius: 6, padding: '10px 12px', marginBottom: 12,
+                  border: '1px solid #f59e0b',
+                }}>
+                  <div style={{ fontSize: 12, color: '#92400e', fontWeight: 600, marginBottom: 4 }}>
+                    升级时长将被截断
+                  </div>
+                  <div style={{ fontSize: 11, color: '#92400e', marginBottom: 8 }}>
+                    {truncateWarning.message}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-ghost btn-sm"
+                      onClick={() => setTruncateWarning(null)}
+                      style={{ fontSize: 11 }}>
+                      取消
+                    </button>
+                    <button className="btn btn-primary btn-sm"
+                      onClick={() => handleUpgrade(true)}
+                      disabled={upgradeLoading}
+                      style={{ fontSize: 11 }}>
+                      仍然升级（截断为 {truncateWarning.remaining_days} 天）
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* QR codes */}
+              {!truncateWarning && (
+                <>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <button
+                      onClick={() => setUpgradePaymentMethod('wechat')}
+                      style={{
+                        flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6, border: 'none',
+                        cursor: 'pointer', fontWeight: upgradePaymentMethod === 'wechat' ? 700 : 400,
+                        background: upgradePaymentMethod === 'wechat' ? 'var(--primary)' : 'var(--card-bg)',
+                        color: upgradePaymentMethod === 'wechat' ? '#fff' : 'var(--text)',
+                      }}
+                    >
+                      微信支付
+                    </button>
+                    <button
+                      onClick={() => setUpgradePaymentMethod('alipay')}
+                      style={{
+                        flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6, border: 'none',
+                        cursor: 'pointer', fontWeight: upgradePaymentMethod === 'alipay' ? 700 : 400,
+                        background: upgradePaymentMethod === 'alipay' ? 'var(--primary)' : 'var(--card-bg)',
+                        color: upgradePaymentMethod === 'alipay' ? '#fff' : 'var(--text)',
+                      }}
+                    >
+                      支付宝
+                    </button>
+                  </div>
+
+                  {(upgradePaymentMethod === 'wechat' && qrCodes.wechat) || (upgradePaymentMethod === 'alipay' && qrCodes.alipay) ? (
+                    <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                      <img
+                        src={upgradePaymentMethod === 'wechat' ? qrCodes.wechat : qrCodes.alipay}
+                        alt="收款码"
+                        style={{ width: 140, height: 140, objectFit: 'contain', borderRadius: 8 }}
+                      />
+                    </div>
+                  ) : (
+                    <div style={{
+                      textAlign: 'center', padding: '10px 0', marginBottom: 12,
+                      color: 'var(--text-secondary)', fontSize: 11,
+                    }}>
+                      请联系管理员获取收款码
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>付款单号</div>
+                  <input
+                    className="form-input"
+                    type="text"
+                    placeholder="支付完成后填写订单号"
+                    value={upgradePaymentRef}
+                    onChange={e => setUpgradePaymentRef(e.target.value)}
+                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
+                  />
+                </>
+              )}
+
+              {upgradeError && (
+                <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>
+                  {upgradeError}
+                </div>
+              )}
+
+              {!truncateWarning && (
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setShowUpgrade(false)}>取消</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => handleUpgrade(false)} disabled={upgradeLoading}>
+                    {upgradeLoading ? '提交中...' : '提交申请'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {isUpgraded && (
+        <div className="ac-sub-item" style={{ marginBottom: 16 }}>
+          <div className="ac-sub-item-header">角色升级</div>
+          <div style={{ fontSize: 12, padding: '4px 0', color: 'var(--primary)', fontWeight: 600 }}>
+            当前已是开发体验员
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+            角色有效期跟随会员：{profile?.expires_at ? new Date(profile.expires_at).toLocaleDateString('zh-CN') : '—'}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+            会员到期后角色将自动失效，续费后自动恢复。
+          </div>
+        </div>
+      )}
 
       {/* Change Password */}
       <div className="ac-sub-item">

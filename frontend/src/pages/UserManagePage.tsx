@@ -281,20 +281,23 @@ export default function UserManagePage() {
     }
   }
 
-  const expiresBadge = (u: UserItem) => {
-    if (!u.expires_at) return null
+  const expiresInfo = (u: UserItem) => {
+    if (!u.expires_at) return <span style={{ color: 'var(--text-secondary)' }}>永久有效</span>
     const now = new Date()
     const exp = new Date(u.expires_at)
     const diff = exp.getTime() - now.getTime()
-    const days = diff / (86400 * 1000)
+    const days = Math.floor(diff / (86400 * 1000))
+    const dateStr = exp.toLocaleDateString('zh-CN')
     if (diff < 0) {
-      return <span style={{ fontSize: 10, color: '#fff', background: 'var(--warning)', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>已过期</span>
+      return <span style={{ color: 'var(--warning)', fontWeight: 600 }}>已过期 ({dateStr})</span>
     }
     if (days <= 7) {
-      return <span style={{ fontSize: 10, color: '#fff', background: '#f0ad4e', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>{Math.floor(days)}天后到期</span>
+      return <span style={{ color: '#f0ad4e', fontWeight: 600 }}>{dateStr}（{days} 天后到期）</span>
     }
-    return <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 8 }}>{Math.floor(days)}天后到期</span>
+    return <span style={{ color: 'var(--success)' }}>{dateStr}（剩余 {days} 天）</span>
   }
+
+  const isExperienceOfficer = (u: UserItem) => u.roles?.some(r => r.name === '开发体验员')
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
@@ -367,7 +370,7 @@ export default function UserManagePage() {
                   opacity: u.is_active ? 1 : 0.5,
                 }}
               >
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 12 }}>
                     {u.display_name}
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
@@ -379,11 +382,41 @@ export default function UserManagePage() {
                     {!u.is_approved && (
                       <span style={{ fontSize: 10, color: '#fff', background: 'var(--warning)', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>待审批</span>
                     )}
-                    {expiresBadge(u)}
+                    {isExperienceOfficer(u) && (
+                      <span style={{ fontSize: 10, color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 6px', borderRadius: 3, marginLeft: 8, fontWeight: 600 }}>
+                        开发体验员
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    {u.email || '无邮箱'} · {u.roles?.map(r => r.name).join(', ') || '无角色'}
+                    {u.email || '无邮箱'}
+                    {tab === 'member' && (
+                      <span> · 会员：{expiresInfo(u)}</span>
+                    )}
                   </div>
+                  {tab === 'member' && u.roles && u.roles.length > 0 && (
+                    <div style={{ fontSize: 11, marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                      <span style={{ color: 'var(--text-secondary)', flexShrink: 0 }}>角色：</span>
+                      {u.roles.map(r => {
+                        const isUpgrade = r.name === '开发体验员'
+                        return (
+                          <span key={r.id} style={{
+                            fontSize: 10, padding: '1px 6px', borderRadius: 3, fontWeight: 500,
+                            background: isUpgrade ? 'var(--primary-light)' : 'var(--card-bg)',
+                            color: isUpgrade ? 'var(--primary)' : 'var(--text)',
+                            border: isUpgrade ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          }}>
+                            {r.name}
+                            {isUpgrade && u.expires_at && (
+                              <span style={{ marginLeft: 3, opacity: 0.7 }}>
+                                · 随会员 {new Date(u.expires_at).toLocaleDateString('zh-CN')} 到期
+                              </span>
+                            )}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {(canManageMembers || canManageRoles) && (

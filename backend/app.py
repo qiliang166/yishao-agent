@@ -35,20 +35,26 @@ DEFAULT_SITE_NAME = "Yishao Agent"
 
 # Server-authoritative plan definitions — stored in settings table, editable via UI.
 # Falls back to default if not configured.
-DEFAULT_PLAN = {"quarterly": {"amount_cents": 2990, "duration_days": 90, "name": "标准套餐"}}
+DEFAULT_PLAN = {
+    "quarterly": {"amount_cents": 2990, "duration_days": 90, "name": "标准套餐"},
+    "upgrade": {"amount_cents": 1990, "duration_days": 30, "name": "体验管理员升级"},
+}
 
 def _load_plans() -> dict:
-    """Load plan config from settings table, with fallback to default."""
+    """Load plan config from settings table, merged with defaults for new plan types."""
     db = get_db()
+    stored = {}
     try:
         row = db.execute("SELECT value FROM settings WHERE key='member_plan'").fetchone()
         if row and row["value"]:
-            return json.loads(row["value"])
+            stored = json.loads(row["value"])
     except Exception:
         pass
     finally:
         db.close()
-    return DEFAULT_PLAN
+    merged = dict(DEFAULT_PLAN)  # start with defaults
+    merged.update(stored)        # stored values override defaults
+    return merged
 
 # Allowed domains for TTS audio download (SSRF prevention)
 _AUDIO_ALLOWED_HOSTS = {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "aliyuncs.com"}
@@ -6373,6 +6379,118 @@ def member_renew(req: dict, request: Request):
     return {"ok": True, "message": "续费申请已提交，请等待管理员审批"}
 
 
+@app.post("/api/member/upgrade")
+def member_upgrade(req: dict, request: Request):
+    """Self-service upgrade request for paid members to become 开发体验员."""
+    ip = _get_client_ip(request)
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    if user.get("user_type") != "member":
+        raise HTTPException(status_code=403, detail="仅会员可申请升级")
+
+    uid = user.get("sub")
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, username, user_type, is_approved, is_active, expires_at FROM users WHERE id=?",
+            (uid,),
+        ).fetchone()
+        if not m or not m["is_active"]:
+            raise HTTPException(status_code=403, detail="账户不可用")
+        if not m["is_approved"]:
+            raise HTTPException(status_code=403, detail="账户尚未通过审批")
+
+        from datetime import datetime as _dt
+        now = _dt.utcnow()
+        if m["expires_at"]:
+            try:
+                exp = _dt.fromisoformat(m["expires_at"])
+                if exp <= now:
+                    raise HTTPException(status_code=403, detail="会员已到期，请先续费后再申请升级")
+            except (ValueError, TypeError):
+                pass
+
+        existing = db.execute(
+            "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
+            "WHERE ur.user_id=? AND r.name='开发体验员'",
+            (uid,),
+        ).fetchone()
+        if existing:
+            raise HTTPException(status_code=400, detail="您已是体验管理员")
+
+        plans = _load_plans()
+        upgrade_plan = plans.get("upgrade")
+        if not upgrade_plan:
+            raise HTTPException(status_code=400, detail="升级套餐未配置，请联系管理员")
+
+        remaining_days = None
+        if m["expires_at"]:
+            try:
+                exp = _dt.fromisoformat(m["expires_at"])
+                remaining = (exp - now).total_seconds() / 86400
+                remaining_days = max(0, int(remaining))
+            except (ValueError, TypeError):
+                pass
+
+        upgrade_days = int(upgrade_plan.get("duration_days", 30))
+        confirm_truncate = req.get("confirm_truncate", False)
+
+        if remaining_days is not None and upgrade_days > remaining_days:
+            if not confirm_truncate:
+                return {
+                    "ok": False,
+                    "truncate_warning": True,
+                    "remaining_days": remaining_days,
+                    "upgrade_days": upgrade_days,
+                    "message": f"您的会员仅剩 {remaining_days} 天，升级时长将被截断为 {remaining_days} 天。建议先续费会员后再升级。",
+                }
+            actual_days = remaining_days
+        else:
+            actual_days = upgrade_days
+
+        plan_name = upgrade_plan.get("name", "体验管理员升级")
+        pending = db.execute(
+            "SELECT id FROM payment_records WHERE user_id=? AND plan_name=? AND recorded_by IS NULL",
+            (uid, plan_name),
+        ).fetchone()
+        if pending:
+            raise HTTPException(status_code=400, detail="您已有待审批的升级申请，请等待管理员处理")
+
+        payment_method = (req.get("payment_method", "") or "").strip()
+        payment_ref = (req.get("payment_ref", "") or "").strip()
+        if not payment_ref:
+            raise HTTPException(status_code=400, detail="请填写付款单号")
+
+        now_str = now.isoformat()
+        import uuid as _uuid
+        db.execute(
+            """INSERT INTO payment_records
+               (id, user_id, amount_cents, plan_name, duration_days,
+                payment_method, payment_ref, paid_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (str(_uuid.uuid4()), uid, upgrade_plan["amount_cents"],
+             plan_name, actual_days,
+             payment_method, payment_ref, now_str),
+        )
+
+        _write_audit(db, uid, "member.upgrade", "user", uid,
+                      json.dumps({"plan_name": plan_name,
+                                  "amount_cents": upgrade_plan["amount_cents"],
+                                  "duration_days": actual_days,
+                                  "payment_method": payment_method,
+                                  "payment_ref": payment_ref}), ip)
+        db.commit()
+    finally:
+        db.close()
+
+    return {
+        "ok": True,
+        "message": "升级申请已提交，请等待管理员审批",
+        "duration_days": actual_days,
+    }
+
+
 # ── Member management endpoints ─────────────────────────────────────
 
 @app.get("/api/members/pending")
@@ -6529,6 +6647,113 @@ async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
                       json.dumps({"reason": reason}), ip_address=ip)
         db.commit()
         return {"ok": True, "message": "已拒绝"}
+    finally:
+        db.close()
+
+
+@app.get("/api/members/pending-upgrades")
+def list_pending_upgrades(user=require_perm("member.manage")):
+    """List members who have submitted upgrade requests pending approval."""
+    db = get_db()
+    try:
+        plans = _load_plans()
+        upgrade_plan = plans.get("upgrade", {})
+        plan_name = upgrade_plan.get("name", "体验管理员升级")
+
+        rows = db.execute(
+            "SELECT DISTINCT u.id, u.username, u.display_name, u.email, u.phone, "
+            "u.created_at, u.expires_at, u.is_approved, "
+            "pr.plan_name, pr.amount_cents, pr.duration_days, pr.payment_method, "
+            "pr.payment_ref, pr.paid_at "
+            "FROM users u "
+            "JOIN payment_records pr ON pr.user_id = u.id "
+            "WHERE u.user_type='member' AND u.is_approved=1 "
+            "AND pr.plan_name=? AND pr.recorded_by IS NULL "
+            "AND u.id NOT IN ("
+            "  SELECT ur.user_id FROM user_roles ur "
+            "  JOIN roles r ON ur.role_id=r.id "
+            "  WHERE r.name='开发体验员'"
+            ") "
+            "ORDER BY pr.paid_at DESC"
+        , (plan_name,)).fetchall()
+
+        members = []
+        for r in rows:
+            m = dict(r)
+            m["payment"] = {
+                "plan_name": m["plan_name"],
+                "amount_cents": m["amount_cents"],
+                "duration_days": m["duration_days"],
+                "payment_method": m["payment_method"],
+                "payment_ref": m["payment_ref"],
+            }
+            members.append(m)
+        return {"members": members, "total": len(members)}
+    finally:
+        db.close()
+
+
+@app.put("/api/members/{user_id}/approve-upgrade")
+def approve_upgrade(user_id: str, request: Request, user=require_perm("member.manage")):
+    """Approve a member's upgrade to 开发体验员."""
+    ip = _get_client_ip(request)
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, username, user_type, is_approved, expires_at FROM users WHERE id=?",
+            (user_id,),
+        ).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+        if m["user_type"] != "member":
+            raise HTTPException(400, "只能为会员升级")
+        if not m["is_approved"]:
+            raise HTTPException(400, "该会员尚未通过基础审批，请先审批会员资格")
+
+        from datetime import datetime as _dt
+        now = _dt.utcnow()
+        if m["expires_at"]:
+            try:
+                exp = _dt.fromisoformat(m["expires_at"])
+                if exp <= now:
+                    raise HTTPException(400, "会员已到期，无法升级，请先续费")
+            except (ValueError, TypeError):
+                pass
+
+        existing = db.execute(
+            "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
+            "WHERE ur.user_id=? AND r.name='开发体验员'",
+            (user_id,),
+        ).fetchone()
+        if existing:
+            raise HTTPException(400, "该会员已是体验管理员")
+
+        role = db.execute(
+            "SELECT id FROM roles WHERE name='开发体验员' AND is_system=1"
+        ).fetchone()
+        if not role:
+            raise HTTPException(500, "系统角色缺失：开发体验员，请联系管理员重新部署")
+
+        db.execute(
+            "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+            (user_id, role["id"]),
+        )
+
+        # Mark pending upgrade payment as recorded
+        plans = _load_plans()
+        upgrade_plan = plans.get("upgrade", {})
+        plan_name = upgrade_plan.get("name", "体验管理员升级")
+        db.execute(
+            "UPDATE payment_records SET recorded_by=?, expires_before=?, expires_after=? "
+            "WHERE user_id=? AND plan_name=? AND recorded_by IS NULL",
+            (user["sub"], m["expires_at"], m["expires_at"], user_id, plan_name),
+        )
+
+        _write_audit(db, user["sub"], "member.approve_upgrade", "user", user_id,
+                      json.dumps({"role": "开发体验员", "membership_expires": m["expires_at"]}),
+                      ip_address=ip)
+        db.commit()
+        return {"ok": True, "message": "升级审批通过，已分配体验管理员角色", "role": "开发体验员"}
     finally:
         db.close()
 
@@ -6903,6 +7128,21 @@ if getattr(sys, 'frozen', False):
 else:
     FRONTEND_DIST = os.path.join(WORKSPACE_ROOT, "frontend", "dist")
 if os.path.isdir(FRONTEND_DIST):
+    import os as _os
+    from fastapi.responses import FileResponse as _FileResponse
+
+    @app.get("/{full_path:path}")
+    async def _spa_fallback(full_path: str):
+        # Resolve and verify the path stays within FRONTEND_DIST to prevent path traversal
+        raw = _os.path.join(FRONTEND_DIST, full_path)
+        real = _os.path.realpath(raw)
+        dist_real = _os.path.realpath(FRONTEND_DIST)
+        if _os.path.commonpath([real, dist_real]) != dist_real:
+            return _FileResponse(_os.path.join(FRONTEND_DIST, "index.html"))
+        if _os.path.isfile(real):
+            return _FileResponse(real)
+        return _FileResponse(_os.path.join(FRONTEND_DIST, "index.html"))
+
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":

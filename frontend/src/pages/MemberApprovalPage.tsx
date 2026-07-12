@@ -20,6 +20,18 @@ interface PendingMember {
   payment: PaymentInfo | null
 }
 
+interface PendingUpgrade {
+  id: string
+  username: string
+  display_name: string
+  email: string
+  phone: string
+  created_at: string
+  expires_at: string | null
+  is_approved: number
+  payment: PaymentInfo | null
+}
+
 function formatAmount(cents: number): string {
   return (cents / 100).toFixed(2)
 }
@@ -41,6 +53,11 @@ export default function MemberApprovalPage() {
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
 
+  // Pending upgrades
+  const [upgrades, setUpgrades] = useState<PendingUpgrade[]>([])
+  const [upgradeLoading, setUpgradeLoading] = useState(true)
+  const [approveUpgradeId, setApproveUpgradeId] = useState<string | null>(null)
+
   const pageSize = 20
 
   const loadMembers = () => {
@@ -54,7 +71,16 @@ export default function MemberApprovalPage() {
       .finally(() => setLoading(false))
   }
 
+  const loadUpgrades = () => {
+    setUpgradeLoading(true)
+    api.listPendingUpgrades()
+      .then(data => setUpgrades(data.members as PendingUpgrade[]))
+      .catch(() => {})
+      .finally(() => setUpgradeLoading(false))
+  }
+
   useEffect(() => { loadMembers() }, [page])
+  useEffect(() => { loadUpgrades() }, [])
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -97,6 +123,22 @@ export default function MemberApprovalPage() {
     }
   }
 
+  const handleApproveUpgrade = async () => {
+    if (!approveUpgradeId) return
+    setActionLoading(true)
+    setError('')
+    try {
+      await api.approveUpgrade(approveUpgradeId)
+      showToast('升级审批通过')
+      setApproveUpgradeId(null)
+      loadUpgrades()
+    } catch (e: any) {
+      setError(e.message || '操作失败')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const openApprove = (m: PendingMember) => {
     setApproveId(m.id)
     setDurationDays(m.payment ? (m.payment.duration_days || 90) : 7)
@@ -106,6 +148,7 @@ export default function MemberApprovalPage() {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const selectedMember = getSelectedMember()
+  const selectedUpgrade = upgrades.find(u => u.id === approveUpgradeId)
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
@@ -120,6 +163,69 @@ export default function MemberApprovalPage() {
           {toast}
         </div>
       )}
+
+      {/* ── Pending Upgrades ── */}
+      {upgrades.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>
+            待审批升级 ({upgrades.length})
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {upgrades.map((u) => (
+              <div
+                key={u.id}
+                className="card"
+                style={{
+                  padding: '16px 20px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  borderLeft: '3px solid var(--primary)',
+                }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>
+                    {u.display_name}
+                    <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
+                      @{u.username}
+                    </span>
+                    <span style={{
+                      marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                      background: 'rgba(139,92,246,0.1)', color: '#8b5cf6', fontWeight: 600,
+                    }}>
+                      申请升级
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {u.email || '无邮箱'}{u.phone ? ` · ${u.phone}` : ''} · 注册于 {new Date(u.created_at).toLocaleString('zh-CN')}
+                  </div>
+                  {u.expires_at && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      会员到期：{new Date(u.expires_at).toLocaleDateString('zh-CN')}
+                    </div>
+                  )}
+                  {u.payment && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      付款单号：{u.payment.payment_ref || '—'} · {paymentMethodLabel(u.payment.payment_method)} · ￥{formatAmount(u.payment.amount_cents)}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => { setApproveUpgradeId(u.id); setError('') }}
+                  >
+                    通过升级
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Pending Members ── */}
+      <h2 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>
+        待审批会员
+      </h2>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
@@ -209,13 +315,12 @@ export default function MemberApprovalPage() {
         </>
       )}
 
-      {/* Approve Dialog */}
+      {/* Approve Member Dialog */}
       {approveId && selectedMember && (
         <div className="dialog-overlay" onClick={() => setApproveId(null)}>
           <div className="dialog-box" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
             <div className="dialog-title">审批通过</div>
 
-            {/* Member info summary */}
             <div style={{
               background: '#f8fafc', borderRadius: 8, padding: 12, marginBottom: 16,
               fontSize: 12, lineHeight: 1.8,
@@ -227,7 +332,6 @@ export default function MemberApprovalPage() {
               <div><strong>注册时间：</strong>{new Date(selectedMember.created_at).toLocaleString('zh-CN')}</div>
             </div>
 
-            {/* Payment info */}
             {selectedMember.payment ? (
               <div style={{
                 background: 'rgba(59,130,246,0.05)', borderRadius: 8, padding: 12, marginBottom: 16,
@@ -311,6 +415,61 @@ export default function MemberApprovalPage() {
               <button className="btn btn-primary btn-sm" onClick={handleReject} disabled={actionLoading}
                 style={{ background: 'var(--warning)', borderColor: 'var(--warning)' }}>
                 {actionLoading ? '处理中...' : '确认拒绝'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Upgrade Dialog */}
+      {approveUpgradeId && selectedUpgrade && (
+        <div className="dialog-overlay" onClick={() => setApproveUpgradeId(null)}>
+          <div className="dialog-box" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">审批升级</div>
+
+            <div style={{
+              background: '#f8fafc', borderRadius: 8, padding: 12, marginBottom: 16,
+              fontSize: 12, lineHeight: 1.8,
+            }}>
+              <div><strong>用户名：</strong>{selectedUpgrade.username}</div>
+              <div><strong>显示名：</strong>{selectedUpgrade.display_name}</div>
+              {selectedUpgrade.email && <div><strong>邮箱：</strong>{selectedUpgrade.email}</div>}
+              {selectedUpgrade.phone && <div><strong>手机号：</strong>{selectedUpgrade.phone}</div>}
+              <div><strong>注册时间：</strong>{new Date(selectedUpgrade.created_at).toLocaleString('zh-CN')}</div>
+              {selectedUpgrade.expires_at && (
+                <div><strong>会员到期：</strong>{new Date(selectedUpgrade.expires_at).toLocaleDateString('zh-CN')}</div>
+              )}
+            </div>
+
+            {selectedUpgrade.payment && (
+              <div style={{
+                background: 'rgba(139,92,246,0.05)', borderRadius: 8, padding: 12, marginBottom: 16,
+                border: '1px solid rgba(139,92,246,0.15)',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#8b5cf6' }}>
+                  升级付款信息
+                </div>
+                <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--text)' }}>
+                  <div>套餐：{selectedUpgrade.payment.plan_name}</div>
+                  <div>金额：￥{formatAmount(selectedUpgrade.payment.amount_cents)}</div>
+                  <div>升级天数：{selectedUpgrade.payment.duration_days} 天</div>
+                  <div>支付方式：{paymentMethodLabel(selectedUpgrade.payment.payment_method)}</div>
+                  <div>付款单号：<strong>{selectedUpgrade.payment.payment_ref || '—'}</strong></div>
+                </div>
+              </div>
+            )}
+
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              通过后将为此会员分配"开发体验员"角色，拥有内容创建和编辑权限。升级有效期自动对齐会员到期时间。
+            </p>
+
+            {error && (
+              <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>{error}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setApproveUpgradeId(null)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleApproveUpgrade} disabled={actionLoading}>
+                {actionLoading ? '处理中...' : '确认通过升级'}
               </button>
             </div>
           </div>

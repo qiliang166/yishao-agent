@@ -971,6 +971,25 @@ export const api = {
       body: JSON.stringify(data),
     }).then(d => d as { ok: boolean; message: string }),
 
+  memberUpgrade: (data: {
+    payment_method?: string; payment_ref?: string;
+    confirm_truncate?: boolean;
+  }) =>
+    request('/api/member/upgrade', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean; message: string; truncate_warning?: boolean; remaining_days?: number; upgrade_days?: number; duration_days?: number }),
+
+  listPendingUpgrades: () =>
+    request('/api/members/pending-upgrades').then(d => d as { members: any[]; total: number }),
+
+  approveUpgrade: (userId: string) =>
+    request('/api/members/' + userId + '/approve-upgrade', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    }).then(d => d as { ok: boolean; message: string; role: string }),
+
   // Roles
   listRoles: (userType?: string) => {
     const qs = userType ? '?user_type=' + encodeURIComponent(userType) : ''

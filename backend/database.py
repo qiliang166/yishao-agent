@@ -1107,6 +1107,9 @@ def init_db():
 
         _migrate_v1_rbac(conn)
 
+        # Always re-seed roles — idempotent (skips existing), catches new roles added in updates
+        _migrate_v1_seed_roles(conn)
+
         conn.commit()
     finally:
         conn.close()
@@ -1335,6 +1338,7 @@ def _migrate_v1_seed_roles(conn):
         ("内容管理员", "admin", CONTENT_ADMIN_PERMS),
         ("试用会员", "member", TRIAL_MEMBER_PERMS),
         ("付费会员", "member", PAID_MEMBER_PERMS),
+        ("开发体验员", "member", CONTENT_ADMIN_PERMS),
     ]
 
     for name, utype, perms in _seed_roles:

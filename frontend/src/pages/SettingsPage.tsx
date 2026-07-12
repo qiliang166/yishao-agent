@@ -103,6 +103,10 @@ function SettingsPage() {
   const [planName, setPlanName] = useState('标准套餐')
   const [planPrice, setPlanPrice] = useState('29.90')
   const [planDays, setPlanDays] = useState('90')
+  // 升级套餐
+  const [upgradePlanName, setUpgradePlanName] = useState('体验管理员升级')
+  const [upgradePlanPrice, setUpgradePlanPrice] = useState('19.90')
+  const [upgradePlanDays, setUpgradePlanDays] = useState('30')
 
   const [adminPasswordEnabled, setAdminPasswordEnabled] = useState(true)
 
@@ -153,6 +157,11 @@ function SettingsPage() {
           if (q.name) setPlanName(q.name)
           if (q.amount_cents) setPlanPrice((q.amount_cents / 100).toFixed(2))
           if (q.duration_days) setPlanDays(String(q.duration_days))
+          if (p.upgrade) {
+            if (p.upgrade.name) setUpgradePlanName(p.upgrade.name)
+            if (p.upgrade.amount_cents) setUpgradePlanPrice((p.upgrade.amount_cents / 100).toFixed(2))
+            if (p.upgrade.duration_days) setUpgradePlanDays(String(p.upgrade.duration_days))
+          }
         } catch {}
       }
       setAdminPasswordEnabled(s.admin_password_enabled !== '0')
@@ -273,7 +282,11 @@ function SettingsPage() {
           quarterly: {
             name: planName, amount_cents: Math.round(parseFloat(planPrice) * 100),
             duration_days: parseInt(planDays, 10) || 90,
-          }
+          },
+          upgrade: {
+            name: upgradePlanName, amount_cents: Math.round(parseFloat(upgradePlanPrice) * 100),
+            duration_days: parseInt(upgradePlanDays, 10) || 30,
+          },
         }),
       })
       const fallback = (await api.getVersion()).app || ''
@@ -976,9 +989,10 @@ function SettingsPage() {
         )}
 
         {/* ═══ TAB: 会员套餐 ═══ */}
-        {activeTab === 'plan' && (
+        {activeTab === 'plan' && (<>
           <div className="settings-section">
-            <h3>套餐配置</h3>
+            <h3>会员套餐</h3>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>会员注册和续费使用的标准套餐。</p>
             <div className="settings-row">
               <label>套餐名称</label>
               <input className="form-input" value={planName}
@@ -1003,7 +1017,36 @@ function SettingsPage() {
               <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>从审批通过当天起算</span>
             </div>
           </div>
-        )}
+
+          <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
+            <h3>升级套餐</h3>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              付费会员可申请升级为"开发体验员"，获得内容管理权限。升级天数超过会员剩余天数时自动截断。
+            </p>
+            <div className="settings-row">
+              <label>套餐名称</label>
+              <input className="form-input" value={upgradePlanName}
+                onChange={e => setUpgradePlanName(e.target.value)}
+                disabled={!canSaveGlobal} style={{ maxWidth: 200 }} />
+            </div>
+            <div className="settings-row">
+              <label>价格（元）</label>
+              <input className="form-input" type="number" step="0.01" min="0.01"
+                value={upgradePlanPrice}
+                onChange={e => setUpgradePlanPrice(e.target.value)}
+                disabled={!canSaveGlobal} style={{ maxWidth: 120 }} />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>一次性付费，升级天数自动截断不超过会员剩余天数</span>
+            </div>
+            <div className="settings-row">
+              <label>最大天数</label>
+              <input className="form-input" type="number" step="1" min="1"
+                value={upgradePlanDays}
+                onChange={e => setUpgradePlanDays(e.target.value)}
+                disabled={!canSaveGlobal} style={{ maxWidth: 100 }} />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>不超过会员剩余天数时使用此值</span>
+            </div>
+          </div>
+        </>)}
       </div>
     </div>
   )
