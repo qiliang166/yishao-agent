@@ -926,9 +926,11 @@ export default function ProjectPage() {
           if (pid.endsWith('-col3')) s3p['sop'] = { prompt: item.prompt, skill: item.skill }
           if (pid.endsWith('-col4')) s3p['daoPpt'] = { prompt: item.prompt, skill: item.skill }
           if (pid.endsWith('-col5')) s3p['yanxiPpt'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-speech-doc')) s4p['doc'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-speech-analysis')) s4p['analysis'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-speech-comprehensive')) s4p['comprehensive'] = { prompt: item.prompt, skill: item.skill }
+          if (item.output_mode === 'speech_config') {
+            if (item.name === '文档演讲') s4p['doc'] = { prompt: item.prompt, skill: item.skill }
+            else if (item.name === '分析演讲') s4p['analysis'] = { prompt: item.prompt, skill: item.skill }
+            else if (item.name === '综合演讲') s4p['comprehensive'] = { prompt: item.prompt, skill: item.skill }
+          }
         })
         setStage3Prompts(s3p)
         if (Object.keys(s4p).length > 0) setStage4Prompts(s4p)
@@ -962,7 +964,7 @@ export default function ProjectPage() {
       api.listSpeechConfigs(wid).then((configs: any[]) => {
         const s4p: Record<string, { prompt: string; skill: string }> = {}
         configs.forEach((c: any) => {
-          const key = c.id === 'speech-doc' ? 'doc' : c.id === 'speech-analysis' ? 'analysis' : c.id === 'speech-comprehensive' ? 'comprehensive' : ''
+          const key = c.label === '文档演讲' ? 'doc' : c.label === '分析演讲' ? 'analysis' : c.label === '综合演讲' ? 'comprehensive' : ''
           if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
         })
         if (Object.keys(s4p).length > 0) setStage4Prompts(prev => ({ ...prev, ...s4p }))

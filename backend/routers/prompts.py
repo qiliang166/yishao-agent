@@ -314,7 +314,7 @@ def list_speech_configs(workspace_id: str = None):
 def update_speech_config(config_id: str, req: dict, user=require_perm("config.project")):
     db = get_db()
     try:
-        existing = db.execute("SELECT id FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
+        existing = db.execute("SELECT id, workspace_id FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
         if not existing:
             raise HTTPException(404, "Config not found")
         if 'prompt' in req:
@@ -322,6 +322,24 @@ def update_speech_config(config_id: str, req: dict, user=require_perm("config.pr
         if 'skill' in req:
             db.execute("UPDATE speech_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
         db.commit()
+
+        # Sync prompt/skill to all project_items in the same workspace
+        ws_id = existing["workspace_id"]
+        if ws_id and any(k in req for k in ("prompt", "skill")):
+            projects = db.execute("SELECT id FROM projects WHERE workspace_id = ?", (ws_id,)).fetchall()
+            for p in projects:
+                item_id = f"pi-{p['id']}-speech-{config_id.replace('speech-', '')}"
+                item = db.execute("SELECT id FROM project_items WHERE id = ?", (item_id,)).fetchone()
+                if not item:
+                    continue
+                if 'prompt' in req:
+                    db.execute("UPDATE project_items SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                               (req['prompt'], item_id))
+                if 'skill' in req:
+                    db.execute("UPDATE project_items SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                               (req['skill'], item_id))
+            db.commit()
+
         row = db.execute("SELECT * FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)
     finally:
@@ -350,7 +368,7 @@ def list_tts_configs(workspace_id: str = None):
 def update_tts_config(config_id: str, req: dict, user=require_perm("config.project")):
     db = get_db()
     try:
-        existing = db.execute("SELECT id FROM tts_configs WHERE id = ?", (config_id,)).fetchone()
+        existing = db.execute("SELECT id, workspace_id FROM tts_configs WHERE id = ?", (config_id,)).fetchone()
         if not existing:
             raise HTTPException(404, "Config not found")
         if 'prompt' in req:
@@ -358,6 +376,24 @@ def update_tts_config(config_id: str, req: dict, user=require_perm("config.proje
         if 'skill' in req:
             db.execute("UPDATE tts_configs SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req['skill'], config_id))
         db.commit()
+
+        # Sync prompt/skill to all project_items in the same workspace
+        ws_id = existing["workspace_id"]
+        if ws_id and any(k in req for k in ("prompt", "skill")):
+            projects = db.execute("SELECT id FROM projects WHERE workspace_id = ?", (ws_id,)).fetchall()
+            for p in projects:
+                item_id = f"pi-{p['id']}-tts-{config_id.replace('tts-', '')}"
+                item = db.execute("SELECT id FROM project_items WHERE id = ?", (item_id,)).fetchone()
+                if not item:
+                    continue
+                if 'prompt' in req:
+                    db.execute("UPDATE project_items SET prompt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                               (req['prompt'], item_id))
+                if 'skill' in req:
+                    db.execute("UPDATE project_items SET skill = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                               (req['skill'], item_id))
+            db.commit()
+
         row = db.execute("SELECT * FROM tts_configs WHERE id = ?", (config_id,)).fetchone()
         return dict(row)
     finally:
