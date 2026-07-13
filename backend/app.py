@@ -1045,10 +1045,18 @@ def api_project_files(project_id: str, request: Request):
     finally:
         db.close()
 
+    # Variant suffixes to hide — only final index.html / slide_N.html are shown
+    _variant_re = re.compile(r'(^index_|\.html$)')
+    _variant_suffixes = ('_vars', '_backup', '_regenerated', '_regenerated_partial', '_regenerated_vars')
+
     if os.path.exists(path):
         for f in sorted(os.listdir(path), key=lambda x: os.path.getmtime(os.path.join(path, x)), reverse=True):
             full = os.path.join(path, f)
             if os.path.isfile(full):
+                # Skip variant / intermediate PPT HTML files
+                name_no_ext = os.path.splitext(f)[0]
+                if name_no_ext.endswith(_variant_suffixes):
+                    continue
                 ext = os.path.splitext(f)[1].lower()
                 type_map = {'.pptx': 'PPT', '.docx': 'Word', '.txt': 'Text',
                            '.mp3': 'MP3', '.wav': 'Audio', '.mp4': 'Video'}
