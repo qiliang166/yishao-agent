@@ -1154,6 +1154,13 @@ def api_project_files(project_id: str, request: Request):
                 for rf in sorted(os.listdir(run_dir)):
                     rfull = os.path.join(run_dir, rf)
                     if os.path.isfile(rfull):
+                        # Skip variant / intermediate files — only show final output
+                        _rf_no_ext = os.path.splitext(rf)[0]
+                        if _rf_no_ext in ('index_vars', 'index_backup', 'index_regenerated',
+                                          'index_regenerated_partial', 'index_regenerated_vars'):
+                            continue
+                        if _rf_no_ext.endswith('_vars'):
+                            continue
                         ext = os.path.splitext(rf)[1].lower()
                         if ext in ('.html', '.svg', '.png', '.jpg'):
                             files.append({
