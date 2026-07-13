@@ -443,8 +443,11 @@ async def license_middleware(request: Request, call_next):
     }
     # Always allow license endpoints, login, auth check, branding, static assets
     if (path in _license_endpoints
-        or path in ("/api/login", "/api/auth/check", "/api/verify-password",
-                    "/api/settings", "/api/version")
+        or path in ("/api/login", "/api/auth/login", "/api/member/login",
+                    "/api/member/register",
+                    "/api/auth/change-password", "/api/setup/complete",
+                    "/api/auth/check",
+                    "/api/verify-password", "/api/settings", "/api/version")
         or path.startswith("/api/logos/")
         or path.startswith("/api/help-manual/")
         or path.startswith("/api/download/")
@@ -5208,6 +5211,21 @@ def get_settings():
                 settings["admin_password_enabled"] = "1" if r["value"] else "0"
             else:
                 settings[r["key"]] = r["value"]
+
+        # Expose initial admin password on first-time setup so new users
+        # know how to log in (desktop version hides console output).
+        admin = db.execute(
+            "SELECT must_change_password FROM users WHERE user_type='admin' LIMIT 1"
+        ).fetchone()
+        if admin and admin["must_change_password"] == 1:
+            pwd_path = os.path.join(BASE_DIR, "initial_admin_password.txt")
+            try:
+                if os.path.exists(pwd_path):
+                    with open(pwd_path) as f:
+                        settings["initial_admin_password"] = f.read().strip()
+            except Exception:
+                pass
+
         return {"settings": settings}
     finally:
         db.close()
@@ -5544,6 +5562,11 @@ def auth_change_password(req: dict, request: Request):
             "password_changed_at=?, updated_at=? WHERE id=?",
             (new_hash, datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), user["sub"]),
         )
+        # Sync to settings.admin_password so verify-password works too
+        if user.get("user_type") == "admin":
+            db.execute(
+                "INSERT OR REPLACE INTO settings (key, value) VALUES ('admin_password', ?)",
+                (new_hash,))
         _write_audit(db, user["sub"], "auth.change_password", "user", user["sub"],
                       json.dumps({}), _get_client_ip(request))
         db.commit()
@@ -6389,19 +6412,29 @@ def verify_password(req: dict):
     plain = req.get("password", "")
     if not plain:
         raise HTTPException(status_code=400, detail="密码不能为空")
-    stored_hash = _get_setting("admin_password")
-    if not stored_hash:
-        raise HTTPException(status_code=400, detail="未设置密码")
-    if not _verify_password(plain, stored_hash):
-        raise HTTPException(status_code=403, detail="密码错误")
-    # Upgrade legacy hash to bcrypt on successful verification
-    if not stored_hash.startswith("$2"):
-        db = get_db()
-        try:
+    db = get_db()
+    try:
+        # RBAC mode: check admin user's password_hash first
+        admin = db.execute(
+            "SELECT password_hash FROM users WHERE user_type='admin' AND is_active=1 LIMIT 1"
+        ).fetchone()
+        if admin:
+            stored_hash = admin["password_hash"]
+        else:
+            stored_hash = _get_setting("admin_password")
+        if not stored_hash:
+            raise HTTPException(status_code=400, detail="未设置密码")
+        if not _verify_password(plain, stored_hash):
+            raise HTTPException(status_code=403, detail="密码错误")
+        # Upgrade legacy hash to bcrypt on successful verification
+        if not stored_hash.startswith("$2"):
             db.execute("UPDATE settings SET value = ? WHERE key = 'admin_password'", (_hash_password(plain),))
+            db.execute(
+                "UPDATE users SET password_hash=? WHERE user_type='admin' AND is_active=1",
+                (_hash_password(plain),))
             db.commit()
-        finally:
-            db.close()
+    finally:
+        db.close()
     return {"ok": True}
 
 
