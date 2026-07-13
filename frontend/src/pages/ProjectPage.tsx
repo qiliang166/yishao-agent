@@ -317,18 +317,23 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
   const [playingAudio, setPlayingAudio] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
+  const playingUrlRef = useRef('')
+
   const handleAudioToggle = (audioUrl: string) => {
-    if (!audioRef.current || audioRef.current.src !== audioUrl) {
-      if (audioRef.current) { audioRef.current.pause() }
+    if (playingUrlRef.current !== audioUrl) {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+      }
       const a = new Audio(audioUrl)
-      a.onended = () => setPlayingAudio('')
-      a.onpause = () => setPlayingAudio('')
-      a.onplay = () => setPlayingAudio(audioUrl)
+      a.onended = () => { setPlayingAudio(''); playingUrlRef.current = '' }
+      a.onpause = () => { setPlayingAudio(''); playingUrlRef.current = '' }
+      a.onplay = () => { setPlayingAudio(audioUrl); playingUrlRef.current = audioUrl }
       audioRef.current = a
-      a.play().catch(() => {})
-    } else if (audioRef.current.paused) {
-      audioRef.current.play().catch(() => {})
-    } else {
+      a.play().catch(() => { setPlayingAudio(''); playingUrlRef.current = '' })
+    } else if (audioRef.current && audioRef.current.paused) {
+      audioRef.current.play().catch(() => { setPlayingAudio(''); playingUrlRef.current = '' })
+    } else if (audioRef.current) {
       audioRef.current.pause()
     }
   }
