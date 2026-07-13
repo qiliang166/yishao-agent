@@ -5216,9 +5216,10 @@ def get_settings(request: Request):
 
         # Expose initial admin password on first-time setup so new users
         # know how to log in (desktop version hides console output).
-        # Only allow from localhost — unauthenticated endpoint, not safe for network exposure.
+        # Only allow from localhost without proxy — unauthenticated endpoint.
         client_host = request.client.host if request.client else ""
-        if client_host in ("127.0.0.1", "::1", "localhost"):
+        is_proxied = any(h in request.headers for h in ("x-forwarded-for", "x-real-ip"))
+        if client_host in ("127.0.0.1", "::1", "localhost") and not is_proxied:
             admin = db.execute(
                 "SELECT must_change_password FROM users WHERE user_type='admin' LIMIT 1"
             ).fetchone()
