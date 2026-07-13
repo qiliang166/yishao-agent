@@ -5563,10 +5563,33 @@ def api_download_server():
 # ── File Download ──
 
 @app.get("/api/download/{filename}")
-def download_file(filename: str, project_id: str = None, name: str = None, request: Request = None):
+def download_file(filename: str, request: Request, project_id: str = None, name: str = None):
+    print(f"[DOWNLOAD] filename={filename}, project_id={project_id}, request_ok={request is not None}", flush=True)
+    if request:
+        print(f"[DOWNLOAD] user={getattr(request.state, 'user', 'NO_STATE')}", flush=True)
     download_name = name or filename
     if project_id:
         user = getattr(request.state, "user", None) if request else None
+        print(f"[DOWNLOAD] user_ok={user is not None}, perms={user.get('permissions', []) if user else 'N/A'}", flush=True)
+        if user is None and request:
+            token = request.query_params.get("token")
+            if token:
+                try:
+                    user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                    # Verify token_version for security
+                    if "token_version" in user and "sub" in user:
+                        db = get_db()
+                        try:
+                            urow = db.execute(
+                                "SELECT token_version FROM users WHERE id=? AND is_active=1",
+                                (user["sub"],),
+                            ).fetchone()
+                            if not urow or urow["token_version"] != user["token_version"]:
+                                user = None
+                        finally:
+                            db.close()
+                except JWTError:
+                    pass
         if user is None:
             raise HTTPException(status_code=401, detail="请先登录")
         perms = set(user.get("permissions", []))
@@ -5835,7 +5858,7 @@ def api_tts_history_delete(history_id: int, user=require_perm("stage4.generate")
 
 
 @app.get("/api/audio/{filename}")
-def serve_audio(filename: str, project_id: str = None, name: str = None, request: Request = None):
+def serve_audio(filename: str, request: Request, project_id: str = None, name: str = None):
     download_name = name or filename
     if project_id:
         user = getattr(request.state, "user", None) if request else None

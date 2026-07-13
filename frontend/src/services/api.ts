@@ -531,17 +531,18 @@ export const api = {
   downloadFile: (projectId: string, filename: string) => {
     window.open(`${BASE}/api/download/${encodeURIComponent(filename)}?project_id=${encodeURIComponent(projectId)}`, '_blank')
   },
-  /** Download a file via fetch+blob with a custom filename (works for HTML exports too). */
+  /** Download a file via direct <a> tag — browser handles streaming natively, no memory pressure for large files. */
   downloadWithName: async (url: string, filename: string) => {
     const token = localStorage.getItem('auth_token')
-    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-    const res = await fetch(url.startsWith('http') ? url : `${BASE}${url}`, { headers })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const blob = await res.blob()
-    const objUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a'); a.href = objUrl; a.download = filename
-    document.body.appendChild(a); a.click(); document.body.removeChild(a)
-    URL.revokeObjectURL(objUrl)
+    const fullUrl = url.startsWith('http') ? url : `${BASE}${url}`
+    const separator = fullUrl.includes('?') ? '&' : '?'
+    const finalUrl = token ? `${fullUrl}${separator}token=${encodeURIComponent(token)}` : fullUrl
+    const a = document.createElement('a')
+    a.href = finalUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   },
   downloadAllFiles: (projectId: string) => {
     window.open(`${BASE}/api/projects/${projectId}/download-all`, '_blank')
