@@ -242,11 +242,7 @@ function HomePage() {
                       if (!file) return
                       setCreateLogoUploading(true)
                       try {
-                        const form = new FormData()
-                        form.append('file', file)
-                        const res = await fetch('/api/upload/logo', { method: 'POST', body: form })
-                        if (!res.ok) throw new Error((await res.json()).detail || '上传失败')
-                        const data = await res.json()
+                        const data = await api.uploadLogo(file)
                         setCreateLogo(data.url)
                       } catch (err: any) {
                         modal.toast('上传失败: ' + err.message, 'error')

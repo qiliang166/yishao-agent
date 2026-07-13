@@ -795,10 +795,59 @@ export default function ProjectPage() {
   // Load project
   useEffect(() => {
     if (!id) return
+    const wsidRef = { current: '' }
     api.getProject(id).then(p => {
       setProject(p)
       setProjStoragePath(p.storage_path || '')
       workspaceIdRef.current = p.workspace_id
+      wsidRef.current = p.workspace_id
+
+      // Load configs only after we have the workspace_id to avoid race condition
+      // where listColumnConfigs(undefined) returns global seed configs instead of
+      // workspace-specific configs
+      api.listProjectItems(id).then((items: any[]) => {
+        if (items && items.length > 0) {
+          const s3p: Record<string, { prompt: string; skill: string }> = {}
+          const s4p: Record<string, { prompt: string; skill: string }> = {}
+          items.forEach((item: any) => {
+            if (item.name === '文档课件') s3p['sop'] = { prompt: item.prompt, skill: item.skill }
+            else if (item.name === '分析PPT') s3p['daoPpt'] = { prompt: item.prompt, skill: item.skill }
+            else if (item.name === '综合PPT') s3p['yanxiPpt'] = { prompt: item.prompt, skill: item.skill }
+            if (item.output_mode === 'speech_config') {
+              if (item.name === '文档演讲') s4p['doc'] = { prompt: item.prompt, skill: item.skill }
+              else if (item.name === '分析演讲') s4p['analysis'] = { prompt: item.prompt, skill: item.skill }
+              else if (item.name === '综合演讲') s4p['comprehensive'] = { prompt: item.prompt, skill: item.skill }
+            }
+          })
+          setStage3Prompts(s3p)
+          if (Object.keys(s4p).length > 0) setStage4Prompts(s4p)
+          // col1 & col2 always loaded from column configs
+          api.listColumnConfigs(wsidRef.current).then(applyCol12Configs).catch(() => {})
+          return
+        }
+        loadWsConfigs(wsidRef.current)
+      }).catch(() => { loadWsConfigs(wsidRef.current) })
+
+      function loadWsConfigs(wid: string) {
+        api.listColumnConfigs(wid).then((configs: any[]) => {
+          applyCol12Configs(configs)
+          const s3p: Record<string, { prompt: string; skill: string }> = {}
+          configs.forEach((c: any) => {
+            if (c.column_id === 'col3') s3p['sop'] = { prompt: c.prompt, skill: c.skill }
+            if (c.column_id === 'col4') s3p['daoPpt'] = { prompt: c.prompt, skill: c.skill }
+            if (c.column_id === 'col5') s3p['yanxiPpt'] = { prompt: c.prompt, skill: c.skill }
+          })
+          setStage3Prompts(s3p)
+        }).catch(() => {})
+        api.listSpeechConfigs(wid).then((configs: any[]) => {
+          const s4p: Record<string, { prompt: string; skill: string }> = {}
+          configs.forEach((c: any) => {
+            const key = c.label === '文档演讲' ? 'doc' : c.label === '分析演讲' ? 'analysis' : c.label === '综合演讲' ? 'comprehensive' : ''
+            if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
+          })
+          if (Object.keys(s4p).length > 0) setStage4Prompts(prev => ({ ...prev, ...s4p }))
+        }).catch(() => {})
+      }
     }).catch(() => navigate('/'))
     let hasModelOverride = false
     api.getSteps(id).then((s: any[]) => {
@@ -903,11 +952,11 @@ export default function ProjectPage() {
       const s2p: Record<string, { prompt: string; skill: string }> = {}
       configs.forEach((c: any) => {
         if (c.column_id === 'col1') {
-          const key = c.id === 'c1-text' ? 'text' : c.id === 'c1-video' ? 'video' : c.id === 'c1-file' ? 'file' : ''
+          const key = c.sort_order === 0 ? 'text' : c.sort_order === 1 ? 'video' : c.sort_order === 2 ? 'file' : ''
           if (key) { s1p[key] = c.prompt; if (!s1s) s1s = c.skill }
         }
         if (c.column_id === 'col2') {
-          const key = c.id === 'c2-sop' ? 'sop' : c.id === 'c2-dao' ? 'dao' : c.id === 'c2-yanxi' ? 'yanxi' : ''
+          const key = c.sort_order === 3 ? 'sop' : c.sort_order === 4 ? 'dao' : c.sort_order === 5 ? 'yanxi' : ''
           if (key) s2p[key] = { prompt: c.prompt, skill: c.skill }
         }
       })
@@ -916,60 +965,6 @@ export default function ProjectPage() {
       if (Object.keys(s2p).length > 0) setStage2Prompts(s2p)
     }
 
-    // Try project_items first (new per-project architecture)
-    api.listProjectItems(id).then((items: any[]) => {
-      if (items && items.length > 0) {
-        const s3p: Record<string, { prompt: string; skill: string }> = {}
-        const s4p: Record<string, { prompt: string; skill: string }> = {}
-        items.forEach((item: any) => {
-          const pid = item.id
-          if (pid.endsWith('-col3')) s3p['sop'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-col4')) s3p['daoPpt'] = { prompt: item.prompt, skill: item.skill }
-          if (pid.endsWith('-col5')) s3p['yanxiPpt'] = { prompt: item.prompt, skill: item.skill }
-          if (item.output_mode === 'speech_config') {
-            if (item.name === '文档演讲') s4p['doc'] = { prompt: item.prompt, skill: item.skill }
-            else if (item.name === '分析演讲') s4p['analysis'] = { prompt: item.prompt, skill: item.skill }
-            else if (item.name === '综合演讲') s4p['comprehensive'] = { prompt: item.prompt, skill: item.skill }
-          }
-        })
-        setStage3Prompts(s3p)
-        if (Object.keys(s4p).length > 0) setStage4Prompts(s4p)
-        // col1 & col2 always loaded from column configs (shared parser, no duplication)
-        api.listColumnConfigs(workspaceIdRef.current).then(applyCol12Configs).catch(() => {})
-        return
-      }
-      loadWorkspaceConfigs(workspaceIdRef.current)
-    }).catch(() => { loadWorkspaceConfigs(workspaceIdRef.current) })
-
-    const loadWorkspaceConfigs = (wid?: string) => {
-      // Load column configs for the project's workspace (not global seed)
-      api.listColumnConfigs(wid).then((configs: any[]) => {
-        applyCol12Configs(configs)
-        const s3p: Record<string, { prompt: string; skill: string }> = {}
-        configs.forEach((c: any) => {
-          if (c.column_id === 'col3') {
-            const key = c.id === 'c3-sop' ? 'sop' : ''
-            if (key) s3p[key] = { prompt: c.prompt, skill: c.skill }
-          }
-          if (c.column_id === 'col4') {
-            if (c.id === 'c4-dao') s3p['daoPpt'] = { prompt: c.prompt, skill: c.skill }
-          }
-          if (c.column_id === 'col5') {
-            if (c.id === 'c4-yanxi') s3p['yanxiPpt'] = { prompt: c.prompt, skill: c.skill }
-          }
-        })
-        setStage3Prompts(s3p)
-      }).catch(() => {})
-      // Load speech configs (col6) from workspace
-      api.listSpeechConfigs(wid).then((configs: any[]) => {
-        const s4p: Record<string, { prompt: string; skill: string }> = {}
-        configs.forEach((c: any) => {
-          const key = c.label === '文档演讲' ? 'doc' : c.label === '分析演讲' ? 'analysis' : c.label === '综合演讲' ? 'comprehensive' : ''
-          if (key) s4p[key] = { prompt: c.prompt, skill: c.skill }
-        })
-        if (Object.keys(s4p).length > 0) setStage4Prompts(prev => ({ ...prev, ...s4p }))
-      }).catch(() => {})
-    }
     // Load templates for Stage 3 PPT columns
     const loadTemplates = (stageType: string) =>
       api.listTemplatesForStage(stageType).then((items: any[]) => {
@@ -2316,6 +2311,34 @@ export default function ProjectPage() {
       <div className="content-area">
         {/* ====== STAGE 1: 文案提取 ====== */}
         {stage === 1 && (
+          <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>
+            <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>📁 保存路径</span>
+            <input className="form-input" style={{ fontSize: 11, flex: 1, padding: '4px 8px' }}
+              value={projStoragePath}
+              onChange={e => setProjStoragePath(e.target.value)}
+              placeholder={project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`} />
+            <button className="btn btn-ghost btn-sm" title="打开文件夹" style={{ whiteSpace: 'nowrap', fontSize: 11 }}
+              onClick={async () => {
+                const p = (projStoragePath || project?.storage_path || '').replace(/\\/g, '/')
+                if (p) { try { await api.openFolder(p) } catch { modal.toast('无法打开文件夹', 'error') } }
+              }}>📂</button>
+            <button className="btn btn-sm" style={{ whiteSpace: 'nowrap', fontSize: 11, padding: '4px 10px', background: 'var(--primary)', color: '#fff' }}
+              disabled={savingPath}
+              onClick={async () => {
+                if (!id) return
+                const p = projStoragePath.trim() || (project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`)
+                setSavingPath(true)
+                try {
+                  await api.updateProject(id, { storage_path: p })
+                  setProjStoragePath(p)
+                  setProject(prev => prev ? { ...prev, storage_path: p } : prev)
+                  modal.toast('保存路径已更新', 'success')
+                } catch (e: any) {
+                  modal.toast('保存失败: ' + e.message, 'error')
+                } finally { setSavingPath(false) }
+              }}>{savingPath ? '...' : '保存'}</button>
+          </div>
           <div className="panel-grid">
             <div className="panel-left">
               {/* Shared model selector */}
@@ -2459,44 +2482,6 @@ export default function ProjectPage() {
                     </CanEdit>
                   </div>
                 )}
-                <div className="card">
-                  <div className="card-title">📁 项目保存路径</div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <input className="form-input" style={{ fontSize: 10, flex: 1 }}
-                      value={projStoragePath}
-                      onChange={e => setProjStoragePath(e.target.value)}
-                      placeholder={project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`} />
-                    <button className="btn btn-ghost btn-sm" title="打开文件夹"
-                      onClick={async () => {
-                        const p = (projStoragePath || project?.storage_path || '').replace(/\\/g, '/')
-                        if (p) {
-                          try { await api.openFolder(p) } catch { modal.toast('无法打开文件夹', 'error') }
-                        }
-                      }}>
-                      📂
-                    </button>
-                    <button className="btn btn-ghost btn-sm"
-                      disabled={savingPath}
-                      onClick={async () => {
-                        if (!id) return
-                        const p = projStoragePath.trim() || (project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`)
-                        setSavingPath(true)
-                        try {
-                          await api.updateProject(id, { storage_path: p })
-                          setProjStoragePath(p)
-                          setProject(prev => prev ? { ...prev, storage_path: p } : prev)
-                          modal.toast('保存路径已更新', 'success')
-                        } catch (e: any) {
-                          modal.toast('保存失败: ' + e.message, 'error')
-                        } finally { setSavingPath(false) }
-                      }}>
-                      {savingPath ? '...' : '保存'}
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    留空则使用全局默认路径
-                  </div>
-                </div>
               </>}
 
               {/* 1b: Text Input */}
@@ -2524,44 +2509,6 @@ export default function ProjectPage() {
                       <button className="btn btn-sm" style={{ background: 'var(--warning)', color: '#fff' }}
                         onClick={() => { abortRef.current['step1_1b']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
                     )}
-                  </div>
-                </div>
-                <div className="card">
-                  <div className="card-title">📁 项目保存路径</div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <input className="form-input" style={{ fontSize: 10, flex: 1 }}
-                      value={projStoragePath}
-                      onChange={e => setProjStoragePath(e.target.value)}
-                      placeholder={project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`} />
-                    <button className="btn btn-ghost btn-sm" title="打开文件夹"
-                      onClick={async () => {
-                        const p = (projStoragePath || project?.storage_path || '').replace(/\\/g, '/')
-                        if (p) {
-                          try { await api.openFolder(p) } catch { modal.toast('无法打开文件夹', 'error') }
-                        }
-                      }}>
-                      📂
-                    </button>
-                    <button className="btn btn-ghost btn-sm"
-                      disabled={savingPath}
-                      onClick={async () => {
-                        if (!id) return
-                        const p = projStoragePath.trim() || (project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`)
-                        setSavingPath(true)
-                        try {
-                          await api.updateProject(id, { storage_path: p })
-                          setProjStoragePath(p)
-                          setProject(prev => prev ? { ...prev, storage_path: p } : prev)
-                          modal.toast('保存路径已更新', 'success')
-                        } catch (e: any) {
-                          modal.toast('保存失败: ' + e.message, 'error')
-                        } finally { setSavingPath(false) }
-                      }}>
-                      {savingPath ? '...' : '保存'}
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    留空则使用全局默认路径
                   </div>
                 </div>
               </>)}
@@ -2610,44 +2557,6 @@ export default function ProjectPage() {
                       onClick={() => { if (id && fileText.trim()) { saveStep('raw_file', fileText); flashSave() } }}>{getSaveBtnLabel(fileText, 'raw_file')}</button>
                   </div>
                   </CanEdit>
-                </div>
-                <div className="card">
-                  <div className="card-title">📁 项目保存路径</div>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    <input className="form-input" style={{ fontSize: 10, flex: 1 }}
-                      value={projStoragePath}
-                      onChange={e => setProjStoragePath(e.target.value)}
-                      placeholder={project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`} />
-                    <button className="btn btn-ghost btn-sm" title="打开文件夹"
-                      onClick={async () => {
-                        const p = (projStoragePath || project?.storage_path || '').replace(/\\/g, '/')
-                        if (p) {
-                          try { await api.openFolder(p) } catch { modal.toast('无法打开文件夹', 'error') }
-                        }
-                      }}>
-                      📂
-                    </button>
-                    <button className="btn btn-ghost btn-sm"
-                      disabled={savingPath}
-                      onClick={async () => {
-                        if (!id) return
-                        const p = projStoragePath.trim() || (project?.storage_path || `D:\\YISHAOAGENT\\data\\output\\${project?.name || ''}`)
-                        setSavingPath(true)
-                        try {
-                          await api.updateProject(id, { storage_path: p })
-                          setProjStoragePath(p)
-                          setProject(prev => prev ? { ...prev, storage_path: p } : prev)
-                          modal.toast('保存路径已更新', 'success')
-                        } catch (e: any) {
-                          modal.toast('保存失败: ' + e.message, 'error')
-                        } finally { setSavingPath(false) }
-                      }}>
-                      {savingPath ? '...' : '保存'}
-                    </button>
-                  </div>
-                  <div style={{ fontSize: 9, color: 'var(--text-secondary)', marginTop: 4 }}>
-                    留空则使用全局默认路径
-                  </div>
                 </div>
               </>}
 
@@ -2754,7 +2663,7 @@ export default function ProjectPage() {
               </div>
             </div>
           </div>
-        )}
+        </>)}
 
         {/* ====== STAGE 2: 教学文档 ====== */}
         {stage === 2 && (
@@ -2830,6 +2739,7 @@ export default function ProjectPage() {
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: sub === '2a' ? 'contents' : 'none' }}>
                   <TeachingDocPanel ref={sopRef} docType="sop" projectId={id!}
+                    projectName={project?.name || ''}
                     steps={steps} savedSteps={savedSteps}
                     prompt={stage2Prompts.sop?.prompt || ''}
                     skill={stage2Prompts.sop?.skill || ''}
@@ -2849,6 +2759,7 @@ export default function ProjectPage() {
                 </div>
                 <div style={{ display: sub === '2b' ? 'contents' : 'none' }}>
                   <TeachingDocPanel ref={daoRef} docType="dao" projectId={id!}
+                    projectName={project?.name || ''}
                     steps={steps} savedSteps={savedSteps}
                     prompt={stage2Prompts.dao?.prompt || ''}
                     skill={stage2Prompts.dao?.skill || ''}
@@ -2868,6 +2779,7 @@ export default function ProjectPage() {
                 </div>
                 <div style={{ display: sub === '2c' ? 'contents' : 'none' }}>
                   <TeachingDocPanel ref={yanxiRef} docType="yanxi" projectId={id!}
+                    projectName={project?.name || ''}
                     steps={steps} savedSteps={savedSteps}
                     prompt={stage2Prompts.yanxi?.prompt || ''}
                     skill={stage2Prompts.yanxi?.skill || ''}
@@ -4047,7 +3959,12 @@ export default function ProjectPage() {
                           if (s4SourceEdits[editKey] !== undefined) inputContent = s4SourceEdits[editKey]
                           try {
                             let pid = '', mdl = ''
-                            if (activeModel) { [pid, mdl] = activeModel.split(':') }
+                            if (activeModel) {
+                              [pid, mdl] = activeModel.split(':')
+                            } else {
+                              const def = llmProviders.find((p: any) => p.is_enabled)
+                              if (def) { pid = def.id; mdl = Array.isArray(def.models) ? def.models[0] : '' }
+                            }
                             const userMessage = activeSkill
                               ? `请将以下内容按指定格式生成演讲稿：\n\n${inputContent}\n\n输出格式要求：\n${activeSkill}`
                               : inputContent
@@ -4830,9 +4747,26 @@ export default function ProjectPage() {
             </div>
             <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
               <div style={{ flex: 3, background: '#000', borderRadius: 8, minHeight: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {videoPath ? (
-                  <video src={`/api/video/file?path=${encodeURIComponent(videoPath)}`} controls style={{ width: '100%', height: '100%', borderRadius: 8 }}
-                    onError={() => modal.toast('视频加载失败', 'error')} />
+                {(videoPath || dlTaskId) ? (
+                  <video src={dlTaskId ? `/api/video/file?task_id=${dlTaskId}` : `/api/video/file?path=${encodeURIComponent(videoPath)}`} controls style={{ width: '100%', height: '100%', borderRadius: 8 }}
+                    onError={(e: any) => {
+                      const err = e.currentTarget?.error
+                      let msg = '视频加载失败'
+                      if (err) {
+                        switch (err.code) {
+                          case 1: msg += ': 加载中止'; break
+                          case 2: msg += ': 网络错误'; break
+                          case 3: msg += ': 解码失败，视频编码可能不兼容（请尝试重新下载）'; break
+                          case 4: msg += ': 视频格式不支持（浏览器无法播放此编码）'; break
+                          default: msg += `: 错误码 ${err.code}`
+                        }
+                      }
+                      const checkUrl = dlTaskId ? `/api/video/file?task_id=${dlTaskId}` : `/api/video/file?path=${encodeURIComponent(videoPath)}`
+                      fetch(checkUrl, { method: 'HEAD' }).then(r => {
+                        if (!r.ok) msg += ` [HTTP ${r.status}]`
+                      }).catch(() => {})
+                      modal.toast(msg, 'error')
+                    }} />
                 ) : (
                   <span style={{ color: '#666', fontSize: 16 }}>暂无视频文件</span>
                 )}

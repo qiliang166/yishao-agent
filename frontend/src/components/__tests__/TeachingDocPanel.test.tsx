@@ -20,6 +20,7 @@ vi.mock('../ModalProvider', () => ({
 const defaultProps = {
   docType: 'sop' as const,
   projectId: 'test-1',
+  projectName: 'TestProject',
   steps: {
     raw_video: 'test video content',
     raw_text: 'test text content',

@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [brandLogo, setBrandLogo] = useState('')
   const [storedPhone, setStoredPhone] = useState('')
   const [hasRbac, setHasRbac] = useState(false)
+  const [initialAdminPassword, setInitialAdminPassword] = useState('')
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -34,6 +35,10 @@ export default function LoginPage() {
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.admin_phone) setStoredPhone(s.admin_phone)
       if (s.db_schema_version) setHasRbac(true)
+      if (s.initial_admin_password) {
+        setInitialAdminPassword(s.initial_admin_password)
+        setUsername('admin')
+      }
     }).catch(() => {})
   }, [])
 
@@ -99,7 +104,23 @@ export default function LoginPage() {
           请输入管理员账号密码以继续
         </p>
 
-        {!storedPhone && (
+        {initialAdminPassword && (
+          <div style={{
+            fontSize: 13, background: '#d1fae5', border: '1px solid #10b981',
+            color: '#065f46', padding: '10px 14px', borderRadius: 6,
+            marginBottom: 16, lineHeight: 1.7, textAlign: 'center',
+          }}>
+            首次安装，初始密码为：<br/>
+            <code style={{
+              fontSize: 15, fontWeight: 700, background: 'rgba(0,0,0,0.06)',
+              padding: '3px 10px', borderRadius: 4, letterSpacing: 1,
+              userSelect: 'all',
+            }}>{initialAdminPassword}</code>
+            <br/><span style={{ fontSize: 10, opacity: 0.7 }}>登录后请立即修改</span>
+          </div>
+        )}
+
+        {!storedPhone && !initialAdminPassword && (
           <div style={{
             fontSize: 11, background: '#fef3c7', border: '1px solid #f59e0b',
             color: '#92400e', padding: '8px 12px', borderRadius: 6,

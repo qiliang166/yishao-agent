@@ -7,6 +7,7 @@ import DOMPurify from 'dompurify'
 export interface TeachingDocPanelProps {
   docType: 'sop' | 'dao' | 'yanxi'
   projectId: string
+  projectName: string
   steps: Record<string, string>
   savedSteps: Record<string, string>
   prompt: string
@@ -66,7 +67,7 @@ const PREVIEW_CSS = `
 `
 
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
-  docType, projectId, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
+  docType, projectId, projectName, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
   hideControls, dataSource: dataSourceProp, onDataSourceChange, temperature = 0.3,
   onGeneratingChange, onLogEntry, onProgressChange,
 }, ref) => {
@@ -294,7 +295,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     if (!localContent) return
     try {
       const label = DOC_LABELS[docType]
-      const resp = await api.saveFileToProject(projectId, `${label}.txt`, localContent)
+      const resp = await api.saveFileToProject(projectId, `${projectName}_${label}.txt`, localContent)
       modal.toast(`已保存到 ${resp.path}`, 'success')
     } catch (e: any) {
       modal.toast('保存失败: ' + e.message, 'error')

@@ -517,13 +517,6 @@ function SettingsPage() {
               <input className="form-input" type="text" value={adminPhone}
                 onChange={e => setAdminPhone(e.target.value)} placeholder="用于身份验证" style={{ maxWidth: 220 }} disabled={!canSaveGlobal} />
             </div>
-            <div className="settings-row">
-              <label></label>
-              <button className="btn btn-ghost btn-sm" onClick={() => navigate('/users')}>
-                用户管理 →
-              </button>
-            </div>
-
             <h4 style={{ marginTop: 20, marginBottom: 8, fontSize: 13 }}>修改密码</h4>
             <div className="settings-row">
               <label>当前密码</label>
