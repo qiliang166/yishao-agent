@@ -37,22 +37,46 @@ $dirs = @(
     "$distDir\backend\data\exports",
     "$distDir\backend\data\logos",
     "$distDir\backend\data\downloads",
+    "$distDir\backend\data\styles",
+    "$distDir\backend\data\templates",
+    "$distDir\backend\resources",
+    "$distDir\backend\routers",
     "$distDir\backend\services",
     "$distDir\frontend\dist"
 )
 foreach ($d in $dirs) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
 
+# Copy backend .py and .txt files
 Copy-Item "$root\backend\*.py", "$root\backend\*.txt" "$distDir\backend\" -ErrorAction SilentlyContinue
-Copy-Item "$root\backend\services\*.py" "$distDir\backend\services\" -ErrorAction SilentlyContinue
-Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force
-Copy-Item "$root\start_prod.bat" "$distDir\" -ErrorAction SilentlyContinue
 
+# Copy routers
+Copy-Item "$root\backend\routers\*.py" "$distDir\backend\routers\" -ErrorAction SilentlyContinue
+
+# Copy services
+Copy-Item "$root\backend\services\*.py" "$distDir\backend\services\" -ErrorAction SilentlyContinue
+
+# Copy resources (prompts, scenarios, templates, vi)
+Copy-Item "$root\backend\resources\*" "$distDir\backend\resources\" -Recurse -Force -ErrorAction SilentlyContinue
+
+# Copy data files
+Copy-Item "$root\backend\data\styles\*" "$distDir\backend\data\styles\" -Recurse -Force -ErrorAction SilentlyContinue
+Copy-Item "$root\backend\data\templates\*" "$distDir\backend\data\templates\" -Recurse -Force -ErrorAction SilentlyContinue
+
+# Copy built frontend
+Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force
+
+# Copy production start scripts and install guide
+Copy-Item "$root\start_prod.bat" "$distDir\" -ErrorAction SilentlyContinue
+Copy-Item "$root\start_prod.sh" "$distDir\" -ErrorAction SilentlyContinue
+Copy-Item "$root\INSTALL.txt" "$distDir\" -ErrorAction SilentlyContinue
+
+# Build the server deployment zip
 $zipFile = "$root\yishao-agent-server.zip"
 if (Test-Path $zipFile) { Remove-Item $zipFile -Force }
 Compress-Archive -Path "$distDir\*" -DestinationPath $zipFile -Force
 Remove-Item $distDir -Recurse -Force
 
-# Copy to downloads
+# Also keep a local copy for dev serving
 $downloadsDir = "$root\backend\data\downloads"
 if (-not (Test-Path $downloadsDir)) { New-Item -ItemType Directory -Path $downloadsDir -Force | Out-Null }
 Copy-Item $zipFile $downloadsDir -Force

@@ -61,25 +61,16 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 # Clean up temp spec
 Remove-Item "$root\build_temp.spec" -Force -ErrorAction SilentlyContinue
 
-# Step 4: Copy to downloads
+# Step 4: Copy to downloads (always use English filename)
 Write-Host "[4/4] Copying to downloads..."
 $downloadsDir = "$root\backend\data\downloads"
 if (-not (Test-Path $downloadsDir)) { New-Item -ItemType Directory -Path $downloadsDir -Force | Out-Null }
 
-# Find the built exe
-$python2 = "$root\backend\venv\Scripts\python.exe"
-if (-not (Test-Path $python2)) { $python2 = "python" }
-$appName = & $python2 -c "import sqlite3;conn=sqlite3.connect('$root\backend\data\yishao.db');row=conn.execute(\"SELECT value FROM settings WHERE key='brand_name'\").fetchone();print(row[0] if row and row[0] else 'YishaoAgent')"
-$exePath = "$root\dist\$appName.exe"
-if (Test-Path $exePath) {
-    Copy-Item $exePath $downloadsDir -Force -ErrorAction SilentlyContinue
-    Write-Host "  Copied $appName.exe to downloads"
-} else {
-    # fallback to YishaoAgent.exe
-    $fallback = "$root\dist\YishaoAgent.exe"
-    if (Test-Path $fallback) {
-        Copy-Item $fallback $downloadsDir -Force -ErrorAction SilentlyContinue
-    }
+$builtExe = Get-ChildItem "$root\dist\*.exe" | Where-Object { $_.Name -ne 'YishaoAgent-KeyGen.exe' } | Sort-Object LastWriteTime -Desc | Select-Object -First 1
+if ($builtExe) {
+    $destName = "YishaoAgent-Setup.exe"
+    Copy-Item $builtExe.FullName "$downloadsDir\$destName" -Force -ErrorAction SilentlyContinue
+    Write-Host "  Copied to downloads as $destName"
 }
 
 Write-Host ""
