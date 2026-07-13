@@ -5203,7 +5203,7 @@ def serve_logo(filename: str):
 # ── Settings ──
 
 @app.get("/api/settings")
-def get_settings():
+def get_settings(request: Request):
     db = get_db()
     try:
         rows = db.execute("SELECT key, value FROM settings").fetchall()
@@ -5216,17 +5216,20 @@ def get_settings():
 
         # Expose initial admin password on first-time setup so new users
         # know how to log in (desktop version hides console output).
-        admin = db.execute(
-            "SELECT must_change_password FROM users WHERE user_type='admin' LIMIT 1"
-        ).fetchone()
-        if admin and admin["must_change_password"] == 1:
-            pwd_path = os.path.join(BASE_DIR, "initial_admin_password.txt")
-            try:
-                if os.path.exists(pwd_path):
-                    with open(pwd_path) as f:
-                        settings["initial_admin_password"] = f.read().strip()
-            except Exception:
-                pass
+        # Only allow from localhost — unauthenticated endpoint, not safe for network exposure.
+        client_host = request.client.host if request.client else ""
+        if client_host in ("127.0.0.1", "::1", "localhost"):
+            admin = db.execute(
+                "SELECT must_change_password FROM users WHERE user_type='admin' LIMIT 1"
+            ).fetchone()
+            if admin and admin["must_change_password"] == 1:
+                pwd_path = os.path.join(BASE_DIR, "initial_admin_password.txt")
+                try:
+                    if os.path.exists(pwd_path):
+                        with open(pwd_path) as f:
+                            settings["initial_admin_password"] = f.read().strip()
+                except Exception:
+                    pass
 
         return {"settings": settings}
     finally:
