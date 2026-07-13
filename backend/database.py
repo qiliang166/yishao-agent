@@ -354,6 +354,14 @@ def init_db():
         except Exception:
             pass
 
+        # Add enabled column to templates if missing (migration)
+        try:
+            existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(templates)").fetchall()]
+            if 'enabled' not in existing_cols:
+                conn.execute("ALTER TABLE templates ADD COLUMN enabled INTEGER DEFAULT 1")
+        except Exception:
+            pass
+
         # Add workspace_id column to projects if missing (migration)
         try:
             existing_cols = [row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()]
