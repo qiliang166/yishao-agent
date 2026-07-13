@@ -4,6 +4,7 @@ __pycache__/
 *.egg-info/
 dist/
 backend/ffmpeg.exe
+backend/ffmpeg
 *.pid
 build/
 
