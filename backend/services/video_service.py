@@ -308,6 +308,44 @@ def _parse_subtitle(subtitle_path: str) -> str:
     return "\n".join(text_lines)
 
 
+def _ensure_ffmpeg():
+    """Ensure ffmpeg.exe is available. Checks BASE_DIR, then system PATH, then auto-downloads from ffmpeg.org."""
+    # 1) Check BASE_DIR
+    local = os.path.join(BASE_DIR, "ffmpeg.exe")
+    if os.path.exists(local):
+        return local
+
+    # 2) Check system PATH
+    import shutil as _shutil
+    which = _shutil.which("ffmpeg")
+    if which:
+        return which
+
+    # 3) Auto-download from official ffmpeg.org Windows build (gyan.dev)
+    import tempfile, zipfile as _zipfile
+    url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+    try:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+        tmp.close()
+        resp = requests.get(url, timeout=600, stream=True)
+        resp.raise_for_status()
+        with open(tmp.name, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                f.write(chunk)
+        with _zipfile.ZipFile(tmp.name) as zf:
+            for name in zf.namelist():
+                if name.endswith("/bin/ffmpeg.exe"):
+                    with zf.open(name) as src, open(local, "wb") as dst:
+                        dst.write(src.read())
+                    break
+        os.unlink(tmp.name)
+        if os.path.exists(local):
+            return local
+    except Exception:
+        pass
+    return None
+
+
 def _transcribe_audio(video_path: str, task_dir: str, asr_model: str = "fun-asr", asr_provider_id: str = None) -> str:
     """Transcribe video audio using configured ASR provider.
 
@@ -319,8 +357,8 @@ def _transcribe_audio(video_path: str, task_dir: str, asr_model: str = "fun-asr"
     import base64
     import time
 
-    ffmpeg_path = os.path.join(BASE_DIR, "ffmpeg.exe")
-    if not os.path.exists(ffmpeg_path):
+    ffmpeg_path = _ensure_ffmpeg()
+    if not ffmpeg_path:
         return "[语音识别失败: ffmpeg 未安装]"
 
     # Resolve ASR provider config
