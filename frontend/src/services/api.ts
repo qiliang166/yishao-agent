@@ -486,40 +486,6 @@ export const api = {
 
   // Templates
   listTemplates: (type?: string) => request(`/api/templates${type ? `?type=${encodeURIComponent(type)}` : ''}`).then(d => d.templates),
-  createTemplate: (data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; rules?: string; linked_skill_id?: string; branding_config?: string}) =>
-    request('/api/templates', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
-  updateTemplate: (id: string, data: {name: string; type: string; file_path?: string; prompt?: string; skill?: string; rules?: string; linked_skill_id?: string; branding_config?: string}) =>
-    request(`/api/templates/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
-  deleteTemplate: (id: string) => request(`/api/templates/${id}`, { method: 'DELETE' }),
-  setDefaultTemplate: (id: string) => request(`/api/templates/${id}/set-default`, { method: 'POST' }),
-  resetTemplateThumbnail: (templateId: string) =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/reset-thumbnail`, { method: 'POST' }),
-  uploadTemplateThumbnail: async (templateId: string, file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload-thumbnail`, { method: 'POST', body: formData, headers: getAuthHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.detail || 'Upload failed')
-    return data as { ok: boolean; thumbnail_path: string; filename: string }
-  },
-  uploadTemplateFile: async (templateId: string, file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    const res = await fetch(`/api/templates/${encodeURIComponent(templateId)}/upload`, { method: 'POST', body: formData, headers: getAuthHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.detail || 'Upload failed')
-    return data as { ok: boolean; file_path: string; filename: string }
-  },
-  previewSlides: (templateId: string) =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/preview-slides`, { method: 'POST' }).then(d => d.slides as string[]),
-  getSlidesContent: (templateId: string) =>
-    request(`/api/templates/${encodeURIComponent(templateId)}/slides-content`),
-  getSlideThumbUrl: (templateId: string) =>
-    `${BASE}/api/templates/${encodeURIComponent(templateId)}/slide-thumb`,
-  previewTemplate: (templateId: string) =>
-    `${BASE}/api/templates/${encodeURIComponent(templateId)}/file`,
-  slideUrl: (slidePath: string) =>
-    `${BASE}/api/slides/${slidePath}`,
   listTemplatesForStage: (stageType: string) =>
     request(`/api/templates/for-stage/${encodeURIComponent(stageType)}`).then(d => d.templates),
 
@@ -805,22 +771,8 @@ export const api = {
     request(`/api/core-prompt-configs/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   copySeedConfigs: (workspaceId: string) =>
     request(`/api/workspaces/${workspaceId}/copy-seed-configs`, { method: 'POST' }),
-  analyzeTemplate: (templateId: string, stageType: string = 'daoPpt', providerId: string = '', model: string = '') => {
-    const params = new URLSearchParams({ stage_type: stageType })
-    if (providerId) params.set('provider_id', providerId)
-    if (model) params.set('model', model)
-    return request(`/api/templates/${encodeURIComponent(templateId)}/analyze?${params.toString()}`, { method: 'POST' })
-  },
   toggleTemplateEnabled: (templateId: string) =>
     request(`/api/templates/${encodeURIComponent(templateId)}/toggle-enabled`, { method: 'PUT' }).then(d => d as { ok: boolean; enabled: boolean }),
-  uploadColumnTemplate: async (id: string, file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    const res = await fetch(`/api/column-configs/${id}/upload-template`, { method: 'POST', body: formData, headers: getAuthHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.detail || 'Upload failed')
-    return data as { ok: boolean; path: string; content?: string }
-  },
 
   // Source Materials (multi-format input)
   listMaterials: (projectId: string) =>

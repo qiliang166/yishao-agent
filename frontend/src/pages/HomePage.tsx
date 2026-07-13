@@ -116,15 +116,9 @@ function HomePage() {
           style={{ flex: 1, maxWidth: 300 }}
           value={search} onChange={e => setSearch(e.target.value)} />
         <HelpButton location="home" />
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowWizard(true)}
-            style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', fontWeight: 600 }}>
-            🚀 快速上手
-          </button>
-          {canCreate && (
-            <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建项目</button>
-          )}
-        </div>
+        {canCreate && (
+          <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建项目</button>
+        )}
       </div>
 
       {loading ? (

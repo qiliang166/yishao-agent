@@ -125,7 +125,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
     Promise.all([
       api.listProviders().catch(() => []),
       api.listColumnConfigs().catch(() => []),
-      api.listTemplates('ppt').catch(() => []),
+      api.listTemplates('style').catch(() => []),
       api.listTtsProviders().catch(() => []),
     ]).then(([p, seeds, tmpls, tts]) => {
       if (cancelled) return
@@ -255,7 +255,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
     setLoading(true)
     setError('')
     setStage3Result(null)
-    setStage3Log('正在获取模板列表...')
+    setStage3Log('正在获取设计风格列表...')
     try {
       const p = providers[0]
       const model = (Array.isArray(p.models) ? p.models[0] : 'deepseek-chat') || 'deepseek-chat'
@@ -263,7 +263,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
       const pptTemplates = (templates as any[]).filter((t: any) => t.type === 'ppt')
       const templateId = pptTemplates.length > 0 ? pptTemplates[0].id : ''
       if (!templateId) {
-        setStage3Log('未找到 PPT 模板，请在「模板管理」中先上传模板。跳过此步骤。')
+        setStage3Log('未找到 VI 设计风格，请在「模板管理」中启用风格。跳过此步骤。')
         setLoading(false)
         return
       }
@@ -276,7 +276,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
       setStage3Log('')
     } catch (e: any) {
       setStage3Log('')
-      setError(e.message || '课件生成失败，请检查模板和 LLM 配置')
+      setError(e.message || '课件生成失败，请检查设计风格和 LLM 配置')
     } finally {
       setLoading(false)
     }
@@ -409,11 +409,15 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
             const done = idx < current
             const active = idx === current
             return (
-              <div key={s.key} style={{
+              <div key={s.key}
+                onClick={() => setStep(s.key)}
+                title={`跳转到：${s.label}`}
+                style={{
                 display: 'flex', alignItems: 'center', gap: 6,
                 fontSize: 11, whiteSpace: 'nowrap',
                 color: active ? 'var(--primary)' : done ? 'var(--success)' : 'var(--text-secondary)',
                 fontWeight: active ? 600 : 400,
+                cursor: 'pointer', userSelect: 'none',
               }}>
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -451,6 +455,10 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                     <div>
                       <strong>LLM 提供商</strong>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>AI 生成功能的核心引擎</div>
+                      <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                           onClick={() => { handleClose(); navigate('/proj-settings') }}>
+                        → 侧边栏「全局配置」→ 模型设置
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ color: hasProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
@@ -462,14 +470,18 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                     </div>
                   </div>
 
-                  {/* PPT Template */}
+                  {/* VI Design Style */}
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     padding: '12px 16px', background: 'var(--card-bg)', borderRadius: 8, marginBottom: 8,
                   }}>
                     <div>
-                      <strong>PPT 模板</strong>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>课件生成所需的设计模板（需上传 PPTX 文件）</div>
+                      <strong>VI 设计风格</strong>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>课件生成所需的 VI 设计风格</div>
+                      <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                           onClick={() => { handleClose(); navigate('/templates') }}>
+                        → 侧边栏「模板管理」
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ color: hasTemplates ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
@@ -491,6 +503,10 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                     <div>
                       <strong>TTS 提供商</strong>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>语音合成引擎，用于生成课件配音</div>
+                      <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                           onClick={() => { handleClose(); navigate('/proj-settings') }}>
+                        → 侧边栏「全局配置」→ 模型设置
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ color: hasTtsProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
@@ -510,6 +526,10 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                     <div>
                       <strong>种子提示词</strong>
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>系统预设的提示词配置，确保生成质量</div>
+                      <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                           onClick={() => { handleClose(); navigate('/proj-settings') }}>
+                        → 侧边栏「全局配置」→ 默认提示词
+                      </div>
                     </div>
                     <span style={{ color: hasSeeds ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
                       {hasSeeds ? '✓ 已加载' : '✗ 未加载'}
@@ -522,7 +542,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                       fontSize: 12, color: '#92400e',
                     }}>
                       LLM 提供商是必须项。请先点击「去配置」添加一个 LLM 提供商后再继续。
-                      {!hasTemplates && ' PPT 模板可在流程中跳过，之后可随时在「模板管理」中上传。'}
+                      {!hasTemplates && ' VI 设计风格可在流程中跳过，之后可随时在「模板管理」中启用。'}
                     </div>
                   ) : (
                     <div style={{ textAlign: 'right', marginTop: 20 }}>
@@ -531,7 +551,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                           fontSize: 11, color: '#92400e', marginBottom: 10,
                           padding: '8px 12px', background: '#fef3c7', borderRadius: 6, textAlign: 'left',
                         }}>
-                          尚未配置 PPT 模板，第 3 步（生成课件）将跳过。可随时前往「模板管理」上传。
+                          尚未启用 VI 设计风格，第 3 步（生成课件）将跳过。可随时前往「模板管理」启用设计风格。
                         </div>
                       )}
                       <button className="btn btn-primary" onClick={() => setStep('create')} disabled={!hasProviders}>
@@ -547,7 +567,14 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
           {/* ── Step: create ── */}
           {step === 'create' && (
             <div>
-              <h3 style={{ margin: '0 0 16px 0' }}>创建第一个项目</h3>
+              <h3 style={{ margin: '0 0 8px 0' }}>创建第一个项目</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 8px 0', lineHeight: 1.6 }}>
+                项目是所有培训内容的管理单元，每个项目包含完整的 5 阶段流水线（文案提取 → 教学文档 → 输出课件 → 语音课件 → 输出列表）。
+              </p>
+              <div style={{ fontSize: 10, color: 'var(--primary)', marginBottom: 16, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                   onClick={() => { handleClose(); navigate('/') }}>
+                → 侧边栏「项目管理」→ 点击「+ 新建项目」
+              </div>
               <div className="form-label">项目名称</div>
               <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} placeholder="一勺笔录" />
               <div className="form-label" style={{ marginTop: 16 }}>素材内容（可直接使用示例）</div>
@@ -565,32 +592,57 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
           {/* ── Stage 1-4 ── */}
           {['stage1', 'stage2', 'stage3', 'stage4'].includes(step) && (
             <div>
-              <h3 style={{ margin: '0 0 16px 0' }}>
+              <h3 style={{ margin: '0 0 8px 0' }}>
                 {step === 'stage1' && '第 1 步：整理素材'}
                 {step === 'stage2' && '第 2 步：生成培训文档'}
                 {step === 'stage3' && '第 3 步：生成培训课件'}
                 {step === 'stage4' && '第 4 步：生成演讲稿'}
               </h3>
 
-              {!loading && !stage1Result && step === 'stage1' && (
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                  AI 将读取你的素材内容，整理成结构清晰的 Markdown 文档。点击下方按钮开始。
-                </p>
+              {/* Step description + location */}
+              {step === 'stage1' && (
+                <>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 4px 0', lineHeight: 1.6 }}>
+                    AI 将原始文本/视频/文件内容整理为结构化素材，提取关键知识点和操作步骤。
+                  </p>
+                  <div style={{ fontSize: 10, color: 'var(--primary)', marginBottom: 16, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                       onClick={() => { if (projectId) { handleClose(); navigate(`/project/${projectId}/workspace`) } }}>
+                    → 项目详情「阶段 1 · 文案提取」
+                  </div>
+                </>
               )}
-              {!loading && !stage2Result && step === 'stage2' && (
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                  基于整理后的素材，AI 将生成一份完整的培训文档（包含目录、章节、总结）。
-                </p>
+              {step === 'stage2' && (
+                <>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 4px 0', lineHeight: 1.6 }}>
+                    AI 基于素材并发生成 3 份教学文档：SOP 标准文档（操作规范）、道与术（理论+方法）、研学手册（学习指南）。
+                  </p>
+                  <div style={{ fontSize: 10, color: 'var(--primary)', marginBottom: 16, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                       onClick={() => { if (projectId) { handleClose(); navigate(`/project/${projectId}/workspace`) } }}>
+                    → 项目详情「阶段 2 · 教学文档」
+                  </div>
+                </>
               )}
-              {!loading && !stage3Result && step === 'stage3' && (
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                  基于文档内容，AI 将自动生成 PPT 培训课件（需要模板支持）。
-                </p>
+              {step === 'stage3' && (
+                <>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 4px 0', lineHeight: 1.6 }}>
+                    AI 将文档转化为 HTML/SVG 幻灯片，支持选择 VI 设计风格和配色方案，生成后可逐页预览编辑。
+                  </p>
+                  <div style={{ fontSize: 10, color: 'var(--primary)', marginBottom: 16, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                       onClick={() => { if (projectId) { handleClose(); navigate(`/project/${projectId}/workspace`) } }}>
+                    → 项目详情「阶段 3 · 输出课件」
+                  </div>
+                </>
               )}
-              {!loading && !stage4Result && step === 'stage4' && (
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                  基于文档内容，AI 将撰写一篇口语化的演讲稿，适合现场培训使用。
-                </p>
+              {step === 'stage4' && (
+                <>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 4px 0', lineHeight: 1.6 }}>
+                    AI 撰写口语化演讲稿（含开场白、停顿、重点强调标注），配合 TTS 语音合成为 .mp3 音频文件。
+                  </p>
+                  <div style={{ fontSize: 10, color: 'var(--primary)', marginBottom: 16, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                       onClick={() => { if (projectId) { handleClose(); navigate(`/project/${projectId}/workspace`) } }}>
+                    → 项目详情「阶段 4 · 语音课件」
+                  </div>
+                </>
               )}
 
               {/* Results display */}
@@ -708,10 +760,18 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
               <h3 style={{ margin: '0 0 8px 0' }}>恭喜！你已完成第一个培训项目</h3>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 24 }}>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 8 }}>
                 你已经体验了从素材整理、文档生成、课件制作到演讲稿撰写的完整流程。<br/>
                 在正式使用中，你可以上传更多素材、选择不同模板和风格。
               </p>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: '0 0 16px 0', lineHeight: 1.6 }}>
+                点击下方「进入项目查看」前往完整的项目工作台，使用完整 5 阶段流水线：<br/>
+                文案提取 → 教学文档 → 输出课件 → 语音课件 → 输出列表
+              </p>
+              <div style={{ fontSize: 10, color: 'var(--primary)', marginBottom: 24, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                   onClick={() => { if (projectId) { handleClose(); navigate(`/project/${projectId}/workspace`) } }}>
+                → 侧边栏「项目管理」→ 选择项目 → 进入项目详情页
+              </div>
               <div style={{
                 display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12,
                 marginBottom: 28, textAlign: 'center',
