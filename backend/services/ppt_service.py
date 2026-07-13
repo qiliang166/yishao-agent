@@ -4158,6 +4158,17 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 template_html = _load_slide_template(family, stype) or ""
             if template_html:
                 html = _fill_slide_template(template_html, slide, total)
+                # Run contrast fix pipeline on code-filled slides too —
+                # the structural templates (toc/cover/section/summary)
+                # may use {{primary}}/var(--primary) as text color which
+                # is unreadable on dark backgrounds.
+                if active_scheme:
+                    html = _auto_fix_white_on_light(html, active_scheme, seq,
+                                                    style_id=style_id, page_type=stype)
+                    html = _auto_fix_dark_on_dark(html, active_scheme, seq,
+                                                  style_id=style_id, page_type=stype)
+                    html = _enforce_element_contrast(html, active_scheme, seq,
+                                                     style_id=style_id, page_type=stype)
                 html_vars = html
                 html = _resolve_color_vars(html, active_scheme, css_vars=True)
                 _logger.info(f"Slide {seq}: code-filled ({style_id}/{stype}), {len(html)} chars")
