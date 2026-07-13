@@ -376,6 +376,7 @@ def init_db():
                     (ws_id,))
         except Exception:
             pass
+
         # Create workspace-specific configs for default workspace 食谱培训
         try:
             ws_cfg_count = conn.execute("SELECT COUNT(*) FROM column_configs WHERE workspace_id = ?", (ws_id,)).fetchone()[0]
@@ -618,56 +619,60 @@ def init_db():
             pass
 
         # ── Workspace config migration: add workspace_id to 4 config tables ──
-        # Seed data → workspace_id IS NULL; workspace copies → workspace_id = <wid>
+        # Only runs when upgrading an old database (tables already exist but lack workspace_id)
         _config_tables = ['column_configs', 'speech_configs', 'tts_configs', 'core_prompt_configs']
         try:
+            _all_tables_exist = True
             for _tbl in _config_tables:
-                _existing_cols = [row[1] for row in conn.execute(f"PRAGMA table_info({_tbl})").fetchall()]
-                if 'workspace_id' not in _existing_cols:
-                    conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN workspace_id TEXT")
-            # Assign existing data to 食谱教案 workspace, then re-insert seed copies
-            _ws = conn.execute("SELECT id FROM workspaces WHERE name LIKE '%食谱%' LIMIT 1").fetchone()
-            if _ws:
-                _ws_id = _ws[0]
-                _migrated = conn.execute(
-                    "SELECT COUNT(*) FROM column_configs WHERE workspace_id IS NOT NULL").fetchone()[0]
-                if _migrated == 0:
-                    # Rebuild core_prompt_configs UNIQUE constraint: single-col → composite
-                    # so the same prompt_key can exist in different workspaces
-                    conn.execute("""CREATE TABLE IF NOT EXISTS _cpc_rebuild (
-                        id TEXT PRIMARY KEY, prompt_key TEXT NOT NULL, category TEXT NOT NULL,
-                        label TEXT NOT NULL, content TEXT, sort_order INTEGER DEFAULT 0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, workspace_id TEXT,
-                        UNIQUE(prompt_key, workspace_id))""")
-                    _cpc_rows = conn.execute("SELECT * FROM core_prompt_configs").fetchall()
-                    if _cpc_rows:
-                        _cpc_keys = _cpc_rows[0].keys()
-                        _cpc_vals = [[r[k] for k in _cpc_keys] for r in _cpc_rows]
-                        _cpc_ph = ', '.join(['?'] * len(_cpc_keys))
-                        _cpc_cn = ', '.join(_cpc_keys)
-                        conn.executemany(f"INSERT OR IGNORE INTO _cpc_rebuild ({_cpc_cn}) VALUES ({_cpc_ph})", _cpc_vals)
-                    conn.execute("DROP TABLE core_prompt_configs")
-                    conn.execute("ALTER TABLE _cpc_rebuild RENAME TO core_prompt_configs")
-                    for _tbl in _config_tables:
-                        conn.execute(f"UPDATE {_tbl} SET workspace_id = ?", (_ws_id,))
-                    # Re-insert seed rows (workspace_id = NULL) with 'seed-' prefixed IDs
-                    for _tbl in _config_tables:
-                        _rows = conn.execute(f"SELECT * FROM {_tbl}").fetchall()
-                        if not _rows:
-                            continue
-                        _keys = _rows[0].keys()
-                        for _row in _rows:
-                            _d = {k: _row[k] for k in _keys}
-                            _d['id'] = 'seed-' + str(_d['id'])
-                            _d['workspace_id'] = None
-                            if _tbl == 'core_prompt_configs' and 'prompt_key' in _d:
-                                _d['prompt_key'] = 'seed-' + str(_d['prompt_key'])
-                            _vals = [_d[k] for k in _keys]
-                            _ph = ', '.join(['?'] * len(_keys))
-                            _cn = ', '.join(_keys)
-                            conn.execute(f"INSERT OR IGNORE INTO {_tbl} ({_cn}) VALUES ({_ph})", _vals)
-                    conn.commit()
+                try:
+                    conn.execute(f"SELECT 1 FROM {_tbl} LIMIT 1")
+                except Exception:
+                    _all_tables_exist = False
+                    break
+            if _all_tables_exist:
+                for _tbl in _config_tables:
+                    _existing_cols = [row[1] for row in conn.execute(f"PRAGMA table_info({_tbl})").fetchall()]
+                    if 'workspace_id' not in _existing_cols:
+                        conn.execute(f"ALTER TABLE {_tbl} ADD COLUMN workspace_id TEXT")
+                _ws = conn.execute("SELECT id FROM workspaces WHERE name LIKE '%食谱%' LIMIT 1").fetchone()
+                if _ws:
+                    _ws_id = _ws[0]
+                    _migrated = conn.execute(
+                        "SELECT COUNT(*) FROM column_configs WHERE workspace_id IS NOT NULL").fetchone()[0]
+                    if _migrated == 0:
+                        conn.execute("""CREATE TABLE IF NOT EXISTS _cpc_rebuild (
+                            id TEXT PRIMARY KEY, prompt_key TEXT NOT NULL, category TEXT NOT NULL,
+                            label TEXT NOT NULL, content TEXT, sort_order INTEGER DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, workspace_id TEXT,
+                            UNIQUE(prompt_key, workspace_id))""")
+                        _cpc_rows = conn.execute("SELECT * FROM core_prompt_configs").fetchall()
+                        if _cpc_rows:
+                            _cpc_keys = _cpc_rows[0].keys()
+                            _cpc_vals = [[r[k] for k in _cpc_keys] for r in _cpc_rows]
+                            _cpc_ph = ', '.join(['?'] * len(_cpc_keys))
+                            _cpc_cn = ', '.join(_cpc_keys)
+                            conn.executemany(f"INSERT OR IGNORE INTO _cpc_rebuild ({_cpc_cn}) VALUES ({_cpc_ph})", _cpc_vals)
+                        conn.execute("DROP TABLE core_prompt_configs")
+                        conn.execute("ALTER TABLE _cpc_rebuild RENAME TO core_prompt_configs")
+                        for _tbl in _config_tables:
+                            conn.execute(f"UPDATE {_tbl} SET workspace_id = ?", (_ws_id,))
+                        for _tbl in _config_tables:
+                            _rows = conn.execute(f"SELECT * FROM {_tbl}").fetchall()
+                            if not _rows:
+                                continue
+                            _keys = _rows[0].keys()
+                            for _row in _rows:
+                                _d = {k: _row[k] for k in _keys}
+                                _d['id'] = 'seed-' + str(_d['id'])
+                                _d['workspace_id'] = None
+                                if _tbl == 'core_prompt_configs' and 'prompt_key' in _d:
+                                    _d['prompt_key'] = 'seed-' + str(_d['prompt_key'])
+                                _vals = [_d[k] for k in _keys]
+                                _ph = ', '.join(['?'] * len(_keys))
+                                _cn = ', '.join(_keys)
+                                conn.execute(f"INSERT OR IGNORE INTO {_tbl} ({_cn}) VALUES ({_ph})", _vals)
+                        conn.commit()
         except Exception as _e:
             print(f"[DB] Workspace config migration: {_e}")
 
@@ -1017,6 +1022,39 @@ def init_db():
                     )
         except Exception:
             pass
+
+        # ── Load default workspace configs from JSON (must run after all config tables exist) ──
+        try:
+            import json as _json
+            import uuid as _uuid
+            _config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "default_workspace_configs.json")
+            if os.path.exists(_config_path):
+                _ws_row = conn.execute("SELECT id FROM workspaces WHERE name LIKE '%食谱%' LIMIT 1").fetchone()
+                if _ws_row:
+                    _ws_id = _ws_row[0]
+                    _ws_cfg_count = conn.execute("SELECT COUNT(*) FROM column_configs WHERE workspace_id = ?", (_ws_id,)).fetchone()[0]
+                    if _ws_cfg_count == 0:
+                        with open(_config_path, 'r', encoding='utf-8') as _f:
+                            _cfg = _json.load(_f)
+                        for _item in _cfg.get('column_configs', []):
+                            _rid = 'ws-cfg-' + _uuid.uuid4().hex[:10]
+                            conn.execute(
+                                "INSERT INTO column_configs (id, workspace_id, column_id, label, prompt, skill, rules, sort_order, has_template) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                (_rid, _ws_id, _item['column_id'], _item['label'], _item['prompt'], _item['skill'], _item.get('rules', '{}'), _item['sort_order'], _item.get('has_template', 0)))
+                        for _item in _cfg.get('speech_configs', []):
+                            _rid = 'ws-cfg-' + _uuid.uuid4().hex[:10]
+                            conn.execute(
+                                "INSERT INTO speech_configs (id, workspace_id, label, prompt, skill, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+                                (_rid, _ws_id, _item['label'], _item['prompt'], _item['skill'], _item['sort_order']))
+                        for _item in _cfg.get('tts_configs', []):
+                            _rid = 'ws-cfg-' + _uuid.uuid4().hex[:10]
+                            conn.execute(
+                                "INSERT INTO tts_configs (id, workspace_id, label, prompt, skill, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+                                (_rid, _ws_id, _item['label'], _item['prompt'], _item['skill'], _item['sort_order']))
+                        conn.commit()
+                        print("[DB] Default workspace configs loaded from JSON")
+        except Exception as _e:
+            print(f"[DB] Workspace config loading failed: {_e}")
 
         # Create core_prompt_configs table (seed documentation for PPT generation prompts)
         conn.execute("""
