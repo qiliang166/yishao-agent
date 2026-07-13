@@ -5564,13 +5564,9 @@ def api_download_server():
 
 @app.get("/api/download/{filename}")
 def download_file(filename: str, request: Request, project_id: str = None, name: str = None):
-    print(f"[DOWNLOAD] filename={filename}, project_id={project_id}, request_ok={request is not None}", flush=True)
-    if request:
-        print(f"[DOWNLOAD] user={getattr(request.state, 'user', 'NO_STATE')}", flush=True)
     download_name = name or filename
     if project_id:
         user = getattr(request.state, "user", None) if request else None
-        print(f"[DOWNLOAD] user_ok={user is not None}, perms={user.get('permissions', []) if user else 'N/A'}", flush=True)
         if user is None and request:
             token = request.query_params.get("token")
             if token:
