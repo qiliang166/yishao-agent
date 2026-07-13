@@ -2528,7 +2528,13 @@ export default function ProjectPage() {
                     onChange={async e => {
                       const f = e.target.files?.[0]
                       if (!f) return
-                      const text = await f.text()
+                      let text = ''
+                      if (f.name.toLowerCase().endsWith('.docx')) {
+                        const res = await api.uploadMaterial(id!, f)
+                        text = res.parse_result?.text || ''
+                      } else {
+                        text = await f.text()
+                      }
                       setFileText(text)
                       if (id && text) {
                         api.saveStep(id, 'raw_file', text)
