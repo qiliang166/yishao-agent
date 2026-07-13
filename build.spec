@@ -71,6 +71,7 @@ a = Analysis(
         'backend.routers.prompt_studio',
         'backend.routers.prompts',
         'backend.routers.scenarios',
+        'backend.routers.users',
         'backend.services',
         'backend.services.license_service',
         'backend.services.llm_service',

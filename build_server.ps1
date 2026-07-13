@@ -55,6 +55,9 @@ Copy-Item "$root\backend\routers\*.py" "$distDir\backend\routers\" -ErrorAction 
 # Copy services
 Copy-Item "$root\backend\services\*.py" "$distDir\backend\services\" -ErrorAction SilentlyContinue
 
+# Copy ffmpeg static binary for Linux
+Copy-Item "$root\backend\ffmpeg" "$distDir\backend\ffmpeg" -Force -ErrorAction SilentlyContinue
+
 # Copy resources (prompts, scenarios, templates, vi)
 Copy-Item "$root\backend\resources\*" "$distDir\backend\resources\" -Recurse -Force -ErrorAction SilentlyContinue
 
