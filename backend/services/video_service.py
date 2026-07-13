@@ -18,16 +18,19 @@ _progress = {}
 
 def _find_yt_dlp():
     """Find yt-dlp executable. Install if not found."""
-    try:
-        subprocess.run(["yt-dlp", "--version"], capture_output=True, check=True)
-        return "yt-dlp"
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-    try:
-        subprocess.run([r"C:\Program Files\yt-dlp\yt-dlp.exe", "--version"], capture_output=True, check=True)
-        return r"C:\Program Files\yt-dlp\yt-dlp.exe"
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
+    import shutil as _shutil
+    # Check adjacent venv (production deployment: ../venv/bin/yt-dlp)
+    venv_ytdlp = os.path.normpath(os.path.join(BASE_DIR, "..", "venv", "bin", "yt-dlp"))
+    if os.path.exists(venv_ytdlp):
+        return venv_ytdlp
+    # Check system PATH
+    which = _shutil.which("yt-dlp")
+    if which:
+        return which
+    # Check Windows bundled location
+    win_path = r"C:\Program Files\yt-dlp\yt-dlp.exe"
+    if os.path.exists(win_path):
+        return win_path
     raise RuntimeError(
         "yt-dlp 未安装。请运行: pip install yt-dlp\n"
         "或从 https://github.com/yt-dlp/yt-dlp/releases 下载"
@@ -189,6 +192,13 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                 elif ext in (".srt", ".vtt", ".ass"):
                     subtitle_path = f
 
+            # Validate downloaded file is actual video, not HTML / auth wall
+            if video_path:
+                file_size = os.path.getsize(video_path)
+                if file_size < 100 * 1024:
+                    _progress[task_id] = {"status": "error", "progress": 0, "message": f"下载失败：文件过小 ({file_size} bytes)，可能是登录页面或无效内容。请检查视频链接。"}
+                    return
+
             # Step 1: Extract embedded subtitles if present → save subtitles.txt
             if subtitle_path:
                 _progress[task_id] = {"status": "processing", "progress": 65, "message": "解析内嵌字幕..."}
@@ -218,6 +228,11 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                     with open(merged_txt_path, "w", encoding="utf-8") as f:
                         f.write(merged_text)
 
+            # Ensure browser-compatible codec (transcode HEVC/VP9/AV1 to H.264 if needed)
+            if video_path:
+                _progress[task_id] = {"status": "processing", "progress": 92, "message": "检查视频编码兼容性..."}
+                video_path = _transcode_to_h264(video_path, task_dir)
+
             # Rename video to project name and copy to project folder if requested
             if project_id and video_path:
                 try:
@@ -243,6 +258,7 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                         video_path = new_path
                         # Copy to project storage folder
                         if proj["storage_path"]:
+                            os.makedirs(proj["storage_path"], exist_ok=True)
                             dest = os.path.join(proj["storage_path"], new_name)
                             if os.path.exists(dest):
                                 os.remove(dest)
@@ -309,17 +325,62 @@ def _parse_subtitle(subtitle_path: str) -> str:
 
 
 def _ensure_ffmpeg():
-    """Check for ffmpeg.exe — first in backend/ directory, then system PATH."""
-    local = os.path.join(BASE_DIR, "ffmpeg.exe")
+    """Check for ffmpeg — first bundled binary, then system PATH."""
+    import shutil as _shutil
+    import stat as _stat
+
+    # Bundled binary (ffmpeg.exe on Windows, ffmpeg on Linux)
+    local = os.path.join(BASE_DIR, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
     if os.path.exists(local):
+        if os.name != "nt":
+            os.chmod(local, _stat.S_IRWXU | _stat.S_IRGRP | _stat.S_IXGRP | _stat.S_IROTH | _stat.S_IXOTH)
         return local
 
-    import shutil as _shutil
     which = _shutil.which("ffmpeg")
     if which:
         return which
 
     return None
+
+
+def _transcode_to_h264(video_path: str, task_dir: str) -> str:
+    """If video codec isn't browser-compatible (HEVC, VP9, AV1), transcode to H.264/AAC MP4."""
+    ffmpeg = _ensure_ffmpeg()
+    if not ffmpeg:
+        return video_path
+
+    ffprobe = os.path.join(os.path.dirname(ffmpeg), "ffprobe.exe" if os.name == "nt" else "ffprobe")
+    if not os.path.exists(ffprobe):
+        ffprobe = ffmpeg.replace("ffmpeg", "ffprobe")
+    if not os.path.exists(ffprobe):
+        return video_path
+
+    try:
+        result = subprocess.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1",
+             video_path],
+            capture_output=True, text=True, timeout=30)
+        codec = result.stdout.strip().lower() if result.returncode == 0 else ""
+    except Exception:
+        return video_path
+
+    COMPATIBLE = {"h264", "avc1", "avc3", "mpeg4", "msmpeg4"}
+    if not codec or codec in COMPATIBLE:
+        return video_path
+
+    base_name = os.path.splitext(os.path.basename(video_path))[0]
+    output = os.path.join(task_dir, f"{base_name}_h264.mp4")
+    if os.path.exists(output) and os.path.getsize(output) > 1024:
+        return output
+
+    cmd = [ffmpeg, "-y", "-i", video_path,
+           "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+           "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", output]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    if result.returncode == 0 and os.path.exists(output) and os.path.getsize(output) > 1024:
+        return output
+    return video_path
 
 
 def _transcribe_audio(video_path: str, task_dir: str, asr_model: str = "fun-asr", asr_provider_id: str = None) -> str:
