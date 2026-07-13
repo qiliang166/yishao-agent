@@ -2380,8 +2380,8 @@ def _enforce_element_contrast(html: str, scheme: dict, slide_seq: int,
                     except ValueError:
                         return (None, 1.0)
                 return (None, alpha)
-            # var(--name)
-            vm = _re_ec.match(r'var\(--([\w-]+)\)', v)
+            # var(--name) or var(--name, fallback)
+            vm = _re_ec.match(r'var\(--([\w-]+)', v)
             if vm:
                 return (_scheme_hex(vm.group(1)), 1.0)
             # {{name}}
@@ -5828,35 +5828,53 @@ def _extract_slides_from_html(full_html: str) -> list[dict]:
 
 
 def _build_root_vars(scheme_data: dict) -> str:
-    """Build :root CSS block defining all color variables with actual hex/rgb values."""
+    """Build :root CSS block defining all color variables with actual hex/rgb values.
+
+    Every variable name that contains an underscore also gets a hyphen alias,
+    and vice versa — the LLM may output either convention in generated HTML.
+    """
+    def _emit(name: str, value: str):
+        lines.append(f"  --{name}: {value};")
+        # bidirectional alias: _ ↔ -
+        if "_" in name:
+            alt = name.replace("_", "-")
+            if alt != name:
+                lines.append(f"  --{alt}: {value};")
+
     lines = [":root {"]
 
     color_keys = ["primary", "secondary", "accent", "background", "text", "card_bg"]
     for key in color_keys:
         val = scheme_data.get(key, "")
         if val and val.startswith("#"):
-            lines.append(f"  --{key}: {val};")
+            _emit(key, val)
             r, g, b = _hex_to_rgb(val)
-            lines.append(f"  --{key}-r: {r};")
-            lines.append(f"  --{key}-g: {g};")
-            lines.append(f"  --{key}-b: {b};")
-            lines.append(f"  --{key}-rgb: {r}, {g}, {b};")
+            _emit(f"{key}-r", str(r))
+            _emit(f"{key}-g", str(g))
+            _emit(f"{key}-b", str(b))
+            _emit(f"{key}-rgb", f"{r}, {g}, {b}")
 
     chart_colors = scheme_data.get("chart_colors", [])
     if isinstance(chart_colors, list):
         for i, c in enumerate(chart_colors):
             if c and c.startswith("#"):
-                lines.append(f"  --chart-{i}: {c};")
+                _emit(f"chart-{i}", c)
                 r, g, b = _hex_to_rgb(c)
-                lines.append(f"  --chart-{i}-rgb: {r}, {g}, {b};")
+                _emit(f"chart-{i}-rgb", f"{r}, {g}, {b}")
 
     semantic = scheme_data.get("semantic", {})
     if isinstance(semantic, dict):
         for k, v in semantic.items():
             if v and v.startswith("#"):
-                lines.append(f"  --semantic-{k}: {v};")
+                _emit(f"semantic-{k}", v)
                 r, g, b = _hex_to_rgb(v)
-                lines.append(f"  --semantic-{k}-rgb: {r}, {g}, {b};")
+                _emit(f"semantic-{k}-rgb", f"{r}, {g}, {b}")
+
+    # Standard fallbacks for LLM-invented variable names
+    fallback = chart_colors[0] if chart_colors else scheme_data.get("accent", "#cccccc")
+    if isinstance(fallback, str) and fallback.startswith("#"):
+        _emit("chart_color", fallback)
+    lines.append("  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);")
 
     lines.append("}")
     return "\n".join(lines)
