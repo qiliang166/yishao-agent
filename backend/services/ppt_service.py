@@ -6688,7 +6688,7 @@ def _placeholder_to_css_var(placeholder: str) -> str:
         return ""
     m = re.match(r'\{\{(\w+)\}\}', placeholder)
     if m:
-        return f"var(--{m.group(1).replace('_', '-')})"
+        return f"var(--{m.group(1)})"
     return placeholder
 
 
