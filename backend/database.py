@@ -1142,6 +1142,15 @@ def init_db():
         except Exception as e:
             print(f"[DB] Warning: could not backfill upgrade_expires_at: {e}")
 
+        # Fix col2 sub-item labels to match frontend stage tabs (see CLAUDE.md plan)
+        try:
+            conn.execute("DELETE FROM column_configs WHERE column_id = 'col2' AND sort_order = 0")
+            conn.execute("UPDATE column_configs SET label = '标准文档' WHERE column_id = 'col2' AND sort_order = 3")
+            conn.execute("UPDATE column_configs SET label = '分析文档' WHERE column_id = 'col2' AND sort_order = 4")
+            conn.execute("UPDATE column_configs SET label = '综合文档' WHERE column_id = 'col2' AND sort_order = 5")
+        except Exception as e:
+            print(f"[DB] Warning: col2 label migration failed: {e}")
+
         conn.commit()
     finally:
         conn.close()

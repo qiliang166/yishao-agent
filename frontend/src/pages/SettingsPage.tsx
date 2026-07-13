@@ -88,6 +88,7 @@ function SettingsPage() {
   // -- 通用设置 state --
   const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
+  const [brandSlogan, setBrandSlogan] = useState('')
   const [savePath, setSavePath] = useState('D:\\YISHAOAGENT\\data\\output')
   const [brandingCopyright, setBrandingCopyright] = useState('')
   const [brandingSignature, setBrandingSignature] = useState('')
@@ -144,6 +145,7 @@ function SettingsPage() {
       const s = data.settings || {}
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.brand_name) setBrandName(s.brand_name)
+      if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
       if (s.save_path) setSavePath(s.save_path)
       if (s.branding_copyright) setBrandingCopyright(s.branding_copyright)
       if (s.branding_signature) setBrandingSignature(s.branding_signature)
@@ -274,6 +276,7 @@ function SettingsPage() {
     try {
       await api.updateSettings({
         brand_logo: brandLogo, brand_name: brandName, save_path: savePath,
+        branding_slogan: brandSlogan,
         branding_copyright: brandingCopyright, branding_signature: brandingSignature,
         admin_phone: adminPhone, app_version: appVersion,
         payment_qr_wechat: qrWechat, payment_qr_alipay: qrAlipay,
@@ -455,6 +458,11 @@ function SettingsPage() {
               <label>应用名称</label>
               <input className="form-input" type="text" value={brandName}
                 onChange={e => setBrandName(e.target.value)} style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+            </div>
+            <div className="settings-row">
+              <label>口号</label>
+              <input className="form-input" type="text" value={brandSlogan}
+                onChange={e => setBrandSlogan(e.target.value)} placeholder="展示在侧边栏品牌名称下方" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
             </div>
             <div className="settings-row">
               <label>版本号</label>

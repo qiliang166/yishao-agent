@@ -1,3 +1,35 @@
+[2026-07-13] col2子项标签对齐前台：数据库column_configs中sort_order 3/4/5的label从"文档生成/道与术文案/研学手册文案"改为"标准文档/分析文档/综合文档"，删除sort_order=0旧记录。幂等迁移在init_db中执行，仅影响展示层label字段，不涉及业务逻辑。
+[2026-07-12 12:00:00] 会员角色升级——"开发体验员"完整实现(后端3端点+前端4页面):
+
+功能:付费会员可自助申请升级为"开发体验员"(member类型,内容管理员权限),按时间付费,升级天数自动截断不超过会员剩余天数(截断前弹警告)。
+
+改动:
+1. database.py _seed_roles 新增"开发体验员"(member,CONTENT_ADMIN_PERMS,is_system=1);init_db 无条件调用 _migrate_v1_seed_roles 确保更新后新角色自动创建(idempotent,skip existing)
+2. app.py DEFAULT_PLAN 新增 upgrade 套餐(amount_cents=1990,duration_days=30,name="体验管理员升级");_load_plans() 改为 merge 模式(dict(DEFAULT_PLAN) + stored.update),防止新增套餐类型在已有settings中丢失
+3. app.py 新增 POST /api/member/upgrade — 会员自助升级申请:校验登录/会员/已审批/未过期/未重复申请→加载upgrade plan→计算剩余天数→超期返回truncate_warning(confirm_truncate=false时)→创建payment_records→写audit_log
+4. app.py 新增 GET /api/members/pending-upgrades — 管理员查待审批升级:JOIN payment_records WHERE plan_name匹配upgrade AND recorded_by IS NULL AND 未持有开发体验员角色
+5. app.py 新增 PUT /api/members/{id}/approve-upgrade — 管理员审批升级:校验会员/已基础审批/未过期/未重复→INSERT user_roles(开发体验员)→标记payment recorded_by→写audit_log
+6. frontend api.ts 新增 memberUpgrade/listPendingUpgrades/approveUpgrade 三个API方法
+7. MemberCenterPage.tsx 新增"角色升级"区块(会员有效期与修改密码之间):付费会员显示升级按钮→付款弹窗(QR+单号)→截断警告→提交;已升级显示"当前已是体验管理员"
+8. SettingsPage.tsx 会员套餐Tab新增"升级套餐"配置区(名称/价格/最大天数)
+9. MemberApprovalPage.tsx 新增"待审批升级"卡片列表(紫色左边框+申请升级标签)+升级审批弹窗
+
+验证(14项):
+1. Admin login OK
+2. 新付费会员注册+审批通过
+3. 升级申请提交 ok=True days=30
+4. 无付款单号拦截(请填写付款单号)
+5. 重复申请拦截(已有待审批的升级申请)
+6. 管理员看到待审批升级列表(1 member)
+7. 升级审批通过(已分配体验管理员角色)
+8. 会员获得开发体验员+付费会员双角色
+9. 审批后待办清零(0)
+10. 已升级会员再次申请拦截(您已是体验管理员)
+11. 回归:待审批会员列表正常(5 members)
+12. 回归:已有会员accept01登录正常
+13. 回归:新会员注册(试用)正常
+14. 自审6项通过+TypeScript 0 errors+前端build 1.06s
+
 [2026-07-11 02:30:00] hex 正则无词边界破坏 SVG id 引用整类缺陷根治(黑圆圈根因,非提示词问题):
 背景:用户从最新 col4 成品(分析PPT,22页)实测第10/16页出现大黑圆圈、col5 第2/3/4页同样黑点,位置逐次漂移。逐层取证钉死根因(非推测):第10页黑圆的 fill 在成品 index.html 是 fill="url(var(--semantic-positive)orGrad1)"(非法值→浏览器渲染黑),变量版 index_vars.html 是 url({{semantic_positive}}orGrad1),而 LLM 原始单页 slides/slide_10.html 里定义与引用都正确:<radialGradient id="decorGrad1"> + fill="url(#decorGrad1)"。破坏发生在 _auto_fix_hardcoded_hex(1733)的 hex 扫描:正则 #[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})? 无词边界,把 url(#decorGrad1) 里的 #dec(d/e/c 皆合法十六进制)当成 3 位色值 #ddeecc→语义匹配 semantic_positive→替换 #dec 为 {{semantic_positive}},残留 orGrad1→渐变引用被拦腰截断。#glow1 因 g/l/o 非 hex 字符幸存。所以"哪页中招"随 LLM 即兴给渐变命名漂移(dec/dee 开头就爆),bug 本身固定。
 缺陷类普查(characterize-defect-class):不止渐变——凡"# 开头且标识符前 3 字符全是十六进制"的引用都会中招:url(#gradient/filter/mask/clipPath)、xlink:href=#symbol、href=#anchor 共 6 类。当前成品 16 种 id 里恰只 decorGrad1/decorGrad2/deco-glow 命中(全是渐变、全在报错页),cardShadow/shadow-md/glow1/steam-mask 等 13 种因前缀含非 hex 字符幸存——是运气非安全,LLM 未来命名 fadeShadow/defMask/beeIcon 会静默破坏且症状更隐蔽。故根治正则而非给 id 改名。

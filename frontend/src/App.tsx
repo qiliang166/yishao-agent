@@ -37,6 +37,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const { user } = useAuth()
   const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
+  const [brandSlogan, setBrandSlogan] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
   const [projName, setProjName] = useState('')
   const [sidebarWid, setSidebarWid] = useState('')
@@ -60,6 +61,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
       } else if (fallback) {
         document.title = fallback
       }
+      if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
       if ((ver as any).version) setSidebarVersion((ver as any).version)
       if (s.app_version) setSidebarVersion(s.app_version)
     }).catch(() => {})
@@ -89,9 +91,9 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
 
   const renderLogo = () => {
     if (isImagePath(brandLogo)) {
-      return <img src={brandLogo} alt="Logo" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover', verticalAlign: 'middle' }} />
+      return <img src={brandLogo} alt="Logo" className="sidebar-head-icon-img" />
     }
-    return <span style={{ fontSize: 15 }}>{brandLogo || '🍽'}</span>
+    return <span className="sidebar-head-icon-emoji">{brandLogo || '🍽'}</span>
   }
 
   const canTemplate = usePermission('template.manage')
@@ -102,7 +104,11 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-head">
-        <div className="sidebar-logo">{renderLogo()} {brandName}</div>
+        <div className="sidebar-head-icon">{renderLogo()}</div>
+        <div className="sidebar-head-texts">
+          <div className="sidebar-logo">{brandName}</div>
+          {brandSlogan && <div className="sidebar-sub">{brandSlogan}</div>}
+        </div>
       </div>
       <nav className="sidebar-nav">
         <button
@@ -284,6 +290,7 @@ function MemberSidebar() {
   const { user } = useAuth()
   const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
+  const [brandSlogan, setBrandSlogan] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
   const [projName, setProjName] = useState('')
   const isWorkspace = location.pathname.startsWith('/app/workspace/') || location.pathname.startsWith('/app/project/')
@@ -295,6 +302,7 @@ function MemberSidebar() {
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.brand_name) { setBrandName(s.brand_name); document.title = s.brand_name }
       else if (fallback) { document.title = fallback }
+      if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
       if ((ver as any).version) setSidebarVersion((ver as any).version)
       if (s.app_version) setSidebarVersion(s.app_version)
     }).catch(() => {})
@@ -321,15 +329,19 @@ function MemberSidebar() {
 
   const renderLogo = () => {
     if (isImagePath(brandLogo)) {
-      return <img src={brandLogo} alt="Logo" style={{ width: 18, height: 18, borderRadius: 3, objectFit: 'cover', verticalAlign: 'middle' }} />
+      return <img src={brandLogo} alt="Logo" className="sidebar-head-icon-img" />
     }
-    return <span style={{ fontSize: 15 }}>{brandLogo || '🍽'}</span>
+    return <span className="sidebar-head-icon-emoji">{brandLogo || '🍽'}</span>
   }
 
   return (
     <aside className="sidebar">
       <div className="sidebar-head">
-        <div className="sidebar-logo">{renderLogo()} {brandName}</div>
+        <div className="sidebar-head-icon">{renderLogo()}</div>
+        <div className="sidebar-head-texts">
+          <div className="sidebar-logo">{brandName}</div>
+          {brandSlogan && <div className="sidebar-sub">{brandSlogan}</div>}
+        </div>
       </div>
       <nav className="sidebar-nav">
         <button

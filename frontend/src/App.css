@@ -18,6 +18,29 @@
 .sidebar-head {
   padding: 14px 16px 10px;
   border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sidebar-head-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.sidebar-head-icon-img {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.sidebar-head-icon-emoji {
+  font-size: 22px;
+  line-height: 1;
+}
+.sidebar-head-texts {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 .sidebar-logo {
   font-size: 13px;
@@ -275,7 +298,7 @@
   gap: 16px;
   flex: 1;
   min-height: 0;
-  height: 100%;
+  overflow: hidden;
 }
 .panel-left {
   width: 380px;
@@ -285,6 +308,7 @@
   gap: 10px;
   overflow-y: auto;
   min-height: 0;
+  flex-shrink: 0;
 }
 .panel-right {
   flex: 1;
@@ -292,7 +316,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  height: 100%;
+  overflow-y: auto;
 }
 
 /* ═══ Cards ═══ */
