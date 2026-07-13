@@ -5559,7 +5559,7 @@ def auth_change_password(req: dict, request: Request):
         new_hash = _hash_password(new_pw)
         db.execute(
             "UPDATE users SET password_hash=?, token_version=token_version+1, "
-            "password_changed_at=?, updated_at=? WHERE id=?",
+            "password_changed_at=?, must_change_password=0, updated_at=? WHERE id=?",
             (new_hash, datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), user["sub"]),
         )
         # Sync to settings.admin_password so verify-password works too
