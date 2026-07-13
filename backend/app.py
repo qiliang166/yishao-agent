@@ -180,7 +180,9 @@ def _get_global_save_path() -> str:
     try:
         row = db.execute("SELECT value FROM settings WHERE key = 'save_path'").fetchone()
         if row and row["value"]:
-            return row["value"]
+            path = row["value"]
+            if os.path.isabs(path):
+                return path
     finally:
         db.close()
     return os.path.join(BASE_DIR, "data", "output")
@@ -488,9 +490,10 @@ def resolve_project_storage(project_id: str, auto_create: bool = True) -> str:
 
         if proj["storage_path"]:
             path = os.path.normpath(proj["storage_path"])
-            if auto_create:
-                os.makedirs(path, exist_ok=True)
-            return path
+            if os.path.isabs(path):
+                if auto_create:
+                    os.makedirs(path, exist_ok=True)
+                return path
 
         base = _get_global_save_path()
         folder = _sanitize_folder_name(proj["name"])
@@ -3047,15 +3050,23 @@ def api_video_progress(task_id: str):
 
 
 @app.get("/api/video/file")
-def api_video_file(path: str = ""):
-    """Serve a downloaded video file. Allows paths under VIDEO_DIR, data_dir, or global save_path."""
+def api_video_file(path: str = "", task_id: str = ""):
+    """Serve a downloaded video file. Accepts task_id (preferred, avoids encoding issues) or raw path."""
     import os as _os
+    # Resolve path from task_id if provided (avoids path encoding issues)
+    if task_id:
+        data = get_progress(task_id)
+        resolved = data.get("video_path", "")
+        if resolved:
+            path = resolved  # fall through to unified validation below
+    if not path:
+        raise HTTPException(400, "Missing path or task_id")
     base = _os.path.dirname(_os.path.abspath(__file__))
     video_dir = _os.path.normcase(_os.path.normpath(_os.path.join(base, "data", "videos")))
     data_dir = _os.path.normcase(_os.path.normpath(_os.path.join(base, "data")))
     save_root = _os.path.normcase(_os.path.normpath(_get_global_save_path()))
     full = _os.path.normcase(_os.path.normpath(_os.path.abspath(path)))
-    if not (full.startswith(video_dir) or full.startswith(data_dir + _os.sep) or full.startswith(save_root)):
+    if not (full.startswith(video_dir + _os.sep) or full.startswith(data_dir + _os.sep) or full.startswith(save_root + _os.sep)):
         raise HTTPException(403, f"Access denied: {full}")
     if not _os.path.exists(full):
         raise HTTPException(404, f"File not found: {full}")
@@ -5142,15 +5153,6 @@ def api_tts_history_delete(history_id: int, user=require_perm("stage4.generate")
 def serve_audio(filename: str, request: Request, project_id: str = None, name: str = None):
     download_name = name or filename
     if project_id:
-        user = getattr(request.state, "user", None) if request else None
-        if user is None:
-            raise HTTPException(status_code=401, detail="请先登录")
-        perms = set(user.get("permissions", []))
-        if user.get("user_type") == "admin":
-            perms.add("project.view_all")
-        if "stage4.view" not in perms:
-            raise HTTPException(status_code=403, detail="缺少权限: stage4.view")
-        verify_project_access(project_id, user)
         try:
             proj_dir = resolve_project_storage(project_id, auto_create=False)
             filepath = os.path.join(proj_dir, filename)
