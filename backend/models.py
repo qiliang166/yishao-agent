@@ -8,6 +8,7 @@ class WorkspaceCreate(BaseModel):
     logo: Optional[str] = ''
     status: Optional[str] = 'draft'
     role_ids: Optional[List[str]] = None
+    source_workspace_id: Optional[str] = None
 
 
 class WorkspaceUpdate(BaseModel):

@@ -280,7 +280,7 @@ def _get_user_permissions(user_id: str, user_type: str) -> list[str]:
 
 
 def _get_user_roles(user_id: str) -> list[str]:
-    """Get role names for a user."""
+    """Get role names for a user. Filters out expired upgrade role."""
     db = get_db()
     try:
         rows = db.execute("""
@@ -288,7 +288,20 @@ def _get_user_roles(user_id: str) -> list[str]:
             JOIN user_roles ur ON ur.role_id = r.id
             WHERE ur.user_id = ?
         """, (user_id,)).fetchall()
-        return [r["name"] for r in rows]
+        roles = [r["name"] for r in rows]
+        # Check if upgrade role is expired
+        if "开发体验员" in roles:
+            from datetime import datetime as _dt
+            urow = db.execute(
+                "SELECT upgrade_expires_at FROM users WHERE id=?", (user_id,)
+            ).fetchone()
+            if urow and urow["upgrade_expires_at"]:
+                try:
+                    if _dt.utcnow() > _dt.fromisoformat(urow["upgrade_expires_at"]):
+                        roles.remove("开发体验员")
+                except (ValueError, TypeError):
+                    pass
+        return roles
     finally:
         db.close()
 
@@ -565,6 +578,32 @@ def _copy_seed_configs(db, workspace_id: str):
     db.commit()
 
 
+def _copy_workspace_configs(db, target_ws_id: str, source_ws_id: str):
+    """Copy configs from source workspace to target workspace (4 tables)."""
+    for table, id_col in [
+        ('column_configs', 'id'),
+        ('speech_configs', 'id'),
+        ('tts_configs', 'id'),
+        ('core_prompt_configs', 'id'),
+    ]:
+        rows = db.execute(
+            f"SELECT * FROM {table} WHERE workspace_id = ? ORDER BY sort_order",
+            (source_ws_id,)).fetchall()
+        if not rows:
+            continue
+        for r in rows:
+            d = dict(r)
+            d[id_col] = uuid.uuid4().hex[:20]
+            d['workspace_id'] = target_ws_id
+            cols = list(d.keys())
+            ph = ', '.join(['?'] * len(cols))
+            cn = ', '.join(cols)
+            db.execute(
+                f"INSERT OR IGNORE INTO {table} ({cn}) VALUES ({ph})",
+                list(d.values()))
+    db.commit()
+
+
 @app.post("/api/workspaces")
 def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
     wid = uuid.uuid4().hex[:12]
@@ -573,7 +612,27 @@ def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
         db.execute("INSERT INTO workspaces (id, name, description, logo, status, created_by) VALUES (?, ?, ?, ?, ?, ?)",
                    (wid, req.name, req.description or '', req.logo or '', req.status or 'draft', user.get("sub", "")))
         db.commit()
-        _copy_seed_configs(db, wid)
+        if req.source_workspace_id:
+            # Verify source workspace exists
+            source_ws = db.execute(
+                "SELECT id FROM workspaces WHERE id = ?", (req.source_workspace_id,)).fetchone()
+            if not source_ws:
+                raise HTTPException(status_code=404, detail="源工作区不存在")
+            # Members additionally need explicit access
+            if user.get("user_type") == "member":
+                uid = user.get("user_id", user.get("sub", ""))
+                access = db.execute("""
+                    SELECT 1 FROM workspaces w
+                    LEFT JOIN member_workspaces mw ON mw.workspace_id = w.id AND mw.user_id = ?
+                    LEFT JOIN workspace_roles wr ON wr.workspace_id = w.id
+                    LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ?
+                    WHERE w.id = ? AND (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)
+                """, (uid, uid, req.source_workspace_id)).fetchone()
+                if not access:
+                    raise HTTPException(status_code=403, detail="无权访问源工作区")
+            _copy_workspace_configs(db, wid, req.source_workspace_id)
+        else:
+            _copy_seed_configs(db, wid)
 
         # Role-based visibility — requires member.manage permission
         if req.role_ids and "member.manage" in (user.get("permissions") or []):
@@ -6126,7 +6185,7 @@ def auth_me(request: Request):
     db = get_db()
     try:
         row = db.execute(
-            "SELECT display_name, email, expires_at, created_at, is_approved, is_active FROM users WHERE id=?",
+            "SELECT display_name, email, expires_at, upgrade_expires_at, created_at, is_approved, is_active FROM users WHERE id=?",
             (uid,),
         ).fetchone()
         profile = {}
@@ -6135,18 +6194,22 @@ def auth_me(request: Request):
                 "display_name": row["display_name"],
                 "email": row["email"],
                 "expires_at": row["expires_at"],
+                "upgrade_expires_at": row["upgrade_expires_at"],
                 "created_at": row["created_at"],
                 "is_approved": row["is_approved"],
                 "is_active": row["is_active"],
             }
     finally:
         db.close()
+    user_type = user.get("user_type", "member")
+    roles = _get_user_roles(uid)
+    permissions = _get_user_permissions(uid, user_type)
     return {
         "user_id": uid,
         "username": user.get("username"),
-        "user_type": user.get("user_type"),
-        "permissions": user.get("permissions", []),
-        "roles": user.get("roles", []),
+        "user_type": user_type,
+        "permissions": permissions,
+        "roles": roles,
         **profile,
     }
 
@@ -6454,43 +6517,31 @@ def member_upgrade(req: dict, request: Request):
                 pass
 
         existing = db.execute(
-            "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
-            "WHERE ur.user_id=? AND r.name='开发体验员'",
-            (uid,),
-        ).fetchone()
+                "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
+                "WHERE ur.user_id=? AND r.name='开发体验员'",
+                (uid,),
+            ).fetchone()
         if existing:
-            raise HTTPException(status_code=400, detail="您已是体验管理员")
+            # Allow re-upgrade if previous upgrade has expired
+            urow = db.execute(
+                "SELECT upgrade_expires_at FROM users WHERE id=?", (uid,)
+            ).fetchone()
+            already_upgraded = True
+            if urow and urow["upgrade_expires_at"]:
+                try:
+                    if _dt.utcnow() > _dt.fromisoformat(urow["upgrade_expires_at"]):
+                        already_upgraded = False
+                except (ValueError, TypeError):
+                    pass
+            if already_upgraded:
+                raise HTTPException(status_code=400, detail="您已是体验管理员")
 
         plans = _load_plans()
         upgrade_plan = plans.get("upgrade")
         if not upgrade_plan:
             raise HTTPException(status_code=400, detail="升级套餐未配置，请联系管理员")
 
-        remaining_days = None
-        if m["expires_at"]:
-            try:
-                exp = _dt.fromisoformat(m["expires_at"])
-                remaining = (exp - now).total_seconds() / 86400
-                remaining_days = max(0, int(remaining))
-            except (ValueError, TypeError):
-                pass
-
         upgrade_days = int(upgrade_plan.get("duration_days", 30))
-        confirm_truncate = req.get("confirm_truncate", False)
-
-        if remaining_days is not None and upgrade_days > remaining_days:
-            if not confirm_truncate:
-                return {
-                    "ok": False,
-                    "truncate_warning": True,
-                    "remaining_days": remaining_days,
-                    "upgrade_days": upgrade_days,
-                    "message": f"您的会员仅剩 {remaining_days} 天，升级时长将被截断为 {remaining_days} 天。建议先续费会员后再升级。",
-                }
-            actual_days = remaining_days
-        else:
-            actual_days = upgrade_days
-
         plan_name = upgrade_plan.get("name", "体验管理员升级")
         pending = db.execute(
             "SELECT id FROM payment_records WHERE user_id=? AND plan_name=? AND recorded_by IS NULL",
@@ -6512,14 +6563,14 @@ def member_upgrade(req: dict, request: Request):
                 payment_method, payment_ref, paid_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (str(_uuid.uuid4()), uid, upgrade_plan["amount_cents"],
-             plan_name, actual_days,
+             plan_name, upgrade_days,
              payment_method, payment_ref, now_str),
         )
 
         _write_audit(db, uid, "member.upgrade", "user", uid,
                       json.dumps({"plan_name": plan_name,
                                   "amount_cents": upgrade_plan["amount_cents"],
-                                  "duration_days": actual_days,
+                                  "duration_days": upgrade_days,
                                   "payment_method": payment_method,
                                   "payment_ref": payment_ref}), ip)
         db.commit()
@@ -6529,7 +6580,7 @@ def member_upgrade(req: dict, request: Request):
     return {
         "ok": True,
         "message": "升级申请已提交，请等待管理员审批",
-        "duration_days": actual_days,
+        "duration_days": upgrade_days,
     }
 
 
@@ -6763,12 +6814,23 @@ def approve_upgrade(user_id: str, request: Request, user=require_perm("member.ma
                 pass
 
         existing = db.execute(
-            "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
-            "WHERE ur.user_id=? AND r.name='开发体验员'",
-            (user_id,),
-        ).fetchone()
+                "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
+                "WHERE ur.user_id=? AND r.name='开发体验员'",
+                (user_id,),
+            ).fetchone()
         if existing:
-            raise HTTPException(400, "该会员已是体验管理员")
+            # Allow re-approval if previous upgrade expired
+            urow = db.execute(
+                "SELECT upgrade_expires_at FROM users WHERE id=?", (user_id,)
+            ).fetchone()
+            if urow and urow["upgrade_expires_at"]:
+                try:
+                    if _dt.utcnow() <= _dt.fromisoformat(urow["upgrade_expires_at"]):
+                        raise HTTPException(400, "该会员已是体验管理员")
+                except (ValueError, TypeError):
+                    raise HTTPException(400, "该会员已是体验管理员")
+            else:
+                raise HTTPException(400, "该会员已是体验管理员")
 
         role = db.execute(
             "SELECT id FROM roles WHERE name='开发体验员' AND is_system=1"
@@ -6776,23 +6838,40 @@ def approve_upgrade(user_id: str, request: Request, user=require_perm("member.ma
         if not role:
             raise HTTPException(500, "系统角色缺失：开发体验员，请联系管理员重新部署")
 
+        plans = _load_plans()
+        upgrade_plan = plans.get("upgrade", {})
+        plan_name = upgrade_plan.get("name", "体验管理员升级")
+
         db.execute(
             "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
             (user_id, role["id"]),
         )
 
-        # Mark pending upgrade payment as recorded
-        plans = _load_plans()
-        upgrade_plan = plans.get("upgrade", {})
-        plan_name = upgrade_plan.get("name", "体验管理员升级")
+        # Calculate independent upgrade expiration: now + duration_days from payment
+        payment = db.execute(
+            "SELECT duration_days FROM payment_records "
+            "WHERE user_id=? AND plan_name=? AND recorded_by IS NULL "
+            "ORDER BY paid_at DESC LIMIT 1",
+            (user_id, plan_name),
+        ).fetchone()
+        upgrade_days = payment["duration_days"] if payment else int(upgrade_plan.get("duration_days", 30))
+        from datetime import timedelta as _td
+        upgrade_expires = (now + _td(days=int(upgrade_days))).isoformat()
         db.execute(
-            "UPDATE payment_records SET recorded_by=?, expires_before=?, expires_after=? "
+            "UPDATE users SET upgrade_expires_at=? WHERE id=?",
+            (upgrade_expires, user_id),
+        )
+
+        # Mark pending upgrade payment as recorded
+        db.execute(
+            "UPDATE payment_records SET recorded_by=?, expires_before=NULL, expires_after=? "
             "WHERE user_id=? AND plan_name=? AND recorded_by IS NULL",
-            (user["sub"], m["expires_at"], m["expires_at"], user_id, plan_name),
+            (user["sub"], upgrade_expires, user_id, plan_name),
         )
 
         _write_audit(db, user["sub"], "member.approve_upgrade", "user", user_id,
-                      json.dumps({"role": "开发体验员", "membership_expires": m["expires_at"]}),
+                      json.dumps({"role": "开发体验员", "upgrade_expires": upgrade_expires,
+                                  "upgrade_days": upgrade_days}),
                       ip_address=ip)
         db.commit()
         return {"ok": True, "message": "升级审批通过，已分配体验管理员角色", "role": "开发体验员"}

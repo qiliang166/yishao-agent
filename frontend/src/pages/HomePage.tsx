@@ -39,6 +39,10 @@ function HomePage() {
   const [memberRoles, setMemberRoles] = useState<{id:string;name:string}[]>([])
   const [creating, setCreating] = useState(false)
   const [showWizard, setShowWizard] = useState(false)
+  const [sourceWorkspaceId, setSourceWorkspaceId] = useState('')
+  const [sourceWorkspaceQuery, setSourceWorkspaceQuery] = useState('')
+  const [showSourceDropdown, setShowSourceDropdown] = useState(false)
+  const [allWorkspaces, setAllWorkspaces] = useState<Workspace[]>([])
 
   const loadWorkspaces = (p: number) => {
     setLoading(true)
@@ -67,16 +71,20 @@ function HomePage() {
     setCreateLogo('')
     setCreateStatus('draft')
     setCreateRoleIds([])
+    setSourceWorkspaceId('')
+    setSourceWorkspaceQuery('')
+    setShowSourceDropdown(false)
     if (canManageMembers) {
       api.listRoles('member').then(roles => setMemberRoles(roles as {id:string;name:string}[])).catch(() => {})
     }
+    api.listWorkspaces(1, 200).then(data => setAllWorkspaces(data.workspaces)).catch(() => {})
   }
 
   const handleCreate = async () => {
     if (!createName.trim()) return
     setCreating(true)
     try {
-      const ws = await api.createWorkspace(createName.trim(), createDesc.trim(), createLogo.trim(), createStatus, createRoleIds.length > 0 ? createRoleIds : undefined)
+      const ws = await api.createWorkspace(createName.trim(), createDesc.trim(), createLogo.trim(), createStatus, createRoleIds.length > 0 ? createRoleIds : undefined, sourceWorkspaceId || undefined)
       setShowCreate(false)
       navigate(`/workspace/${ws.id}`)
     } catch (err: any) {
@@ -261,6 +269,51 @@ function HomePage() {
                 onChange={e => setCreateDesc(e.target.value)}
                 placeholder="简要描述该项目的用途和内容..."
                 style={{ resize: 'vertical' }} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">复制配置自</label>
+              {sourceWorkspaceId ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-secondary)', borderRadius: 6, fontSize: 13 }}>
+                  <span style={{ flex: 1 }}>{allWorkspaces.find(w => w.id === sourceWorkspaceId)?.name || sourceWorkspaceId}</span>
+                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--text-secondary)' }}
+                    onClick={() => { setSourceWorkspaceId(''); setSourceWorkspaceQuery('') }}>清除</button>
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <input className="form-input" type="text"
+                    value={sourceWorkspaceQuery}
+                    onChange={e => { setSourceWorkspaceQuery(e.target.value); setShowSourceDropdown(true) }}
+                    onFocus={() => setShowSourceDropdown(true)}
+                    onBlur={() => setTimeout(() => setShowSourceDropdown(false), 200)}
+                    placeholder="搜索并选择工作区（留空则使用默认配置）" />
+                  {showSourceDropdown && (
+                    <div style={{
+                      position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                      background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6,
+                      maxHeight: 180, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                    }}>
+                      {(sourceWorkspaceQuery
+                        ? allWorkspaces.filter(w => w.name.toLowerCase().includes(sourceWorkspaceQuery.toLowerCase()))
+                        : allWorkspaces
+                      ).map(w => (
+                        <div key={w.id}
+                          style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid var(--border)' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-secondary)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '')}
+                          onMouseDown={() => { setSourceWorkspaceId(w.id); setSourceWorkspaceQuery(w.name); setShowSourceDropdown(false) }}>
+                          {w.name}
+                        </div>
+                      ))}
+                      {allWorkspaces.length === 0 && (
+                        <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-secondary)' }}>暂无工作区</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+                选择已有工作区，将其提示词、演讲、语音等配置复制到新项目
+              </div>
             </div>
             {canManageMembers && memberRoles.length > 0 && (
               <div className="form-group">

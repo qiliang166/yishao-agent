@@ -9,6 +9,7 @@ interface MemberProfile {
   email: string
   user_type: string
   expires_at: string | null
+  upgrade_expires_at: string | null
   created_at: string
   is_approved: number
   is_active: number
@@ -38,7 +39,6 @@ export default function MemberCenterPage() {
   const [upgradeError, setUpgradeError] = useState('')
   const [upgradeSuccess, setUpgradeSuccess] = useState('')
   const [qrCodes, setQrCodes] = useState<{ wechat: string; alipay: string }>({ wechat: '', alipay: '' })
-  const [truncateWarning, setTruncateWarning] = useState<{ remaining_days: number; upgrade_days: number; message: string } | null>(null)
 
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
@@ -89,26 +89,16 @@ export default function MemberCenterPage() {
     }
   }
 
-  const handleUpgrade = async (confirmTruncate: boolean = false) => {
+  const handleUpgrade = async () => {
     setUpgradeError('')
     setUpgradeLoading(true)
     try {
       const result = await api.memberUpgrade({
         payment_method: upgradePaymentMethod,
         payment_ref: upgradePaymentRef,
-        confirm_truncate: confirmTruncate,
       })
-      if (!result.ok && result.truncate_warning) {
-        setTruncateWarning({
-          remaining_days: result.remaining_days!,
-          upgrade_days: result.upgrade_days!,
-          message: result.message!,
-        })
-        return
-      }
       setUpgradeSuccess(result.message || '升级申请已提交')
       setShowUpgrade(false)
-      setTruncateWarning(null)
     } catch (e: any) {
       setUpgradeError(e.message || '操作失败')
     } finally {
@@ -131,6 +121,18 @@ export default function MemberCenterPage() {
       return <span style={{ color: '#f0ad4e', fontWeight: 600 }}>{days} 天后到期 ({new Date(profile.expires_at).toLocaleDateString('zh-CN')})</span>
     }
     return <span style={{ color: 'var(--success)' }}>{new Date(profile.expires_at).toLocaleDateString('zh-CN')}（剩余 {days} 天）</span>
+  }
+
+  const upgradeExpiresInfo = () => {
+    if (!profile?.upgrade_expires_at) return null
+    const now = new Date()
+    const exp = new Date(profile.upgrade_expires_at)
+    const diff = exp.getTime() - now.getTime()
+    const days = Math.max(0, Math.floor(diff / (86400 * 1000)))
+    if (diff < 0) {
+      return <span style={{ color: 'var(--warning)', fontWeight: 600 }}>已过期 ({new Date(profile.upgrade_expires_at).toLocaleDateString('zh-CN')})</span>
+    }
+    return <span style={{ color: 'var(--success)' }}>{new Date(profile.upgrade_expires_at).toLocaleDateString('zh-CN')}（剩余 {days} 天）</span>
   }
 
   const isPaid = profile?.permissions?.includes('stage5.download')
@@ -198,7 +200,7 @@ export default function MemberCenterPage() {
           <div className="ac-sub-item-header">角色升级</div>
           <div style={{ fontSize: 13, padding: '4px 0' }}>
             <p style={{ margin: '0 0 8px 0', color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.6 }}>
-              如果您希望搭建属于自己的智能食谱教案生成系统，可申请升级为"开发体验员"，完整体验内容创建、编辑、AI 生成等全部功能，帮助您了解系统能力与使用方法。确认需求后可联系管理员购买授权码并申请独立部署。升级按时间付费，有效期自动对齐会员到期时间。
+              如果您希望搭建属于自己的智能食谱教案生成系统，可申请升级为"开发体验员"，完整体验内容创建、编辑、AI 生成等全部功能，帮助您了解系统能力与使用方法。确认需求后可联系管理员购买授权码并申请独立部署。升级独立计费，购买天数用完即止。
             </p>
             {upgradeSuccess ? (
               <div style={{ color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>{upgradeSuccess}</div>
@@ -207,7 +209,6 @@ export default function MemberCenterPage() {
                 setShowUpgrade(true)
                 setUpgradeError('')
                 setUpgradePaymentRef('')
-                setTruncateWarning(null)
               }}>
                 申请升级为开发体验员
               </button>
@@ -224,90 +225,58 @@ export default function MemberCenterPage() {
                 申请升级 · ￥{upgradePlan.amount_cents ? (upgradePlan.amount_cents / 100).toFixed(2) : '—'} / {upgradePlan.duration_days}天
               </div>
 
-              {/* Truncate warning */}
-              {truncateWarning && (
+              {/* QR codes */}
+              <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                <button
+                  onClick={() => setUpgradePaymentMethod('wechat')}
+                  style={{
+                    flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6, border: 'none',
+                    cursor: 'pointer', fontWeight: upgradePaymentMethod === 'wechat' ? 700 : 400,
+                    background: upgradePaymentMethod === 'wechat' ? 'var(--primary)' : 'var(--card-bg)',
+                    color: upgradePaymentMethod === 'wechat' ? '#fff' : 'var(--text)',
+                  }}
+                >
+                  微信支付
+                </button>
+                <button
+                  onClick={() => setUpgradePaymentMethod('alipay')}
+                  style={{
+                    flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6, border: 'none',
+                    cursor: 'pointer', fontWeight: upgradePaymentMethod === 'alipay' ? 700 : 400,
+                    background: upgradePaymentMethod === 'alipay' ? 'var(--primary)' : 'var(--card-bg)',
+                    color: upgradePaymentMethod === 'alipay' ? '#fff' : 'var(--text)',
+                  }}
+                >
+                  支付宝
+                </button>
+              </div>
+
+              {(upgradePaymentMethod === 'wechat' && qrCodes.wechat) || (upgradePaymentMethod === 'alipay' && qrCodes.alipay) ? (
+                <div style={{ textAlign: 'center', marginBottom: 12 }}>
+                  <img
+                    src={upgradePaymentMethod === 'wechat' ? qrCodes.wechat : qrCodes.alipay}
+                    alt="收款码"
+                    style={{ width: 140, height: 140, objectFit: 'contain', borderRadius: 8 }}
+                  />
+                </div>
+              ) : (
                 <div style={{
-                  background: '#fef3c7', borderRadius: 6, padding: '10px 12px', marginBottom: 12,
-                  border: '1px solid #f59e0b',
+                  textAlign: 'center', padding: '10px 0', marginBottom: 12,
+                  color: 'var(--text-secondary)', fontSize: 11,
                 }}>
-                  <div style={{ fontSize: 12, color: '#92400e', fontWeight: 600, marginBottom: 4 }}>
-                    升级时长将被截断
-                  </div>
-                  <div style={{ fontSize: 11, color: '#92400e', marginBottom: 8 }}>
-                    {truncateWarning.message}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn btn-ghost btn-sm"
-                      onClick={() => setTruncateWarning(null)}
-                      style={{ fontSize: 11 }}>
-                      取消
-                    </button>
-                    <button className="btn btn-primary btn-sm"
-                      onClick={() => handleUpgrade(true)}
-                      disabled={upgradeLoading}
-                      style={{ fontSize: 11 }}>
-                      仍然升级（截断为 {truncateWarning.remaining_days} 天）
-                    </button>
-                  </div>
+                  请联系管理员获取收款码
                 </div>
               )}
 
-              {/* QR codes */}
-              {!truncateWarning && (
-                <>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    <button
-                      onClick={() => setUpgradePaymentMethod('wechat')}
-                      style={{
-                        flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6, border: 'none',
-                        cursor: 'pointer', fontWeight: upgradePaymentMethod === 'wechat' ? 700 : 400,
-                        background: upgradePaymentMethod === 'wechat' ? 'var(--primary)' : 'var(--card-bg)',
-                        color: upgradePaymentMethod === 'wechat' ? '#fff' : 'var(--text)',
-                      }}
-                    >
-                      微信支付
-                    </button>
-                    <button
-                      onClick={() => setUpgradePaymentMethod('alipay')}
-                      style={{
-                        flex: 1, padding: '6px 0', fontSize: 11, borderRadius: 6, border: 'none',
-                        cursor: 'pointer', fontWeight: upgradePaymentMethod === 'alipay' ? 700 : 400,
-                        background: upgradePaymentMethod === 'alipay' ? 'var(--primary)' : 'var(--card-bg)',
-                        color: upgradePaymentMethod === 'alipay' ? '#fff' : 'var(--text)',
-                      }}
-                    >
-                      支付宝
-                    </button>
-                  </div>
-
-                  {(upgradePaymentMethod === 'wechat' && qrCodes.wechat) || (upgradePaymentMethod === 'alipay' && qrCodes.alipay) ? (
-                    <div style={{ textAlign: 'center', marginBottom: 12 }}>
-                      <img
-                        src={upgradePaymentMethod === 'wechat' ? qrCodes.wechat : qrCodes.alipay}
-                        alt="收款码"
-                        style={{ width: 140, height: 140, objectFit: 'contain', borderRadius: 8 }}
-                      />
-                    </div>
-                  ) : (
-                    <div style={{
-                      textAlign: 'center', padding: '10px 0', marginBottom: 12,
-                      color: 'var(--text-secondary)', fontSize: 11,
-                    }}>
-                      请联系管理员获取收款码
-                    </div>
-                  )}
-
-                  <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>付款单号</div>
-                  <input
-                    className="form-input"
-                    type="text"
-                    placeholder="支付完成后填写订单号"
-                    value={upgradePaymentRef}
-                    onChange={e => setUpgradePaymentRef(e.target.value)}
-                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
-                  />
-                </>
-              )}
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>付款单号</div>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="支付完成后填写订单号"
+                value={upgradePaymentRef}
+                onChange={e => setUpgradePaymentRef(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
+              />
 
               {upgradeError && (
                 <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>
@@ -315,14 +284,12 @@ export default function MemberCenterPage() {
                 </div>
               )}
 
-              {!truncateWarning && (
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-                  <button className="btn btn-ghost btn-sm" onClick={() => setShowUpgrade(false)}>取消</button>
-                  <button className="btn btn-primary btn-sm" onClick={() => handleUpgrade(false)} disabled={upgradeLoading}>
-                    {upgradeLoading ? '提交中...' : '提交申请'}
-                  </button>
-                </div>
-              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => setShowUpgrade(false)}>取消</button>
+                <button className="btn btn-primary btn-sm" onClick={() => handleUpgrade()} disabled={upgradeLoading}>
+                  {upgradeLoading ? '提交中...' : '提交申请'}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -335,10 +302,10 @@ export default function MemberCenterPage() {
             当前已是开发体验员
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-            角色有效期跟随会员：{profile?.expires_at ? new Date(profile.expires_at).toLocaleDateString('zh-CN') : '—'}
+            升级有效期：{upgradeExpiresInfo() || '—'}
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
-            会员到期后角色将自动失效，续费后自动恢复。
+            升级独立计费，到期后需重新购买。与会员有效期无关。
           </div>
         </div>
       )}

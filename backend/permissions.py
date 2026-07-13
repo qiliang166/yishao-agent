@@ -56,11 +56,14 @@ def verify_project_access(project_id: str, user: dict) -> None:
         return
     db = get_db()
     try:
+        uid = user.get("user_id", user.get("sub", ""))
         row = db.execute(
-            "SELECT 1 FROM member_workspaces mw "
-            "JOIN projects p ON p.workspace_id = mw.workspace_id "
-            "WHERE mw.user_id=? AND p.id=?",
-            (user.get("user_id", user.get("sub", "")), project_id),
+            "SELECT 1 FROM projects p "
+            "LEFT JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id AND mw.user_id = ? "
+            "LEFT JOIN workspace_roles wr ON wr.workspace_id = p.workspace_id "
+            "LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ? "
+            "WHERE p.id = ? AND (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)",
+            (uid, uid, project_id),
         ).fetchone()
         if not row:
             raise HTTPException(status_code=403, detail="无权访问此项目资源")

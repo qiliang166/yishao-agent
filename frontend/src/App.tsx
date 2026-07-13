@@ -34,6 +34,7 @@ import './App.css'
 function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
@@ -206,7 +207,12 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
           <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
-        <LogoutButton />
+        {user && (
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+              👤 {user.display_name || user.username}
+            </div>
+          )}
+          <LogoutButton />
       </div>
     </aside>
   )
@@ -275,6 +281,7 @@ function MemberLogoutButton() {
 function MemberSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [brandLogo, setBrandLogo] = useState('⚡')
   const [brandName, setBrandName] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
@@ -364,7 +371,12 @@ function MemberSidebar() {
           <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
           <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
-        <MemberLogoutButton />
+        {user && (
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+              👤 {user.display_name || user.username}
+            </div>
+          )}
+          <MemberLogoutButton />
       </div>
     </aside>
   )
@@ -602,7 +614,8 @@ function RootRoute() {
     )
   }
   if (user) {
-    if (user.user_type === 'member') return <Navigate to="/app" replace />
+    const isExperienceOfficer = user.roles?.includes('开发体验员')
+    if (user.user_type === 'member' && !isExperienceOfficer) return <Navigate to="/app" replace />
     return <Navigate to="/home" replace />
   }
   return <LandingPage />

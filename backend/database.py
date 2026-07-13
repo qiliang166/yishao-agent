@@ -1121,6 +1121,27 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_wr_workspace_id ON workspace_roles(workspace_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_wr_role_id ON workspace_roles(role_id)")
 
+        # Ensure upgrade_expires_at column exists (added post-migration)
+        try:
+            users_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+            if "upgrade_expires_at" not in users_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN upgrade_expires_at TEXT")
+        except Exception as e:
+            print(f"[DB] Warning: could not add upgrade_expires_at to users: {e}")
+
+        # Backfill: existing users with 开发体验员 role get upgrade_expires_at = expires_at
+        try:
+            conn.execute("""
+                UPDATE users SET upgrade_expires_at = expires_at
+                WHERE upgrade_expires_at IS NULL
+                AND id IN (SELECT ur.user_id FROM user_roles ur
+                           JOIN roles r ON r.id = ur.role_id
+                           WHERE r.name = '开发体验员')
+                AND expires_at IS NOT NULL
+            """)
+        except Exception as e:
+            print(f"[DB] Warning: could not backfill upgrade_expires_at: {e}")
+
         conn.commit()
     finally:
         conn.close()
@@ -1182,6 +1203,7 @@ def _migrate_v1_create_tables(conn):
             failed_login_attempts INTEGER NOT NULL DEFAULT 0,
             locked_until TEXT,
             password_changed_at TEXT,
+            upgrade_expires_at TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
         )
@@ -1292,6 +1314,27 @@ def _migrate_v1_create_tables(conn):
             conn.execute("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''")
     except Exception as e:
         print(f"[DB] Warning: could not add phone to users: {e}")
+
+    # Migrate: add upgrade_expires_at to users (独立升级计费)
+    try:
+        users_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+        if "upgrade_expires_at" not in users_cols:
+            conn.execute("ALTER TABLE users ADD COLUMN upgrade_expires_at TEXT")
+    except Exception as e:
+        print(f"[DB] Warning: could not add upgrade_expires_at to users: {e}")
+
+    # Backfill: existing users with 开发体验员 role get upgrade_expires_at = expires_at
+    try:
+        conn.execute("""
+            UPDATE users SET upgrade_expires_at = expires_at
+            WHERE upgrade_expires_at IS NULL
+            AND id IN (SELECT ur.user_id FROM user_roles ur
+                       JOIN roles r ON r.id = ur.role_id
+                       WHERE r.name = '开发体验员')
+            AND expires_at IS NOT NULL
+        """)
+    except Exception as e:
+        print(f"[DB] Warning: could not backfill upgrade_expires_at: {e}")
 
     # Migrate: add payment_ref to payment_records (user-submitted payment proof)
     try:

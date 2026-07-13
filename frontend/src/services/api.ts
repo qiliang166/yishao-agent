@@ -197,11 +197,11 @@ export const api = {
     return request(`/api/workspaces${qs ? '?' + qs : ''}`).then(d => d as { workspaces: Workspace[]; total: number; page: number; page_size: number })
   },
   getWorkspace: (id: string) => request(`/api/workspaces/${id}`) as Promise<Workspace>,
-  createWorkspace: (name: string, description?: string, logo?: string, status?: string, roleIds?: string[]) =>
+  createWorkspace: (name: string, description?: string, logo?: string, status?: string, roleIds?: string[], sourceWorkspaceId?: string) =>
     request('/api/workspaces', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, description: description || '', logo: logo || '', status: status || 'draft', role_ids: roleIds }),
+      body: JSON.stringify({ name, description: description || '', logo: logo || '', status: status || 'draft', role_ids: roleIds, source_workspace_id: sourceWorkspaceId || undefined }),
     }) as Promise<Workspace>,
   updateWorkspace: (id: string, data: {name?: string; status?: string; description?: string; logo?: string; role_ids?: string[]}) =>
     request(`/api/workspaces/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
@@ -974,13 +974,12 @@ export const api = {
 
   memberUpgrade: (data: {
     payment_method?: string; payment_ref?: string;
-    confirm_truncate?: boolean;
   }) =>
     request('/api/member/upgrade', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    }).then(d => d as { ok: boolean; message: string; truncate_warning?: boolean; remaining_days?: number; upgrade_days?: number; duration_days?: number }),
+    }).then(d => d as { ok: boolean; message: string; duration_days?: number }),
 
   listPendingUpgrades: () =>
     request('/api/members/pending-upgrades').then(d => d as { members: any[]; total: number }),

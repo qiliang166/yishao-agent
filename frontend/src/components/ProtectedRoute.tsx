@@ -43,8 +43,17 @@ export default function ProtectedRoute({ children, requiredType }: Props) {
   }
 
   if (requiredType && user.user_type !== requiredType) {
+    // Allow members with 开发体验员 role to access admin interface
+    if (requiredType === 'admin' && user.roles?.includes('开发体验员')) {
+      return <><DemoBanner />{children}</>
+    }
     const fallback = user.user_type === 'member' ? '/app' : '/'
     return <Navigate to={fallback} replace />
+  }
+
+  // Redirect 开发体验员 members away from member interface to admin
+  if (requiredType === 'member' && user.roles?.includes('开发体验员')) {
+    return <Navigate to="/home" replace />
   }
 
   return (
