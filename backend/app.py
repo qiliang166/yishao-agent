@@ -1046,7 +1046,6 @@ def api_project_files(project_id: str, request: Request):
         db.close()
 
     # Variant suffixes to hide — only final index.html / slide_N.html are shown
-    _variant_re = re.compile(r'(^index_|\.html$)')
     _variant_suffixes = ('_vars', '_backup', '_regenerated', '_regenerated_partial', '_regenerated_vars')
 
     if os.path.exists(path):
