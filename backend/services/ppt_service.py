@@ -12,6 +12,7 @@ from lxml import etree
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
+from bs4 import BeautifulSoup
 from database import get_db
 
 _logger = logging.getLogger("uvicorn")
@@ -2316,7 +2317,6 @@ def _enforce_element_contrast(html: str, scheme: dict, slide_seq: int,
         return html
 
     try:
-        from bs4 import BeautifulSoup
         import re as _re_ec
 
         def _scheme_hex(name: str):
@@ -4726,7 +4726,6 @@ def _detect_fullscreen_mask(html: str) -> str | None:
     Pattern: a div with position:absolute covering the full 1280x720 canvas
     with an opaque background (no transparency).
     """
-    from bs4 import BeautifulSoup
     import re
 
     soup = BeautifulSoup(html, "html.parser")
@@ -4792,7 +4791,6 @@ def _detect_content_overflow(html: str, page_type: str = "", layout: str = "") -
     a card inside a 720px slide (130px top + 50px bottom = 540px available)
     with 28px padding can hold at most 8 content blocks before overflow.
     """
-    from bs4 import BeautifulSoup
     import re
     import math
 
