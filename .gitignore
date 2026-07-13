@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
+backend/ffmpeg.exe
+*.pid
 build/
 
 # Database
