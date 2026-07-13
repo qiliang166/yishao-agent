@@ -90,18 +90,15 @@ if getattr(sys, 'frozen', False):
     AUDIO_DIR = os.path.join(_EXE_DIR, "data", "audio")
     EXPORT_DIR = os.path.join(_EXE_DIR, "data", "exports")
     LOGO_DIR = os.path.join(_EXE_DIR, "data", "logos")
-    THUMBNAIL_DIR = os.path.join(_EXE_DIR, "data", "thumbnails")
 else:
     WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
     AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
     EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
     LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
-    THUMBNAIL_DIR = os.path.join(BASE_DIR, "data", "thumbnails")
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
 os.makedirs(LOGO_DIR, exist_ok=True)
-os.makedirs(THUMBNAIL_DIR, exist_ok=True)
 
 # Run-id → actual directory mapping for SVG preview serving
 # Persisted to data/run_dirs.json so it survives restarts
@@ -2762,16 +2759,6 @@ async def image_generate(req: ImageGenerateRequest, user=require_perm("stage1.ge
 
 # ── Templates ──
 
-class TemplateCreate(BaseModel):
-    name: str
-    type: str  # "ppt" or "sop"
-    file_path: str = ""
-    prompt: str = ""
-    skill: str = ""
-    rules: str = "{}"
-    linked_skill_id: str = ""
-    branding_config: str = "{}"
-
 
 @app.get("/api/templates")
 def list_templates(type: str = None):
@@ -2786,18 +2773,6 @@ def list_templates(type: str = None):
         db.close()
 
 
-@app.post("/api/templates")
-def create_template(req: TemplateCreate, user=require_perm("template.manage")):
-    tid = uuid.uuid4().hex[:8]
-    db = get_db()
-    try:
-        db.execute(
-            "INSERT INTO templates (id, name, type, file_path, prompt, skill, rules, linked_skill_id, branding_config) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (tid, req.name, req.type, req.file_path, req.prompt, req.skill, req.rules, req.linked_skill_id, req.branding_config))
-        db.commit()
-        return {"id": tid, "name": req.name}
-    finally:
-        db.close()
 
 
 @app.put("/api/templates/{template_id}/toggle-enabled")
@@ -2823,316 +2798,16 @@ def toggle_template_enabled(template_id: str, user=require_perm("template.manage
         db.close()
 
 
-@app.put("/api/templates/{template_id}")
-def update_template(template_id: str, req: TemplateCreate, user=require_perm("template.manage")):
-    db = get_db()
-    try:
-        existing = db.execute("SELECT file_path, thumbnail_path FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not existing:
-            raise HTTPException(404, "Template not found")
-        # Guard: never overwrite a valid file_path with an empty one
-        final_file_path = req.file_path if req.file_path else (existing["file_path"] or "")
-        db.execute(
-            "UPDATE templates SET name=?, type=?, file_path=?, prompt=?, skill=?, rules=?, linked_skill_id=?, branding_config=? WHERE id=?",
-            (req.name, req.type, final_file_path, req.prompt, req.skill, req.rules, req.linked_skill_id, req.branding_config, template_id))
-        db.commit()
-        return {"ok": True}
-    finally:
-        db.close()
 
 
-@app.delete("/api/templates/{template_id}")
-def delete_template(template_id: str, user=require_perm("template.manage")):
-    db = get_db()
-    try:
-        row = db.execute("SELECT is_default FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Template not found")
-        if row["is_default"]:
-            raise HTTPException(400, "默认模板不可删除，请先将其他模板设为默认后再删除")
-        db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
-        db.commit()
-        return {"ok": True}
-    finally:
-        db.close()
 
 
-@app.post("/api/templates/{template_id}/set-default")
-def set_template_default(template_id: str, user=require_perm("template.manage")):
-    db = get_db()
-    try:
-        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Template not found")
-        db.execute("UPDATE templates SET is_default = 0 WHERE type = ?", (row["type"],))
-        db.execute("UPDATE templates SET is_default = 1 WHERE id = ?", (template_id,))
-        db.commit()
-        return {"ok": True}
-    finally:
-        db.close()
 
 
-def _generate_pptx_thumbnail(pptx_path: str, template_id: str) -> str | None:
-    """Export slide 1 as a full-slide thumbnail PNG. Falls back to extracting first embedded image."""
-    # Preferred: full-slide PNG via PowerPoint COM
-    thumb_path = _export_slide_thumbnail(pptx_path, template_id)
-    if thumb_path:
-        return thumb_path
-
-    # Fallback: extract first embedded picture from slide 1
-    try:
-        from pptx import Presentation
-        from pptx.shapes.picture import Picture
-        prs = Presentation(pptx_path)
-        if prs.slides:
-            for shape in prs.slides[0].shapes:
-                if isinstance(shape, Picture):
-                    image = shape.image
-                    ext = image.content_type.split("/")[-1]
-                    if ext == "jpeg":
-                        ext = "jpg"
-                    thumb_name = f"{template_id}_thumb.{ext}"
-                    thumb_path = os.path.join(THUMBNAIL_DIR, thumb_name)
-                    with open(thumb_path, "wb") as f:
-                        f.write(image.blob)
-                    return thumb_path
-    except Exception as e:
-        logging.getLogger("uvicorn").info(f"Thumbnail picture fallback failed: {e}")
-
-    return None
 
 
-def _export_slide_thumbnail(pptx_path: str, template_id: str) -> str | None:
-    """Export slide 1 as a PNG thumbnail using PowerPoint COM."""
-    try:
-        import subprocess
-        thumb_name = f"{template_id}_thumb.png"
-        thumb_path = os.path.join(THUMBNAIL_DIR, thumb_name)
-        ps_script = f'''
-$ppt = New-Object -ComObject PowerPoint.Application
-$ppt.Visible = 0
-try {{
-    $pres = $ppt.Presentations.Open("{pptx_path}", $true, $false, $false)
-    $pres.Slides[1].Export("{thumb_path}", "PNG", 960, 540)
-    $pres.Close()
-}} finally {{
-    $ppt.Quit()
-    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($ppt) | Out-Null
-}}
-Write-Output "1"
-'''
-        result = subprocess.run(["powershell", "-Command", ps_script],
-                              capture_output=True, text=True, timeout=30)
-        if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 0:
-            return thumb_path
-    except Exception as e:
-        logging.getLogger("uvicorn").info(f"Slide thumbnail fallback failed: {e}")
-    return None
 
 
-@app.post("/api/templates/{template_id}/upload")
-async def upload_template_file(template_id: str, file: UploadFile = File(...), user=require_perm("template.manage")):
-    db = get_db()
-    try:
-        existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not existing:
-            raise HTTPException(404, "Template not found")
-        if not file.filename or not file.filename.endswith('.pptx'):
-            raise HTTPException(400, "请上传 .pptx 格式的模板文件")
-        tmpl_dir = os.path.join(BASE_DIR, "data", "templates")
-        os.makedirs(tmpl_dir, exist_ok=True)
-        safe_name = f"{template_id}_{file.filename}"
-        file_path = os.path.join(tmpl_dir, safe_name)
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        db.execute("UPDATE templates SET file_path = ? WHERE id = ?", (file_path, template_id))
-        # Auto-generate thumbnail from first slide
-        thumb_path = _generate_pptx_thumbnail(file_path, template_id)
-        if thumb_path:
-            db.execute("UPDATE templates SET thumbnail_path = ? WHERE id = ?", (thumb_path, template_id))
-        db.commit()
-        return {"ok": True, "file_path": file_path, "filename": file.filename,
-                "thumbnail_path": thumb_path}
-    finally:
-        db.close()
-
-
-@app.post("/api/templates/{template_id}/upload-thumbnail")
-async def upload_template_thumbnail(template_id: str, file: UploadFile = File(...), user=require_perm("template.manage")):
-    db = get_db()
-    try:
-        existing = db.execute("SELECT id FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not existing:
-            raise HTTPException(404, "Template not found")
-        if not file.filename:
-            raise HTTPException(400, "No file provided")
-        ext = os.path.splitext(file.filename)[1].lower()
-        if ext not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"):
-            raise HTTPException(400, "请上传图片格式文件 (png/jpg/gif/webp/svg)")
-        safe_name = f"{template_id}_thumb{ext}"
-        file_path = os.path.join(THUMBNAIL_DIR, safe_name)
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        db.execute("UPDATE templates SET thumbnail_path = ? WHERE id = ?", (file_path, template_id))
-        db.commit()
-        return {"ok": True, "thumbnail_path": file_path, "filename": file.filename}
-    finally:
-        db.close()
-
-
-@app.post("/api/templates/{template_id}/reset-thumbnail")
-def reset_template_thumbnail(template_id: str, user=require_perm("template.manage")):
-    db = get_db()
-    try:
-        row = db.execute("SELECT id, file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Template not found")
-        if not row["file_path"] or not os.path.exists(row["file_path"]):
-            raise HTTPException(400, "请先上传 PPTX 模板文件")
-        thumb_path = _generate_pptx_thumbnail(row["file_path"], template_id)
-        if thumb_path:
-            db.execute("UPDATE templates SET thumbnail_path = ? WHERE id = ?", (thumb_path, template_id))
-        else:
-            db.execute("UPDATE templates SET thumbnail_path = NULL WHERE id = ?", (template_id,))
-        db.commit()
-        return {"ok": True, "thumbnail_path": thumb_path}
-    finally:
-        db.close()
-
-
-@app.get("/api/templates/{template_id}/file")
-def serve_template_file(template_id: str):
-    """Serve the template PPTX file — generated from prompt+SKILL+rules, or original upload as fallback."""
-    db = get_db()
-    try:
-        row = db.execute(
-            "SELECT file_path, name, prompt, skill, rules FROM templates WHERE id = ?",
-            (template_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "Template not found")
-        name = row["name"]
-        prompt = row["prompt"] or ""
-        skill = row["skill"] or ""
-        rules_str = row["rules"] or "{}"
-        original_path = row["file_path"]
-
-        # Generated template cache path
-        gen_dir = os.path.join(BASE_DIR, "data", "templates", "_generated")
-        os.makedirs(gen_dir, exist_ok=True)
-        gen_path = os.path.join(gen_dir, f"{template_id}.pptx")
-
-        # Serve cached generated template if available
-        if os.path.exists(gen_path):
-            serve_path = gen_path
-        elif skill and prompt:
-            # Find original upload for layout source
-            layout_source = original_path if (original_path and os.path.exists(original_path)) else None
-            if not layout_source:
-                raise HTTPException(404, "No layout source file available")
-
-            # Try AI generation from prompt+SKILL+rules
-            rules = {}
-            try:
-                rules = json.loads(rules_str)
-            except Exception:
-                pass
-
-            prov = db.execute(
-                "SELECT id, models FROM llm_providers WHERE is_enabled=1 LIMIT 1").fetchone()
-            if prov:
-                models = json.loads(prov["models"] or "[]")
-                model = models[0] if models else ""
-                if model:
-                    from pptx import Presentation
-                    from services.ppt_service import generate_template_pptx
-                    try:
-                        prs = Presentation(layout_source)
-                        generate_template_pptx(prs, prompt, skill, rules, prov["id"], model, gen_path)
-                        # DO NOT overwrite file_path — keep original as layout source for future regenerations
-                        logging.getLogger("uvicorn").info(f"Template {template_id} generated from SKILL")
-                        serve_path = gen_path
-                    except Exception as e:
-                        logging.getLogger("uvicorn").warning(
-                            f"Template generation failed, serving original: {e}")
-                        serve_path = layout_source
-                else:
-                    serve_path = layout_source
-            else:
-                serve_path = layout_source
-        elif original_path and os.path.exists(original_path):
-            serve_path = original_path
-        else:
-            raise HTTPException(404, "No template file available")
-
-        if not os.path.exists(serve_path):
-            raise HTTPException(404, "Template file not found on disk")
-
-        # Also copy to global save path
-        try:
-            save_dir = _get_global_save_path()
-            os.makedirs(save_dir, exist_ok=True)
-            dest = os.path.join(save_dir, name + ".pptx")
-            shutil.copy2(serve_path, dest)
-            logging.getLogger("uvicorn").info(f"Template copied to {dest}")
-        except Exception as e:
-            logging.getLogger("uvicorn").warning(f"Failed to copy template to save path: {e}")
-
-        from urllib.parse import quote
-        safe_name = name + ".pptx"
-        return FileResponse(serve_path,
-                          media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                          filename=safe_name,
-                          headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(safe_name)}"})
-    finally:
-        db.close()
-
-
-SLIDES_DIR = os.path.join(BASE_DIR, "data", "slides")
-
-
-def _export_pptx_slides(pptx_path: str, template_id: str) -> list[str]:
-    """Export all slides of a PPTX as PNG images. Returns list of filenames."""
-    import subprocess, uuid
-    os.makedirs(SLIDES_DIR, exist_ok=True)
-    out_dir = os.path.join(SLIDES_DIR, f"{template_id}_slides")
-    os.makedirs(out_dir, exist_ok=True)
-    # Check if already exported
-    existing = [f for f in os.listdir(out_dir) if f.endswith(".png")]
-    if existing:
-        existing.sort()
-        return [f"{template_id}_slides/{f}" for f in existing]
-    # Use PowerShell + PowerPoint COM to export slides
-    ps = f'''
-$ppt = New-Object -ComObject PowerPoint.Application
-$ppt.Visible = 0
-$pres = $ppt.Presentations.Open("{pptx_path}")
-$count = $pres.Slides.Count
-for ($i = 1; $i -le $count; $i++) {{
-    $pres.Slides[$i].Export("{out_dir}\\slide_$i.png", "PNG", 960, 540)
-}}
-$pres.Close()
-$ppt.Quit()
-[System.Runtime.Interopservices.Marshal]::ReleaseComObject($ppt) | Out-Null
-Write-Output $count
-'''
-    try:
-        result = subprocess.run(["powershell", "-Command", ps], capture_output=True, text=True, timeout=60)
-        count = result.stdout.strip()
-        logging.getLogger("uvicorn").info(f"Exported {count} slides for {template_id}")
-    except Exception as e:
-        logging.getLogger("uvicorn").info(f"Slide export failed: {e}")
-    slides = sorted([f for f in os.listdir(out_dir) if f.endswith(".png")])
-    return [f"{template_id}_slides/{f}" for f in slides]
-
-
-@app.get("/api/templates/{template_id}/slide-thumb")
-def get_template_slide_thumb(template_id: str):
-    """Generate a simple PNG thumbnail of the first slide using python-pptx + Pillow.
-    No COM required — reads shapes and text from the PPTX, renders a basic representation."""
-    from pptx import Presentation
-    from pptx.util import Inches, Pt, Emu
     from pptx.dml.color import RGBColor
     from PIL import Image, ImageDraw, ImageFont
     import io
@@ -3274,187 +2949,10 @@ def get_template_slide_thumb(template_id: str):
                              headers={"Cache-Control": "public, max-age=3600"})
 
 
-@app.get("/api/templates/{template_id}/slides-content")
-def get_template_slides_content(template_id: str):
-    """Return full slide shape data (position, color, font, text) for visual in-browser preview.
-    Each shape is rendered as a positioned HTML element in the frontend."""
-    db = get_db()
-    try:
-        row = db.execute("SELECT file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row or not row["file_path"]:
-            raise HTTPException(404, "Template file not found")
-        pptx_path = row["file_path"]
-        gen_path = os.path.join(BASE_DIR, "data", "templates", "_generated", f"{template_id}.pptx")
-        if os.path.exists(gen_path):
-            pptx_path = gen_path
-        if not os.path.exists(pptx_path):
-            raise HTTPException(404, "PPTX file not found on disk")
-    finally:
-        db.close()
-
-    from pptx import Presentation
-    from pptx.util import Inches, Pt, Emu
-    from pptx.dml.color import RGBColor
-    import copy
-
-    prs = Presentation(pptx_path)
-
-    def _rgb_str(fc):
-        """Convert python-pptx color to '#RRGGBB' string or None."""
-        try:
-            if fc is None or fc.type is None:
-                return None
-            s = str(fc.rgb)
-            if len(s) == 6:
-                return '#' + s
-        except Exception:
-            pass
-        return None
-
-    def _extract_fill(shape):
-        """Extract fill color from shape."""
-        try:
-            fill = shape.fill
-            if fill and fill.type is not None:
-                return _rgb_str(fill.fore_color)
-        except Exception:
-            pass
-        return None
-
-    def _extract_text_runs(shape):
-        """Extract rich text runs from shape."""
-        runs_data = []
-        try:
-            if not shape.has_text_frame:
-                return []
-            tf = shape.text_frame
-            for p in tf.paragraphs:
-                align = None
-                try:
-                    from pptx.enum.text import PP_ALIGN
-                    align_map = {
-                        PP_ALIGN.LEFT: 'left', PP_ALIGN.CENTER: 'center',
-                        PP_ALIGN.RIGHT: 'right', PP_ALIGN.JUSTIFY: 'justify',
-                    }
-                    align = align_map.get(p.alignment, 'left')
-                except Exception:
-                    align = 'left'
-                for r in p.runs:
-                    size_pt = None
-                    try:
-                        if r.font.size:
-                            size_pt = round(r.font.size / 12700.0, 1)
-                    except Exception:
-                        pass
-                    color = None
-                    try:
-                        if r.font.color and r.font.color.rgb:
-                            color = _rgb_str(r.font.color)
-                    except Exception:
-                        pass
-                    bold = r.font.bold if r.font.bold is not None else False
-                    italic = r.font.italic if r.font.italic is not None else False
-                    runs_data.append({
-                        "text": r.text,
-                        "size": size_pt,
-                        "color": color,
-                        "bold": bold,
-                        "italic": italic,
-                        "align": align,
-                    })
-        except Exception:
-            pass
-        return runs_data
-
-    def _shape_type_name(shape):
-        """Get a simple shape type name."""
-        try:
-            name = shape.shape_type
-            return str(name).split('.')[-1].split('(')[0].strip().upper() if name else 'UNKNOWN'
-        except Exception:
-            return 'UNKNOWN'
-
-    slides = []
-    for idx, slide in enumerate(prs.slides):
-        shapes_data = []
-        # Try to get slide background
-        bg_color = None
-        try:
-            bg = slide.background
-            if bg.fill and bg.fill.type is not None:
-                bg_color = _rgb_str(bg.fill.fore_color)
-        except Exception:
-            pass
-
-        for shape in slide.shapes:
-            shape_info = {
-                "left": shape.left if shape.left is not None else 0,
-                "top": shape.top if shape.top is not None else 0,
-                "width": shape.width if shape.width is not None else 0,
-                "height": shape.height if shape.height is not None else 0,
-                "rotation": shape.rotation if shape.rotation else 0,
-                "fill": _extract_fill(shape),
-                "name": shape.name or "",
-                "s_type": _shape_type_name(shape),
-                "runs": _extract_text_runs(shape),
-            }
-            shapes_data.append(shape_info)
-
-        slides.append({
-            "num": idx + 1,
-            "bg_color": bg_color,
-            "shapes": shapes_data,
-        })
-
-    return {
-        "slides": slides,
-        "total": len(slides),
-        "slide_width": prs.slide_width,
-        "slide_height": prs.slide_height,
-    }
 
 
-@app.post("/api/templates/{template_id}/preview-slides")
-def preview_template_slides(template_id: str, user=require_perm("template.manage")):
-    """Export all slides as images and return their URLs."""
-    db = get_db()
-    try:
-        row = db.execute("SELECT file_path FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row or not row["file_path"]:
-            raise HTTPException(404, "Template file not found")
-        pptx_path = row["file_path"]
-        # Prefer cached generated template over original upload
-        gen_path = os.path.join(BASE_DIR, "data", "templates", "_generated", f"{template_id}.pptx")
-        if os.path.exists(gen_path):
-            pptx_path = gen_path
-        if not os.path.exists(pptx_path):
-            raise HTTPException(404, "PPTX file not found on disk")
-    finally:
-        db.close()
-    slides = _export_pptx_slides(pptx_path, template_id)
-    return {"slides": slides}
 
 
-@app.get("/api/slides/{path:path}")
-def serve_slide_image(path: str):
-    """Serve exported slide images."""
-    filepath = os.path.join(SLIDES_DIR, path)
-    if not os.path.exists(filepath):
-        raise HTTPException(404, "Slide not found")
-    return FileResponse(filepath, media_type="image/png")
-
-
-@app.get("/api/thumbnails/{filename}")
-def serve_thumbnail(filename: str):
-    filepath = os.path.join(THUMBNAIL_DIR, filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Thumbnail not found")
-    media_map = {
-        ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
-        ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
-    }
-    ext = os.path.splitext(filename)[1].lower()
-    return FileResponse(filepath, media_type=media_map.get(ext, "application/octet-stream"))
 
 
 @app.get("/api/templates/for-stage/{stage_type}")
@@ -3485,201 +2983,6 @@ def list_templates_for_stage(stage_type: str):
         return {"templates": items}
     finally:
         db.close()
-
-
-# ── Template Analysis ──
-
-def extract_pptx_structure(file_path: str) -> dict:
-    from pptx import Presentation
-    from lxml import etree
-    prs = Presentation(file_path)
-    slides = []
-    all_fonts = set()
-    all_colors = set()
-    all_theme_colors = set()
-    all_theme_fonts = set()
-
-    # Extract theme colors from slide master XML
-    for master in prs.slide_masters:
-        master_xml = master.element
-        ns = {'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}
-        # Theme colors (dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink)
-        for clr in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}srgbClr'):
-            val = clr.get('val')
-            if val:
-                all_theme_colors.add(val)
-                all_colors.add(val)
-        for clr in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}sysClr'):
-            val = clr.get('lastClr')
-            if val:
-                all_theme_colors.add(val)
-                all_colors.add(val)
-        # Theme fonts (latin, ea, cs)
-        for font_elem in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}latin'):
-            typeface = font_elem.get('typeface')
-            if typeface:
-                all_theme_fonts.add(typeface)
-                all_fonts.add(typeface)
-        for font_elem in master_xml.iter('{http://schemas.openxmlformats.org/drawingml/2006/main}ea'):
-            typeface = font_elem.get('typeface')
-            if typeface:
-                all_theme_fonts.add(typeface)
-                all_fonts.add(typeface)
-
-    for i, slide in enumerate(prs.slides):
-        info = {"index": i + 1, "layout": slide.slide_layout.name, "placeholders": [], "shapes": []}
-        for shape in slide.placeholders:
-            font_info = {}
-            if shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
-                    for run in para.runs:
-                        f = run.font
-                        if f.name:
-                            font_info["name"] = f.name
-                            all_fonts.add(f.name)
-                        if f.size:
-                            font_info["size_pt"] = round(f.size / 12700, 1)
-                        font_info["bold"] = f.bold
-                        try:
-                            if f.color and f.color.rgb:
-                                all_colors.add(str(f.color.rgb))
-                        except Exception:
-                            pass
-            info["placeholders"].append({
-                "idx": shape.placeholder_format.idx,
-                "type": str(shape.placeholder_format.type),
-                "name": shape.name,
-                "text_preview": (shape.text or "")[:100],
-                "font": font_info
-            })
-        for shape in slide.shapes:
-            if not shape.is_placeholder:
-                shape_info = {
-                    "type": str(shape.shape_type),
-                    "name": shape.name,
-                    "text_preview": (shape.text or "")[:100] if shape.has_text_frame else ""
-                }
-                if shape.has_text_frame:
-                    for para in shape.text_frame.paragraphs:
-                        for run in para.runs:
-                            f = run.font
-                            if f.name:
-                                all_fonts.add(f.name)
-                            try:
-                                if f.color and f.color.rgb:
-                                    all_colors.add(str(f.color.rgb))
-                            except Exception:
-                                pass
-                info["shapes"].append(shape_info)
-        slides.append(info)
-
-    master_layouts = []
-    for master in prs.slide_masters:
-        for layout in master.slide_layouts:
-            master_layouts.append(layout.name)
-
-    return {
-        "slide_count": len(slides),
-        "slide_width": prs.slide_width,
-        "slide_height": prs.slide_height,
-        "slide_layouts": [lyt.name for lyt in prs.slide_layouts],
-        "master_layouts": master_layouts,
-        "fonts_used": sorted(list(all_fonts))[:30],
-        "theme_fonts": sorted(list(all_theme_fonts))[:10],
-        "colors_used": sorted(list(all_colors))[:30],
-        "theme_colors": sorted(list(all_theme_colors))[:20],
-        "typography_extracted": _extract_typography(prs),
-        "slides": slides
-    }
-
-
-@app.post("/api/templates/{template_id}/analyze")
-async def analyze_template(template_id: str, stage_type: str = "daoPpt",
-                            provider_id: str = "", model: str = "", user=require_perm("template.manage")):
-    """Mechanically extract visual data from PPTX and save to template.
-
-    No AI call — colors, fonts, and typography are extracted directly from
-    the PPTX file. Column config's rules structure is used as-is.
-    """
-    from services.ppt_designer import _extract_dominant_colors
-    db = get_db()
-    try:
-        tmpl = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not tmpl:
-            raise HTTPException(404, "模板不存在")
-        if not tmpl["file_path"] or not os.path.exists(tmpl["file_path"]):
-            raise HTTPException(400, "请先上传 .pptx 模板文件")
-
-        # Use built-in default design_rules structure (column_configs rules removed)
-        rules = {}
-
-        # Mechanical extraction from PPTX
-        structure = extract_pptx_structure(tmpl["file_path"])
-        typography = structure.get("typography_extracted", {}) or {}
-        dominant = _extract_dominant_colors(tmpl["file_path"])
-
-        # Populate design_rules.colors from extracted data
-        design_rules = rules.get("design_rules", {})
-        if not isinstance(design_rules, dict):
-            design_rules = {}
-
-        design_rules["colors"] = {
-            "primary": dominant.get("primary", "#C02E2E"),
-            "accent": dominant.get("accent", "#FF6D01"),
-            "background": dominant.get("background", "#FFFFFF"),
-            "text": dominant.get("text", "#333333"),
-            "light_text": dominant.get("light_text", "#FFFFFF"),
-        }
-
-        # Populate design_rules.fonts from extracted data
-        fonts_used = structure.get("fonts_used", [])
-        real_fonts = [f for f in fonts_used if not f.startswith('+')
-                      and f not in ('Calibri', 'Arial')]  # theme refs & generic defaults
-        font_name = real_fonts[0] if real_fonts else "Microsoft YaHei"
-        # Fall back if likely a theme font reference
-        if font_name.startswith('+'):
-            font_name = "Microsoft YaHei"
-        design_rules["fonts"] = {
-            "font_name": font_name,
-            "title_size": int(typography.get("title_font_size_pt") or 36),
-            "body_size": int(typography.get("body_font_size_pt") or 18),
-        }
-
-        rules["design_rules"] = design_rules
-
-        # Typography profile
-        typography_profile = {
-            "body_font_size_pt": typography.get("body_font_size_pt") or 18,
-            "title_font_size_pt": typography.get("title_font_size_pt") or 36,
-            "line_height_ratio": typography.get("line_height_ratio") or 1.2,
-        }
-
-        rules_json = json.dumps(rules, ensure_ascii=False)
-        db.execute(
-            "UPDATE templates SET typography_profile = ?, rules = ? WHERE id = ?",
-            (json.dumps(typography_profile, ensure_ascii=False), rules_json, template_id))
-        db.commit()
-
-        return {
-            "ok": True,
-            "typography_profile": typography_profile,
-            "rules": rules,
-            "colors_used": structure.get("colors_used", []),
-            "fonts_used": structure.get("fonts_used", []),
-        }
-    finally:
-        db.close()
-
-
-
-
-
-
-
-
-
-
-
 
 # ── Video ──
 
@@ -4800,34 +4103,17 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest, user=require_perm("
 
 @app.put("/api/ppt/splice-slides/{run_id}")
 def api_ppt_splice_slides(run_id: str, req: dict, user=require_perm("stage3.generate")):
-    """Rebuild index.html from individual slide files after regeneration.
+    """Apply regenerated slides by directly replacing slide wrappers in index.html.
 
-    The new flow:
-    1. Overwrite regenerated slide files in slides/
-    2. Load all slide files from slides/
-    3. Reassemble complete index.html via _assemble_html_deck
-
-    Falls back to old string-splice approach if slides/ directory doesn't exist.
+    Extracts the regenerated slide wrappers from index_regenerated.html
+    and splices them into index.html at the matching positions.
+    Only regenerated slides change — all other slides stay byte-identical.
     """
     import re as _re
 
     run_dir = _find_run_dir(run_id)
     if not run_dir or not os.path.isdir(run_dir):
         raise HTTPException(status_code=404, detail="Run not found")
-
-    # Look up project_id from step_results for config isolation
-    project_id = ""
-    try:
-        ppt_db = get_db()
-        sr_row = ppt_db.execute(
-            "SELECT project_id FROM step_results WHERE step_name = ? LIMIT 1",
-            (f"_ppt_result_{run_id}",)
-        ).fetchone()
-        ppt_db.close()
-        if sr_row:
-            project_id = sr_row["project_id"] or ""
-    except Exception:
-        pass
 
     slides_data = req.get("slides", [])
     if not slides_data:
@@ -4842,105 +4128,101 @@ def api_ppt_splice_slides(run_id: str, req: dict, user=require_perm("stage3.gene
             _lf.write(line)
             _lf.flush()
 
-    from services.ppt_service import (
-        _save_slide_files, _load_slide_files, _assemble_html_deck,
-        _load_scheme_data, _resolve_color_vars,
-        _auto_fix_font_size, _auto_fix_hardcoded_hex,
-        _get_canvas_dimensions, _build_root_vars,
-    )
+    regen_path = os.path.join(run_dir, "index_regenerated.html")
+    if not os.path.exists(regen_path):
+        raise HTTPException(status_code=400, detail="index_regenerated.html not found — regenerate first")
 
-    # Read color scheme from result.json
-    rj_path = os.path.join(run_dir, "result.json")
-    style_id = "business"
-    color_scheme = "deep-blue"
-    column_id = ""
-    if os.path.exists(rj_path):
-        try:
-            rj_meta = json.loads(open(rj_path, "r", encoding="utf-8").read())
-            style_id = rj_meta.get("style_id") or style_id
-            color_scheme = rj_meta.get("color_scheme") or color_scheme
-            column_id = rj_meta.get("column_id", "")
-        except Exception:
-            pass
-    _log_splice(f"色系(from result.json): {color_scheme}")
+    index_path = os.path.join(run_dir, "index.html")
+    if not os.path.exists(index_path):
+        raise HTTPException(status_code=400, detail="index.html not found")
 
-    scheme_data = _load_scheme_data(style_id, color_scheme)
-    regen_canvas_w, regen_canvas_h = _get_canvas_dimensions(column_id, project_id=project_id)
-    is_a4 = regen_canvas_h >= 1100
+    with open(regen_path, "r", encoding="utf-8") as f:
+        regen_html = f.read()
+    with open(index_path, "r", encoding="utf-8") as f:
+        index_html = f.read()
 
-    # ── Save regenerated slides to individual files ──
-    _save_slide_files(run_dir, slides_data)
-    _log_splice(f"已保存 {len(slides_data)} 页到 slides/ 目录")
-
-    # ── Load all slides from files ──
-    all_slides = _load_slide_files(run_dir)
     _ensure_backup(run_dir)
 
-    if all_slides:
-        # ── File-based rebuild: clean, no string surgery ──
-        _log_splice(f"从 {len(all_slides)} 个独立文件重建 index.html")
+    regen_seqs = {s["seq"] for s in slides_data}
+    replaced = 0
 
-        # Resolve color variables in each slide
-        for s in all_slides:
-            html = s.get("html", "")
-            html_vars = s.get("html_vars", html)
-            # Re-resolve with current scheme
-            if html_vars and scheme_data:
-                html = _resolve_color_vars(html_vars, scheme_data, css_vars=True)
-            elif html and scheme_data:
-                html = _resolve_color_vars(html, scheme_data, css_vars=True)
-            if scheme_data:
-                hex_before = len(_re.findall(r'#[0-9a-fA-F]{3,6}\b', html))
-                html = _auto_fix_hardcoded_hex(html, scheme_data, s["seq"])
-                html = _auto_fix_font_size(html, s["seq"], is_a4=is_a4)
-            s["html"] = html
+    for seq in sorted(regen_seqs):
+        # Extract slide wrapper from index_regenerated.html
+        wrapper = _extract_slide_wrapper(regen_html, seq)
+        if wrapper is None:
+            _log_splice(f"Warning: slide {seq} not found in index_regenerated.html")
+            continue
 
-        # Cover fix: dark bg → white text
-        if all_slides and scheme_data:
-            cover = all_slides[0]
-            primary = scheme_data.get("primary", "")
-            secondary = scheme_data.get("secondary", "")
-            text_color = scheme_data.get("text", "")
-            if primary and text_color:
-                cover_html = cover.get("html", "")
-                has_dark_bg = (f"background:{primary}" in cover_html
-                              or f"background:{secondary}" in cover_html
-                              or f"background: {primary}" in cover_html
-                              or f"background: {secondary}" in cover_html)
-                if has_dark_bg:
-                    for pat in [f"color:{text_color}", f"color:{text_color};",
-                                f"color: {text_color}", f"color: {text_color};"]:
-                        replace_val = "color:#ffffff" if ";" not in pat else "color:#ffffff;"
-                        cover_html = cover_html.replace(pat, replace_val)
-                    all_slides[0]["html"] = cover_html
-                    _log_splice("Cover fix: dark background → white text")
+        # Replace matching wrapper in index.html
+        old_wrapper = _extract_slide_wrapper(index_html, seq)
+        if old_wrapper is None:
+            _log_splice(f"Warning: slide {seq} not found in index.html")
+            continue
 
-        title = all_slides[0].get("heading", "") if all_slides else "Presentation"
-        deck_html = _assemble_html_deck(all_slides, title, style_id, scheme_data,
-                                        canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
-        if scheme_data:
-            deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
+        index_html = index_html.replace(old_wrapper, wrapper, 1)
+        replaced += 1
+        _log_splice(f"Replaced slide {seq} ({len(old_wrapper)} → {len(wrapper)} bytes)")
 
-        index_path = os.path.join(run_dir, "index.html")
-        with open(index_path, "w", encoding="utf-8") as f:
-            f.write(deck_html)
+    # Write updated index.html
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(index_html)
 
-        # Also rebuild vars deck
-        vars_slides = [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in all_slides]
-        deck_vars = _assemble_html_deck(vars_slides, title, style_id, scheme_data,
-                                        canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
-        vars_path = os.path.join(run_dir, "index_vars.html")
-        with open(vars_path, "w", encoding="utf-8") as f:
-            f.write(deck_vars)
+    # Save individual slide files for regenerated slides
+    from services.ppt_service import _save_slide_files
+    regen_slides = []
+    for seq in sorted(regen_seqs):
+        inner = _extract_slide_inner(regen_html, seq)
+        if inner is not None:
+            regen_slides.append({"seq": seq, "html": inner})
+    if regen_slides:
+        _save_slide_files(run_dir, regen_slides)
+        _log_splice(f"Saved {len(regen_slides)} individual slide files")
 
-        replaced = len(slides_data)
-        _log_splice(f"重建完成: {len(all_slides)} 页, {len(deck_html)} 字节")
-        return {"ok": True, "replaced": replaced, "total": len(slides_data)}
+    _log_splice(f"Spliced {replaced}/{len(regen_seqs)} slides into index.html")
+    return {"ok": True, "replaced": replaced, "total": len(slides_data)}
+
+
+def _extract_slide_wrapper(html: str, seq: int) -> str | None:
+    """Extract the full slide-wrapper div (including outer div) for a given seq."""
+    import re
+    prefix = f'<div class="slide-wrapper" data-seq="{seq}">'
+    start = html.find(prefix)
+    if start < 0:
+        return None
+    # Find the end: next slide-wrapper or </body>
+    next_wrapper = html.find('<div class="slide-wrapper"', start + len(prefix))
+    if next_wrapper > 0:
+        return html[start:next_wrapper]
+    # Last slide — ends before </body>
+    body_end = html.find('</body>', start)
+    if body_end > 0:
+        return html[start:body_end]
+    return None
+
+
+def _extract_slide_inner(html: str, seq: int) -> str | None:
+    """Extract only the inner content of a slide-wrapper (without the outer div)."""
+    import re
+    prefix = f'<div class="slide-wrapper" data-seq="{seq}">'
+    start = html.find(prefix)
+    if start < 0:
+        return None
+    inner_start = start + len(prefix)
+    next_wrapper = html.find('<div class="slide-wrapper"', inner_start)
+    if next_wrapper > 0:
+        inner = html[inner_start:next_wrapper]
     else:
-        # ── Fallback: old-style string splice for runs without slides/ directory ──
-        _log_splice("slides/ 目录不存在，使用旧版字符串拼接模式")
-        return _splice_slides_legacy(run_dir, slides_data, scheme_data, style_id,
-                                     color_scheme, log_path_splice, _log_splice, _re)
+        body_end = html.find('</body>', inner_start)
+        if body_end > 0:
+            inner = html[inner_start:body_end]
+        else:
+            return None
+    # Strip trailing whitespace/newlines before the closing wrapper or next wrapper
+    inner = inner.rstrip()
+    # Remove closing </div> if present (trailing wrapper close)
+    if inner.endswith('</div>'):
+        inner = inner[:-len('</div>')].rstrip()
+    return inner
 
 
 def _splice_slides_legacy(run_dir, slides_data, scheme_data, style_id,

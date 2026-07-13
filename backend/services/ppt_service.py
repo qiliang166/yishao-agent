@@ -5711,9 +5711,11 @@ def _save_slide_files(run_dir: str, slides: list):
     Directory layout:
       {run_dir}/slides/slide_01.html        (resolved: var(--primary))
       {run_dir}/slides/slide_01_vars.html   (unresolved: {{primary}})
+      {run_dir}/slides/slide_01_meta.json   (metadata: type, heading)
       ...
     """
     import os as _os
+    import json as _json
     slides_dir = _os.path.join(run_dir, SLIDES_DIR)
     _os.makedirs(slides_dir, exist_ok=True)
     for s in slides:
@@ -5728,16 +5730,26 @@ def _save_slide_files(run_dir: str, slides: list):
             path = _os.path.join(slides_dir, f"slide_{seq:02d}_vars.html")
             with open(path, "w", encoding="utf-8") as f:
                 f.write(html_vars)
+        # Save metadata (type, heading) for correct reassembly
+        meta = {}
+        for key in ("type", "heading"):
+            if s.get(key):
+                meta[key] = s[key]
+        if meta:
+            path = _os.path.join(slides_dir, f"slide_{seq:02d}_meta.json")
+            with open(path, "w", encoding="utf-8") as f:
+                _json.dump(meta, f, ensure_ascii=False)
 
 
 def _load_slide_files(run_dir: str) -> list[dict]:
     """Load all individual slide HTML files from a run directory.
 
-    Returns a list of dicts with keys: seq, html, html_vars.
+    Returns a list of dicts with keys: seq, html, html_vars, type, heading.
     Slides are sorted by seq.
     """
     import os as _os
     import re as _re
+    import json as _json
     slides_dir = _os.path.join(run_dir, SLIDES_DIR)
     if not _os.path.isdir(slides_dir):
         return []
@@ -5763,6 +5775,23 @@ def _load_slide_files(run_dir: str) -> list[dict]:
         path = _os.path.join(slides_dir, fname)
         with open(path, "r", encoding="utf-8") as f:
             slides[seq]["html_vars"] = f.read()
+    # Also load metadata (type, heading)
+    for fname in _os.listdir(slides_dir):
+        m = _re.match(r"slide_(\d+)_meta\.json$", fname)
+        if not m:
+            continue
+        seq = int(m.group(1))
+        if seq not in slides:
+            slides[seq] = {"seq": seq}
+        path = _os.path.join(slides_dir, fname)
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                meta = _json.load(f)
+            for key in ("type", "heading"):
+                if meta.get(key):
+                    slides[seq][key] = meta[key]
+        except Exception:
+            pass
     return [slides[k] for k in sorted(slides.keys())]
 
 
@@ -6273,43 +6302,56 @@ def _preprocess_a4_slides(slides: list, canvas_w: int, canvas_h: int) -> list:
     return result
 
 
-def _extract_outermost_div(html: str) -> str:
-    """Extract the outermost <div> container from LLM-generated HTML.
+def _extract_outermost_container(html: str) -> str:
+    """Extract the outermost container (<div> or <section>) from LLM-generated HTML.
 
-    The LLM is instructed to output exactly one outer <div> container
-    (width:...;height:...). We find the first <div and trace element
-    depth to locate its matching </div>, returning a self-contained
-    div tree that cannot leak into or out of the slide wrapper.
-
-    This replaces fragile regex-based div counting that could strip
-    closing tags from the wrong position when divs are structurally
-    (not numerically) imbalanced.
+    The LLM is instructed to output exactly one outer <div> container but
+    sometimes generates <section> instead. We detect whichever tag opens
+    first and trace element depth to locate its matching close tag,
+    returning a self-contained tree that cannot leak into or out of the
+    slide wrapper.
     """
-    first_open = html.find('<div')
-    if first_open < 0:
+    # Detect outermost container: <section> or <div>, whichever opens first
+    first_div = html.find('<div')
+    first_section = html.find('<section')
+
+    if first_div < 0 and first_section < 0:
         return html
+
+    if first_section >= 0 and (first_div < 0 or first_section < first_div):
+        tag = 'section'
+        first_open = first_section
+        close_tag = '</section>'
+    else:
+        tag = 'div'
+        first_open = first_div
+        close_tag = '</div>'
+
+    open_tag = f'<{tag}'
+    open_len = len(open_tag)
+    close_len = len(close_tag)
 
     depth = 0
     pos = first_open
     while pos < len(html):
-        next_open = html.find('<div', pos)
-        next_close = html.find('</div>', pos)
+        next_open = html.find(open_tag, pos)
+        next_close = html.find(close_tag, pos)
 
         if next_close == -1:
             break
 
         if next_open != -1 and next_open < next_close:
             depth += 1
-            pos = next_open + 4
+            pos = next_open + open_len
         else:
             depth -= 1
             if depth == 0:
-                return html[first_open:next_close + 6]
-            pos = next_close + 6
+                return html[first_open:next_close + close_len]
+            pos = next_close + close_len
 
-    # Depth never returned to 0 — outermost <div> is unclosed.
+    # Depth never returned to 0 — outermost tag is unclosed.
     # Close it ourselves so the slide wrapper stays intact.
-    return html[first_open:] + '</div>'
+    return html[first_open:] + close_tag
 
 
 def _wcag_relative_luminance(hex_color: str) -> float:
@@ -6982,12 +7024,11 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
         # Strip AI-generated page number divs (depth-balanced — no regex div leakage)
         html = _strip_page_numbers(html)
 
-        # ═══ Extract outermost div: prevents cross-slide DOM corruption ═══
-        # The LLM is told to output exactly one outer <div>. We extract it
-        # by tracing depth from the first <div> to its matching </div>.
-        # This is structural — a slide's internal divs cannot leak into or
-        # close the wrapper, even if the LLM outputs extra or missing tags.
-        html = _extract_outermost_div(html)
+        # ═══ Extract outermost container: prevents cross-slide DOM corruption ═══
+        # The LLM is told to output exactly one outer <div> but sometimes
+        # generates <section> instead. We detect whichever tag opens first
+        # and trace depth to its matching close tag.
+        html = _extract_outermost_container(html)
 
         # Inject unified page number (skip cover slide; only for landscape/PPT:
         # portrait/A4 documents use header/footer page numbers defined in VI)
@@ -7006,26 +7047,35 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
             if last_section > 0:
                 html = html[:last_section] + pn_tag + '\n' + html[last_section:]
             else:
-                # Trace depth from first <div to find TRUE outermost </div>
-                first_open = html.find('<div')
+                # Trace depth from outermost container to find insertion point
+                first_sec = html.find('<section')
+                first_dv = html.find('<div')
+                if first_sec >= 0 and (first_dv < 0 or first_sec < first_dv):
+                    tag, close_tag = 'section', '</section>'
+                else:
+                    tag, close_tag = 'div', '</div>'
+                open_tag = f'<{tag}'
+                first_open = html.find(open_tag)
                 if first_open >= 0:
                     depth = 0
                     pos = first_open
                     outer_close = -1
+                    open_len = len(open_tag)
+                    close_len = len(close_tag)
                     while pos < len(html):
-                        no = html.find('<div', pos)
-                        nc = html.find('</div>', pos)
+                        no = html.find(open_tag, pos)
+                        nc = html.find(close_tag, pos)
                         if nc == -1:
                             break
                         if no != -1 and no < nc:
                             depth += 1
-                            pos = no + 4
+                            pos = no + open_len
                         else:
                             depth -= 1
                             if depth == 0:
                                 outer_close = nc
                                 break
-                            pos = nc + 6
+                            pos = nc + close_len
                     if outer_close > 0:
                         html = html[:outer_close] + pn_tag + '\n' + html[outer_close:]
                     else:
