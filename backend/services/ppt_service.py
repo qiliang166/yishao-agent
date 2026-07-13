@@ -2261,25 +2261,77 @@ def _auto_fix_dark_on_dark(html: str, scheme: dict, slide_seq: int,
     import re as _re_dod
 
     fix_count = 0
+    text_fallback = scheme.get("text", "")
 
-    # ── Replace color:{{primary}} → color:{{text}} ──
-    # Only target the CSS 'color' property, not background/fill/stroke
-    color_patterns = [
-        ('color:{{primary}}', 'color:{{text}}'),
-        ('color: {{primary}}', 'color: {{text}}'),
-        ('color:{{primary}};', 'color:{{text}};'),
-        ('color: {{primary}};', 'color: {{text}};'),
-    ]
-    for pat, repl in color_patterns:
-        count = html.count(pat)
-        if count > 0:
-            html = html.replace(pat, repl)
-            fix_count += count
+    # ── Replace color:{{key}} / color:var(--key) → color:{{text}} / color:var(--text) ──
+    # Handles BOTH placeholder form ({{primary}}) AND CSS var form (var(--primary)).
+    # The LLM outputs var(--primary) directly; {{primary}} comes from YAML template paths.
+    # Only target the CSS 'color' property, not background/fill/stroke.
+    dark_keys = ["primary", "secondary", "card_bg"]
+    for key in dark_keys:
+        key_hex = scheme.get(key, "")
+        if not key_hex or not key_hex.startswith("#"):
+            continue
+        # Only fix if this key genuinely has poor contrast on the page background
+        if bg_hex.startswith("#") and _wcag_contrast_ratio(key_hex, bg_hex) >= 4.5:
+            continue
+
+        # {{key}} form (from YAML/template pipeline)
+        tmpl_pats = [
+            ('color:{{' + key + '}}', 'color:{{text}}'),
+            ('color: {{' + key + '}}', 'color: {{text}}'),
+            ('color:{{' + key + '}};', 'color:{{text}};'),
+            ('color: {{' + key + '}};', 'color: {{text}};'),
+        ]
+        for pat, repl in tmpl_pats:
+            count = html.count(pat)
+            if count > 0:
+                html = html.replace(pat, repl)
+                fix_count += count
+
+        # var(--key) form (LLM-generated HTML)
+        var_pats = [
+            ('color:var(--' + key + ')', 'color:var(--text)'),
+            ('color: var(--' + key + ')', 'color: var(--text)'),
+            ('color:var(--' + key + ');', 'color:var(--text);'),
+            ('color: var(--' + key + ');', 'color: var(--text);'),
+        ]
+        for pat, repl in var_pats:
+            count = html.count(pat)
+            if count > 0:
+                html = html.replace(pat, repl)
+                fix_count += count
+
+    # ── Fix same-color text/bg on the SAME element ──
+    # e.g. <span style="color:var(--chart-5);background:var(--chart-5)"> → invisible
+    # The var name captures any --word or --word-word pattern.
+    for m in _re_dod.finditer(
+        r'(<(\w+)\b[^>]*style="[^"]*)(color:\s*var\(--([\w-]+)\))([^"]*background:\s*var\(--\4\)[^"]*")',
+        html
+    ):
+        tag = m.group(2)
+        before = m.group(1)
+        color_decl = m.group(3)
+        after = m.group(5)
+        var_name = m.group(4)
+        var_hex = scheme.get(var_name.replace('-', '_'), scheme.get(var_name, ''))
+        if var_hex and var_hex.startswith("#"):
+            var_lum = _hex_luminance(var_hex)
+            new_color = "#ffffff" if (var_lum is not None and var_lum <= 128) else scheme.get("text", "#000000")
+        else:
+            new_color = "#ffffff"
+        replacement = before + f'color:{new_color}' + after
+        html = html.replace(m.group(0), replacement)
+        fix_count += 1
+        _logger.info(
+            f"[DARK-FIX] Slide {slide_seq}: same-color text/bg fix "
+            f"(--{var_name} on --{var_name} → {new_color}) on <{tag}>"
+        )
 
     if fix_count > 0:
         _logger.info(
             f"[DARK-FIX] Slide {slide_seq}: fixed {fix_count} dark-on-dark "
-            f"primary→text occurrences (bg luminance={bg_luminance:.0f} ≤ 128)"
+            f"occurrences (bg luminance={bg_luminance:.0f} ≤ 128)"
         )
 
     return html
