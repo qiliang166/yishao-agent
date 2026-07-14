@@ -232,7 +232,8 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
             const blob = await api.downloadSlideImages(runId)
             const url = URL.createObjectURL(blob)
             const a = document.createElement('a')
-            a.href = url; a.download = 'slides.zip'
+            const safeName = (projectName || 'slides').replace(/[\\/:*?"<>|]/g, '_')
+            a.href = url; a.download = safeName + '_slides.zip'
             document.body.appendChild(a); a.click(); document.body.removeChild(a)
             URL.revokeObjectURL(url)
             modal.toast('下载完成', 'success')
