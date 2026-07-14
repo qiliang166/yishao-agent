@@ -2381,6 +2381,15 @@ def _enforce_element_contrast(html: str, scheme: dict, slide_seq: int,
                 val = scheme.get(key)
                 if isinstance(val, str) and val.startswith("#"):
                     return val
+            # resolve chart_N / chart-N from chart_colors list
+            m = _re_ec.match(r'chart[-_](\d+)$', n)
+            if m:
+                idx = int(m.group(1))
+                charts = scheme.get("chart_colors", [])
+                if isinstance(charts, list) and 0 <= idx < len(charts):
+                    val = charts[idx]
+                    if isinstance(val, str) and val.startswith("#"):
+                        return val
             return None
 
         _NAMED = {
@@ -2523,7 +2532,7 @@ def _enforce_element_contrast(html: str, scheme: dict, slide_seq: int,
                 continue  # already AA-readable
 
             bg_lum = _hex_luminance(bg_hex)
-            fix = "#ffffff" if (bg_lum is not None and bg_lum <= 128) else "{{text}}"
+            fix = "#ffffff" if (bg_lum is not None and bg_lum <= 128) else "{{primary}}"
             # no-op guard: don't rewrite to a value that resolves to the same hex
             fix_hex, _fa = _resolve_one_color(fix)
             if fix_hex and col_hex and fix_hex.lower() == col_hex.lower():
@@ -2597,6 +2606,16 @@ def _strip_local_var_overrides(html: str, slide_seq: int) -> str:
         )
 
     return html
+
+
+def _fix_table_header_nowrap(html: str) -> str:
+    """Inject white-space:nowrap into all <th> elements with style attr."""
+    import re as _re_nw
+    return _re_nw.sub(
+        r'(<th\b[^>]*style=")',
+        r'\1white-space:nowrap;',
+        html
+    )
 
 
 def _auto_fix_font_size(html: str, slide_seq: int, is_a4: bool = False) -> str:
@@ -4169,6 +4188,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                                                   style_id=style_id, page_type=stype)
                     html = _enforce_element_contrast(html, active_scheme, seq,
                                                      style_id=style_id, page_type=stype)
+                    html = _fix_table_header_nowrap(html)
                 html_vars = html
                 html = _resolve_color_vars(html, active_scheme, css_vars=True)
                 _logger.info(f"Slide {seq}: code-filled ({style_id}/{stype}), {len(html)} chars")
@@ -4555,6 +4575,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         # (needs var()/{{}} forms to identify each element's bg role).
                         html = _enforce_element_contrast(html, active_scheme, seq,
                                                          style_id=style_id, page_type=stype)
+                        html = _fix_table_header_nowrap(html)
                     # Post-process: strip LLM-invented CSS variable reassignments
                     # (e.g. --primary: var(--card_bg) inverts the theme → invisible text)
                     html = _strip_local_var_overrides(html, seq)
