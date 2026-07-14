@@ -174,6 +174,7 @@ export default function WorkspaceSettingsPage() {
 
       let sc = await api.listSpeechConfigs(wid)
       if (!sc || sc.length === 0) {
+        await api.copySeedConfigs(wid)
         sc = await api.listSpeechConfigs(wid)
       }
       setSpeechConfigs(sc as SpeechConfig[])
@@ -183,6 +184,7 @@ export default function WorkspaceSettingsPage() {
 
       let tc = await api.listTtsConfigs(wid)
       if (!tc || tc.length === 0) {
+        await api.copySeedConfigs(wid)
         tc = await api.listTtsConfigs(wid)
       }
       setTtsConfigs(tc as SpeechConfig[])
@@ -192,6 +194,7 @@ export default function WorkspaceSettingsPage() {
 
       let cpc = await api.listCorePromptConfigs(wid)
       if (!cpc || cpc.length === 0) {
+        await api.copySeedConfigs(wid)
         cpc = await api.listCorePromptConfigs(wid)
       }
       setCoreConfigs(cpc as CorePromptConfig[])

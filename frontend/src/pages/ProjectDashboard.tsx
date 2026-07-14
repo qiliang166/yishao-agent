@@ -58,6 +58,7 @@ export default function ProjectDashboard() {
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [playingAudio, setPlayingAudio] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const playingUrlRef = useRef('')
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -262,18 +263,23 @@ export default function ProjectDashboard() {
   }
 
   const handleAudioToggle = (audioUrl: string) => {
-    if (!audioRef.current || audioRef.current.src !== audioUrl) {
-      if (audioRef.current) { audioRef.current.pause() }
+    if (playingUrlRef.current !== audioUrl) {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.src = ''
+      }
       const a = new Audio(audioUrl)
-      a.onended = () => setPlayingAudio('')
-      a.onpause = () => setPlayingAudio('')
-      a.onplay = () => setPlayingAudio(audioUrl)
+      a.onended = () => { setPlayingAudio(''); playingUrlRef.current = '' }
       audioRef.current = a
-      a.play().catch(() => {})
-    } else if (audioRef.current.paused) {
-      audioRef.current.play().catch(() => {})
-    } else {
+      setPlayingAudio(audioUrl)
+      playingUrlRef.current = audioUrl
+      a.play().catch(() => { setPlayingAudio(''); playingUrlRef.current = '' })
+    } else if (audioRef.current && audioRef.current.paused) {
+      setPlayingAudio(audioUrl)
+      audioRef.current.play().catch(() => { setPlayingAudio(''); playingUrlRef.current = '' })
+    } else if (audioRef.current) {
       audioRef.current.pause()
+      setPlayingAudio('')
     }
   }
 

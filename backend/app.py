@@ -556,13 +556,18 @@ def list_workspaces(page: int = 1, page_size: int = 20, request: Request = None)
 
 
 def _copy_seed_configs(db, workspace_id: str):
-    """Copy seed configs (workspace_id IS NULL) to a specific workspace."""
+    """Copy seed configs (workspace_id IS NULL) to a specific workspace.
+    Checks each table individually — skips tables that already have workspace data."""
     for table, id_col in [
         ('column_configs', 'id'),
         ('speech_configs', 'id'),
         ('tts_configs', 'id'),
         ('core_prompt_configs', 'id'),
     ]:
+        existing = db.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
+        if existing > 0:
+            continue
         seeds = db.execute(
             f"SELECT * FROM {table} WHERE workspace_id IS NULL ORDER BY sort_order").fetchall()
         for s in seeds:
@@ -756,9 +761,14 @@ def copy_seed_configs_to_workspace(workspace_id: str, user=require_perm("project
         ws = db.execute("SELECT created_by FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
         if ws:
             check_ownership(ws["created_by"], user)
-        existing = db.execute(
-            "SELECT COUNT(*) FROM column_configs WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
-        if existing > 0:
+        all_filled = True
+        for tbl in ('column_configs', 'speech_configs', 'tts_configs', 'core_prompt_configs'):
+            cnt = db.execute(
+                f"SELECT COUNT(*) FROM {tbl} WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
+            if cnt == 0:
+                all_filled = False
+                break
+        if all_filled:
             return {"ok": True, "message": "already has configs"}
         _copy_seed_configs(db, workspace_id)
         return {"ok": True, "message": "copied"}
