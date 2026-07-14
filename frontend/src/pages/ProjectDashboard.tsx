@@ -59,6 +59,7 @@ export default function ProjectDashboard() {
   const [playingAudio, setPlayingAudio] = useState('')
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const playingUrlRef = useRef('')
+  const audioPlayingRef = useRef(false)
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -262,30 +263,65 @@ export default function ProjectDashboard() {
     if (deleted > 0) modal.toast(`已删除 ${deleted} 个文件`, 'success')
   }
 
+  const _stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+    }
+    audioRef.current = null
+    setPlayingAudio('')
+    playingUrlRef.current = ''
+    audioPlayingRef.current = false
+  }
+
   const handleAudioToggle = (audioUrl: string) => {
+    // Different audio → stop old, play new
     if (playingUrlRef.current !== audioUrl) {
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.src = ''
-      }
+      _stopAudio()
       const a = new Audio(audioUrl)
-      a.onended = () => { setPlayingAudio('') }
       audioRef.current = a
       setPlayingAudio(audioUrl)
       playingUrlRef.current = audioUrl
-      a.play().catch(() => { setPlayingAudio('') })
-    } else if (audioRef.current && audioRef.current.ended) {
-      const a = new Audio(audioUrl)
-      a.onended = () => { setPlayingAudio('') }
-      audioRef.current = a
-      setPlayingAudio(audioUrl)
-      a.play().catch(() => { setPlayingAudio('') })
-    } else if (audioRef.current && audioRef.current.paused) {
-      setPlayingAudio(audioUrl)
-      audioRef.current.play().catch(() => { setPlayingAudio('') })
-    } else if (audioRef.current) {
-      audioRef.current.pause()
+      audioPlayingRef.current = true
+      a.play().catch(() => {
+        setPlayingAudio('')
+        playingUrlRef.current = ''
+        audioPlayingRef.current = false
+      })
+      a.onended = () => {
+        setPlayingAudio('')
+        audioPlayingRef.current = false
+      }
+      return
+    }
+
+    // Same audio → toggle
+    if (audioPlayingRef.current) {
+      audioRef.current?.pause()
       setPlayingAudio('')
+      audioPlayingRef.current = false
+    } else {
+      if (audioRef.current?.ended) {
+        const a = new Audio(audioUrl)
+        audioRef.current = a
+        a.onended = () => {
+          setPlayingAudio('')
+          audioPlayingRef.current = false
+        }
+        a.play().catch(() => {
+          setPlayingAudio('')
+          playingUrlRef.current = ''
+          audioPlayingRef.current = false
+        })
+      } else {
+        audioRef.current?.play().catch(() => {
+          setPlayingAudio('')
+          playingUrlRef.current = ''
+          audioPlayingRef.current = false
+        })
+      }
+      setPlayingAudio(audioUrl)
+      audioPlayingRef.current = true
     }
   }
 
@@ -591,7 +627,7 @@ export default function ProjectDashboard() {
                                       const isPlaying = playingAudio === url
                                       return (
                                       <button className="btn btn-ghost btn-sm"
-                                        onClick={() => handleAudioToggle(url)}
+                                        onClick={e => { e.stopPropagation(); handleAudioToggle(url) }}
                                         style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent)' }}
                                         title={isPlaying ? '暂停' : '播放'}>
                                         {isPlaying ? '⏸' : '▶'}

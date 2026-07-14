@@ -318,31 +318,65 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const playingUrlRef = useRef('')
+  const audioPlayingRef = useRef(false)
+
+  const _stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+    }
+    audioRef.current = null
+    setPlayingAudio('')
+    playingUrlRef.current = ''
+    audioPlayingRef.current = false
+  }
 
   const handleAudioToggle = (audioUrl: string) => {
     if (playingUrlRef.current !== audioUrl) {
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.src = ''
-      }
+      _stopAudio()
       const a = new Audio(audioUrl)
-      a.onended = () => { setPlayingAudio('') }
       audioRef.current = a
       setPlayingAudio(audioUrl)
       playingUrlRef.current = audioUrl
-      a.play().catch(() => { setPlayingAudio('') })
-    } else if (audioRef.current && audioRef.current.ended) {
-      const a = new Audio(audioUrl)
-      a.onended = () => { setPlayingAudio('') }
-      audioRef.current = a
-      setPlayingAudio(audioUrl)
-      a.play().catch(() => { setPlayingAudio('') })
-    } else if (audioRef.current && audioRef.current.paused) {
-      setPlayingAudio(audioUrl)
-      audioRef.current.play().catch(() => { setPlayingAudio('') })
-    } else if (audioRef.current) {
-      audioRef.current.pause()
+      audioPlayingRef.current = true
+      a.play().catch(() => {
+        setPlayingAudio('')
+        playingUrlRef.current = ''
+        audioPlayingRef.current = false
+      })
+      a.onended = () => {
+        setPlayingAudio('')
+        audioPlayingRef.current = false
+      }
+      return
+    }
+
+    if (audioPlayingRef.current) {
+      audioRef.current?.pause()
       setPlayingAudio('')
+      audioPlayingRef.current = false
+    } else {
+      if (audioRef.current?.ended) {
+        const a = new Audio(audioUrl)
+        audioRef.current = a
+        a.onended = () => {
+          setPlayingAudio('')
+          audioPlayingRef.current = false
+        }
+        a.play().catch(() => {
+          setPlayingAudio('')
+          playingUrlRef.current = ''
+          audioPlayingRef.current = false
+        })
+      } else {
+        audioRef.current?.play().catch(() => {
+          setPlayingAudio('')
+          playingUrlRef.current = ''
+          audioPlayingRef.current = false
+        })
+      }
+      setPlayingAudio(audioUrl)
+      audioPlayingRef.current = true
     }
   }
 
@@ -522,7 +556,7 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
                           const isPlaying = playingAudio === url
                           return (
                           <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--accent)', flexShrink: 0 }}
-                            onClick={() => handleAudioToggle(url)}
+                            onClick={e => { e.stopPropagation(); handleAudioToggle(url) }}
                             title={isPlaying ? '暂停' : '播放'}>
                             {isPlaying ? '⏸' : '▶'}
                           </button>
