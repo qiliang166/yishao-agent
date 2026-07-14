@@ -15,3 +15,4 @@ python-jose>=3.0.0
 cryptography>=40.0.0
 pyyaml
 beautifulsoup4>=4.12.0
+playwright>=1.50.0
