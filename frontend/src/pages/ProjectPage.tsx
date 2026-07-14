@@ -326,14 +326,20 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
         audioRef.current.src = ''
       }
       const a = new Audio(audioUrl)
-      a.onended = () => { setPlayingAudio(''); playingUrlRef.current = '' }
+      a.onended = () => { setPlayingAudio('') }
       audioRef.current = a
       setPlayingAudio(audioUrl)
       playingUrlRef.current = audioUrl
-      a.play().catch(() => { setPlayingAudio(''); playingUrlRef.current = '' })
+      a.play().catch(() => { setPlayingAudio('') })
+    } else if (audioRef.current && audioRef.current.ended) {
+      const a = new Audio(audioUrl)
+      a.onended = () => { setPlayingAudio('') }
+      audioRef.current = a
+      setPlayingAudio(audioUrl)
+      a.play().catch(() => { setPlayingAudio('') })
     } else if (audioRef.current && audioRef.current.paused) {
       setPlayingAudio(audioUrl)
-      audioRef.current.play().catch(() => { setPlayingAudio(''); playingUrlRef.current = '' })
+      audioRef.current.play().catch(() => { setPlayingAudio('') })
     } else if (audioRef.current) {
       audioRef.current.pause()
       setPlayingAudio('')
