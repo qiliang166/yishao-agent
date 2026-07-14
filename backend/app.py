@@ -1,5 +1,7 @@
 import os
 import sys
+import io
+import zipfile
 import shutil
 import uuid
 from datetime import datetime, timedelta
@@ -4750,8 +4752,9 @@ def api_export_svg_zip(run_id: str):
 
 
 @app.post("/api/ppt/save-images/{run_id}")
-async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate")):
-    """Render each slide as a 1280x720 PNG and save to the export directory."""
+async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"), download: bool = False):
+    """Render each slide as a 1280x720 PNG and save to the export directory.
+    If download=true, return a zip file instead of JSON."""
     import asyncio
 
     run_dir = _find_run_dir(run_id)
@@ -4788,6 +4791,21 @@ async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"
         return saved
 
     saved = await asyncio.to_thread(_capture)
+
+    if download:
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for f in saved:
+                zf.write(f, os.path.basename(f))
+        buf.seek(0)
+        from urllib.parse import quote
+        safe_name = quote(f"slides-{run_id}.zip", safe="")
+        return StreamingResponse(
+            buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}"},
+        )
+
     return {"ok": True, "saved": len(saved), "files": [os.path.basename(f) for f in saved],
             "dir": run_dir}
 

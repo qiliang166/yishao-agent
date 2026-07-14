@@ -226,9 +226,17 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       if (result?.ok) {
         const saved = result.saved || 0
         const dir = result.dir || ''
-        const ok = await modal.confirm(`已保存 ${saved} 张图片到:\n${dir}\n\n是否打开文件夹？`)
-        if (ok && dir) {
-          try { await api.openFolder(dir) } catch (_) { /* ignore */ }
+        const ok = await modal.confirm(`已保存 ${saved} 张图片到:\n${dir}\n\n是否下载到本地？`)
+        if (ok) {
+          try {
+            const blob = await api.downloadSlideImages(runId)
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url; a.download = 'slides.zip'
+            document.body.appendChild(a); a.click(); document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            modal.toast('下载完成', 'success')
+          } catch (_) { modal.toast('下载失败，请重试', 'error') }
         }
       } else {
         modal.toast('保存图片失败，请重试', 'error')

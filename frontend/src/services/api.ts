@@ -644,6 +644,15 @@ export const api = {
     request(`/api/ppt/save-images/${encodeURIComponent(runId)}`, { method: 'POST' })
       .then(d => d as { ok: boolean; saved: number; files: string[]; dir: string; detail?: string }),
 
+  // Download slide images as zip (returns blob for browser download)
+  downloadSlideImages: async (runId: string): Promise<Blob> => {
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+    const resp = await fetch(`/api/ppt/save-images/${encodeURIComponent(runId)}?download=true`, { method: 'POST', headers })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    return resp.blob()
+  },
+
   // No-op placeholder (edits now write directly to index.html)
   saveEdit: (runId: string) =>
     request(`/api/ppt/save-edit/${encodeURIComponent(runId)}`, { method: 'POST' })
