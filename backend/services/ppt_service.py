@@ -2608,6 +2608,19 @@ def _strip_local_var_overrides(html: str, slide_seq: int) -> str:
     return html
 
 
+def _fix_table_data_cells(html: str) -> str:
+    """Inject color:var(--text) into <td> elements that lack an explicit color."""
+    import re as _re_td
+    def _add_color(m):
+        tag = m.group(0)
+        if "color:" in tag:
+            return tag
+        if "style=" in tag:
+            return tag.replace('style="', 'style="color:var(--text);', 1)
+        return tag.replace("<td", '<td style="color:var(--text);"', 1)
+    return _re_td.sub(r'<td\b[^>]*>', _add_color, html)
+
+
 def _fix_table_header_nowrap(html: str) -> str:
     """Inject white-space:nowrap into all <th> elements with style attr."""
     import re as _re_nw
@@ -4189,6 +4202,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                     html = _enforce_element_contrast(html, active_scheme, seq,
                                                      style_id=style_id, page_type=stype)
                     html = _fix_table_header_nowrap(html)
+                    html = _fix_table_data_cells(html)
                 html_vars = html
                 html = _resolve_color_vars(html, active_scheme, css_vars=True)
                 _logger.info(f"Slide {seq}: code-filled ({style_id}/{stype}), {len(html)} chars")
@@ -4576,6 +4590,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         html = _enforce_element_contrast(html, active_scheme, seq,
                                                          style_id=style_id, page_type=stype)
                         html = _fix_table_header_nowrap(html)
+                        html = _fix_table_data_cells(html)
                     # Post-process: strip LLM-invented CSS variable reassignments
                     # (e.g. --primary: var(--card_bg) inverts the theme → invisible text)
                     html = _strip_local_var_overrides(html, seq)
