@@ -1895,7 +1895,7 @@ def copy_project(project_id: str, user=require_perm("project.create")):
             (new_id, f"{src['name']} (副本)", "", project_id, project_code))
         db.commit()
         # Copy project items
-        copy_project_items(new_id, project_id)
+        copy_project_items(new_id, project_id, user=user)
         return {"ok": True, "project": {"id": new_id, "name": f"{src['name']} (副本)"}}
     finally:
         db.close()
