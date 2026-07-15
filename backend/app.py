@@ -5697,7 +5697,9 @@ def member_login(req: dict, request: Request):
                     raise HTTPException(status_code=403, detail="会员已到期，请联系管理员续费")
             except (ValueError, TypeError):
                 pass
-        if not user["is_approved"]:
+        # Allow is_approved=0 when expires_at exists (renewal pending for active member).
+        # Block is_approved=0 only for new registrations (no expires_at yet).
+        if not user["is_approved"] and not user["expires_at"]:
             raise HTTPException(status_code=403, detail="账户尚未通过审批，请等待管理员审核")
         if user["is_approved"] == 2:
             raise HTTPException(status_code=403, detail="注册申请已被拒绝，请联系管理员")
@@ -5871,24 +5873,11 @@ def member_renew(req: dict, request: Request):
              plan["duration_days"], payment_method, payment_ref, now),
         )
 
-        # Only mark for admin re-approval if member has expired.
-        # Active members keep their access — renewal extends on approval.
-        is_expired = True
-        if user["expires_at"]:
-            try:
-                expires = datetime.fromisoformat(user["expires_at"])
-                if expires >= datetime.utcnow():
-                    is_expired = False
-            except (ValueError, TypeError):
-                pass
-        else:
-            # No expiry = permanent access
-            is_expired = False
-
-        if is_expired:
-            db.execute("UPDATE users SET is_approved=0, updated_at=? WHERE id=?",
-                       (now, user["id"]))
-            db.execute("UPDATE users SET token_version=token_version+1 WHERE id=?", (user["id"],))
+        # Always set is_approved=0 so admin sees renewal in approval queue.
+        # Login allows is_approved=0 when expires_at is present (previously approved).
+        db.execute("UPDATE users SET is_approved=0, updated_at=? WHERE id=?",
+                   (now, user["id"]))
+        db.execute("UPDATE users SET token_version=token_version+1 WHERE id=?", (user["id"],))
 
         _write_audit(db, user["id"], "member.renew", "user", user["id"],
                       json.dumps({"plan_id": plan_id, "payment_method": payment_method,
