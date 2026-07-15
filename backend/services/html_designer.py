@@ -690,7 +690,8 @@ body {{
   font-family: {self._body_font};
   background: #1a1a2e;
   color: {self._text};
-  overflow-x: hidden;
+  width: 100vw;
+	  overflow-x: hidden;
 }}
 .deck {{
   display: flex;

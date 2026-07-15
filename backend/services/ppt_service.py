@@ -7293,6 +7293,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     gap: 24px;
     padding: 24px;
     font-family: system-ui, -apple-system, sans-serif;
+    width: 100vw;
     overflow-x: hidden;
   }}
   .slide-wrapper {{
