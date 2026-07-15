@@ -2,6 +2,14 @@
 
 ## 2026-07-16
 
+- refactor: 鍙栨秷浼氬憳娉ㄥ唽瀹℃壒 鈥?鏂颁細鍛樿嚜鍔ㄦ壒鍑嗭紝绔嬪嵆鐢熸晥
+
+## 2026-07-16
+
+- docs: dev-log 2026-07-16 鈥?绉垎绯荤粺寤鸿鍏ㄨ褰?- build: regenerate server.zip with points admin UI (commit ea61bbe)
+
+## 2026-07-16
+
 - feat: 绉垎绠＄悊鍚庡彴 鈥?鐢ㄦ埛绉垎鏌ョ湅/淇敼 + 涓嬭浇缁熻 + init_db杩佺Щ淇 - build: regenerate server.zip with TOCTOU fix (commit 60c9d29)
 
 ## 2026-07-16
