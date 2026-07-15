@@ -7293,6 +7293,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     gap: 24px;
     padding: 24px;
     font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
   }}
   .slide-wrapper {{
     width: {canvas_w}px;
@@ -7301,12 +7302,33 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     border-radius: 4px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     flex-shrink: 0;
+    transform-origin: top center;
   }}
 </style>
 </head>
 <body>
 {wrapped}
 {_TEXT_FIT_SCRIPT}
+<script>
+(function(){{
+  var W = {canvas_w}, H = {canvas_h}, pad = 48;
+  var wrappers = document.querySelectorAll('.slide-wrapper');
+  function fit() {{
+    var avail = Math.min(window.innerWidth - pad, W);
+    if (avail >= W) {{
+      wrappers.forEach(function(w) {{ w.style.transform = ''; w.style.marginBottom = ''; }});
+      return;
+    }}
+    var s = avail / W;
+    wrappers.forEach(function(w) {{
+      w.style.transform = 'scale(' + s + ')';
+      w.style.marginBottom = (H * (s - 1)) + 'px';
+    }});
+  }}
+  window.addEventListener('resize', fit);
+  fit();
+}})();
+</script>
 </body>
 </html>"""
 

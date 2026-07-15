@@ -690,6 +690,7 @@ body {{
   font-family: {self._body_font};
   background: #1a1a2e;
   color: {self._text};
+  overflow-x: hidden;
 }}
 .deck {{
   display: flex;
@@ -702,6 +703,7 @@ body {{
   flex-shrink: 0;
   border-radius: 10px;
   box-shadow: {self._shadow_lg};
+  transform-origin: top center;
 }}
 @media print {{
   body {{ background: white; }}
@@ -714,6 +716,26 @@ body {{
 <div class="deck">
 {slides}
 </div>
+<script>
+(function(){{
+  var W = 1280, H = 720, pad = 40;
+  var slides = document.querySelectorAll('.slide');
+  function fit() {{
+    var avail = Math.min(window.innerWidth - pad, W);
+    if (avail >= W) {{
+      slides.forEach(function(s) {{ s.style.transform = ''; s.style.marginBottom = ''; }});
+      return;
+    }}
+    var scale = avail / W;
+    slides.forEach(function(s) {{
+      s.style.transform = 'scale(' + scale + ')';
+      s.style.marginBottom = (H * (scale - 1)) + 'px';
+    }});
+  }}
+  window.addEventListener('resize', fit);
+  fit();
+}})();
+</script>
 </body>
 </html>"""
 
