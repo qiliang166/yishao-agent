@@ -176,7 +176,7 @@ def remove_role_permission(role_id: str, req: dict, user=require_perm("role.mana
         db.close()
 
 
-# ── Users ──
+# ── Users (batch routes before parameterized routes) ──
 
 @router.get("/users")
 def list_users(user_type: str = None, status: str = None, search: str = None,
@@ -239,30 +239,6 @@ def list_users(user_type: str = None, status: str = None, search: str = None,
         db.close()
 
 
-@router.get("/users/{user_id}")
-def get_user(user_id: str, user=require_perm("member.manage")):
-    db = get_db()
-    try:
-        row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "用户不存在")
-        u = dict(row)
-        u.pop("password_hash", None)
-        if user.get("username") != "admin":
-            u.pop("admin_note", None)
-        role_rows = db.execute(
-            "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
-            (user_id,)).fetchall()
-        u["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
-        ws_rows = db.execute(
-            "SELECT w.id, w.name FROM workspaces w JOIN member_workspaces mw ON w.id = mw.workspace_id WHERE mw.user_id = ?",
-            (user_id,)).fetchall()
-        u["workspaces"] = [{"id": wr["id"], "name": wr["name"]} for wr in ws_rows]
-        return u
-    finally:
-        db.close()
-
-
 @router.post("/users")
 def create_user(req: dict, user=require_perm("member.manage")):
     from app import _hash_password
@@ -310,6 +286,114 @@ def create_user(req: dict, user=require_perm("member.manage")):
         if user.get("username") != "admin":
             result.pop("admin_note", None)
         return result
+    finally:
+        db.close()
+
+
+# ── Batch operations (MUST be before /users/{user_id} routes) ──
+
+@router.put("/users/batch")
+def batch_update_users(req: dict, user=require_perm("member.manage")):
+    user_ids = req.get("user_ids", [])
+    updates = req.get("updates", {})
+    if not user_ids:
+        raise HTTPException(400, "user_ids 不能为空")
+    if not updates:
+        raise HTTPException(400, "updates 不能为空")
+
+    allowed = {"expires_at", "is_active"}
+    for k in updates:
+        if k not in allowed:
+            raise HTTPException(400, f"不允许批量修改字段: {k}")
+
+    db = get_db()
+    try:
+        count = 0
+        for uid in user_ids:
+            existing = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+            if not existing:
+                continue
+            if uid == user["sub"]:
+                continue
+            if existing["user_type"] == "admin" and existing["username"] == "admin":
+                continue
+
+            set_parts = []
+            params = []
+            if "expires_at" in updates:
+                set_parts.append("expires_at = ?")
+                params.append(updates["expires_at"])
+            if "is_active" in updates:
+                set_parts.append("is_active = ?")
+                params.append(updates["is_active"])
+
+            if set_parts:
+                set_parts.append("updated_at = datetime('now')")
+                params.append(uid)
+                db.execute(
+                    f"UPDATE users SET {', '.join(set_parts)} WHERE id = ?",
+                    params)
+                db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (uid,))
+                count += 1
+
+        db.commit()
+        return {"ok": True, "message": f"已更新 {count} 个用户", "count": count}
+    finally:
+        db.close()
+
+
+@router.post("/users/batch-delete")
+def batch_delete_users(req: dict, user=require_perm("member.manage")):
+    user_ids = req.get("user_ids", [])
+    if not user_ids:
+        raise HTTPException(400, "user_ids 不能为空")
+
+    db = get_db()
+    try:
+        count = 0
+        for uid in user_ids:
+            existing = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+            if not existing:
+                continue
+            if uid == user["sub"]:
+                continue
+            if existing["user_type"] == "admin" and existing["username"] == "admin":
+                continue
+
+            db.execute("DELETE FROM user_roles WHERE user_id = ?", (uid,))
+            db.execute("DELETE FROM member_workspaces WHERE user_id = ?", (uid,))
+            db.execute("DELETE FROM payment_records WHERE user_id = ?", (uid,))
+            db.execute("DELETE FROM users WHERE id = ?", (uid,))
+            count += 1
+
+        db.commit()
+        return {"ok": True, "message": f"已删除 {count} 个用户", "count": count}
+    finally:
+        db.close()
+
+
+# ── Single-user routes (parameterized, must be AFTER batch routes) ──
+
+@router.get("/users/{user_id}")
+def get_user(user_id: str, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "用户不存在")
+        u = dict(row)
+        u.pop("password_hash", None)
+        if user.get("username") != "admin":
+            u.pop("admin_note", None)
+        role_rows = db.execute(
+            "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
+            (user_id,)).fetchall()
+        u["roles"] = [{"id": rr["id"], "name": rr["name"]} for rr in role_rows]
+        ws_rows = db.execute(
+            "SELECT w.id, w.name FROM workspaces w JOIN member_workspaces mw ON w.id = mw.workspace_id WHERE mw.user_id = ?",
+            (user_id,)).fetchall()
+        u["workspaces"] = [{"id": wr["id"], "name": wr["name"]} for wr in ws_rows]
+        return u
     finally:
         db.close()
 
@@ -497,87 +581,5 @@ def remove_user_workspace(user_id: str, req: dict, user=require_perm("member.man
                    (user_id, workspace_id))
         db.commit()
         return {"ok": True}
-    finally:
-        db.close()
-
-
-# ── Batch operations ──
-
-@router.put("/users/batch")
-def batch_update_users(req: dict, user=require_perm("member.manage")):
-    user_ids = req.get("user_ids", [])
-    updates = req.get("updates", {})
-    if not user_ids:
-        raise HTTPException(400, "user_ids 不能为空")
-    if not updates:
-        raise HTTPException(400, "updates 不能为空")
-
-    allowed = {"expires_at", "is_active"}
-    for k in updates:
-        if k not in allowed:
-            raise HTTPException(400, f"不允许批量修改字段: {k}")
-
-    db = get_db()
-    try:
-        count = 0
-        for uid in user_ids:
-            existing = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
-            if not existing:
-                continue
-            if uid == user["sub"]:
-                continue
-            if existing["user_type"] == "admin" and existing["username"] == "admin":
-                continue
-
-            set_parts = []
-            params = []
-            if "expires_at" in updates:
-                set_parts.append("expires_at = ?")
-                params.append(updates["expires_at"])
-            if "is_active" in updates:
-                set_parts.append("is_active = ?")
-                params.append(updates["is_active"])
-
-            if set_parts:
-                set_parts.append("updated_at = datetime('now')")
-                params.append(uid)
-                db.execute(
-                    f"UPDATE users SET {', '.join(set_parts)} WHERE id = ?",
-                    params)
-                db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (uid,))
-                count += 1
-
-        db.commit()
-        return {"ok": True, "message": f"已更新 {count} 个用户", "count": count}
-    finally:
-        db.close()
-
-
-@router.post("/users/batch-delete")
-def batch_delete_users(req: dict, user=require_perm("member.manage")):
-    user_ids = req.get("user_ids", [])
-    if not user_ids:
-        raise HTTPException(400, "user_ids 不能为空")
-
-    db = get_db()
-    try:
-        count = 0
-        for uid in user_ids:
-            existing = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
-            if not existing:
-                continue
-            if uid == user["sub"]:
-                continue
-            if existing["user_type"] == "admin" and existing["username"] == "admin":
-                continue
-
-            db.execute("DELETE FROM user_roles WHERE user_id = ?", (uid,))
-            db.execute("DELETE FROM member_workspaces WHERE user_id = ?", (uid,))
-            db.execute("DELETE FROM payment_records WHERE user_id = ?", (uid,))
-            db.execute("DELETE FROM users WHERE id = ?", (uid,))
-            count += 1
-
-        db.commit()
-        return {"ok": True, "message": f"已删除 {count} 个用户", "count": count}
     finally:
         db.close()
