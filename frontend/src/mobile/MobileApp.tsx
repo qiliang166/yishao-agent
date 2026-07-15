@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { api } from '../services/api'
+import { applyThemeToDOM, resetThemeToDefault } from '../services/theme'
 import MLogin from './pages/MLogin'
 import MMemberLogin from './pages/MMemberLogin'
 import MHome from './pages/MHome'
@@ -69,9 +71,42 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
   return children
 }
 
+// 与桌面版 App.tsx 一致：登录后从服务器设置同步主题，
+// 覆盖手机 localStorage 里可能残留的旧主题（如暗夜模式）
+function ThemeSync() {
+  const { user } = useAuth()
+  useEffect(() => {
+    if (!user) return
+    api.getSettings().then((data: any) => {
+      const s = data?.settings || {}
+      const themeId = s.theme || 'classic'
+      const presetsJson = s.theme_presets
+
+      localStorage.setItem('theme', themeId)
+      if (presetsJson) {
+        localStorage.setItem('theme_presets', presetsJson)
+      } else {
+        localStorage.removeItem('theme_presets')
+      }
+
+      if (themeId === 'classic') {
+        resetThemeToDefault()
+      } else if (presetsJson) {
+        try {
+          const presets = JSON.parse(presetsJson)
+          const preset = Array.isArray(presets) ? presets.find((p: any) => p != null && p.id === themeId) : null
+          if (preset != null && preset.colors != null) applyThemeToDOM(preset.colors, themeId)
+        } catch {}
+      }
+    }).catch(() => {})
+  }, [user])
+  return null
+}
+
 export default function MobileApp() {
   return (
     <div className="m-shell">
+      <ThemeSync />
       <Routes>
         <Route path="/login" element={<MLogin />} />
         <Route path="/member" element={<MMemberLogin />} />
