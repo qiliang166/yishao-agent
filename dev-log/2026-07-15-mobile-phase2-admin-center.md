@@ -52,3 +52,17 @@ scp -r d:\YISHAOAGENT\frontend\dist\mobile root@120.25.251.172:/opt/yishao-agent
 ```
 
 真机验收清单：管理员手机审批一个真实注册；安卓添加桌面图标显示 LOGO；iOS 引导弹层；微信内续费流程。
+
+---
+
+## 补强（同日，真机验收反馈）
+
+用户真机反馈三个问题，当天修复：
+
+1. **"添加到桌面"提示"当前浏览器不支持"无路可走**
+   - 根因：站点为 HTTP（IP 直连无证书），Chrome 系 `beforeinstallprompt` 只在 HTTPS 触发；国产浏览器（百度/夸克/UC/自带）即使 HTTPS 也不支持 → promptInstall() 返回 'unavailable'
+   - 修复：新增共享组件 `MInstallGuide`（MobileApp.tsx），'unavailable' 从 toast 改为安卓图文引导弹层（浏览器菜单 ⋮/≡ → 添加到主屏幕/添加快捷方式/保存到桌面）；引导条和个人中心共用；将来上 HTTPS 后原生弹窗路径自动恢复
+2. **会员管理行操作补全**（MAdmin.tsx）：编辑（显示名/邮箱/可选重置密码 ≥8 位，`api.updateUser` + `api.resetUserPassword`）、删除（confirm 不可恢复提示，`api.deleteUser` 级联删角色/工作区/付费记录）。行按钮：编辑/停用/录入续期(仅会员)/删除；超管 admin 行隐藏停用/删除
+3. **个人中心补全**（MMe.tsx，对齐桌面 MemberCenterPage）：+注册时间、账号状态；会员有效期着色（已过期红/≤7 天橙/正常绿+剩余天数）；角色升级区（付费未过期未升级 → 申请开发体验员弹层：收款码+单号 → `api.memberUpgrade`；已升级显示有效期）；修改密码（旧/新/确认 → POST /api/auth/change-password）
+
+测试：test_mobile_phase2.py 重写扩展到 **36 项 ALL PASS**，新增覆盖：安卓引导弹层（引导条+个人中心两处）、编辑显示名/邮箱 API 验证、UI 删除后用户不存在、/me 注册时间/账号状态行、错误旧密码报错、正确改密后 DB password_hash 变化（改密后续费流程用新密码）。产物 dist/mobile/assets/index-Bv57Gzz7.js；两个规则 8 产物已重建。

@@ -4,6 +4,12 @@
 状态：用户已确认设计，已实现并通过全量回归（dev-log/test_mobile_phase2.py ALL PASS）
 回滚点：git tag `backup/pre-mobile-phase2`；服务器 DB 备份 yishao-backup-20260715.db
 
+## 补强（2026-07-15 真机验收反馈，同日实现，36 项测试 ALL PASS）
+
+1. **A2HS 图文引导弹层**：站点为 HTTP（IP 直连），Chrome 系 `beforeinstallprompt` 只在 HTTPS 触发；国产浏览器（百度/夸克/UC/自带）即使 HTTPS 也不支持 → 'unavailable' 分支从死胡同 toast 改为安卓图文引导弹层（浏览器菜单 → 添加到主屏幕/添加快捷方式/保存到桌面）。共享组件 `MInstallGuide`（MobileApp.tsx），引导条与个人中心均使用。将来上 HTTPS 后 Chrome 原生弹窗路径自动恢复，代码无需再改
+2. **会员/管理员行操作补全**：编辑（显示名/邮箱/可选重置密码 ≥8 位）→ `api.updateUser` + `api.resetUserPassword`；删除（confirm 提示不可恢复级联删除）→ `api.deleteUser`。超级管理员 admin 行隐藏停用/删除（后端有保护）。行按钮：编辑/停用/录入续期(仅会员)/删除
+3. **个人中心补全**（对齐桌面 MemberCenterPage）：+注册时间、账号状态；会员有效期着色（已过期红/≤7天橙/正常绿+剩余天数）；角色升级区（付费未过期未升级可申请开发体验员 → `api.memberUpgrade`，已升级显示有效期）；修改密码（POST /api/auth/change-password）
+
 ## 目标
 
 手机版在第一期（浏览为主）基础上增加：

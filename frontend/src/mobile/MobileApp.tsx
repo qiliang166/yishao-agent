@@ -68,6 +68,39 @@ export function MTopBar({ title, back, action }: {
   )
 }
 
+// ── 添加到桌面图文引导弹层（安卓/iOS 共用，A2hsBanner 与个人中心均使用） ──
+export function MInstallGuide({ kind, onClose }: {
+  kind: 'ios' | 'android'
+  onClose: () => void
+}) {
+  return (
+    <div className="m-sheet-mask" onClick={onClose}>
+      <div className="m-sheet" onClick={e => e.stopPropagation()}>
+        <div className="m-sheet-title">添加到主屏幕</div>
+        {kind === 'ios' ? (
+          <div style={{ fontSize: 14, lineHeight: 2, padding: '0 4px' }}>
+            1. 点击 Safari 底部的 <b>分享按钮</b>（方框加向上箭头 ⬆）<br />
+            2. 向下滑动，选择<b>「添加到主屏幕」</b><br />
+            3. 点击右上角<b>「添加」</b>完成
+          </div>
+        ) : (
+          <div style={{ fontSize: 14, lineHeight: 2, padding: '0 4px' }}>
+            1. 点击浏览器<b>菜单按钮</b>（右上角 ⋮ 或底部 ≡）<br />
+            2. 选择<b>「添加到主屏幕」</b>、<b>「添加快捷方式」</b>或<b>「保存到桌面」</b><br />
+            3. 确认添加，桌面上就会出现本站图标
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginTop: 8 }}>
+              若菜单中没有该选项，请改用手机自带浏览器或 Chrome 打开本页后再操作。
+            </div>
+          </div>
+        )}
+        <div className="m-sheet-actions">
+          <button className="primary" onClick={onClose}>知道了</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="m-loading">加载中…</div>
@@ -110,7 +143,7 @@ function ThemeSync() {
 // ── 首次"添加到桌面"引导条 ──
 function A2hsBanner() {
   const [visible, setVisible] = useState(false)
-  const [iosGuide, setIosGuide] = useState(false)
+  const [guide, setGuide] = useState<'ios' | 'android' | null>(null)
 
   useEffect(() => {
     if (isWeChat() || isStandalone()) return
@@ -130,13 +163,14 @@ function A2hsBanner() {
         mToast('已添加到桌面')
         dismiss()
       } else if (result === 'ios') {
-        setIosGuide(true)
+        setGuide('ios')
       } else if (result === 'prompted') {
         // 用户在原生弹窗里点了取消 → 保留引导条
       } else if (result === 'installed') {
         dismiss()
       } else {
-        mToast('当前浏览器不支持，请在浏览器菜单中选择"添加到主屏幕"')
+        // 'unavailable'：HTTP 环境或国产浏览器无 beforeinstallprompt → 图文引导
+        setGuide('android')
       }
     } catch (e: any) {
       mToast(`操作失败: ${e?.message || e}`, 'error')
@@ -151,20 +185,8 @@ function A2hsBanner() {
         <button onClick={handleAdd}>添加</button>
         <button className="ghost" onClick={dismiss}>×</button>
       </div>
-      {iosGuide && (
-        <div className="m-sheet-mask" onClick={() => setIosGuide(false)}>
-          <div className="m-sheet" onClick={e => e.stopPropagation()}>
-            <div className="m-sheet-title">添加到主屏幕</div>
-            <div style={{ fontSize: 14, lineHeight: 2, padding: '0 4px' }}>
-              1. 点击 Safari 底部的 <b>分享按钮</b>（方框加向上箭头 ⬆）<br />
-              2. 向下滑动，选择<b>「添加到主屏幕」</b><br />
-              3. 点击右上角<b>「添加」</b>完成
-            </div>
-            <div className="m-sheet-actions">
-              <button className="primary" onClick={() => { setIosGuide(false); dismiss() }}>知道了</button>
-            </div>
-          </div>
-        </div>
+      {guide != null && (
+        <MInstallGuide kind={guide} onClose={() => { setGuide(null); dismiss() }} />
       )}
     </>
   )

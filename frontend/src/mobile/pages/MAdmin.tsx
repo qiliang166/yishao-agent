@@ -71,6 +71,12 @@ export default function MAdmin() {
   const [renewNote, setRenewNote] = useState('')
   const [renewSubmitting, setRenewSubmitting] = useState(false)
 
+  const [editTarget, setEditTarget] = useState<any | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editPassword, setEditPassword] = useState('')
+  const [editSubmitting, setEditSubmitting] = useState(false)
+
   const [approveTarget, setApproveTarget] = useState<any | null>(null)
   const [approveDays, setApproveDays] = useState('7')
   const [approveSubmitting, setApproveSubmitting] = useState(false)
@@ -195,6 +201,68 @@ export default function MAdmin() {
       mToast(`${action}失败: ${e?.message || e}`, 'error')
     } finally {
       setBusyUserId('')
+    }
+  }
+
+  const handleDelete = async (u: any) => {
+    if (!window.confirm(`确定删除用户「${u.display_name || u.username}」？该操作不可恢复，将同时删除其角色、工作区分配和付费记录。`)) return
+    setBusyUserId(u.id)
+    try {
+      const result = await api.deleteUser(u.id) as any
+      if (result != null) {
+        mToast('已删除')
+        await loadUsers(tab, page)
+      } else {
+        mToast('删除失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`删除失败: ${e?.message || e}`, 'error')
+    } finally {
+      setBusyUserId('')
+    }
+  }
+
+  const openEdit = (u: any) => {
+    setEditTarget(u)
+    setEditName(u.display_name || '')
+    setEditEmail(u.email || '')
+    setEditPassword('')
+  }
+
+  const handleEditSubmit = async () => {
+    if (editTarget == null) return
+    if (!editName.trim()) {
+      mToast('显示名不能为空', 'error')
+      return
+    }
+    if (editPassword && editPassword.length < 8) {
+      mToast('重置密码至少 8 位', 'error')
+      return
+    }
+    setEditSubmitting(true)
+    try {
+      const result = await api.updateUser(editTarget.id, {
+        display_name: editName.trim(),
+        email: editEmail.trim(),
+      })
+      if (result == null) {
+        mToast('保存失败：服务器未确认', 'error')
+        return
+      }
+      if (editPassword) {
+        const pw = await api.resetUserPassword(editTarget.id, editPassword) as any
+        if (pw == null || !pw.ok) {
+          mToast('资料已保存，但密码重置失败', 'error')
+          return
+        }
+      }
+      mToast(editPassword ? '已保存，密码已重置' : '已保存')
+      setEditTarget(null)
+      await loadUsers(tab, page)
+    } catch (e: any) {
+      mToast(`保存失败: ${e?.message || e}`, 'error')
+    } finally {
+      setEditSubmitting(false)
     }
   }
 
@@ -407,28 +475,38 @@ export default function MAdmin() {
             <div className="m-empty">暂无用户</div>
           ) : (
             <>
-              {users.map(u => (
-                <div key={u.id} className="m-user-row">
-                  <div className="m-user-head">
-                    <div className="m-user-name">{u.display_name || u.username}</div>
-                    {statusBadge(u)}
+              {users.map(u => {
+                const isSuperAdmin = u.user_type === 'admin' && u.username === 'admin'
+                return (
+                  <div key={u.id} className="m-user-row">
+                    <div className="m-user-head">
+                      <div className="m-user-name">{u.display_name || u.username}</div>
+                      {statusBadge(u)}
+                    </div>
+                    <div className="m-user-meta">
+                      @{u.username}{u.email ? ` · ${u.email}` : ''}
+                      {tab === 'member' && <> · 到期：{fmtDate(u.expires_at)}</>}
+                    </div>
+                    <div className="m-row-actions">
+                      <button className="m-mini-btn" onClick={() => openEdit(u)}>编辑</button>
+                      {!isSuperAdmin && (
+                        <button className={`m-mini-btn ${u.is_active === 0 ? '' : 'warn'}`}
+                          disabled={busyUserId === u.id}
+                          onClick={() => handleToggleActive(u)}>
+                          {u.is_active === 0 ? '启用' : '停用'}
+                        </button>
+                      )}
+                      {tab === 'member' && (
+                        <button className="m-mini-btn primary" onClick={() => openRenew(u)}>录入续期</button>
+                      )}
+                      {!isSuperAdmin && (
+                        <button className="m-mini-btn warn" disabled={busyUserId === u.id}
+                          onClick={() => handleDelete(u)}>删除</button>
+                      )}
+                    </div>
                   </div>
-                  <div className="m-user-meta">
-                    @{u.username}{u.email ? ` · ${u.email}` : ''}
-                    {tab === 'member' && <> · 到期：{fmtDate(u.expires_at)}</>}
-                  </div>
-                  <div className="m-row-actions">
-                    <button className={`m-mini-btn ${u.is_active === 0 ? '' : 'warn'}`}
-                      disabled={busyUserId === u.id}
-                      onClick={() => handleToggleActive(u)}>
-                      {u.is_active === 0 ? '启用' : '停用'}
-                    </button>
-                    {tab === 'member' && (
-                      <button className="m-mini-btn primary" onClick={() => openRenew(u)}>录入续期</button>
-                    )}
-                  </div>
-                </div>
-              ))}
+                )
+              })}
               {totalPages > 1 && (
                 <div className="m-pager">
                   <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</button>
@@ -573,6 +651,31 @@ export default function MAdmin() {
           )
         )}
       </div>
+
+      {editTarget != null && (
+        <MSheet title={`编辑用户 · @${editTarget.username}`}
+          onClose={() => { if (!editSubmitting) setEditTarget(null) }}>
+          <div className="m-field">
+            <label>显示名</label>
+            <input className="m-input" value={editName} onChange={e => setEditName(e.target.value)} />
+          </div>
+          <div className="m-field">
+            <label>邮箱（可留空）</label>
+            <input className="m-input" value={editEmail} onChange={e => setEditEmail(e.target.value)} />
+          </div>
+          <div className="m-field">
+            <label>重置密码（留空则不修改，至少 8 位）</label>
+            <input className="m-input" type="password" value={editPassword} autoComplete="new-password"
+              onChange={e => setEditPassword(e.target.value)} />
+          </div>
+          <div className="m-sheet-actions">
+            <button disabled={editSubmitting} onClick={() => setEditTarget(null)}>取消</button>
+            <button className="primary" disabled={editSubmitting} onClick={handleEditSubmit}>
+              {editSubmitting ? '保存中…' : '保存'}
+            </button>
+          </div>
+        </MSheet>
+      )}
 
       {renewTarget != null && (
         <MSheet title={`录入续期 · ${renewTarget.display_name || renewTarget.username}`}
