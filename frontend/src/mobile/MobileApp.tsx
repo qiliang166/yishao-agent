@@ -6,6 +6,7 @@ import { applyThemeToDOM, resetThemeToDefault } from '../services/theme'
 import { injectManifest, isStandalone, isWeChat, promptInstall } from './a2hs'
 import MLogin from './pages/MLogin'
 import MMemberLogin from './pages/MMemberLogin'
+import MRegister from './pages/MRegister'
 import MHome from './pages/MHome'
 import MProjects from './pages/MProjects'
 import MProject from './pages/MProject'
@@ -204,6 +205,7 @@ export default function MobileApp() {
       <Routes>
         <Route path="/login" element={<MLogin />} />
         <Route path="/member" element={<MMemberLogin />} />
+        <Route path="/register" element={<MRegister />} />
         <Route path="/renew" element={<MRenew />} />
         <Route path="/" element={<RequireAuth><MHome /></RequireAuth>} />
         <Route path="/ws/:wid" element={<RequireAuth><MProjects /></RequireAuth>} />

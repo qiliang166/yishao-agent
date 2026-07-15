@@ -59,6 +59,9 @@ export default function MMemberLogin() {
           管理员？<Link to="/login">管理员登录</Link>
         </div>
         <div className="m-login-switch">
+          没有账号？<Link to="/register">去注册</Link>
+        </div>
+        <div className="m-login-switch">
           会员已过期？<Link to="/renew">去续费</Link>
         </div>
         {contactInfo && (

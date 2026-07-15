@@ -105,6 +105,11 @@ export default function MAdmin() {
   const [rejectReason, setRejectReason] = useState('')
   const [rejectSubmitting, setRejectSubmitting] = useState(false)
 
+  // ── 拒绝升级 ──
+  const [rejectUpgradeTarget, setRejectUpgradeTarget] = useState<any | null>(null)
+  const [rejectUpgradeReason, setRejectUpgradeReason] = useState('')
+  const [rejectUpgradeSubmitting, setRejectUpgradeSubmitting] = useState(false)
+
   const [busyUserId, setBusyUserId] = useState('')
 
   // ── 套餐设置 ──
@@ -209,10 +214,10 @@ export default function MAdmin() {
       loadUsers(tab, page)
     } else if (tab === 'pending') {
       loadPending(pendingFilter, pendingPage)
-    } else if (tab === 'plan' && !planLoaded) {
+    } else if (tab === 'plan') {
       loadPlanSettings()
     }
-  }, [canMember, tab, page, pendingPage, pendingFilter, planLoaded, loadUsers, loadPending, loadPlanSettings])
+  }, [canMember, tab, page, pendingPage, pendingFilter, loadUsers, loadPending, loadPlanSettings])
 
   // 进页时拉一次角标数
   useEffect(() => {
@@ -405,7 +410,7 @@ export default function MAdmin() {
     if (renewTarget == null) return
     const cents = Math.round(parseFloat(renewYuan) * 100)
     const days = parseInt(renewDays, 10)
-    if (!renewPlan.trim() || !Number.isFinite(cents) || cents < 0 || !Number.isFinite(days) || days <= 0) {
+    if (!renewPlan.trim() || !Number.isFinite(cents) || cents <= 0 || !Number.isFinite(days) || days <= 0) {
       mToast('请填写有效的套餐名、金额和天数', 'error')
       return
     }
@@ -500,6 +505,26 @@ export default function MAdmin() {
     }
   }
 
+  const handleRejectUpgrade = async () => {
+    if (rejectUpgradeTarget == null) return
+    setRejectUpgradeSubmitting(true)
+    try {
+      const result = await api.rejectUpgrade(rejectUpgradeTarget.id, rejectUpgradeReason.trim() || undefined)
+      if (result != null && result.ok) {
+        mToast('已拒绝升级')
+        setRejectUpgradeTarget(null)
+        setRejectUpgradeReason('')
+        await loadPending(pendingFilter, pendingPage)
+      } else {
+        mToast('操作失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`操作失败: ${e?.message || e}`, 'error')
+    } finally {
+      setRejectUpgradeSubmitting(false)
+    }
+  }
+
   const handleQrUpload = (which: 'wechat' | 'alipay') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -521,8 +546,8 @@ export default function MAdmin() {
     const qd = parseInt(qDays, 10)
     const uc = Math.round(parseFloat(uPrice) * 100)
     const ud = parseInt(uDays, 10)
-    if (!qName.trim() || !Number.isFinite(qc) || qc < 0 || !Number.isFinite(qd) || qd <= 0
-      || !uName.trim() || !Number.isFinite(uc) || uc < 0 || !Number.isFinite(ud) || ud <= 0) {
+    if (!qName.trim() || !Number.isFinite(qc) || qc <= 0 || !Number.isFinite(qd) || qd <= 0
+      || !uName.trim() || !Number.isFinite(uc) || uc <= 0 || !Number.isFinite(ud) || ud <= 0) {
       mToast('请填写有效的套餐名、价格和天数', 'error')
       return
     }
@@ -622,8 +647,9 @@ export default function MAdmin() {
             <>
               {users.map(u => {
                 const isSuperAdmin = u.user_type === 'admin' && u.username === 'admin'
+                const isRejected = u.is_approved === 2
                 return (
-                  <div key={u.id} className="m-user-row">
+                  <div key={u.id} className="m-user-row" style={{ opacity: (u.is_active && !isRejected) ? 1 : 0.5 }}>
                     <div className="m-user-head">
                       <div className="m-user-name">{u.display_name || u.username}</div>
                       {statusBadge(u)}
@@ -645,26 +671,28 @@ export default function MAdmin() {
                         <div style={{ marginTop: 2 }}>备注：{u.admin_note}</div>
                       )}
                     </div>
-                    <div className="m-row-actions">
-                      <button className="m-mini-btn" onClick={() => openEdit(u)}>编辑</button>
-                      {tab === 'member' && (
-                        <button className="m-mini-btn" onClick={() => openPayments(u)}>明细</button>
-                      )}
-                      {!isSuperAdmin && (
-                        <button className={`m-mini-btn ${u.is_active === 0 ? '' : 'warn'}`}
-                          disabled={busyUserId === u.id}
-                          onClick={() => handleToggleActive(u)}>
-                          {u.is_active === 0 ? '启用' : '停用'}
-                        </button>
-                      )}
-                      {tab === 'member' && (
-                        <button className="m-mini-btn primary" onClick={() => openRenew(u)}>录入续期</button>
-                      )}
-                      {!isSuperAdmin && (
-                        <button className="m-mini-btn warn" disabled={busyUserId === u.id}
-                          onClick={() => handleDelete(u)}>删除</button>
-                      )}
-                    </div>
+                    {!isRejected && (
+                      <div className="m-row-actions">
+                        <button className="m-mini-btn" onClick={() => openEdit(u)}>编辑</button>
+                        {tab === 'member' && (
+                          <button className="m-mini-btn" onClick={() => openPayments(u)}>明细</button>
+                        )}
+                        {!isSuperAdmin && (
+                          <button className={`m-mini-btn ${u.is_active === 0 ? '' : 'warn'}`}
+                            disabled={busyUserId === u.id}
+                            onClick={() => handleToggleActive(u)}>
+                            {u.is_active === 0 ? '启用' : '停用'}
+                          </button>
+                        )}
+                        {tab === 'member' && (
+                          <button className="m-mini-btn primary" onClick={() => openRenew(u)}>录入续期</button>
+                        )}
+                        {!isSuperAdmin && (
+                          <button className="m-mini-btn warn" disabled={busyUserId === u.id}
+                            onClick={() => handleDelete(u)}>删除</button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -700,6 +728,8 @@ export default function MAdmin() {
                       <div className="m-row-actions">
                         <button className="m-mini-btn primary" disabled={busyUserId === m.id}
                           onClick={() => handleApproveUpgrade(m)}>通过升级</button>
+                        <button className="m-mini-btn warn"
+                          onClick={() => { setRejectUpgradeTarget(m); setRejectUpgradeReason('') }}>拒绝</button>
                       </div>
                     </div>
                   ))}
@@ -720,11 +750,26 @@ export default function MAdmin() {
                     <div key={m.id} className="m-user-row">
                       <div className="m-user-head">
                         <div className="m-user-name">{m.display_name || m.username}</div>
-                        {statusBadge(m)}
+                        {pendingFilter === 'pending' ? (
+                          <>
+                            {m.expires_at ? (
+                              <span className="m-badge" style={{ background: 'rgba(59,130,246,0.08)', color: 'var(--primary)', fontWeight: 600 }}>续费</span>
+                            ) : (
+                              <span className="m-badge" style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600 }}>新注册</span>
+                            )}
+                            {m.payment ? (
+                              <span className="m-badge" style={{ background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600 }}>付费</span>
+                            ) : (
+                              <span className="m-badge" style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600 }}>试用</span>
+                            )}
+                          </>
+                        ) : (
+                          statusBadge(m)
+                        )}
                       </div>
                       <div className="m-user-meta">
                         <div>@{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
-                        <div>注册：{fmtDate(m.created_at)} · 到期：{fmtDate(m.expires_at)}</div>
+                        <div>注册：{fmtDate(m.created_at)} · {pendingFilter === 'pending' ? '原到期：' : '会员到期：'}{fmtDate(m.expires_at)}</div>
                         {m.payment != null && <div style={{ marginTop: 2 }}>{paymentInfo(m)}</div>}
 
                       </div>
@@ -1045,6 +1090,26 @@ export default function MAdmin() {
             <button disabled={rejectSubmitting} onClick={() => setRejectTarget(null)}>取消</button>
             <button className="primary" disabled={rejectSubmitting} onClick={handleReject}>
               {rejectSubmitting ? '提交中…' : '确认拒绝'}
+            </button>
+          </div>
+        </MSheet>
+      )}
+
+      {rejectUpgradeTarget != null && (
+        <MSheet title={`拒绝升级 · ${rejectUpgradeTarget.display_name || rejectUpgradeTarget.username}`}
+          onClose={() => { if (!rejectUpgradeSubmitting) setRejectUpgradeTarget(null) }}>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            驳回后将标记升级付款记录为已处理，会员状态不受影响。
+          </p>
+          <div className="m-field">
+            <label>拒绝原因（可选）</label>
+            <input className="m-input" value={rejectUpgradeReason} onChange={e => setRejectUpgradeReason(e.target.value)}
+              placeholder="如：查不到订单编号" />
+          </div>
+          <div className="m-sheet-actions">
+            <button disabled={rejectUpgradeSubmitting} onClick={() => setRejectUpgradeTarget(null)}>取消</button>
+            <button className="primary" disabled={rejectUpgradeSubmitting} onClick={handleRejectUpgrade}>
+              {rejectUpgradeSubmitting ? '提交中…' : '确认拒绝'}
             </button>
           </div>
         </MSheet>

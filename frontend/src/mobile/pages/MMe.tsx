@@ -64,6 +64,10 @@ export default function MMe() {
   const [pwMsg, setPwMsg] = useState('')
   const [pwError, setPwError] = useState('')
 
+  // ── 申请记录 ──
+  const [payments, setPayments] = useState<any[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(true)
+
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -101,8 +105,22 @@ export default function MMe() {
         // 设置读取失败 → 不显示升级区，不影响其他内容
       }
     }
+    const loadPayments = async () => {
+      setPaymentsLoading(true)
+      try {
+        const data = await api.listMyPayments()
+        if (!cancelled && data != null && Array.isArray(data.payments)) {
+          setPayments(data.payments)
+        }
+      } catch {
+        // 付款记录加载失败不阻塞其他内容
+      } finally {
+        if (!cancelled) setPaymentsLoading(false)
+      }
+    }
     load()
     loadSettings()
+    loadPayments()
     return () => { cancelled = true }
   }, [])
 
@@ -243,6 +261,46 @@ export default function MMe() {
                   onClick={() => navigate(`/renew?u=${encodeURIComponent(me.username || '')}`)}>
                   会员续费
                 </button>
+
+                {/* 申请记录 — 与桌面 MemberCenterPage 一致 */}
+                {!paymentsLoading && payments.length > 0 && (
+                  <>
+                    <div className="m-section-title">申请记录</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                      {payments.slice(0, 3).map((p: any, i: number) => {
+                        const statusLabel = p.status === 'pending' ? '待审核' : p.status === 'rejected' ? '已拒绝' : p.status === 'confirmed' ? '已确认' : p.status
+                        const statusColor = p.status === 'pending' ? '#f0ad4e' : p.status === 'rejected' ? 'var(--warning)' : p.status === 'confirmed' ? '#5cb85c' : 'var(--text-secondary)'
+                        return (
+                          <div key={i} style={{
+                            padding: '10px 12px', borderRadius: 8,
+                            background: 'var(--card-bg)', border: '1px solid var(--border)',
+                            fontSize: 12,
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontWeight: 600 }}>{p.plan_name || '付款记录'}</span>
+                              <span style={{
+                                fontSize: 11, padding: '2px 8px', borderRadius: 4,
+                                background: statusColor + '20', color: statusColor, fontWeight: 600,
+                              }}>
+                                {statusLabel}
+                              </span>
+                            </div>
+                            <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>
+                              ￥{(p.amount_cents / 100).toFixed(2)}
+                              {p.payment_ref ? ` · 单号：${p.payment_ref}` : ''}
+                              {p.paid_at ? ` · ${new Date(p.paid_at).toLocaleString('zh-CN')}` : ''}
+                            </div>
+                            {p.note && (
+                              <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 2 }}>
+                                备注：{p.note}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
               </>
             )}
 
