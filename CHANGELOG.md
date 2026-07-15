@@ -2,6 +2,10 @@
 
 ## 2026-07-15
 
+- fix: 瀹℃壒鎰忚绉昏嚦 payment_records.note锛岃窡闅忎粯娆炬槑缁嗚€岄潪鐢ㄦ埛 - chore: 鑷姩鏇存柊 CHANGELOG + server.zip (缁垂瀹℃壒淇)
+
+## 2026-07-15
+
 - fix: 娲昏穬浼氬憳缁垂鍚庡湪绠＄悊鍛樺鎵瑰垪琛ㄤ笉鍙 - chore: 鑷姩鏇存柊 CHANGELOG + server.zip (娉ㄥ唽棰戞帶淇)
 
 ## 2026-07-15
