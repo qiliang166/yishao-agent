@@ -5744,6 +5744,12 @@ def member_register(req: dict, request: Request):
         raise HTTPException(status_code=400, detail="用户名至少需要 2 个字符")
     if len(password) < 8:
         raise HTTPException(status_code=400, detail="密码长度不能少于 8 位")
+    # 手机号必填：付款后若审批被拒，需要能联系客户退款
+    if not phone:
+        raise HTTPException(status_code=400, detail="请填写手机号（用于审批联系与退款）")
+    phone_digits = re.sub(r"\D", "", phone)
+    if len(phone_digits) < 7 or len(phone_digits) > 15:
+        raise HTTPException(status_code=400, detail="手机号格式不正确")
 
     db = get_db()
     try:

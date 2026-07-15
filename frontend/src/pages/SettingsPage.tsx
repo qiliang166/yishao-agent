@@ -100,6 +100,7 @@ function SettingsPage() {
   const [adminPhone, setAdminPhone] = useState('')
   const [qrWechat, setQrWechat] = useState('')
   const [qrAlipay, setQrAlipay] = useState('')
+  const [contactInfo, setContactInfo] = useState('')
   // 会员套餐
   const [planName, setPlanName] = useState('标准套餐')
   const [planPrice, setPlanPrice] = useState('29.90')
@@ -152,6 +153,7 @@ function SettingsPage() {
       if (s.admin_phone) setAdminPhone(s.admin_phone)
       if (s.payment_qr_wechat) setQrWechat(s.payment_qr_wechat)
       if (s.payment_qr_alipay) setQrAlipay(s.payment_qr_alipay)
+      if (s.contact_info) setContactInfo(s.contact_info)
       if (s.member_plan) {
         try {
           const p = JSON.parse(s.member_plan)
@@ -280,6 +282,7 @@ function SettingsPage() {
         branding_copyright: brandingCopyright, branding_signature: brandingSignature,
         admin_phone: adminPhone, app_version: appVersion,
         payment_qr_wechat: qrWechat, payment_qr_alipay: qrAlipay,
+        contact_info: contactInfo,
         admin_password_enabled: adminPasswordEnabled ? '1' : '0',
         member_plan: JSON.stringify({
           quarterly: {
@@ -636,6 +639,16 @@ function SettingsPage() {
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               会员注册时将展示这些收款码。如不配置，付费选项将提示用户联系管理员。
+            </div>
+            <div className="settings-row" style={{ marginTop: 12 }}>
+              <label>客服联系方式</label>
+              <input className="form-input" type="text" value={contactInfo}
+                onChange={e => setContactInfo(e.target.value)}
+                placeholder="如：微信 yishao-kefu / 电话 138xxxx8888"
+                style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+              显示在会员注册页、注册成功页和会员登录页底部（"遇到问题？联系我们"），方便客户在审批前后联系到您。
             </div>
           </div>
 

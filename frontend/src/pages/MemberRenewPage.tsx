@@ -18,6 +18,7 @@ export default function MemberRenewPage() {
   const [loading, setLoading] = useState(false)
   const [qrCodes, setQrCodes] = useState<QRState>({ wechat: '', alipay: '' })
   const [brandName, setBrandName] = useState('')
+  const [contactInfo, setContactInfo] = useState('')
   const [planPrice, setPlanPrice] = useState('29.90')
   const [planDays, setPlanDays] = useState('90')
 
@@ -25,6 +26,7 @@ export default function MemberRenewPage() {
     fetch('/api/settings').then(r => r.json()).then(data => {
       const s = data.settings || {}
       if (s.brand_name) setBrandName(s.brand_name)
+      if (s.contact_info) setContactInfo(s.contact_info)
       if (s.payment_qr_wechat) setQrCodes(prev => ({ ...prev, wechat: s.payment_qr_wechat }))
       if (s.payment_qr_alipay) setQrCodes(prev => ({ ...prev, alipay: s.payment_qr_alipay }))
       if (s.member_plan) {
@@ -101,6 +103,11 @@ export default function MemberRenewPage() {
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             {success}
           </p>
+          {contactInfo && (
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 12 }}>
+              遇到问题？联系我们：{contactInfo}
+            </p>
+          )}
           <Link to="/" style={{
             display: 'inline-block', marginTop: 20,
             color: 'var(--primary)', fontSize: 13, textDecoration: 'none',
@@ -305,6 +312,14 @@ export default function MemberRenewPage() {
             返回首页
           </Link>
         </p>
+        {contactInfo && (
+          <p style={{
+            fontSize: 11, color: 'var(--text-secondary)',
+            marginTop: 8, textAlign: 'center',
+          }}>
+            遇到问题？联系我们：{contactInfo}
+          </p>
+        )}
       </div>
     </div>
   )

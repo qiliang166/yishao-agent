@@ -10,6 +10,7 @@ export default function MemberLoginPage() {
   const navigate = useNavigate()
   const [brandName, setBrandName] = useState('')
   const [brandLogo, setBrandLogo] = useState('')
+  const [contactInfo, setContactInfo] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -25,6 +26,7 @@ export default function MemberLoginPage() {
       if (s.brand_name) setBrandName(s.brand_name)
       else if (fallback) setBrandName(fallback)
       if (s.brand_logo) setBrandLogo(s.brand_logo)
+      if (s.contact_info) setContactInfo(s.contact_info)
     }).catch(() => {})
   }, [])
 
@@ -147,6 +149,15 @@ export default function MemberLoginPage() {
             管理员登录
           </Link>
         </p>
+
+        {contactInfo && (
+          <p style={{
+            fontSize: 11, color: 'var(--text-secondary)',
+            marginTop: 8, textAlign: 'center',
+          }}>
+            遇到问题？联系我们：{contactInfo}
+          </p>
+        )}
       </div>
     </div>
   )

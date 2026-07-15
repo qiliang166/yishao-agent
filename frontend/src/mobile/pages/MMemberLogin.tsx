@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 
@@ -8,6 +8,14 @@ export default function MMemberLogin() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [contactInfo, setContactInfo] = useState('')
+
+  useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(data => {
+      const s = data.settings || {}
+      if (s.contact_info) setContactInfo(s.contact_info)
+    }).catch(() => {})
+  }, [])
 
   if (user) return <Navigate to="/" replace />
 
@@ -53,6 +61,11 @@ export default function MMemberLogin() {
         <div className="m-login-switch">
           会员已过期？<Link to="/renew">去续费</Link>
         </div>
+        {contactInfo && (
+          <div className="m-login-switch">
+            遇到问题？联系我们：{contactInfo}
+          </div>
+        )}
       </div>
     </div>
   )

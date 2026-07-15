@@ -26,6 +26,7 @@ export default function MemberRegisterPage() {
   const [loading, setLoading] = useState(false)
   const [qrCodes, setQrCodes] = useState<QRState>({ wechat: '', alipay: '' })
   const [brandName, setBrandName] = useState('')
+  const [contactInfo, setContactInfo] = useState('')
   const [planPrice, setPlanPrice] = useState('29.90')
   const [planDays, setPlanDays] = useState('90')
 
@@ -33,6 +34,7 @@ export default function MemberRegisterPage() {
     fetch('/api/settings').then(r => r.json()).then(data => {
       const s = data.settings || {}
       if (s.brand_name) setBrandName(s.brand_name)
+      if (s.contact_info) setContactInfo(s.contact_info)
       if (s.payment_qr_wechat) setQrCodes(prev => ({ ...prev, wechat: s.payment_qr_wechat }))
       if (s.payment_qr_alipay) setQrCodes(prev => ({ ...prev, alipay: s.payment_qr_alipay }))
       if (s.member_plan) {
@@ -62,6 +64,15 @@ export default function MemberRegisterPage() {
     }
     if (email && (!email.includes('@') || !email.split('@')[1]?.includes('.'))) {
       setError('邮箱格式不正确')
+      return
+    }
+    if (!phone.trim()) {
+      setError('请填写手机号（用于审批联系与退款）')
+      return
+    }
+    const phoneDigits = phone.replace(/\D/g, '')
+    if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+      setError('手机号格式不正确')
       return
     }
     setStep(1)
@@ -113,6 +124,11 @@ export default function MemberRegisterPage() {
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             {success}
           </p>
+          {contactInfo && (
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 12 }}>
+              遇到问题？联系我们：{contactInfo}
+            </p>
+          )}
           <Link to="/member" style={{
             display: 'inline-block', marginTop: 20,
             color: 'var(--primary)', fontSize: 13, textDecoration: 'none',
@@ -177,7 +193,7 @@ export default function MemberRegisterPage() {
             <input className="form-input" type="email" placeholder="邮箱（可选）" value={email}
               onChange={e => { setEmail(e.target.value); setError('') }}
               style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10 }} />
-            <input className="form-input" type="tel" placeholder="手机号（可选，用于接收审批通知）" value={phone}
+            <input className="form-input" type="tel" placeholder="手机号 *（用于接收审批通知与联系）" value={phone}
               onChange={e => { setPhone(e.target.value); setError('') }}
               style={{ width: '100%', boxSizing: 'border-box' }} />
 
@@ -369,6 +385,14 @@ export default function MemberRegisterPage() {
             立即登录 →
           </Link>
         </p>
+        {contactInfo && (
+          <p style={{
+            fontSize: 11, color: 'var(--text-secondary)',
+            marginTop: 8, textAlign: 'center',
+          }}>
+            遇到问题？联系我们：{contactInfo}
+          </p>
+        )}
       </div>
     </div>
   )

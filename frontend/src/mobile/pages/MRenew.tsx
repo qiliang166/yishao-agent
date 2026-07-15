@@ -17,6 +17,7 @@ export default function MRenew() {
   const [planName, setPlanName] = useState('标准套餐')
   const [planPrice, setPlanPrice] = useState('29.90')
   const [planDays, setPlanDays] = useState('90')
+  const [contactInfo, setContactInfo] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -29,6 +30,7 @@ export default function MRenew() {
         const s = data.settings || {}
         if (s.payment_qr_wechat) setQrWechat(s.payment_qr_wechat)
         if (s.payment_qr_alipay) setQrAlipay(s.payment_qr_alipay)
+        if (s.contact_info) setContactInfo(s.contact_info)
         if (s.member_plan) {
           try {
             const p = JSON.parse(s.member_plan)
@@ -109,6 +111,11 @@ export default function MRenew() {
             <div className="m-login-switch">
               <Link to="/member">返回会员登录</Link>
             </div>
+            {contactInfo && (
+              <div className="m-login-switch">
+                遇到问题？联系我们：{contactInfo}
+              </div>
+            )}
           </div>
         </div>
       </>
@@ -179,6 +186,11 @@ export default function MRenew() {
           <div className="m-login-switch">
             <Link to="/member">返回会员登录</Link>
           </div>
+          {contactInfo && (
+            <div className="m-login-switch">
+              遇到问题？联系我们：{contactInfo}
+            </div>
+          )}
         </div>
       </div>
     </>
