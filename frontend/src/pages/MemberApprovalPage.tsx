@@ -19,7 +19,7 @@ interface MemberRow {
   is_approved: number
   created_at: string
   expires_at?: string | null
-  approval_note?: string
+
   payment?: PaymentInfo | null
 }
 
@@ -362,11 +362,6 @@ export default function MemberApprovalPage() {
                   {m.payment && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                       付款单号：{m.payment.payment_ref || '—'} · {paymentMethodLabel(m.payment.payment_method)} · ￥{formatAmount(m.payment.amount_cents)}
-                    </div>
-                  )}
-                  {statusFilter !== 'pending' && m.approval_note && (
-                    <div style={{ fontSize: 11, color: 'var(--text)', marginTop: 2 }}>
-                      审批意见：{m.approval_note}
                     </div>
                   )}
                 </div>

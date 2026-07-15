@@ -726,9 +726,7 @@ export default function MAdmin() {
                         <div>@{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
                         <div>注册：{fmtDate(m.created_at)} · 到期：{fmtDate(m.expires_at)}</div>
                         {m.payment != null && <div style={{ marginTop: 2 }}>{paymentInfo(m)}</div>}
-                        {pendingFilter !== 'pending' && m.approval_note && (
-                          <div style={{ marginTop: 2 }}>审批意见：{m.approval_note}</div>
-                        )}
+
                       </div>
                       <div className="m-row-actions">
                         {pendingFilter === 'pending' && (

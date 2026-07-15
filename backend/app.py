@@ -6083,10 +6083,16 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
 
         db.execute(
             "UPDATE users SET is_approved=1, approved_by=?, approved_at=?, "
-            "expires_at=?, approval_note=?, updated_at=? WHERE id=?",
+            "expires_at=?, updated_at=? WHERE id=?",
             (user["sub"], _dt.utcnow().isoformat(), expires_at,
-             (body.note or "").strip(), _dt.utcnow().isoformat(), user_id),
+             _dt.utcnow().isoformat(), user_id),
         )
+
+        # Write approval note to the payment record so it persists per-payment
+        note_text = (body.note or "").strip()
+        if payment and note_text:
+            db.execute("UPDATE payment_records SET note=? WHERE id=?",
+                       (note_text, payment["id"]))
 
         # Assign role
         role = db.execute(
@@ -6147,10 +6153,21 @@ async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
         from datetime import datetime as _dt
         db.execute(
             "UPDATE users SET is_approved=2, approved_by=?, approved_at=?, "
-            "approval_note=?, updated_at=? WHERE id=?",
-            (user["sub"], _dt.utcnow().isoformat(), (reason or "").strip(),
+            "updated_at=? WHERE id=?",
+            (user["sub"], _dt.utcnow().isoformat(),
              _dt.utcnow().isoformat(), user_id),
         )
+
+        # Write rejection reason to the latest payment record (if any)
+        if (reason or "").strip():
+            payment = db.execute(
+                "SELECT id FROM payment_records WHERE user_id=? "
+                "ORDER BY paid_at DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            if payment:
+                db.execute("UPDATE payment_records SET note=? WHERE id=?",
+                           ((reason or "").strip(), payment["id"]))
         _write_audit(db, user["sub"], "member.reject", "user", user_id,
                       json.dumps({"reason": reason}), ip_address=ip)
         db.commit()
