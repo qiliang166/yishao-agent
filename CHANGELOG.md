@@ -2,6 +2,10 @@
 
 ## 2026-07-15
 
+- fix: 浼氬憳鐧诲綍鏀圭敤娓叉煋闃舵 Navigate 閲嶅畾鍚戯紝閬垮厤 useEffect 绔炴€?- chore: 鑷姩鏇存柊 CHANGELOG + server.zip (鐧诲綍璺宠浆淇)
+
+## 2026-07-15
+
 - fix: 浼氬憳鐧诲綍鍚庤烦杞け璐?鈥?绉婚櫎鍙岄噸瀵艰埅瀵艰嚧鐨勭珵鎬佹潯浠?- chore: 鑷姩鏇存柊 CHANGELOG + server.zip (绉婚櫎 approval_note 杩斿洖鍊?
 
 ## 2026-07-15
