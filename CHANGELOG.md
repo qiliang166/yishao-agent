@@ -2,6 +2,10 @@
 
 ## 2026-07-16
 
+- feat: 绉垎绠＄悊鍚庡彴 鈥?鐢ㄦ埛绉垎鏌ョ湅/淇敼 + 涓嬭浇缁熻 + init_db杩佺Щ淇 - build: regenerate server.zip with TOCTOU fix (commit 60c9d29)
+
+## 2026-07-16
+
 - fix: atomic UPDATE in _deduct_points to prevent TOCTOU race condition
 
 ## 2026-07-16
