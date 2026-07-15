@@ -45,6 +45,13 @@ export default function UserManagePage() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
 
+  // Batch selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [showBatchExpiry, setShowBatchExpiry] = useState(false)
+  const [batchExpiryDate, setBatchExpiryDate] = useState('')
+  const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false)
+  const [batchLoading, setBatchLoading] = useState(false)
+
   // Create dialog
   const [showCreate, setShowCreate] = useState(false)
   const [createUsername, setCreateUsername] = useState('')
@@ -106,6 +113,38 @@ export default function UserManagePage() {
   }, [tab, page])
 
   useEffect(() => { loadUsers() }, [loadUsers])
+
+  // Clear selection on tab/page change
+  useEffect(() => { setSelectedIds(new Set()) }, [tab, page])
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const currentIds = users.map(u => u.id)
+    const allSelected = currentIds.every(id => selectedIds.has(id))
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        currentIds.forEach(id => next.delete(id))
+        return next
+      })
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev)
+        currentIds.forEach(id => next.add(id))
+        return next
+      })
+    }
+  }
+
+  const isAllSelected = users.length > 0 && users.every(u => selectedIds.has(u.id))
 
   const openEdit = async (u: UserItem) => {
     setEditUser(u)
@@ -201,6 +240,67 @@ export default function UserManagePage() {
       loadUsers()
     } catch (e: any) {
       showToast(e.message || '删除失败')
+    }
+  }
+
+  // ── Batch operations ──
+
+  const handleBatchExpiry = async () => {
+    if (!batchExpiryDate) return
+    setBatchLoading(true)
+    try {
+      const result = await api.batchUpdateUsers({
+        user_ids: Array.from(selectedIds),
+        updates: { expires_at: batchExpiryDate },
+      })
+      if (result == null) { showToast('操作失败：服务器未确认'); return }
+      showToast(result.message || `已更新 ${result.count} 个用户`)
+      setShowBatchExpiry(false)
+      setBatchExpiryDate('')
+      setSelectedIds(new Set())
+      loadUsers()
+    } catch (e: any) {
+      showToast(e.message || '批量操作失败')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const handleBatchToggleActive = async (makeActive: boolean) => {
+    const label = makeActive ? '启用' : '停用'
+    const selectedUsers = users.filter(u => selectedIds.has(u.id))
+    if (selectedUsers.length === 0) return
+    if (!confirm(`确定批量${label} ${selectedUsers.length} 个用户吗？`)) return
+    setBatchLoading(true)
+    try {
+      const result = await api.batchUpdateUsers({
+        user_ids: Array.from(selectedIds),
+        updates: { is_active: makeActive ? 1 : 0 },
+      })
+      if (result == null) { showToast('操作失败：服务器未确认'); return }
+      showToast(result.message || `已${label} ${result.count} 个用户`)
+      setSelectedIds(new Set())
+      loadUsers()
+    } catch (e: any) {
+      showToast(e.message || '批量操作失败')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const handleBatchDelete = async () => {
+    setBatchLoading(true)
+    try {
+      const result = await api.batchDeleteUsers({ user_ids: Array.from(selectedIds) })
+      if (result == null) { showToast('操作失败：服务器未确认'); return }
+      showToast(result.message || `已删除 ${result.count} 个用户`)
+      setShowBatchDeleteConfirm(false)
+      setSelectedIds(new Set())
+      loadUsers()
+    } catch (e: any) {
+      showToast(e.message || '批量删除失败')
+    } finally {
+      setBatchLoading(false)
     }
   }
 
@@ -317,6 +417,10 @@ export default function UserManagePage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
+  const selectedUsers = users.filter(u => selectedIds.has(u.id))
+  const selectedNamesForConfirm = selectedUsers.slice(0, 5).map(u => u.display_name).join('、')
+    + (selectedUsers.length > 5 ? `...等 ${selectedUsers.length} 个` : '')
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 24px 0' }}>用户管理</h1>
@@ -332,7 +436,7 @@ export default function UserManagePage() {
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderBottom: '1px solid var(--border)', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ display: 'flex', gap: 0, marginBottom: 0, borderBottom: '1px solid var(--border)', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex' }}>
           <button
             onClick={() => { setTab('admin'); setPage(1) }}
@@ -364,6 +468,41 @@ export default function UserManagePage() {
         </button>
       </div>
 
+      {/* Batch action bar */}
+      {selectedIds.size > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0',
+          borderBottom: '1px solid var(--border)', background: 'var(--card-bg)',
+          position: 'sticky', top: 0, zIndex: 10,
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--primary)' }}>
+            已选 {selectedIds.size} 个用户
+          </span>
+          {tab === 'member' && (
+            <button className="btn btn-ghost btn-sm" onClick={() => {
+              setShowBatchExpiry(true)
+              setBatchExpiryDate('')
+            }}>
+              批量改到期
+            </button>
+          )}
+          <button className="btn btn-ghost btn-sm" onClick={() => handleBatchToggleActive(true)}>
+            批量启用
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => handleBatchToggleActive(false)}>
+            批量停用
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setShowBatchDeleteConfirm(true)}
+            style={{ color: 'var(--warning)' }}>
+            批量删除
+          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setSelectedIds(new Set())}
+            style={{ marginLeft: 'auto', fontSize: 11 }}>
+            取消选择
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
       ) : users.length === 0 ? (
@@ -375,17 +514,33 @@ export default function UserManagePage() {
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Select-all bar */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            <input type="checkbox" checked={isAllSelected} onChange={toggleSelectAll}
+              style={{ margin: 0, cursor: 'pointer', accentColor: 'var(--primary)' }} />
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', cursor: 'pointer' }}
+              onClick={toggleSelectAll}>
+              {isAllSelected ? '取消全选' : '全选当前页'}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
             {users.map((u) => (
               <div
                 key={u.id}
                 className="card"
                 style={{
                   padding: '16px 20px',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  display: 'flex', alignItems: 'center',
                   opacity: u.is_active ? 1 : 0.5,
+                  gap: 12,
                 }}
               >
+                <input type="checkbox" checked={selectedIds.has(u.id)} onChange={() => toggleSelect(u.id)}
+                  style={{ margin: 0, cursor: 'pointer', accentColor: 'var(--primary)', flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 12 }}>
                     {u.display_name}
@@ -475,6 +630,57 @@ export default function UserManagePage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Batch Expiry Dialog */}
+      {showBatchExpiry && (
+        <div className="dialog-overlay" onClick={() => setShowBatchExpiry(false)}>
+          <div className="dialog-box" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量修改到期时间</div>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              将为选中的 {selectedIds.size} 个用户设置相同的到期时间。
+            </p>
+            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>到期时间</label>
+            <input className="form-input" type="datetime-local"
+              value={batchExpiryDate}
+              onChange={e => setBatchExpiryDate(e.target.value)}
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowBatchExpiry(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleBatchExpiry}
+                disabled={batchLoading || !batchExpiryDate}>
+                {batchLoading ? '处理中...' : '确认修改'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Delete Confirm Dialog */}
+      {showBatchDeleteConfirm && (
+        <div className="dialog-overlay" onClick={() => setShowBatchDeleteConfirm(false)}>
+          <div className="dialog-box" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量删除用户</div>
+            <p style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.6 }}>
+              确定删除以下 {selectedIds.size} 个用户吗？此操作不可撤销。
+            </p>
+            <div style={{
+              fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12,
+              padding: '8px 12px', background: 'var(--card-bg)', borderRadius: 6,
+              border: '1px solid var(--border)',
+            }}>
+              {selectedNamesForConfirm}
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowBatchDeleteConfirm(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleBatchDelete}
+                disabled={batchLoading}
+                style={{ background: 'var(--warning)', borderColor: 'var(--warning)' }}>
+                {batchLoading ? '删除中...' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Edit User Dialog */}

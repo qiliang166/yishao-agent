@@ -499,3 +499,85 @@ def remove_user_workspace(user_id: str, req: dict, user=require_perm("member.man
         return {"ok": True}
     finally:
         db.close()
+
+
+# ── Batch operations ──
+
+@router.put("/users/batch")
+def batch_update_users(req: dict, user=require_perm("member.manage")):
+    user_ids = req.get("user_ids", [])
+    updates = req.get("updates", {})
+    if not user_ids:
+        raise HTTPException(400, "user_ids 不能为空")
+    if not updates:
+        raise HTTPException(400, "updates 不能为空")
+
+    allowed = {"expires_at", "is_active"}
+    for k in updates:
+        if k not in allowed:
+            raise HTTPException(400, f"不允许批量修改字段: {k}")
+
+    db = get_db()
+    try:
+        count = 0
+        for uid in user_ids:
+            existing = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+            if not existing:
+                continue
+            if uid == user["sub"]:
+                continue
+            if existing["user_type"] == "admin" and existing["username"] == "admin":
+                continue
+
+            set_parts = []
+            params = []
+            if "expires_at" in updates:
+                set_parts.append("expires_at = ?")
+                params.append(updates["expires_at"])
+            if "is_active" in updates:
+                set_parts.append("is_active = ?")
+                params.append(updates["is_active"])
+
+            if set_parts:
+                set_parts.append("updated_at = datetime('now')")
+                params.append(uid)
+                db.execute(
+                    f"UPDATE users SET {', '.join(set_parts)} WHERE id = ?",
+                    params)
+                db.execute("UPDATE users SET token_version = token_version + 1 WHERE id = ?", (uid,))
+                count += 1
+
+        db.commit()
+        return {"ok": True, "message": f"已更新 {count} 个用户", "count": count}
+    finally:
+        db.close()
+
+
+@router.post("/users/batch-delete")
+def batch_delete_users(req: dict, user=require_perm("member.manage")):
+    user_ids = req.get("user_ids", [])
+    if not user_ids:
+        raise HTTPException(400, "user_ids 不能为空")
+
+    db = get_db()
+    try:
+        count = 0
+        for uid in user_ids:
+            existing = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+            if not existing:
+                continue
+            if uid == user["sub"]:
+                continue
+            if existing["user_type"] == "admin" and existing["username"] == "admin":
+                continue
+
+            db.execute("DELETE FROM user_roles WHERE user_id = ?", (uid,))
+            db.execute("DELETE FROM member_workspaces WHERE user_id = ?", (uid,))
+            db.execute("DELETE FROM payment_records WHERE user_id = ?", (uid,))
+            db.execute("DELETE FROM users WHERE id = ?", (uid,))
+            count += 1
+
+        db.commit()
+        return {"ok": True, "message": f"已删除 {count} 个用户", "count": count}
+    finally:
+        db.close()

@@ -1031,6 +1031,18 @@ export const api = {
     request('/api/users/' + id, { method: 'DELETE' }),
   toggleUserActive: (userId: string) =>
     request('/api/users/' + userId + '/active', { method: 'PUT' }).then(d => d as any),
+  batchUpdateUsers: (data: {user_ids: string[], updates: Record<string, any>}) =>
+    request('/api/users/batch', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    }).then(d => d as {ok: boolean, message: string, count: number}),
+  batchDeleteUsers: (data: {user_ids: string[]}) =>
+    request('/api/users/batch-delete', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    }).then(d => d as {ok: boolean, message: string, count: number}),
   addUserRole: (userId: string, roleId: string) =>
     request('/api/users/' + userId + '/roles/add', {
       method: 'POST',
