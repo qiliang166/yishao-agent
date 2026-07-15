@@ -1,7 +1,32 @@
-INFO:     Started server process [26072]
+INFO:     Started server process [12044]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-ERROR:    [Errno 10048] error while attempting to bind on address ('0.0.0.0', 8766): [winerror 10048] 通常每个套接字地址(协议/网络地址/端口)只允许使用一次。
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
+INFO:     Uvicorn running on http://0.0.0.0:8766 (Press CTRL+C to quit)
 [DB] Initialized at D:\YISHAOAGENT\backend\data\yishao.db
+INFO:     127.0.0.1:36899 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:27633 - "GET /app/center HTTP/1.1" 200 OK
+INFO:     127.0.0.1:27633 - "GET /assets/index-DgCOs9ak.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43349 - "GET /assets/index-CQD2g755.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:27633 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43349 - "GET /api/license/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:16043 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:31255 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:27633 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:31255 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43349 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35904 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:16043 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1811 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /members/pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /assets/index-Ci7-oYdp.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1821 - "GET /assets/index-CQD2g755.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1821 - "GET /api/license/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1825 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1826 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1826 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1826 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1825 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1820 - "GET /api/members/pending-upgrades HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1821 - "GET /api/members/pending?page=1&page_size=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1829 - "GET /api/settings HTTP/1.1" 200 OK

@@ -1,0 +1,83 @@
+
+> yishao-agent@1.0.0 dev
+> vite
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m316[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[2m06:47:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.css[22m
+[2m06:56:29[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m06:56:40[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m06:56:46[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:00:47[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:00:55[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:01:21[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:06:26[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:06:30[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:06:35[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:06:40[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/TeachingDocPanel.tsx[22m
+[2m07:08:58[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:09:09[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:09:15[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:21:56[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:22:00[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m07:22:03[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/TeachingDocPanel.tsx[22m
+[2m08:03:34[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m08:03:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m08:04:09[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m08:04:20[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m08:04:31[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m08:08:32[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m08:16:51[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx[22m
+[2m08:16:56[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ProtectedRoute.tsx[22m
+[2m08:24:16[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/ProtectedRoute.tsx[22m
+[2m08:33:08[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
+[2m08:33:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx[22m
+[2m08:51:29[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.css[22m
+[2m08:54:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx[22m
+[2m08:54:26[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.css[22m
+[2m09:18:11[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/pages/HomePage.tsx, /src/pages/ProjItemSettingsPage.tsx, /src/pages/ProjectDashboard.tsx, /src/pages/MemberCenterPage.tsx, /src/components/ModalProvider.tsx, /src/pages/UserManagePage.tsx, /src/pages/RoleManagePage.tsx, /src/contexts/LicenseContext.tsx, /src/components/SetupWizard.tsx, /src/pages/SettingsPage.tsx, /src/pages/PromptStudioPage.tsx, /src/pages/MemberApprovalPage.tsx, /src/pages/WorkspaceSettingsPage.tsx, /src/pages/ProjSettingsPage.tsx, /src/pages/TemplateManager.tsx, /src/pages/ProjectPage.tsx, /src/pages/LicenseRegPage.tsx, /src/components/TeachingDocPanel.tsx, /src/components/SlideEditModal.tsx[22m
+[2m10:03:35[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/pages/HomePage.tsx, /src/pages/ProjItemSettingsPage.tsx, /src/pages/ProjectDashboard.tsx, /src/pages/MemberCenterPage.tsx, /src/components/ModalProvider.tsx, /src/pages/UserManagePage.tsx, /src/pages/RoleManagePage.tsx, /src/contexts/LicenseContext.tsx, /src/components/SetupWizard.tsx, /src/pages/SettingsPage.tsx, /src/pages/PromptStudioPage.tsx, /src/pages/MemberApprovalPage.tsx, /src/pages/WorkspaceSettingsPage.tsx, /src/pages/ProjSettingsPage.tsx, /src/pages/TemplateManager.tsx, /src/pages/ProjectPage.tsx, /src/pages/LicenseRegPage.tsx, /src/components/TeachingDocPanel.tsx, /src/components/SlideEditModal.tsx[22m
+[2m10:03:49[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/pages/HomePage.tsx, /src/pages/ProjItemSettingsPage.tsx, /src/pages/ProjectDashboard.tsx, /src/pages/MemberCenterPage.tsx, /src/components/ModalProvider.tsx, /src/pages/UserManagePage.tsx, /src/pages/RoleManagePage.tsx, /src/contexts/LicenseContext.tsx, /src/components/SetupWizard.tsx, /src/pages/SettingsPage.tsx, /src/pages/PromptStudioPage.tsx, /src/pages/MemberApprovalPage.tsx, /src/pages/WorkspaceSettingsPage.tsx, /src/pages/ProjSettingsPage.tsx, /src/pages/TemplateManager.tsx, /src/pages/ProjectPage.tsx, /src/pages/LicenseRegPage.tsx, /src/components/TeachingDocPanel.tsx, /src/components/SlideEditModal.tsx[22m
+[2m10:03:54[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/pages/HomePage.tsx, /src/pages/ProjItemSettingsPage.tsx, /src/pages/ProjectDashboard.tsx, /src/pages/MemberCenterPage.tsx, /src/components/ModalProvider.tsx, /src/pages/UserManagePage.tsx, /src/pages/RoleManagePage.tsx, /src/contexts/LicenseContext.tsx, /src/components/SetupWizard.tsx, /src/pages/SettingsPage.tsx, /src/pages/PromptStudioPage.tsx, /src/pages/MemberApprovalPage.tsx, /src/pages/WorkspaceSettingsPage.tsx, /src/pages/ProjSettingsPage.tsx, /src/pages/TemplateManager.tsx, /src/pages/ProjectPage.tsx, /src/pages/LicenseRegPage.tsx, /src/components/TeachingDocPanel.tsx, /src/components/SlideEditModal.tsx[22m
+[2m10:34:43[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:34:47[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:34:51[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:34:54[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:35:05[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:35:09[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:35:13[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:37:33[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:39:11[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:43:35[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/HomePage.tsx[22m
+[2m10:43:45[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:43:53[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:43:54[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:44:04[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:44:05[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:47:28[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:47:40[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:47:48[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:47:49[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:50:46[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:51:01[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:51:16[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m10:51:27[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/SetupWizard.tsx[22m
+[2m13:04:53[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LoginPage.tsx[22m
+[2m13:05:10[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LoginPage.tsx[22m
+[2m13:05:21[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/LoginPage.tsx[22m
+[2m13:24:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/WorkspaceSettingsPage.tsx[22m
+[2m13:25:08[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/HomePage.tsx[22m
+[2m23:10:02[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/SettingsPage.tsx[22m
+[2m00:56:14[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m01:22:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m03:10:36[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/TeachingDocPanel.tsx[22m
+[2m03:10:40[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/TeachingDocPanel.tsx[22m
+[2m03:10:45[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/TeachingDocPanel.tsx[22m
+[2m03:10:52[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m03:10:56[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m03:11:03[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m03:57:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m
+[2m04:45:27[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/ProjectPage.tsx[22m

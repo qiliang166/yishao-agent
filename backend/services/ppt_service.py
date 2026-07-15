@@ -7280,7 +7280,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.1">
 <title>{title}</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -7317,14 +7317,12 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
   function fit() {{
     var avail = Math.min(window.innerWidth - pad, W);
     if (avail >= W) {{
-      wrappers.forEach(function(w) {{ w.style.transform = ''; w.style.marginBottom = ''; }});
+      wrappers.forEach(function(w) {{ w.style.zoom = ''; }});
       return;
     }}
     var s = avail / W;
-    var offsetX = (window.innerWidth - pad - W * s) / 2;
     wrappers.forEach(function(w) {{
-      w.style.transform = 'translateX(' + offsetX + 'px) scale(' + s + ')';
-      w.style.marginBottom = (H * (s - 1)) + 'px';
+      w.style.zoom = s;
     }});
   }}
   window.addEventListener('resize', fit);

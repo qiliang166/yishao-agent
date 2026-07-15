@@ -159,11 +159,11 @@ function SettingsPage() {
           const p = JSON.parse(s.member_plan)
           const q = p.quarterly || p[Object.keys(p)[0]] || {}
           if (q.name) setPlanName(q.name)
-          if (q.amount_cents) setPlanPrice((q.amount_cents / 100).toFixed(2))
+          if (q.amount_cents != null) setPlanPrice((q.amount_cents / 100).toFixed(2))
           if (q.duration_days) setPlanDays(String(q.duration_days))
           if (p.upgrade) {
             if (p.upgrade.name) setUpgradePlanName(p.upgrade.name)
-            if (p.upgrade.amount_cents) setUpgradePlanPrice((p.upgrade.amount_cents / 100).toFixed(2))
+            if (p.upgrade.amount_cents != null) setUpgradePlanPrice((p.upgrade.amount_cents / 100).toFixed(2))
             if (p.upgrade.duration_days) setUpgradePlanDays(String(p.upgrade.duration_days))
           }
         } catch {}

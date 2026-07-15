@@ -682,7 +682,7 @@ class HTMLDesigner:
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.1">
 <title>{_esc(title)} — {_esc(self._name)}</title>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
@@ -724,14 +724,12 @@ body {{
   function fit() {{
     var avail = Math.min(window.innerWidth - pad, W);
     if (avail >= W) {{
-      slides.forEach(function(s) {{ s.style.transform = ''; s.style.marginBottom = ''; }});
+      slides.forEach(function(s) {{ s.style.zoom = ''; }});
       return;
     }}
     var scale = avail / W;
-    var offsetX = (window.innerWidth - pad - W * scale) / 2;
     slides.forEach(function(s) {{
-      s.style.transform = 'translateX(' + offsetX + 'px) scale(' + scale + ')';
-      s.style.marginBottom = (H * (scale - 1)) + 'px';
+      s.style.zoom = scale;
     }});
   }}
   window.addEventListener('resize', fit);

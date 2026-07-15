@@ -1,0 +1,86 @@
+============================================
+  智绘教案系统 — 服务器版 安装说明
+============================================
+
+一、环境要求
+----------------------------------------
+- Python 3.11+ （推荐 3.12）
+- 操作系统：Linux (Ubuntu/CentOS/Rocky) 或 Windows Server
+- 端口 8766 需对外开放（如使用云服务器，需在安全组放行）
+
+二、Linux 服务器安装
+----------------------------------------
+1. 将 yishao-agent-server.zip 上传至服务器
+
+2. 解压：
+   unzip yishao-agent-server.zip -d yishao-agent
+   cd yishao-agent
+
+3. 首次启动（自动创建虚拟环境并安装依赖）：
+   chmod +x start_prod.sh
+   ./start_prod.sh
+
+4. 如需指定端口（默认 8766）：
+   ./start_prod.sh 8080
+
+5. 访问 http://服务器IP:8766
+
+三、Windows 服务器安装
+----------------------------------------
+1. 解压 yishao-agent-server.zip
+
+2. 双击 start_prod.bat
+   （首次运行会自动创建 venv 并安装依赖）
+
+3. 访问 http://localhost:8766
+
+四、首次使用
+----------------------------------------
+1. 打开浏览器访问系统，进入激活页面
+2. 输入许可证密钥激活（需提前获取）
+3. 激活后在「全局设置」中配置：
+   - 管理员密码
+   - 管理员手机号（用于忘记密码时验证）
+   - LLM 大模型提供商（API Key + 接口地址）
+   - TTS 语音提供商（API Key + 接口地址，用于演讲课件功能）
+
+五、语音功能说明
+----------------------------------------
+语音转文字（ASR）和文字转语音（TTS）均通过外部大模型 API 完成，
+无需本地安装语音库（如 whisper、torch 等）。
+语音功能需要在「全局设置」→「TTS 提供商」中配置 API 信息。
+
+六、后台运行（Linux）
+----------------------------------------
+使用 systemd 服务实现开机自启：
+
+  sudo tee /etc/systemd/system/yishao-agent.service << 'EOF'
+  [Unit]
+  Description=Yishao Agent
+  After=network.target
+
+  [Service]
+  Type=simple
+  WorkingDirectory=/opt/yishao-agent
+  ExecStart=/opt/yishao-agent/backend/venv/bin/python /opt/yishao-agent/backend/app.py
+  Restart=always
+  RestartSec=5
+
+  [Install]
+  WantedBy=multi-user.target
+  EOF
+
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now yishao-agent
+
+七、防火墙配置
+----------------------------------------
+  # firewalld (CentOS/Rocky)
+  sudo firewall-cmd --add-port=8766/tcp --permanent
+  sudo firewall-cmd --reload
+
+  # ufw (Ubuntu)
+  sudo ufw allow 8766/tcp
+
+  # 云服务器安全组
+  在阿里云/腾讯云控制台添加入方向规则：TCP 8766

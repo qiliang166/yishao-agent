@@ -5574,7 +5574,7 @@ def auth_me(request: Request):
     db = get_db()
     try:
         row = db.execute(
-            "SELECT display_name, email, expires_at, upgrade_expires_at, created_at, is_approved, is_active FROM users WHERE id=?",
+            "SELECT display_name, email, phone, expires_at, upgrade_expires_at, created_at, is_approved, is_active FROM users WHERE id=?",
             (uid,),
         ).fetchone()
         profile = {}
@@ -5582,6 +5582,7 @@ def auth_me(request: Request):
             profile = {
                 "display_name": row["display_name"],
                 "email": row["email"],
+                "phone": row["phone"],
                 "expires_at": row["expires_at"],
                 "upgrade_expires_at": row["upgrade_expires_at"],
                 "created_at": row["created_at"],

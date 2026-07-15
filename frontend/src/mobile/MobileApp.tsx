@@ -105,7 +105,7 @@ export function MInstallGuide({ kind, onClose }: {
 function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth()
   if (loading) return <div className="m-loading">加载中…</div>
-  if (!user) return <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/member" replace />
   return children
 }
 

@@ -284,11 +284,11 @@ export default function MemberCenterPage() {
                 </div>
               )}
 
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>付款单号</div>
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>交易单号</div>
               <input
                 className="form-input"
                 type="text"
-                placeholder="支付完成后填写订单号"
+                placeholder="支付完成后填写交易单号"
                 value={upgradePaymentRef}
                 onChange={e => setUpgradePaymentRef(e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}

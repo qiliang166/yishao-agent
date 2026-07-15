@@ -299,7 +299,7 @@ export default function MemberApprovalPage() {
                   )}
                   {u.payment && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                      付款单号：{u.payment.payment_ref || '—'} · {paymentMethodLabel(u.payment.payment_method)} · ￥{formatAmount(u.payment.amount_cents)}
+                      交易单号：{u.payment.payment_ref || '—'} · {paymentMethodLabel(u.payment.payment_method)} · ￥{formatAmount(u.payment.amount_cents)}
                     </div>
                   )}
                 </div>
@@ -406,7 +406,7 @@ export default function MemberApprovalPage() {
                   )}
                   {m.payment && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                      付款单号：{m.payment.payment_ref || '—'} · {paymentMethodLabel(m.payment.payment_method)} · ￥{formatAmount(m.payment.amount_cents)}
+                      交易单号：{m.payment.payment_ref || '—'} · {paymentMethodLabel(m.payment.payment_method)} · ￥{formatAmount(m.payment.amount_cents)}
                     </div>
                   )}
                 </div>
@@ -520,7 +520,7 @@ export default function MemberApprovalPage() {
                   <div>套餐：{selectedMember.payment.plan_name}</div>
                   <div>金额：￥{formatAmount(selectedMember.payment.amount_cents)}</div>
                   <div>支付方式：{paymentMethodLabel(selectedMember.payment.payment_method)}</div>
-                  <div>付款单号：<strong>{selectedMember.payment.payment_ref || '—'}</strong></div>
+                  <div>交易单号：<strong>{selectedMember.payment.payment_ref || '—'}</strong></div>
                 </div>
               </div>
             ) : (
@@ -641,7 +641,7 @@ export default function MemberApprovalPage() {
                   <div>金额：￥{formatAmount(selectedUpgrade.payment.amount_cents)}</div>
                   <div>升级天数：{selectedUpgrade.payment.duration_days} 天</div>
                   <div>支付方式：{paymentMethodLabel(selectedUpgrade.payment.payment_method)}</div>
-                  <div>付款单号：<strong>{selectedUpgrade.payment.payment_ref || '—'}</strong></div>
+                  <div>交易单号：<strong>{selectedUpgrade.payment.payment_ref || '—'}</strong></div>
                 </div>
               </div>
             )}

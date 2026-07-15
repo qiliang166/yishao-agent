@@ -2,6 +2,22 @@
 
 ## 2026-07-16
 
+- fix: HTML涓嬭浇椤甸潰鎵嬫満绔乏渚ц閬尅 鈥?body娣诲姞width:100vw绾︽潫甯冨眬瀹藉害
+
+## 2026-07-16
+
+- fix: renewal verification uses /api/member/login instead of /api/auth/login
+
+## 2026-07-16
+
+- fix: verify credentials at step 0 in renewal flow instead of deferring to submit
+
+## 2026-07-16
+
+- feat: 鎵嬫満绔悓姝ユ闈㈢鍔熻兘 鈥?绠＄悊绔?椤逛慨澶?+ 涓汉涓績浠樻璁板綍 + 娉ㄥ唽椤?
+
+## 2026-07-16
+
 - fix: 鎷掔粷娉ㄥ唽鍚屾椂鍋滅敤璐﹀彿 鈥?is_active=0 + token_version+1锛涘墠绔凡鎷掔粷鐢ㄦ埛闅愯棌鎿嶄綔鎸夐挳
 
 ## 2026-07-16

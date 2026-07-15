@@ -43,7 +43,7 @@ export default function MRegister() {
         try {
           const p = JSON.parse(s.member_plan)
           const q = p.quarterly || p[Object.keys(p)[0]] || {}
-          if (q.amount_cents) setPlanPrice((q.amount_cents / 100).toFixed(2))
+          if (q.amount_cents != null) setPlanPrice((q.amount_cents / 100).toFixed(2))
           if (q.duration_days) setPlanDays(String(q.duration_days))
         } catch {}
       }
@@ -88,7 +88,7 @@ export default function MRegister() {
   const handleSubmit = async () => {
     setError('')
     if (planType === 'paid' && !paymentRef.trim()) {
-      setError('请填写付款单号/订单号')
+      setError('请填写交易单号')
       return
     }
     setLoading(true)
@@ -308,13 +308,13 @@ export default function MRegister() {
                 )}
 
                 <div className="m-field">
-                  <label>付款单号/订单号</label>
+                  <label>交易单号</label>
                   <input className="m-input" type="text" placeholder="支付宝/微信支付完成后可查"
                     value={paymentRef}
                     onChange={e => { setPaymentRef(e.target.value); setError('') }} />
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                  付款后请在支付宝/微信中查看订单号并填入上方
+                  付款后请在支付宝/微信中查看交易单号并填入上方
                 </div>
               </div>
             )}

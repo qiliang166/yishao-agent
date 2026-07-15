@@ -145,7 +145,7 @@ export default function MMe() {
 
   const handleUpgrade = async () => {
     if (!upgradeRef.trim()) {
-      mToast('请填写付款单号', 'error')
+      mToast('请填写交易单号', 'error')
       return
     }
     setUpgradeSubmitting(true)
@@ -221,6 +221,10 @@ export default function MMe() {
               <div className="m-kv">
                 <span className="m-kv-label">邮箱</span>
                 <span className="m-kv-value">{me.email || '未设置'}</span>
+              </div>
+              <div className="m-kv">
+                <span className="m-kv-label">手机号</span>
+                <span className="m-kv-value">{me.phone || '未设置'}</span>
               </div>
               <div className="m-kv">
                 <span className="m-kv-label">账号类型</span>
@@ -393,7 +397,7 @@ export default function MMe() {
               <div className="m-qr-empty">该渠道收款码未配置，请联系管理员</div>
             )}
             <div className="m-field" style={{ marginTop: 10 }}>
-              <label>付款单号（付款后在微信/支付宝账单中查看）</label>
+              <label>交易单号（付款后在微信/支付宝账单中查看）</label>
               <input className="m-input" value={upgradeRef} placeholder="扫码付款后填写"
                 onChange={e => setUpgradeRef(e.target.value)} />
             </div>
