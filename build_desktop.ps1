@@ -54,6 +54,30 @@ $stampContent = "commit=$commit`ntime=$buildTime"
 [System.IO.File]::WriteAllText("$root\backend\build_version.txt", $stampContent, [System.Text.Encoding]::UTF8)
 Write-Host "  Build stamp: commit=$commit, time=$buildTime"
 
+# Step 1.6: Auto-update CHANGELOG from git commits since last build
+$lastBuildFile = "$root\backend\.last_build_commit"
+$lastCommit = ""
+if (Test-Path $lastBuildFile) {
+    $lastCommit = (Get-Content $lastBuildFile -Raw).Trim()
+}
+if ($lastCommit -and $commit) {
+    $newLog = git log "${lastCommit}..${commit}" --format="- %s" 2>$null
+    if ($newLog) {
+        $dateHeader = (Get-Date).ToString("yyyy-MM-dd")
+        $entry = "`n## $dateHeader`n`n$newLog`n"
+        $existing = if (Test-Path "$root\CHANGELOG.md") { [System.IO.File]::ReadAllText("$root\CHANGELOG.md", [System.Text.Encoding]::UTF8) } else { "# 更新日志`n" }
+        $lines = $existing -split "`n"
+        $newContent = $lines[0] + "`n" + $entry + ($lines[1..$lines.Length] -join "`n")
+        [System.IO.File]::WriteAllText("$root\CHANGELOG.md", $newContent.TrimEnd() + "`n", [System.Text.Encoding]::UTF8)
+        Write-Host "  CHANGELOG: appended commits since $($lastCommit.Substring(0,7))"
+    } else {
+        Write-Host "  CHANGELOG: no new commits since last build"
+    }
+} elseif (-not $lastCommit) {
+    Write-Host "  CHANGELOG: first build for this repo, no previous stamp"
+}
+[System.IO.File]::WriteAllText($lastBuildFile, $commit, [System.Text.Encoding]::UTF8)
+
 # Step 2: Prepare dynamic build config (app name + icon from DB)
 Write-Host "[2/4] Reading app settings & generating icon..."
 $python = "$root\backend\venv\Scripts\python.exe"

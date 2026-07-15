@@ -6028,6 +6028,9 @@ class ApproveMemberReq(BaseModel):
 class RejectMemberReq(BaseModel):
     reason: str = ""
 
+class RejectUpgradeReq(BaseModel):
+    reason: str = ""
+
 class PaymentRecordReq(BaseModel):
     amount_cents: int = 0
     plan_name: str = ""
@@ -6135,13 +6138,13 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
 @app.put("/api/members/{user_id}/reject")
 async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
                          user=require_perm("member.manage")):
-    """Reject a pending member."""
+    """Reject a pending member. Renewal rejections restore previous approval."""
     reason = body.reason
     ip = _get_client_ip(request)
     db = get_db()
     try:
         m = db.execute(
-            "SELECT id, user_type, is_approved FROM users WHERE id=?", (user_id,)
+            "SELECT id, user_type, is_approved, expires_at FROM users WHERE id=?", (user_id,)
         ).fetchone()
         if not m:
             raise HTTPException(404, "用户不存在")
@@ -6151,12 +6154,30 @@ async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
             raise HTTPException(400, "该用户已处理过")
 
         from datetime import datetime as _dt
-        db.execute(
-            "UPDATE users SET is_approved=2, approved_by=?, approved_at=?, "
-            "updated_at=? WHERE id=?",
-            (user["sub"], _dt.utcnow().isoformat(),
-             _dt.utcnow().isoformat(), user_id),
-        )
+
+        # Distinguish renewal rejection vs registration rejection
+        is_renewal = False
+        if m["expires_at"]:
+            try:
+                if _dt.fromisoformat(m["expires_at"]) > _dt.utcnow():
+                    is_renewal = True
+            except (ValueError, TypeError):
+                pass
+
+        if is_renewal:
+            # Renewal rejection: restore previous approval, keep old expiry
+            db.execute(
+                "UPDATE users SET is_approved=1, updated_at=? WHERE id=?",
+                (_dt.utcnow().isoformat(), user_id),
+            )
+        else:
+            # Registration rejection: lock the account
+            db.execute(
+                "UPDATE users SET is_approved=2, approved_by=?, approved_at=?, "
+                "updated_at=? WHERE id=?",
+                (user["sub"], _dt.utcnow().isoformat(),
+                 _dt.utcnow().isoformat(), user_id),
+            )
 
         # Write rejection reason to the latest payment record (if any)
         if (reason or "").strip():
@@ -6169,9 +6190,10 @@ async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
                 db.execute("UPDATE payment_records SET note=? WHERE id=?",
                            ((reason or "").strip(), payment["id"]))
         _write_audit(db, user["sub"], "member.reject", "user", user_id,
-                      json.dumps({"reason": reason}), ip_address=ip)
+                      json.dumps({"reason": reason, "is_renewal": is_renewal}), ip_address=ip)
         db.commit()
-        return {"ok": True, "message": "已拒绝"}
+        msg = "已拒绝续费申请，会员资格保留" if is_renewal else "已拒绝"
+        return {"ok": True, "message": msg, "is_renewal_rejection": is_renewal}
     finally:
         db.close()
 
@@ -6307,6 +6329,75 @@ def approve_upgrade(user_id: str, request: Request, user=require_perm("member.ma
                       ip_address=ip)
         db.commit()
         return {"ok": True, "message": "升级审批通过，已分配体验管理员角色", "role": "开发体验员"}
+    finally:
+        db.close()
+
+
+@app.put("/api/members/{user_id}/reject-upgrade")
+def reject_upgrade(user_id: str, body: RejectUpgradeReq, request: Request,
+                   user=require_perm("member.manage")):
+    """Reject a member's upgrade application."""
+    reason = body.reason
+    ip = _get_client_ip(request)
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, user_type FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+        if m["user_type"] != "member":
+            raise HTTPException(400, "只能为会员操作")
+
+        plans = _load_plans()
+        upgrade_plan = plans.get("upgrade", {})
+        plan_name = upgrade_plan.get("name", "体验管理员升级")
+
+        # Mark pending upgrade payment as rejected
+        if (reason or "").strip():
+            db.execute(
+                "UPDATE payment_records SET note=?, recorded_by=? "
+                "WHERE user_id=? AND plan_name=? AND recorded_by IS NULL",
+                ((reason or "").strip(), user["sub"], user_id, plan_name),
+            )
+        else:
+            db.execute(
+                "UPDATE payment_records SET recorded_by=? "
+                "WHERE user_id=? AND plan_name=? AND recorded_by IS NULL",
+                (user["sub"], user_id, plan_name),
+            )
+
+        _write_audit(db, user["sub"], "member.reject_upgrade", "user", user_id,
+                      json.dumps({"reason": reason}), ip_address=ip)
+        db.commit()
+        return {"ok": True, "message": "已拒绝升级申请"}
+    finally:
+        db.close()
+
+
+@app.get("/api/member/my-payments")
+def my_payments(current_user=Depends(get_current_user)):
+    """Return the current member's own payment records with status."""
+    if current_user.get("user_type") != "member":
+        raise HTTPException(403, "仅会员可访问")
+    uid = current_user.get("sub")
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT plan_name, amount_cents, duration_days, payment_method, "
+            "payment_ref, paid_at, note, recorded_by "
+            "FROM payment_records WHERE user_id=? ORDER BY paid_at DESC",
+            (uid,),
+        ).fetchall()
+        payments = []
+        for r in rows:
+            p = dict(r)
+            if r["recorded_by"] is None:
+                p["status"] = "pending"
+            else:
+                p["status"] = "confirmed"
+            payments.append(p)
+        return {"payments": payments}
     finally:
         db.close()
 

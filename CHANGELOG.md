@@ -2,6 +2,10 @@
 
 ## 2026-07-15
 
+- chore: 鑷姩鏇存柊 CHANGELOG + server.zip (鐧诲綍閲嶅畾鍚戜慨澶?v2)
+
+## 2026-07-15
+
 - fix: 浼氬憳鐧诲綍鏀圭敤娓叉煋闃舵 Navigate 閲嶅畾鍚戯紝閬垮厤 useEffect 绔炴€?- chore: 鑷姩鏇存柊 CHANGELOG + server.zip (鐧诲綍璺宠浆淇)
 
 ## 2026-07-15

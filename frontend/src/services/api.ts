@@ -952,6 +952,16 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
     }).then(d => d as { ok: boolean; message: string; role: string }),
 
+  rejectUpgrade: (userId: string, reason?: string) =>
+    request('/api/members/' + userId + '/reject-upgrade', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '' }),
+    }).then(d => d as { ok: boolean; message: string }),
+
+  listMyPayments: () =>
+    request('/api/member/my-payments').then(d => d as { payments: any[] }),
+
   // Roles
   listRoles: (userType?: string) => {
     const qs = userType ? '?user_type=' + encodeURIComponent(userType) : ''

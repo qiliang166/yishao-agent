@@ -89,6 +89,8 @@ export default function MemberApprovalPage() {
   const [upgrades, setUpgrades] = useState<PendingUpgrade[]>([])
   const [upgradeLoading, setUpgradeLoading] = useState(true)
   const [approveUpgradeId, setApproveUpgradeId] = useState<string | null>(null)
+  const [rejectUpgradeId, setRejectUpgradeId] = useState<string | null>(null)
+  const [rejectUpgradeReason, setRejectUpgradeReason] = useState('')
 
   const pageSize = 20
 
@@ -195,6 +197,24 @@ export default function MemberApprovalPage() {
     }
   }
 
+  const handleRejectUpgrade = async () => {
+    if (!rejectUpgradeId) return
+    setActionLoading(true)
+    setError('')
+    try {
+      const result = await api.rejectUpgrade(rejectUpgradeId, rejectUpgradeReason.trim())
+      if (result == null) { setError('操作失败：服务器未确认'); return }
+      showToast('已拒绝升级申请')
+      setRejectUpgradeId(null)
+      setRejectUpgradeReason('')
+      loadUpgrades()
+    } catch (e: any) {
+      setError(e.message || '操作失败')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const openApprove = (m: MemberRow) => {
     setApproveId(m.id)
     setDurationDays(m.payment ? (m.payment.duration_days || 90) : 7)
@@ -290,6 +310,13 @@ export default function MemberApprovalPage() {
                   >
                     通过升级
                   </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => { setRejectUpgradeId(u.id); setRejectUpgradeReason(''); setError('') }}
+                    style={{ color: 'var(--warning)' }}
+                  >
+                    拒绝
+                  </button>
                 </div>
               </div>
             ))}
@@ -332,21 +359,38 @@ export default function MemberApprovalPage() {
                       @{m.username}
                     </span>
                     {statusFilter === 'pending' ? (
-                      m.payment ? (
-                        <span style={{
-                          marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
-                          background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600,
-                        }}>
-                          付费
-                        </span>
-                      ) : (
-                        <span style={{
-                          marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
-                          background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600,
-                        }}>
-                          试用
-                        </span>
-                      )
+                      <>
+                        {m.expires_at ? (
+                          <span style={{
+                            marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: 'rgba(59,130,246,0.08)', color: 'var(--primary)', fontWeight: 600,
+                          }}>
+                            续费
+                          </span>
+                        ) : (
+                          <span style={{
+                            marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600,
+                          }}>
+                            新注册
+                          </span>
+                        )}
+                        {m.payment ? (
+                          <span style={{
+                            marginLeft: 4, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600,
+                          }}>
+                            付费
+                          </span>
+                        ) : (
+                          <span style={{
+                            marginLeft: 4, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                            background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600,
+                          }}>
+                            试用
+                          </span>
+                        )}
+                      </>
                     ) : (
                       statusBadge(m.is_approved)
                     )}
@@ -354,9 +398,10 @@ export default function MemberApprovalPage() {
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                     {m.email || '无邮箱'}{m.phone ? ` · ${m.phone}` : ''} · 注册于 {new Date(m.created_at).toLocaleString('zh-CN')}
                   </div>
-                  {statusFilter !== 'pending' && m.expires_at && (
+                  {m.expires_at && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-                      会员到期：{new Date(m.expires_at).toLocaleDateString('zh-CN')}
+                      {statusFilter === 'pending' ? '原到期：' : '会员到期：'}
+                      {new Date(m.expires_at).toLocaleDateString('zh-CN')}
                     </div>
                   )}
                   {m.payment && (
@@ -408,6 +453,39 @@ export default function MemberApprovalPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* Reject Upgrade Dialog */}
+      {rejectUpgradeId && (
+        <div className="dialog-overlay" onClick={() => setRejectUpgradeId(null)}>
+          <div className="dialog-box" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">拒绝升级申请</div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              驳回后将标记升级付款记录为已处理，会员状态不受影响。
+            </p>
+            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+              拒绝原因（可选）
+            </label>
+            <textarea
+              className="form-input"
+              rows={3}
+              value={rejectUpgradeReason}
+              onChange={e => setRejectUpgradeReason(e.target.value)}
+              placeholder="如：查不到订单编号"
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, resize: 'vertical' }}
+            />
+            {error && (
+              <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>{error}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setRejectUpgradeId(null)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleRejectUpgrade} disabled={actionLoading}
+                style={{ background: 'var(--warning)', borderColor: 'var(--warning)' }}>
+                {actionLoading ? '处理中...' : '确认拒绝'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Payment History Dialog */}
@@ -504,7 +582,7 @@ export default function MemberApprovalPage() {
           <div className="dialog-box" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
             <div className="dialog-title">拒绝审批</div>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              拒绝后该会员将无法登录。可附带拒绝原因（作为审批意见保存）。
+              驳回此申请。拒绝原因将记录在付款明细中。如为新注册申请，会员将无法登录。
             </p>
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
               拒绝原因（可选）
