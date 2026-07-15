@@ -210,46 +210,6 @@ export default function MemberCenterPage() {
         )}
       </div>
 
-      {/* Payment History */}
-      {!paymentsLoading && payments.length > 0 && (
-        <div className="ac-sub-item" style={{ marginBottom: 16 }}>
-          <div className="ac-sub-item-header">申请记录</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {payments.map((p: any, i: number) => {
-              const statusLabel = p.status === 'pending' ? '待审核' : p.status === 'rejected' ? '已拒绝' : p.status === 'confirmed' ? '已确认' : p.status
-              const statusColor = p.status === 'pending' ? '#f0ad4e' : p.status === 'rejected' ? 'var(--warning)' : p.status === 'confirmed' ? '#5cb85c' : 'var(--text-secondary)'
-              return (
-                <div key={i} style={{
-                  padding: '8px 12px', borderRadius: 6,
-                  background: 'var(--card-bg)', border: '1px solid var(--border)',
-                  fontSize: 12,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 600 }}>{p.plan_name || '付款记录'}</span>
-                    <span style={{
-                      fontSize: 11, padding: '2px 6px', borderRadius: 4,
-                      background: statusColor + '20', color: statusColor, fontWeight: 600,
-                    }}>
-                      {statusLabel}
-                    </span>
-                  </div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>
-                    ￥{(p.amount_cents / 100).toFixed(2)}
-                    {p.payment_ref ? ` · 单号：${p.payment_ref}` : ''}
-                    {p.paid_at ? ` · ${new Date(p.paid_at).toLocaleString('zh-CN')}` : ''}
-                  </div>
-                  {p.note && (
-                    <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 2 }}>
-                      备注：{p.note}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Upgrade Section */}
       {isPaid && !isUpgraded && !isExpired && upgradePlan && (
         <div className="ac-sub-item" style={{ marginBottom: 16 }}>
@@ -362,6 +322,46 @@ export default function MemberCenterPage() {
           </div>
           <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
             升级独立计费，到期后需重新购买。与会员有效期无关。
+          </div>
+        </div>
+      )}
+
+      {/* Payment History */}
+      {!paymentsLoading && payments.length > 0 && (
+        <div className="ac-sub-item" style={{ marginBottom: 16 }}>
+          <div className="ac-sub-item-header">申请记录</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {payments.slice(0, 3).map((p: any, i: number) => {
+              const statusLabel = p.status === 'pending' ? '待审核' : p.status === 'rejected' ? '已拒绝' : p.status === 'confirmed' ? '已确认' : p.status
+              const statusColor = p.status === 'pending' ? '#f0ad4e' : p.status === 'rejected' ? 'var(--warning)' : p.status === 'confirmed' ? '#5cb85c' : 'var(--text-secondary)'
+              return (
+                <div key={i} style={{
+                  padding: '8px 12px', borderRadius: 6,
+                  background: 'var(--card-bg)', border: '1px solid var(--border)',
+                  fontSize: 12,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 600 }}>{p.plan_name || '付款记录'}</span>
+                    <span style={{
+                      fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                      background: statusColor + '20', color: statusColor, fontWeight: 600,
+                    }}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>
+                    ￥{(p.amount_cents / 100).toFixed(2)}
+                    {p.payment_ref ? ` · 单号：${p.payment_ref}` : ''}
+                    {p.paid_at ? ` · ${new Date(p.paid_at).toLocaleString('zh-CN')}` : ''}
+                  </div>
+                  {p.note && (
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 2 }}>
+                      备注：{p.note}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

@@ -23,6 +23,8 @@ function statusLabel(s: string): { text: string; color: string } {
   return { text: s || '—', color: 'var(--text-secondary)' }
 }
 
+const PAGE_SIZE = 20
+
 export default function PaymentHistoryDialog({ user, onClose }: {
   user: { id: string; username: string; display_name: string } | null
   onClose: () => void
@@ -30,21 +32,46 @@ export default function PaymentHistoryDialog({ user, onClose }: {
   const [payments, setPayments] = useState<PaymentRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [search, setSearch] = useState('')
+  const [searchDebounce, setSearchDebounce] = useState<any>(null)
+
+  const load = (p: number, q?: string) => {
+    if (!user) return
+    setLoading(true)
+    setError('')
+    api.listPayments(user.id, p, PAGE_SIZE, q || search)
+      .then(data => {
+        if (data != null && Array.isArray(data.payments)) {
+          setPayments(data.payments)
+          setTotal(data.total || 0)
+        } else {
+          setPayments([])
+          setTotal(0)
+        }
+      })
+      .catch((e: any) => setError(e?.message || '加载付款记录失败'))
+      .finally(() => setLoading(false))
+  }
+
+  const onSearchChange = (v: string) => {
+    setSearch(v)
+    if (searchDebounce) clearTimeout(searchDebounce)
+    setSearchDebounce(setTimeout(() => {
+      setPage(1)
+      load(1, v)
+    }, 300))
+  }
 
   useEffect(() => {
     if (!user) return
-    let cancelled = false
-    setLoading(true)
-    setError('')
-    api.listPayments(user.id)
-      .then(data => {
-        if (cancelled) return
-        setPayments(data != null && Array.isArray(data.payments) ? data.payments : [])
-      })
-      .catch((e: any) => { if (!cancelled) setError(e?.message || '加载付款记录失败') })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+    setPage(1)
+    setSearch('')
+    load(1, '')
   }, [user])
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   if (!user) return null
 
@@ -52,6 +79,15 @@ export default function PaymentHistoryDialog({ user, onClose }: {
     <div className="dialog-overlay" onClick={onClose}>
       <div className="dialog-box" style={{ width: 480, maxHeight: '75vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="dialog-title">付款明细 — {user.display_name} @{user.username}</div>
+
+        <input
+          className="form-input"
+          type="text"
+          placeholder="搜索套餐名、单号、备注..."
+          value={search}
+          onChange={e => onSearchChange(e.target.value)}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, marginBottom: 12 }}
+        />
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)', fontSize: 12 }}>加载中...</div>
@@ -96,6 +132,19 @@ export default function PaymentHistoryDialog({ user, onClose }: {
           </div>
         )}
 
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>
+            <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => { const np = page - 1; setPage(np); load(np) }}>
+              上一页
+            </button>
+            <span style={{ fontSize: 11, color: 'var(--text-secondary)', alignSelf: 'center' }}>
+              {page} / {totalPages}
+            </span>
+            <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => { const np = page + 1; setPage(np); load(np) }}>
+              下一页
+            </button>
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>关闭</button>
         </div>

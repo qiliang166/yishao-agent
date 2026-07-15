@@ -922,8 +922,14 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(d => d as { ok: boolean; expires_before: string; expires_after: string }),
-  listPayments: (userId: string) =>
-    request('/api/members/' + userId + '/payments').then(d => d as { payments: any[] }),
+  listPayments: (userId: string, page?: number, pageSize?: number, q?: string) => {
+    const params = new URLSearchParams()
+    if (page) params.set('page', String(page))
+    if (pageSize) params.set('page_size', String(pageSize))
+    if (q) params.set('q', q)
+    const qs = params.toString()
+    return request('/api/members/' + userId + '/payments' + (qs ? '?' + qs : '')).then(d => d as { payments: any[]; total: number; page: number; page_size: number })
+  },
   memberRenew: (data: {
     username: string; password: string; plan_type?: string;
     plan_id?: string; payment_method?: string; payment_ref?: string;

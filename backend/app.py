@@ -6477,14 +6477,25 @@ async def record_payment(user_id: str, body: PaymentRecordReq, request: Request,
 
 
 @app.get("/api/members/{user_id}/payments")
-def list_payments(user_id: str, user=require_perm("member.manage")):
+def list_payments(user_id: str, page: int = 1, page_size: int = 20, q: str = "",
+                  user=require_perm("member.manage")):
     db = get_db()
     try:
+        where = "user_id = ?"
+        params: list = [user_id]
+        if q.strip():
+            where += " AND (plan_name LIKE ? OR payment_ref LIKE ? OR note LIKE ? OR payment_method LIKE ?)"
+            like = "%" + q.strip() + "%"
+            params.extend([like, like, like, like])
+        total = db.execute(
+            f"SELECT COUNT(*) FROM payment_records WHERE {where}", params
+        ).fetchone()[0]
+        offset = (page - 1) * page_size
         rows = db.execute(
-            "SELECT * FROM payment_records WHERE user_id=? ORDER BY paid_at DESC",
-            (user_id,),
+            f"SELECT * FROM payment_records WHERE {where} ORDER BY paid_at DESC LIMIT ? OFFSET ?",
+            params + [page_size, offset],
         ).fetchall()
-        return {"payments": [dict(r) for r in rows]}
+        return {"payments": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
 
