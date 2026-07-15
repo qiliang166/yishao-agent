@@ -153,14 +153,17 @@ export default function MProject() {
       window.open(url, '_blank')
       return
     }
-    // download 端点需带 token 且强制 attachment → 取 blob 后以 HTML 打开
+    // download 端点需带 token 且强制 attachment → 取 blob 后打开
+    // 安全：不强制 MIME，仅当服务器明确声明 text/html 时才渲染，其余类型拒绝预览
     const win = window.open('', '_blank')
     try {
       const token = localStorage.getItem('auth_token')
       const resp = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+      const ct = resp.headers.get('content-type') || ''
+      if (!ct.includes('text/html')) throw new Error('该文件不支持预览')
       const blob = await resp.blob()
-      const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'text/html' }))
+      const blobUrl = URL.createObjectURL(blob)
       if (win != null) {
         win.location.href = blobUrl
       } else {
