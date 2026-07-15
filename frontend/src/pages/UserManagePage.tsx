@@ -535,7 +535,7 @@ export default function UserManagePage() {
                 style={{
                   padding: '16px 20px',
                   display: 'flex', alignItems: 'center',
-                  opacity: u.is_active ? 1 : 0.5,
+                  opacity: (u.is_active && u.is_approved !== 2) ? 1 : 0.5,
                   gap: 12,
                 }}
               >
@@ -550,8 +550,11 @@ export default function UserManagePage() {
                     {!u.is_active && (
                       <span style={{ fontSize: 10, color: '#fff', background: '#999', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>已停用</span>
                     )}
-                    {!u.is_approved && (
+                    {u.is_approved === 0 && (
                       <span style={{ fontSize: 10, color: '#fff', background: 'var(--warning)', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>待审批</span>
+                    )}
+                    {u.is_approved === 2 && (
+                      <span style={{ fontSize: 10, color: '#fff', background: '#999', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>已拒绝</span>
                     )}
                     {isExperienceOfficer(u) && (
                       <span style={{ fontSize: 10, color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 6px', borderRadius: 3, marginLeft: 8, fontWeight: 600 }}>
@@ -597,24 +600,28 @@ export default function UserManagePage() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {(canManageMembers || canManageRoles) && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>编辑</button>
-                  )}
-                  {tab === 'member' && canManageMembers && (
+                  {u.is_approved !== 2 && (
                     <>
-                      <button className="btn btn-ghost btn-sm" onClick={() => openPayment(u)}
-                        style={{ color: 'var(--primary)' }}>付费</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setPayHistUser(u)}>明细</button>
-                    </>
-                  )}
-                  {u.username !== 'admin' && canManageMembers && (
-                    <>
-                      <button className="btn btn-ghost btn-sm" onClick={() => handleToggleActive(u)}
-                        style={{ color: u.is_active ? 'var(--warning)' : '#5cb85c' }}>
-                        {u.is_active ? '停用' : '启用'}
-                      </button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(u)}
-                        style={{ color: 'var(--warning)' }}>删除</button>
+                      {(canManageMembers || canManageRoles) && (
+                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>编辑</button>
+                      )}
+                      {tab === 'member' && canManageMembers && (
+                        <>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openPayment(u)}
+                            style={{ color: 'var(--primary)' }}>付费</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => setPayHistUser(u)}>明细</button>
+                        </>
+                      )}
+                      {u.username !== 'admin' && canManageMembers && (
+                        <>
+                          <button className="btn btn-ghost btn-sm" onClick={() => handleToggleActive(u)}
+                            style={{ color: u.is_active ? 'var(--warning)' : '#5cb85c' }}>
+                            {u.is_active ? '停用' : '启用'}
+                          </button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => handleDelete(u)}
+                            style={{ color: 'var(--warning)' }}>删除</button>
+                        </>
+                      )}
                     </>
                   )}
                 </div>

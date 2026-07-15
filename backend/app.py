@@ -6173,7 +6173,8 @@ async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
         else:
             # Registration rejection: lock the account
             db.execute(
-                "UPDATE users SET is_approved=2, approved_by=?, approved_at=?, "
+                "UPDATE users SET is_approved=2, is_active=0, "
+                "token_version=token_version+1, approved_by=?, approved_at=?, "
                 "updated_at=? WHERE id=?",
                 (user["sub"], _dt.utcnow().isoformat(),
                  _dt.utcnow().isoformat(), user_id),
