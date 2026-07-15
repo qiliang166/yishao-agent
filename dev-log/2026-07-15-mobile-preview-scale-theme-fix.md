@@ -38,7 +38,23 @@
 - tsc 0 错误；mobile bundle: index-CLcZT7q-.js
 - 规则 8：server + desktop 产物重建
 
+## 后续修复（同日）
+
+### 3. 真机 HTML 预览空白 — blob: iframe 兼容性
+
+- 部署后真机反馈：微信/手机浏览器 HTML 预览全空白（本地 Chromium 测试通过）
+- 根因：微信 X5/XWeb 及部分手机浏览器不支持 `blob:` URL 作为 iframe src
+- 修复：MPreview.tsx 改用 `srcDoc` 内联 HTML（全端支持），移除 createObjectURL/revoke 逻辑
+- 复验：微信/浏览器/百度APP无痕 全部正常
+
+### 4. 百度APP非无痕空白 — HTML 缓存残留
+
+- 根因：后端 `_spa_fallback` FileResponse 不带 Cache-Control，浏览器启发式缓存旧入口页；旧 hash JS 仍在服务器 → 旧页面持续可加载
+- 修复：app.py `_spa_fallback` 对 .html 响应统一加 `Cache-Control: no-cache`（带 hash 的 assets 不受影响）；本地 curl 验证 GET 直达/兜底路径均带头
+- 用户侧一次性补救：百度APP清缓存
+- 生效条件：服务器后端需更新（待部署）
+
 ## 遗留
 
-- 真机复验：微信内 COL4/COL5 预览、浏览器主题颜色
-- 部署：重新上传 frontend/dist/mobile/ 文件夹
+- 服务器后端更新（no-cache 修复生效）：待与第二期一起部署或单独部署
+- 第二期已确认范围：管理端（用户管理+会员审批）+ 会员个人中心（到期+续费）
