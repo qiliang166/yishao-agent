@@ -224,7 +224,6 @@ def list_users(user_type: str = None, status: str = None, search: str = None,
                 "email": r["email"], "phone": dict(r).get("phone", ""), "user_type": r["user_type"],
                 "is_active": r["is_active"], "is_approved": r["is_approved"],
                 "expires_at": r["expires_at"], "created_at": r["created_at"],
-                "approval_note": dict(r).get("approval_note", "") or "",
             }
             if is_superadmin:
                 u["admin_note"] = dict(r).get("admin_note", "") or ""
