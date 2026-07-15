@@ -5360,7 +5360,9 @@ async def api_admin_grant_points(user_id: str, request: Request,
         raise
     except Exception as e:
         db.rollback()
-        raise HTTPException(500, f"赠送积分失败: {e}")
+        import logging
+        logging.getLogger(__name__).error("grant points failed for user %s: %s", user_id, e, exc_info=True)
+        raise HTTPException(500, "赠送积分失败，请稍后重试")
     finally:
         db.close()
 
