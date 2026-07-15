@@ -74,7 +74,7 @@ export default function MRegister() {
       return
     }
     if (!phone.trim()) {
-      setError('请填写手机号（用于审批联系与退款）')
+      setError('请填写手机号（用于联系与退款）')
       return
     }
     const phoneDigits = phone.replace(/\D/g, '')
@@ -106,7 +106,7 @@ export default function MRegister() {
           payment_ref: paymentRef.trim(),
         } : {}),
       })
-      setSuccess((result as any)?.message || '注册成功，请等待管理员审批')
+      setSuccess((result as any)?.message || '注册成功')
     } catch (e: any) {
       setError(e?.message || '注册失败')
     } finally {
@@ -190,7 +190,7 @@ export default function MRegister() {
                 onChange={e => { setEmail(e.target.value); setError('') }} />
             </div>
             <div className="m-field">
-              <label>手机号 *（用于审批联系与退款）</label>
+              <label>手机号 *</label>
               <input className="m-input" type="tel" placeholder="11 位手机号" value={phone}
                 onChange={e => { setPhone(e.target.value); setError('') }} />
             </div>
@@ -329,7 +329,7 @@ export default function MRegister() {
               </button>
               <button className="m-btn-primary" style={{ flex: 1 }}
                 disabled={loading} onClick={handleSubmit}>
-                {loading ? '提交中…' : planType === 'trial' ? '开始试用' : '提交审批'}
+                {loading ? '提交中…' : planType === 'trial' ? '开始试用' : '立即注册'}
               </button>
             </div>
           </>

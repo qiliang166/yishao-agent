@@ -67,7 +67,7 @@ export default function MemberRegisterPage() {
       return
     }
     if (!phone.trim()) {
-      setError('请填写手机号（用于审批联系与退款）')
+      setError('请填写手机号（用于联系与退款）')
       return
     }
     const phoneDigits = phone.replace(/\D/g, '')
@@ -99,7 +99,7 @@ export default function MemberRegisterPage() {
           payment_ref: paymentRef.trim(),
         } : {}),
       })
-      setSuccess((result as any).message || '注册成功，请等待管理员审批')
+      setSuccess((result as any).message || '注册成功')
     } catch (e: any) {
       setError(e.message || '注册失败')
     } finally {
@@ -193,7 +193,7 @@ export default function MemberRegisterPage() {
             <input className="form-input" type="email" placeholder="邮箱（可选）" value={email}
               onChange={e => { setEmail(e.target.value); setError('') }}
               style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10 }} />
-            <input className="form-input" type="tel" placeholder="手机号 *（用于接收审批通知与联系）" value={phone}
+            <input className="form-input" type="tel" placeholder="手机号 *" value={phone}
               onChange={e => { setPhone(e.target.value); setError('') }}
               style={{ width: '100%', boxSizing: 'border-box' }} />
 
@@ -370,7 +370,7 @@ export default function MemberRegisterPage() {
               </button>
               <button className="btn btn-primary" onClick={handleSubmit}
                 disabled={loading} style={{ flex: 1 }}>
-                {loading ? '提交中...' : planType === 'trial' ? '开始试用' : '提交审批'}
+                {loading ? '提交中...' : planType === 'trial' ? '开始试用' : '立即注册'}
               </button>
             </div>
           </>

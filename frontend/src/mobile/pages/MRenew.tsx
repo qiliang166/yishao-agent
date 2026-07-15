@@ -103,7 +103,7 @@ export default function MRenew() {
         throw new Error((err as any)?.detail || '续费失败')
       }
       const data = await resp.json()
-      setSuccess((data as any)?.message || '续费申请已提交，请等待管理员审批')
+      setSuccess((data as any)?.message || '续费成功')
     } catch (e: any) {
       setError(e?.message || '续费失败')
     } finally {
@@ -120,10 +120,10 @@ export default function MRenew() {
         <div className="m-login-wrap">
           <div className="m-login-card" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 44, marginBottom: 12 }}>✓</div>
-            <div className="m-login-title">续费申请已提交</div>
+            <div className="m-login-title">续费成功</div>
             <div className="m-login-sub" style={{ marginBottom: 16 }}>{success}</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 16 }}>
-              管理员审批通过后生效。审批前账号需重新等待审核，请耐心等待。
+              续费立即生效
             </div>
             <div className="m-login-switch">
               <Link to="/member">返回会员登录</Link>

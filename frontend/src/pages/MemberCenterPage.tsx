@@ -214,7 +214,7 @@ export default function MemberCenterPage() {
               续费 →
             </Link>
             <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-              会员快到期？点击续费自助提交，管理员审批后自动延长
+              会员快到期？点击续费，立即生效
             </span>
           </div>
         )}

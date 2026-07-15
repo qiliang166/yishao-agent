@@ -648,7 +648,7 @@ function SettingsPage() {
                 style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
-              显示在会员注册页、注册成功页和会员登录页底部（"遇到问题？联系我们"），方便客户在审批前后联系到您。
+              显示在会员注册页、注册成功页和会员登录页底部（"遇到问题？联系我们"），方便客户联系到您。
             </div>
           </div>
 
@@ -1028,7 +1028,7 @@ function SettingsPage() {
                 value={planDays}
                 onChange={e => setPlanDays(e.target.value)}
                 disabled={!canSaveGlobal} style={{ maxWidth: 100 }} />
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>从审批通过当天起算</span>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>从注册激活当天起算</span>
             </div>
           </div>
 

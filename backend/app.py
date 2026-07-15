@@ -6268,7 +6268,7 @@ def member_login(req: dict, request: Request):
         if not _verify_password(password, user["password_hash"]):
             _check_login_lockout(user)
             raise HTTPException(status_code=403, detail="用户名或密码错误")
-        # Check expiry before is_approved — so renewing users see "已到期" not "未审批"
+        # Check expiry
         if user["expires_at"]:
             try:
                 expires = datetime.fromisoformat(user["expires_at"])
@@ -6276,10 +6276,7 @@ def member_login(req: dict, request: Request):
                     raise HTTPException(status_code=403, detail="会员已到期，请联系管理员续费")
             except (ValueError, TypeError):
                 pass
-        # Allow is_approved=0 when expires_at exists (renewal pending for active member).
-        # Block is_approved=0 only for new registrations (no expires_at yet).
-        if not user["is_approved"] and not user["expires_at"]:
-            raise HTTPException(status_code=403, detail="账户尚未通过审批，请等待管理员审核")
+        # Block rejected registrations (is_approved=2)
         if user["is_approved"] == 2:
             raise HTTPException(status_code=403, detail="注册申请已被拒绝，请联系管理员")
         _reset_failed_attempts(user["id"])
@@ -6360,11 +6357,12 @@ def member_register(req: dict, request: Request):
         db.execute(
             """INSERT INTO users (id, username, password_hash, display_name, email, phone, user_type,
                is_active, is_approved, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, 'member', 1, 0, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, 'member', 1, 1, ?, ?)""",
             (user_id, username, pw_hash, display_name, email, phone, now, now),
         )
 
         audit_detail = {"username": username, "email": email, "phone": phone, "plan_type": plan_type}
+        from datetime import timedelta as _td_dt
 
         if plan_type == "paid":
             # Client only provides plan_id and payment_ref — price/duration are server-authoritative.
@@ -6382,31 +6380,67 @@ def member_register(req: dict, request: Request):
             duration_days = plan["duration_days"]
 
             import uuid as _uuid2
+            payment_id = str(_uuid2.uuid4())
             db.execute(
                 """INSERT INTO payment_records
                    (id, user_id, amount_cents, plan_name, duration_days,
                     payment_method, payment_ref, paid_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (str(_uuid2.uuid4()), user_id, amount_cents, plan_name,
+                (payment_id, user_id, amount_cents, plan_name,
                  duration_days, payment_method, payment_ref, now),
             )
+
+            # Auto-approve: set expiry, assign paid role, grant points
+            expires_at = (datetime.utcnow() + _td_dt(days=duration_days)).isoformat()
+            db.execute("UPDATE users SET expires_at=?, approved_by=?, approved_at=?, updated_at=? WHERE id=?",
+                       (expires_at, user_id, now, now, user_id))
+
+            role = db.execute("SELECT id FROM roles WHERE name='付费会员' AND is_system=1").fetchone()
+            if role:
+                db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                           (user_id, role["id"]))
+
+            # Grant points from payment + new user bonus
+            try:
+                points_per_yuan = _get_points_per_yuan()
+                points_granted = round(amount_cents / 100.0 * points_per_yuan * 10)
+                if points_granted > 0:
+                    _add_points(db, user_id, points_granted, "purchase",
+                               ref_id=payment_id, ref_type="payment",
+                               note=f"购买 {plan_name} 获 {points_granted/10:.1f} 积分",
+                               expires_at=expires_at)
+                    db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
+                              (points_granted, payment_id))
+                bonus_deci = _new_user_bonus_deci()
+                if bonus_deci > 0:
+                    _add_points(db, user_id, bonus_deci, "signup_bonus",
+                               note=f"新人礼包 {bonus_deci/10:.1f} 积分",
+                               expires_at=expires_at)
+            except Exception as e:
+                print(f"[Points] Warning: failed to grant points on registration: {e}")
+
             audit_detail["plan_id"] = plan_id
             audit_detail["payment_method"] = payment_method
             audit_detail["payment_ref"] = payment_ref
             audit_detail["amount_cents"] = amount_cents
+        else:
+            # Trial: assign trial role, no expiry needed (can be set later by admin)
+            role = db.execute("SELECT id FROM roles WHERE name='试用会员' AND is_system=1").fetchone()
+            if role:
+                db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                           (user_id, role["id"]))
 
         _write_audit(db, user_id, "member.register", "user", user_id,
                       json.dumps(audit_detail), ip)
         db.commit()
     finally:
         db.close()
-    return {"ok": True, "message": "注册成功，请等待管理员审批"}
+    return {"ok": True, "message": "注册成功"}
 
 
 @app.post("/api/member/renew")
 def member_renew(req: dict, request: Request):
-    """Self-service renewal for expired members. Creates payment record and
-    sets is_approved=0 so admin must re-approve."""
+    """Self-service renewal for members. Creates payment record and auto-applies."""
     ip = _get_client_ip(request)
 
     username = (req.get("username", "") or "").strip()
@@ -6441,31 +6475,57 @@ def member_renew(req: dict, request: Request):
         if not payment_ref:
             raise HTTPException(status_code=400, detail="请填写付款单号")
 
+        from datetime import timedelta as _td_dt
         now = datetime.utcnow().isoformat()
         import uuid as _uuid
+        payment_id = str(_uuid.uuid4())
         db.execute(
             """INSERT INTO payment_records
                (id, user_id, amount_cents, plan_name, duration_days,
                 payment_method, payment_ref, paid_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (str(_uuid.uuid4()), user["id"], plan["amount_cents"], plan["name"],
+            (payment_id, user["id"], plan["amount_cents"], plan["name"],
              plan["duration_days"], payment_method, payment_ref, now),
         )
 
-        # Always set is_approved=0 so admin sees renewal in approval queue.
-        # Login allows is_approved=0 when expires_at is present (previously approved).
-        db.execute("UPDATE users SET is_approved=0, updated_at=? WHERE id=?",
-                   (now, user["id"]))
+        # Auto-apply renewal: extend expiry from max(current, existing_expiry)
+        base = datetime.utcnow()
+        if user["expires_at"]:
+            try:
+                current = datetime.fromisoformat(user["expires_at"])
+                if current > base:
+                    base = current
+            except (ValueError, TypeError):
+                pass
+        expires_at = (base + _td_dt(days=plan["duration_days"])).isoformat()
+
+        db.execute("UPDATE users SET expires_at=?, updated_at=? WHERE id=?",
+                   (expires_at, now, user["id"]))
         db.execute("UPDATE users SET token_version=token_version+1 WHERE id=?", (user["id"],))
+
+        # Grant points from payment
+        try:
+            points_per_yuan = _get_points_per_yuan()
+            points_granted = round(plan["amount_cents"] / 100.0 * points_per_yuan * 10)
+            if points_granted > 0:
+                _add_points(db, user["id"], points_granted, "purchase",
+                           ref_id=payment_id, ref_type="payment",
+                           note=f"续费 {plan['name']} 获 {points_granted/10:.1f} 积分",
+                           expires_at=expires_at)
+                db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
+                          (points_granted, payment_id))
+        except Exception as e:
+            print(f"[Points] Warning: failed to grant points on renewal: {e}")
 
         _write_audit(db, user["id"], "member.renew", "user", user["id"],
                       json.dumps({"plan_id": plan_id, "payment_method": payment_method,
                                   "payment_ref": payment_ref,
-                                  "amount_cents": plan["amount_cents"]}), ip)
+                                  "amount_cents": plan["amount_cents"],
+                                  "expires_at": expires_at}), ip)
         db.commit()
     finally:
         db.close()
-    return {"ok": True, "message": "续费申请已提交，请等待管理员审批"}
+    return {"ok": True, "message": "续费成功", "expires_at": expires_at}
 
 
 @app.post("/api/member/upgrade")

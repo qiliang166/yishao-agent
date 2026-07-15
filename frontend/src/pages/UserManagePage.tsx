@@ -12,7 +12,6 @@ interface UserItem {
   phone?: string
   user_type: string
   is_active: number
-  is_approved: number
   expires_at: string | null
   created_at: string
   admin_note?: string
@@ -706,7 +705,7 @@ export default function UserManagePage() {
                 style={{
                   padding: '16px 20px',
                   display: 'flex', alignItems: 'center',
-                  opacity: (u.is_active && u.is_approved !== 2) ? 1 : 0.5,
+                  opacity: u.is_active ? 1 : 0.5,
                   gap: 12,
                 }}
               >
@@ -721,12 +720,7 @@ export default function UserManagePage() {
                     {!u.is_active && (
                       <span style={{ fontSize: 10, color: '#fff', background: '#999', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>已停用</span>
                     )}
-                    {u.is_approved === 0 && (
-                      <span style={{ fontSize: 10, color: '#fff', background: 'var(--warning)', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>待审批</span>
-                    )}
-                    {u.is_approved === 2 && (
-                      <span style={{ fontSize: 10, color: '#fff', background: '#999', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>已拒绝</span>
-                    )}
+
                     {isExperienceOfficer(u) && (
                       <span style={{ fontSize: 10, color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 6px', borderRadius: 3, marginLeft: 8, fontWeight: 600 }}>
                         开发体验员
@@ -771,9 +765,7 @@ export default function UserManagePage() {
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {u.is_approved !== 2 && (
-                    <>
-                      {(canManageMembers || canManageRoles) && (
+                    {(canManageMembers || canManageRoles) && (
                         <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>编辑</button>
                       )}
                       {tab === 'member' && canManageMembers && (
@@ -795,8 +787,6 @@ export default function UserManagePage() {
                             style={{ color: 'var(--warning)' }}>删除</button>
                         </>
                       )}
-                    </>
-                  )}
                 </div>
               </div>
             ))}

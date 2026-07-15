@@ -95,7 +95,7 @@ export default function MemberRenewPage() {
         throw new Error((err as any).detail || '续费失败')
       }
       const data = await res.json()
-      setSuccess((data as any).message || '续费申请已提交，请等待管理员审批')
+      setSuccess((data as any).message || '续费成功')
     } catch (e: any) {
       setError(e.message || '续费失败')
     } finally {
@@ -116,7 +116,7 @@ export default function MemberRenewPage() {
           textAlign: 'center',
         }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>续费申请已提交</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>续费成功</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             {success}
           </p>

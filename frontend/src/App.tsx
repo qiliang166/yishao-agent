@@ -15,7 +15,6 @@ import MemberRenewPage from './pages/MemberRenewPage'
 import MemberCenterPage from './pages/MemberCenterPage'
 import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
 import PromptStudioPage from './pages/PromptStudioPage'
-import MemberApprovalPage from './pages/MemberApprovalPage'
 import UserManagePage from './pages/UserManagePage'
 import RoleManagePage from './pages/RoleManagePage'
 import LandingPage from './pages/LandingPage'
@@ -161,13 +160,6 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
                 className={`sidebar-item ${location.pathname === '/roles' ? 'active' : ''}`}
                 onClick={() => navigate('/roles')}>
                 <span className="ico">🛡</span> 角色管理
-              </button>
-            )}
-            {canMember && (
-              <button
-                className={`sidebar-item ${location.pathname === '/members/pending' ? 'active' : ''}`}
-                onClick={() => navigate('/members/pending')}>
-                <span className="ico">✅</span> 会员审批
               </button>
             )}
             {(canMember || canRole) && (
@@ -599,7 +591,6 @@ function AppShell() {
             <Route path="/templates" element={<TemplateManager />} />
             <Route path="/proj-settings" element={<SettingsLock><ProjSettingsPage /></SettingsLock>} />
             <Route path="/prompt-studio" element={<PromptStudioPage />} />
-            <Route path="/members/pending" element={<MemberApprovalPage />} />
             <Route path="/members" element={<UserManagePage />} />
             <Route path="/roles" element={<RoleManagePage />} />
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
