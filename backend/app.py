@@ -5328,6 +5328,43 @@ async def api_admin_set_points(user_id: str, request: Request,
         db.close()
 
 
+@app.post("/api/members/{user_id}/points/grant")
+async def api_admin_grant_points(user_id: str, request: Request,
+                                  user=require_perm("member.manage")):
+    """Admin: grant (add) points to a user — distinct from setting absolute balance."""
+    body = await request.json()
+    amount_deci = int(body.get("amount_deci", 0))
+    note = body.get("note", "").strip()
+
+    if amount_deci <= 0:
+        raise HTTPException(400, "赠送积分必须大于0")
+
+    db = get_db()
+    try:
+        m = db.execute("SELECT id, username FROM users WHERE id=?", (user_id,)).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+
+        points_per_yuan = _get_points_per_yuan()
+        rate_display = f"{points_per_yuan:.1f}" if points_per_yuan == int(points_per_yuan) else f"{points_per_yuan}"
+        grant_note = note or f"管理员赠送 (汇率: 1元={rate_display}积分)"
+
+        result = _add_points(db, user_id, amount_deci, "admin_grant",
+                           note=grant_note, created_by=user["sub"])
+        db.commit()
+        return {"ok": True, "balance_deci": result["balance_deci"],
+                "balance_display": f"{result['balance_deci'] / 10:.1f}",
+                "granted_deci": amount_deci,
+                "rate": points_per_yuan}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"赠送积分失败: {e}")
+    finally:
+        db.close()
+
+
 # ── Download statistics ───────────────────────────────────────────────
 
 @app.get("/api/admin/stats/downloads/projects")
@@ -6737,6 +6774,12 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
         # ── Points system: grant points from payment + new user bonus ──
         try:
             points_per_yuan = _get_points_per_yuan()
+
+            # New user signup bonus — check BEFORE purchase points are granted
+            # (purchase grant creates user_points row which would make the check fail)
+            bonus_deci = _new_user_bonus_deci()
+            existing_pts = db.execute("SELECT balance_deci FROM user_points WHERE user_id=?", (user_id,)).fetchone()
+
             if payment and payment["amount_cents"] > 0:
                 # Use explicit override if admin specified, otherwise auto-calculate
                 if body.points_granted is not None:
@@ -6746,14 +6789,11 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
                 if points_granted > 0:
                     _add_points(db, user_id, points_granted, "purchase",
                                ref_id=payment["id"], ref_type="payment",
-                               note=f"购买 {payment['plan_name']} 获 {points_granted/10:.1f} 积分",
+                               note=f"购买 {payment['plan_name']} 获 {points_granted/10:.1f} 积分 (汇率: 1元={points_per_yuan}积分)",
                                expires_at=expires_at)
                     db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
                               (points_granted, payment["id"]))
 
-            # New user signup bonus (only for first approval, no prior points record)
-            bonus_deci = _new_user_bonus_deci()
-            existing_pts = db.execute("SELECT balance_deci FROM user_points WHERE user_id=?", (user_id,)).fetchone()
             if bonus_deci > 0 and not existing_pts:
                 _add_points(db, user_id, bonus_deci, "signup_bonus",
                            note=f"新人礼包 {bonus_deci/10:.1f} 积分",

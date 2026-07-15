@@ -119,6 +119,10 @@ export default function MAdmin() {
   const [pointsNewBalance, setPointsNewBalance] = useState('')
   const [pointsNote, setPointsNote] = useState('')
   const [pointsSaving, setPointsSaving] = useState(false)
+  const [giftAmount, setGiftAmount] = useState('')
+  const [giftNote, setGiftNote] = useState('')
+  const [giftSaving, setGiftSaving] = useState(false)
+  const [pointsPerYuan, setPointsPerYuan] = useState(1.0)
 
   // ── 下载统计 ──
   const [statsType, setStatsType] = useState<'projects' | 'members'>('projects')
@@ -400,12 +404,21 @@ export default function MAdmin() {
     setPointsData(null)
     setPointsNewBalance('')
     setPointsNote('')
+    setGiftAmount('')
+    setGiftNote('')
+    setGiftSaving(false)
     setPointsLoading(true)
     try {
-      const data = await api.getUserPoints(u.id)
+      const [data, settings] = await Promise.all([
+        api.getUserPoints(u.id),
+        api.getSettings(),
+      ])
       if (data != null) {
         setPointsData(data)
         setPointsNewBalance(String(data.balance_display || '0'))
+      }
+      if (settings?.settings?.points_per_yuan) {
+        setPointsPerYuan(parseFloat(settings.settings.points_per_yuan) || 1.0)
       }
     } catch (e: any) {
       mToast(`加载积分失败: ${e?.message || e}`, 'error')
@@ -432,6 +445,27 @@ export default function MAdmin() {
       mToast(`设置失败: ${e?.message || e}`, 'error')
     } finally {
       setPointsSaving(false)
+    }
+  }
+
+  const handleGrantPoints = async () => {
+    if (!pointsTarget) return
+    const val = parseFloat(giftAmount)
+    if (isNaN(val) || val <= 0) { mToast('请输入有效的赠送积分', 'error'); return }
+    setGiftSaving(true)
+    try {
+      const deci = Math.round(val * 10)
+      const result = await api.grantPoints(pointsTarget.id, deci, giftNote.trim() || undefined)
+      if (result != null && result.ok) {
+        mToast(`已赠送 ${val.toFixed(1)} 积分 (汇率: 1元=${result.rate || pointsPerYuan}积分)`)
+        setPointsTarget(null)
+      } else {
+        mToast('赠送失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`赠送失败: ${e?.message || e}`, 'error')
+    } finally {
+      setGiftSaving(false)
     }
   }
 
@@ -1141,6 +1175,31 @@ export default function MAdmin() {
                     <label>变更备注</label>
                     <input className="m-input" value={pointsNote} onChange={e => setPointsNote(e.target.value)}
                       placeholder="如：手动调整、活动赠送" />
+                  </div>
+
+                  <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <label style={{ fontSize: 12, fontWeight: 600 }}>赠送积分</label>
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>汇率: 1元={pointsPerYuan}积分</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      直接增加积分，记录汇率以便计算收益
+                    </div>
+                    <div className="m-field">
+                      <label>赠送数量（积分）</label>
+                      <input className="m-input" type="number" inputMode="decimal"
+                        value={giftAmount} onChange={e => setGiftAmount(e.target.value)}
+                        placeholder="赠送积分数量" />
+                    </div>
+                    <div className="m-field">
+                      <label>赠送备注</label>
+                      <input className="m-input" value={giftNote} onChange={e => setGiftNote(e.target.value)}
+                        placeholder="可选" />
+                    </div>
+                    <button className="m-btn primary" style={{ width: '100%', marginTop: 4 }}
+                      disabled={giftSaving} onClick={handleGrantPoints}>
+                      {giftSaving ? '赠送中…' : `确认赠送 ${giftAmount ? parseFloat(giftAmount).toFixed(1) : '0.0'} 积分`}
+                    </button>
                   </div>
                 </>
               )}

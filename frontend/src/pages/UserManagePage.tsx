@@ -104,6 +104,10 @@ export default function UserManagePage() {
   const [pointsNote, setPointsNote] = useState('')
   const [pointsSaving, setPointsSaving] = useState(false)
   const [pointsError, setPointsError] = useState('')
+  const [giftAmount, setGiftAmount] = useState('')
+  const [giftNote, setGiftNote] = useState('')
+  const [giftSaving, setGiftSaving] = useState(false)
+  const [pointsPerYuan, setPointsPerYuan] = useState(1.0)
 
   // Download stats
   const [statsTab, setStatsTab] = useState<'projects' | 'members'>('projects')
@@ -389,12 +393,21 @@ export default function UserManagePage() {
     setPointsNewBalance('')
     setPointsNote('')
     setPointsError('')
+    setGiftAmount('')
+    setGiftNote('')
+    setGiftSaving(false)
     setPointsLoading(true)
     try {
-      const data = await api.getUserPoints(u.id)
+      const [data, settings] = await Promise.all([
+        api.getUserPoints(u.id),
+        api.getSettings(),
+      ])
       if (data != null) {
         setPointsData(data)
         setPointsNewBalance(String(data.balance_display || '0'))
+      }
+      if (settings?.settings?.points_per_yuan) {
+        setPointsPerYuan(parseFloat(settings.settings.points_per_yuan) || 1.0)
       }
     } catch (e: any) {
       showToast(e.message || '加载积分失败')
@@ -422,6 +435,28 @@ export default function UserManagePage() {
       setPointsError(e.message || '设置失败')
     } finally {
       setPointsSaving(false)
+    }
+  }
+
+  const handleGrantPoints = async () => {
+    if (!pointsUser) return
+    const val = parseFloat(giftAmount)
+    if (isNaN(val) || val <= 0) { setPointsError('请输入有效的赠送积分'); return }
+    setGiftSaving(true)
+    setPointsError('')
+    try {
+      const deci = Math.round(val * 10)
+      const result = await api.grantPoints(pointsUser.id, deci, giftNote.trim() || undefined)
+      if (result != null && result.ok) {
+        showToast(`已赠送 ${val.toFixed(1)} 积分 (汇率: 1元=${result.rate || pointsPerYuan}积分)`)
+        setPointsUser(null)
+      } else {
+        setPointsError('赠送失败：服务器未确认')
+      }
+    } catch (e: any) {
+      setPointsError(e.message || '赠送失败')
+    } finally {
+      setGiftSaving(false)
     }
   }
 
@@ -1081,6 +1116,34 @@ export default function UserManagePage() {
                     onChange={e => setPointsNote(e.target.value)}
                     placeholder="如：手动调整、活动赠送等"
                     style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <label style={{ fontSize: 11, fontWeight: 600 }}>赠送积分</label>
+                    <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>汇率: 1元 = {pointsPerYuan} 积分</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                    直接增加积分，独立于余额设置，记录汇率以便计算收益
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <input className="form-input" type="number" step="0.1" min="0.1"
+                      value={giftAmount}
+                      onChange={e => setGiftAmount(e.target.value)}
+                      placeholder="赠送积分数量"
+                      style={{ flex: 1, fontSize: 12 }} />
+                    <span style={{ fontSize: 12, alignSelf: 'center', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>积分</span>
+                  </div>
+                  <input className="form-input" value={giftNote}
+                    onChange={e => setGiftNote(e.target.value)}
+                    placeholder="赠送备注（可选）"
+                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 12, marginBottom: 8 }} />
+                  <button className="btn btn-primary btn-sm"
+                    onClick={handleGrantPoints}
+                    disabled={giftSaving || !isSuperAdmin}
+                    style={{ width: '100%' }}>
+                    {isSuperAdmin ? (giftSaving ? '赠送中...' : `确认赠送 ${giftAmount ? parseFloat(giftAmount).toFixed(1) : '0.0'} 积分`) : '仅超级管理员可操作'}
+                  </button>
                 </div>
 
                 {pointsData.transactions && pointsData.transactions.length > 0 && (

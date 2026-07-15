@@ -1139,6 +1139,13 @@ export const api = {
       body: JSON.stringify({ balance_deci: balanceDeci, note }),
     }).then(d => d as { ok: boolean; balance_deci: number; balance_display: string }),
 
+  grantPoints: (userId: string, amountDeci: number, note?: string) =>
+    request('/api/members/' + userId + '/points/grant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount_deci: amountDeci, note }),
+    }).then(d => d as { ok: boolean; balance_deci: number; balance_display: string; granted_deci: number; rate: number }),
+
   // Download stats
   getDownloadStatsByProject: () =>
     request('/api/admin/stats/downloads/projects').then(d => d as { projects: any[] }),
