@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../services/api'
 import { MTopBar, mToast } from '../MobileApp'
 
@@ -12,10 +12,31 @@ interface ProjectFile {
   modified?: number
   download_url?: string
   audio_url?: string
+  source_name?: string
+}
+
+const withToken = (url: string) => {
+  const token = localStorage.getItem('auth_token')
+  if (!token) return url
+  return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token)
+}
+
+// 预览类型判定：所有文件都可预览（office 走系统打开）
+const kindOf = (f: ProjectFile): string => {
+  if (f.type === 'MP3' || f.type === 'Audio') return 'audio'
+  if (!f.download_url) return 'material' // 素材记录（内容在数据库）
+  const n = (f.filename || '').toLowerCase()
+  if (n.endsWith('.html') || n.endsWith('.htm')) return 'html'
+  if (n.endsWith('.txt') || f.type === 'Text') return 'text'
+  if (/\.(png|jpe?g|gif|svg|webp|bmp)$/.test(n)) return 'image'
+  if (n.endsWith('.mp4') || f.type === 'Video') return 'video'
+  // docx/pptx 及其他未知格式 → 交给系统/微信打开
+  return 'office'
 }
 
 export default function MProject() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [projectName, setProjectName] = useState('')
   const [workspaceId, setWorkspaceId] = useState('')
   const [files, setFiles] = useState<ProjectFile[]>([])
@@ -124,6 +145,11 @@ export default function MProject() {
     }
   }
 
+  const normalizedAudioUrl = (f: ProjectFile) => {
+    if (!f.audio_url) return ''
+    return (f.audio_url as string).startsWith('/') ? f.audio_url : '/' + (f.audio_url as string).replace(/^\//, '')
+  }
+
   const handleDownload = async (f: ProjectFile) => {
     try {
       const dlName = f.display_name || f.filename
@@ -140,39 +166,28 @@ export default function MProject() {
     }
   }
 
-  const isHtml = (f: ProjectFile) => (f.filename || '').toLowerCase().endsWith('.html')
-
-  const handlePreview = async (f: ProjectFile) => {
-    const url = f.download_url
-    if (!url) {
-      mToast('该文件不支持预览', 'error')
-      return
-    }
-    // exports 端点公开且 inline，直接开新窗口
-    if (url.startsWith('/api/exports/')) {
-      window.open(url, '_blank')
-      return
-    }
-    // download 端点需带 token 且强制 attachment → 取 blob 后打开
-    // 安全：不强制 MIME，仅当服务器明确声明 text/html 时才渲染，其余类型拒绝预览
-    const win = window.open('', '_blank')
-    try {
-      const token = localStorage.getItem('auth_token')
-      const resp = await fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-      const ct = resp.headers.get('content-type') || ''
-      if (!ct.includes('text/html')) throw new Error('该文件不支持预览')
-      const blob = await resp.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      if (win != null) {
-        win.location.href = blobUrl
-      } else {
-        window.open(blobUrl, '_blank')
+  const openPreview = (f: ProjectFile) => {
+    const kind = kindOf(f)
+    if (kind === 'office') {
+      // 浏览器无法渲染 office → 直接打开文件地址：
+      // 微信内置浏览器弹出文件预览页（可选打开方式），普通浏览器触发下载并在通知栏显示
+      if (!f.download_url) {
+        mToast('该文件暂不支持预览', 'error')
+        return
       }
-    } catch (e: any) {
-      if (win != null) win.close()
-      mToast(`预览失败: ${e?.message || e}`, 'error')
+      mToast('正在打开文件，如浏览器提示请选择打开方式（微信/WPS）')
+      window.location.href = withToken(f.download_url)
+      return
     }
+    const src = kind === 'audio' ? normalizedAudioUrl(f) : (f.download_url || '')
+    const q = new URLSearchParams({
+      kind,
+      src,
+      name: f.display_name || f.filename,
+      pid: id || '',
+    })
+    if (kind === 'material') q.set('sn', f.source_name || f.filename)
+    navigate(`/preview?${q.toString()}`)
   }
 
   const formatSize = (bytes?: number) => {
@@ -214,9 +229,7 @@ export default function MProject() {
                 </div>
                 {expanded && list.map(f => {
                   const isAudio = f.type === 'MP3' || f.type === 'Audio'
-                  const audioUrl = f.audio_url
-                    ? ((f.audio_url as string).startsWith('/') ? f.audio_url : '/' + (f.audio_url as string).replace(/^\//, ''))
-                    : ''
+                  const audioUrl = normalizedAudioUrl(f)
                   const isPlaying = !!audioUrl && playingAudio === audioUrl
                   return (
                     <div key={f.download_url || f.filename} className="m-file-row">
@@ -234,14 +247,14 @@ export default function MProject() {
                           {isPlaying ? '⏸' : '▶'}
                         </button>
                       )}
-                      {isHtml(f) && (
-                        <button className="m-icon-btn"
-                          onClick={e => { e.stopPropagation(); handlePreview(f) }}
-                          title="预览">👁</button>
-                      )}
                       <button className="m-icon-btn"
-                        onClick={e => { e.stopPropagation(); handleDownload(f) }}
-                        title="下载">⬇</button>
+                        onClick={e => { e.stopPropagation(); openPreview(f) }}
+                        title="预览">👁</button>
+                      {f.download_url && (
+                        <button className="m-icon-btn"
+                          onClick={e => { e.stopPropagation(); handleDownload(f) }}
+                          title="下载">⬇</button>
+                      )}
                     </div>
                   )
                 })}

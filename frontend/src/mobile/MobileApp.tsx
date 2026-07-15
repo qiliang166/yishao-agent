@@ -6,6 +6,7 @@ import MMemberLogin from './pages/MMemberLogin'
 import MHome from './pages/MHome'
 import MProjects from './pages/MProjects'
 import MProject from './pages/MProject'
+import MPreview from './pages/MPreview'
 
 // ── 轻量 toast：window 事件驱动，各页面调用 mToast() ──
 export function mToast(msg: string, kind: 'info' | 'error' = 'info') {
@@ -34,16 +35,24 @@ function Toaster() {
 }
 
 // ── 顶栏 ──
+// back="__back__" 表示浏览器历史返回（用于预览页），其他值为固定路由
 export function MTopBar({ title, back, action }: {
   title: string
   back?: string
   action?: { label: string; onClick: () => void }
 }) {
   const navigate = useNavigate()
+  const handleBack = () => {
+    if (back === '__back__') {
+      navigate(-1)
+    } else if (back != null) {
+      navigate(back)
+    }
+  }
   return (
     <div className="m-topbar">
       {back != null && (
-        <button className="m-back-btn" onClick={() => navigate(back)}>‹</button>
+        <button className="m-back-btn" onClick={handleBack}>‹</button>
       )}
       <div className="m-topbar-title">{title}</div>
       {action && (
@@ -69,6 +78,7 @@ export default function MobileApp() {
         <Route path="/" element={<RequireAuth><MHome /></RequireAuth>} />
         <Route path="/ws/:wid" element={<RequireAuth><MProjects /></RequireAuth>} />
         <Route path="/project/:id" element={<RequireAuth><MProject /></RequireAuth>} />
+        <Route path="/preview" element={<RequireAuth><MPreview /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Toaster />
