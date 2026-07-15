@@ -38,7 +38,7 @@ export default function UserManagePage() {
   const canManageRoles = usePermission('role.manage')
   const { user: authUser } = useAuth()
   const isSuperAdmin = authUser?.username === 'admin'
-  const [tab, setTab] = useState<'admin' | 'member'>('admin')
+  const [tab, setTab] = useState<'admin' | 'member' | 'stats'>('admin')
   const [users, setUsers] = useState<UserItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -96,6 +96,21 @@ export default function UserManagePage() {
   // Workspace assignment
   const [selectedWsId, setSelectedWsId] = useState('')
   const [wsAssignLoading, setWsAssignLoading] = useState(false)
+
+  // Points management
+  const [pointsUser, setPointsUser] = useState<UserItem | null>(null)
+  const [pointsData, setPointsData] = useState<any>(null)
+  const [pointsLoading, setPointsLoading] = useState(false)
+  const [pointsNewBalance, setPointsNewBalance] = useState('')
+  const [pointsNote, setPointsNote] = useState('')
+  const [pointsSaving, setPointsSaving] = useState(false)
+  const [pointsError, setPointsError] = useState('')
+
+  // Download stats
+  const [statsTab, setStatsTab] = useState<'projects' | 'members'>('projects')
+  const [projectStats, setProjectStats] = useState<any[]>([])
+  const [memberStats, setMemberStats] = useState<any[]>([])
+  const [statsLoading, setStatsLoading] = useState(false)
 
   const pageSize = 20
 
@@ -369,6 +384,66 @@ export default function UserManagePage() {
     setPayError('')
   }
 
+  const openPoints = async (u: UserItem) => {
+    setPointsUser(u)
+    setPointsData(null)
+    setPointsNewBalance('')
+    setPointsNote('')
+    setPointsError('')
+    setPointsLoading(true)
+    try {
+      const data = await api.getUserPoints(u.id)
+      if (data != null) {
+        setPointsData(data)
+        setPointsNewBalance(String(data.balance_display || '0'))
+      }
+    } catch (e: any) {
+      showToast(e.message || '加载积分失败')
+    } finally {
+      setPointsLoading(false)
+    }
+  }
+
+  const handleSetPoints = async () => {
+    if (!pointsUser) return
+    const val = parseFloat(pointsNewBalance)
+    if (isNaN(val) || val < 0) { setPointsError('请输入有效积分数'); return }
+    setPointsSaving(true)
+    setPointsError('')
+    try {
+      const deci = Math.round(val * 10)
+      const result = await api.setUserPoints(pointsUser.id, deci, pointsNote.trim() || undefined)
+      if (result != null && result.ok) {
+        showToast(`积分已更新：${result.balance_display || val.toFixed(1)}`)
+        setPointsUser(null)
+      } else {
+        setPointsError('设置失败：服务器未确认')
+      }
+    } catch (e: any) {
+      setPointsError(e.message || '设置失败')
+    } finally {
+      setPointsSaving(false)
+    }
+  }
+
+  const loadStats = async (which: 'projects' | 'members') => {
+    setStatsTab(which)
+    setStatsLoading(true)
+    try {
+      if (which === 'projects') {
+        const d = await api.getDownloadStatsByProject()
+        setProjectStats((d as any)?.projects || [])
+      } else {
+        const d = await api.getDownloadStatsByMember()
+        setMemberStats((d as any)?.members || [])
+      }
+    } catch (e: any) {
+      showToast(e.message || '加载统计失败')
+    } finally {
+      setStatsLoading(false)
+    }
+  }
+
   const handlePayment = async () => {
     if (!payUser) return
     setPayLoading(true)
@@ -460,12 +535,25 @@ export default function UserManagePage() {
           >
             会员
           </button>
+          <button
+            onClick={() => { setTab('stats'); loadStats('projects') }}
+            style={{
+              padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: tab === 'stats' ? 700 : 400,
+              color: tab === 'stats' ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: tab === 'stats' ? '2px solid var(--primary)' : '2px solid transparent',
+            }}
+          >
+            下载统计
+          </button>
         </div>
+        {tab !== 'stats' && (
         <button className="btn btn-primary btn-sm"
           onClick={() => { setShowCreate(true); setCreateUserType(tab); setCreateError('') }}
           style={{ marginRight: 8 }}>
           + 新建用户
         </button>
+        )}
       </div>
 
       {/* Batch action bar */}
@@ -503,7 +591,90 @@ export default function UserManagePage() {
         </div>
       )}
 
-      {loading ? (
+      {tab === 'stats' ? (
+        statsLoading ? (
+          <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 0, marginBottom: 16, marginTop: 16, borderBottom: '1px solid var(--border)' }}>
+              <button onClick={() => loadStats('projects')} style={{
+                padding: '6px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 11,
+                fontWeight: statsTab === 'projects' ? 700 : 400,
+                color: statsTab === 'projects' ? 'var(--primary)' : 'var(--text-secondary)',
+                borderBottom: statsTab === 'projects' ? '2px solid var(--primary)' : '2px solid transparent',
+              }}>按明细</button>
+              <button onClick={() => loadStats('members')} style={{
+                padding: '6px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 11,
+                fontWeight: statsTab === 'members' ? 700 : 400,
+                color: statsTab === 'members' ? 'var(--primary)' : 'var(--text-secondary)',
+                borderBottom: statsTab === 'members' ? '2px solid var(--primary)' : '2px solid transparent',
+              }}>按会员</button>
+            </div>
+            {statsTab === 'projects' ? (
+              projectStats.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
+                  暂无下载记录
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 12px' }}>明细名称</th>
+                      <th style={{ padding: '8px 12px', width: 100 }}>下载次数</th>
+                      <th style={{ padding: '8px 12px', width: 100 }}>可下载</th>
+                      <th style={{ padding: '8px 12px', width: 80 }}>积分</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectStats.map((p: any) => (
+                      <tr key={p.project_id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px 12px' }}>{p.project_name}</td>
+                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{p.download_count || 0}</td>
+                        <td style={{ padding: '8px 12px', color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
+                          {p.is_downloadable ? '是' : '否'}
+                        </td>
+                        <td style={{ padding: '8px 12px' }}>{(p.point_cost_deci / 10).toFixed(1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            ) : (
+              memberStats.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
+                  暂无下载记录
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 12px' }}>会员</th>
+                      <th style={{ padding: '8px 12px', width: 100 }}>下载次数</th>
+                      <th style={{ padding: '8px 12px', width: 100 }}>明细数</th>
+                      <th style={{ padding: '8px 12px', width: 140 }}>最近下载</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {memberStats.map((m: any) => (
+                      <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '8px 12px' }}>
+                          {m.display_name || m.username}
+                          <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>{m.username}</span>
+                        </td>
+                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{m.total_downloads || 0}</td>
+                        <td style={{ padding: '8px 12px' }}>{m.unique_projects || 0}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          {m.last_download ? new Date(m.last_download).toLocaleDateString('zh-CN') : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )
+            )}
+          </>
+        )
+      ) : loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
       ) : users.length === 0 ? (
         <div style={{
@@ -610,6 +781,8 @@ export default function UserManagePage() {
                           <button className="btn btn-ghost btn-sm" onClick={() => openPayment(u)}
                             style={{ color: 'var(--primary)' }}>付费</button>
                           <button className="btn btn-ghost btn-sm" onClick={() => setPayHistUser(u)}>明细</button>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openPoints(u)}
+                            style={{ color: '#5cb85c' }}>积分</button>
                         </>
                       )}
                       {u.username !== 'admin' && canManageMembers && (
@@ -859,6 +1032,99 @@ export default function UserManagePage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setPayUser(null)}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={handlePayment} disabled={payLoading}>
                 {payLoading ? '处理中...' : '确认记录'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Points Dialog */}
+      {pointsUser && (
+        <div className="dialog-overlay" onClick={() => setPointsUser(null)}>
+          <div className="dialog-box" style={{ width: 420, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">积分管理 — {pointsUser.display_name || pointsUser.username}</div>
+
+            {pointsLoading ? (
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>加载中...</div>
+            ) : pointsData ? (
+              <>
+                <div style={{ fontSize: 13, marginBottom: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span>当前余额</span>
+                    <span style={{ fontWeight: 700 }}>{pointsData.balance_display} 积分</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span>过期时间</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{pointsData.expires_at ? new Date(pointsData.expires_at).toLocaleDateString('zh-CN') : '无'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span>已解锁明细</span>
+                    <span>{pointsData.unlocked?.length || 0} 个</span>
+                  </div>
+                </div>
+
+                {pointsData.unlocked && pointsData.unlocked.length > 0 && (
+                  <div style={{ marginBottom: 12, maxHeight: 120, overflowY: 'auto', background: 'var(--bg-secondary)', borderRadius: 6, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>已解锁明细：</div>
+                    {pointsData.unlocked.map((p: any) => (
+                      <div key={p.project_id} style={{ fontSize: 11, padding: '2px 0', color: 'var(--text-secondary)' }}>
+                        {p.project_name} · {(p.points_spent_deci / 10).toFixed(1)} 积分
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>修改积分余额</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input className="form-input" type="number" step="0.1" min="0"
+                      value={pointsNewBalance}
+                      onChange={e => setPointsNewBalance(e.target.value)}
+                      style={{ flex: 1, fontSize: 12 }} />
+                    <span style={{ fontSize: 12, alignSelf: 'center', color: 'var(--text-secondary)' }}>积分</span>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>变更备注</label>
+                  <input className="form-input" value={pointsNote}
+                    onChange={e => setPointsNote(e.target.value)}
+                    placeholder="如：手动调整、活动赠送等"
+                    style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
+                </div>
+
+                {pointsData.transactions && pointsData.transactions.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4 }}>积分流水</div>
+                    <div style={{ maxHeight: 150, overflowY: 'auto', fontSize: 11 }}>
+                      {pointsData.transactions.slice(0, 20).map((tx: any) => (
+                        <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid var(--border)' }}>
+                          <span>
+                            <span style={{ color: tx.amount_deci > 0 ? 'var(--success)' : 'var(--warning)' }}>
+                              {tx.amount_deci > 0 ? '+' : ''}{(tx.amount_deci / 10).toFixed(1)}
+                            </span>
+                            <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>{tx.type}</span>
+                          </span>
+                          <span style={{ color: 'var(--text-secondary)' }}>
+                            {tx.created_at ? new Date(tx.created_at).toLocaleDateString('zh-CN') : ''}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)' }}>无积分数据</div>
+            )}
+
+            {pointsError && (
+              <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 12, textAlign: 'center' }}>{pointsError}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setPointsUser(null)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleSetPoints} disabled={pointsSaving || !isSuperAdmin}>
+                {isSuperAdmin ? (pointsSaving ? '保存中...' : '确认修改') : '仅超级管理员可修改'}
               </button>
             </div>
           </div>

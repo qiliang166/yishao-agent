@@ -47,7 +47,7 @@ export default function MAdmin() {
   const canRole = !!user?.permissions?.includes('role.manage')
   const iAmSuper = user?.username === 'admin'
 
-  const [tab, setTab] = useState<'member' | 'admin' | 'pending' | 'plan'>('member')
+  const [tab, setTab] = useState<'member' | 'admin' | 'pending' | 'plan' | 'stats'>('member')
 
   // ── 会员/管理员列表 ──
   const [users, setUsers] = useState<any[]>([])
@@ -111,6 +111,20 @@ export default function MAdmin() {
   const [rejectUpgradeSubmitting, setRejectUpgradeSubmitting] = useState(false)
 
   const [busyUserId, setBusyUserId] = useState('')
+
+  // ── 积分管理 ──
+  const [pointsTarget, setPointsTarget] = useState<any | null>(null)
+  const [pointsData, setPointsData] = useState<any>(null)
+  const [pointsLoading, setPointsLoading] = useState(false)
+  const [pointsNewBalance, setPointsNewBalance] = useState('')
+  const [pointsNote, setPointsNote] = useState('')
+  const [pointsSaving, setPointsSaving] = useState(false)
+
+  // ── 下载统计 ──
+  const [statsType, setStatsType] = useState<'projects' | 'members'>('projects')
+  const [projectStats, setProjectStats] = useState<any[]>([])
+  const [memberStats, setMemberStats] = useState<any[]>([])
+  const [statsLoading, setStatsLoading] = useState(false)
 
   // ── 套餐设置 ──
   const [planLoaded, setPlanLoaded] = useState(false)
@@ -381,6 +395,64 @@ export default function MAdmin() {
     }
   }
 
+  const openPoints = async (u: any) => {
+    setPointsTarget(u)
+    setPointsData(null)
+    setPointsNewBalance('')
+    setPointsNote('')
+    setPointsLoading(true)
+    try {
+      const data = await api.getUserPoints(u.id)
+      if (data != null) {
+        setPointsData(data)
+        setPointsNewBalance(String(data.balance_display || '0'))
+      }
+    } catch (e: any) {
+      mToast(`加载积分失败: ${e?.message || e}`, 'error')
+    } finally {
+      setPointsLoading(false)
+    }
+  }
+
+  const handleSetPoints = async () => {
+    if (!pointsTarget) return
+    const val = parseFloat(pointsNewBalance)
+    if (isNaN(val) || val < 0) { mToast('请输入有效积分数', 'error'); return }
+    setPointsSaving(true)
+    try {
+      const deci = Math.round(val * 10)
+      const result = await api.setUserPoints(pointsTarget.id, deci, pointsNote.trim() || undefined)
+      if (result != null && result.ok) {
+        mToast(`积分已更新：${result.balance_display || val.toFixed(1)}`)
+        setPointsTarget(null)
+      } else {
+        mToast('设置失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`设置失败: ${e?.message || e}`, 'error')
+    } finally {
+      setPointsSaving(false)
+    }
+  }
+
+  const loadStats = async (which: 'projects' | 'members') => {
+    setStatsType(which)
+    setStatsLoading(true)
+    try {
+      if (which === 'projects') {
+        const d = await api.getDownloadStatsByProject()
+        setProjectStats((d as any)?.projects || [])
+      } else {
+        const d = await api.getDownloadStatsByMember()
+        setMemberStats((d as any)?.members || [])
+      }
+    } catch (e: any) {
+      mToast(`加载失败: ${e?.message || e}`, 'error')
+    } finally {
+      setStatsLoading(false)
+    }
+  }
+
   const openRenew = (u: any) => {
     setRenewTarget(u)
     setRenewPlan(qName || '标准套餐')
@@ -636,6 +708,8 @@ export default function MAdmin() {
           <button className={`m-tab ${tab === 'plan' ? 'active' : ''}`}
             onClick={() => setTab('plan')}>套餐</button>
         )}
+        <button className={`m-tab ${tab === 'stats' ? 'active' : ''}`}
+          onClick={() => { setTab('stats'); loadStats('projects') }}>统计</button>
       </div>
       <div className="m-content">
         {(tab === 'member' || tab === 'admin') && (
@@ -675,7 +749,10 @@ export default function MAdmin() {
                       <div className="m-row-actions">
                         <button className="m-mini-btn" onClick={() => openEdit(u)}>编辑</button>
                         {tab === 'member' && (
-                          <button className="m-mini-btn" onClick={() => openPayments(u)}>明细</button>
+                          <>
+                            <button className="m-mini-btn" onClick={() => openPayments(u)}>明细</button>
+                            <button className="m-mini-btn" onClick={() => openPoints(u)} style={{ color: '#5cb85c' }}>积分</button>
+                          </>
                         )}
                         {!isSuperAdmin && (
                           <button className={`m-mini-btn ${u.is_active === 0 ? '' : 'warn'}`}
@@ -792,6 +869,59 @@ export default function MAdmin() {
                     </div>
                   )}
                 </>
+              )}
+            </>
+          )
+        )}
+
+        {tab === 'stats' && (
+          statsLoading ? (
+            <div className="m-loading">加载中…</div>
+          ) : (
+            <>
+              <div className="m-tabs" style={{ marginBottom: 12 }}>
+                <button className={`m-tab ${statsType === 'projects' ? 'active' : ''}`}
+                  onClick={() => loadStats('projects')}>按明细</button>
+                <button className={`m-tab ${statsType === 'members' ? 'active' : ''}`}
+                  onClick={() => loadStats('members')}>按会员</button>
+              </div>
+              {statsType === 'projects' ? (
+                projectStats.length === 0 ? (
+                  <div className="m-empty">暂无下载记录</div>
+                ) : (
+                  projectStats.map((p: any) => (
+                    <div key={p.project_id} className="m-user-row">
+                      <div className="m-user-head">
+                        <div className="m-user-name">{p.project_name}</div>
+                        <span style={{ fontSize: 11, color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
+                          {p.is_downloadable ? '可下载' : '未开放'}
+                        </span>
+                      </div>
+                      <div className="m-user-meta">
+                        下载次数：<strong>{p.download_count || 0}</strong>
+                        {' · '}积分：{(p.point_cost_deci / 10).toFixed(1)}
+                      </div>
+                    </div>
+                  ))
+                )
+              ) : (
+                memberStats.length === 0 ? (
+                  <div className="m-empty">暂无下载记录</div>
+                ) : (
+                  memberStats.map((m: any) => (
+                    <div key={m.id} className="m-user-row">
+                      <div className="m-user-head">
+                        <div className="m-user-name">{m.display_name || m.username}</div>
+                      </div>
+                      <div className="m-user-meta">
+                        {m.username}
+                        {' · '}下载：<strong>{m.total_downloads || 0}</strong> 次
+                        {' · '}明细：{m.unique_projects || 0} 个
+                        <br />最近：{m.last_download ? new Date(m.last_download).toLocaleDateString('zh-CN') : '—'}
+                      </div>
+                    </div>
+                  ))
+                )
               )}
             </>
           )
@@ -965,6 +1095,87 @@ export default function MAdmin() {
               </div>
             </>
           )}
+        </MSheet>
+      )}
+
+      {pointsTarget != null && (
+        <MSheet title={`积分管理 · ${pointsTarget.display_name || pointsTarget.username}`}
+          onClose={() => { if (!pointsSaving) setPointsTarget(null) }}>
+          {pointsLoading ? (
+            <div className="m-loading">加载中…</div>
+          ) : pointsData ? (
+            <>
+              <div style={{ fontSize: 13, marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span>当前余额</span>
+                  <span style={{ fontWeight: 700 }}>{pointsData.balance_display} 积分</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span>过期时间</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>{pointsData.expires_at ? fmtDate(pointsData.expires_at) : '无'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span>已解锁明细</span>
+                  <span>{pointsData.unlocked?.length || 0} 个</span>
+                </div>
+              </div>
+
+              {pointsData.unlocked && pointsData.unlocked.length > 0 && (
+                <div style={{ maxHeight: 100, overflowY: 'auto', marginBottom: 12 }}>
+                  {pointsData.unlocked.map((p: any) => (
+                    <div key={p.project_id} style={{ fontSize: 11, padding: '2px 0', color: 'var(--text-secondary)' }}>
+                      {p.project_name} · {(p.points_spent_deci / 10).toFixed(1)} 积分
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {iAmSuper && (
+                <>
+                  <div className="m-field">
+                    <label>修改积分余额</label>
+                    <input className="m-input" type="number" inputMode="decimal"
+                      value={pointsNewBalance} onChange={e => setPointsNewBalance(e.target.value)} />
+                  </div>
+                  <div className="m-field">
+                    <label>变更备注</label>
+                    <input className="m-input" value={pointsNote} onChange={e => setPointsNote(e.target.value)}
+                      placeholder="如：手动调整、活动赠送" />
+                  </div>
+                </>
+              )}
+
+              {pointsData.transactions && pointsData.transactions.length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>积分流水</div>
+                  <div style={{ maxHeight: 120, overflowY: 'auto', fontSize: 11 }}>
+                    {pointsData.transactions.slice(0, 20).map((tx: any) => (
+                      <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid var(--border)' }}>
+                        <span>
+                          <span style={{ color: tx.amount_deci > 0 ? 'var(--success)' : 'var(--warning)' }}>
+                            {tx.amount_deci > 0 ? '+' : ''}{(tx.amount_deci / 10).toFixed(1)}
+                          </span>
+                          <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>{tx.type}</span>
+                        </span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(tx.created_at)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="m-empty">无积分数据</div>
+          )}
+
+          <div className="m-sheet-actions" style={{ marginTop: 16 }}>
+            <button disabled={pointsSaving} onClick={() => setPointsTarget(null)}>关闭</button>
+            {iAmSuper && (
+              <button className="primary" disabled={pointsSaving} onClick={handleSetPoints}>
+                {pointsSaving ? '保存中…' : '确认修改'}
+              </button>
+            )}
+          </div>
         </MSheet>
       )}
 
