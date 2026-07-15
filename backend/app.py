@@ -171,9 +171,28 @@ def api_serve_export_file(run_id: str, filename: str):
             from urllib.parse import quote
             encoded = quote(dl_name, safe='')
             headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
-    return _sr.FileResponse(filepath, headers=headers)
+    return _file_response(filepath, headers=headers)
 
 import re
+import mimetypes
+
+
+def _file_response(filepath: str, **kwargs) -> FileResponse:
+    """FileResponse wrapper that adds charset=utf-8 for text-based files,
+    preventing garbled text when Chrome guesses the wrong encoding."""
+    media_type = kwargs.pop("media_type", None)
+    if media_type is None:
+        media_type, _ = mimetypes.guess_type(filepath)
+    if media_type:
+        ext = os.path.splitext(filepath)[1].lower()
+        _text_charset_exts = {
+            ".txt", ".html", ".htm", ".csv", ".md", ".json", ".xml",
+            ".py", ".js", ".css", ".svg", ".yaml", ".yml", ".log",
+            ".ini", ".cfg", ".conf", ".env", ".ts", ".tsx", ".jsx",
+        }
+        if ext in _text_charset_exts and "charset" not in media_type:
+            media_type = f"{media_type}; charset=utf-8"
+    return FileResponse(filepath, media_type=media_type, **kwargs)
 
 
 def _get_global_save_path() -> str:
@@ -3096,7 +3115,7 @@ def api_video_file(path: str = "", task_id: str = ""):
         raise HTTPException(403, f"Access denied: {full}")
     if not _os.path.exists(full):
         raise HTTPException(404, f"File not found: {full}")
-    return FileResponse(full)
+    return _file_response(full)
 
 
 @app.post("/api/video/extract-subtitles")
@@ -4886,7 +4905,7 @@ def api_download_desktop():
                 break
     if not exe_file:
         raise HTTPException(status_code=404, detail="桌面版安装包尚未构建")
-    return FileResponse(os.path.join(dl_dir, exe_file), filename=exe_file)
+    return _file_response(os.path.join(dl_dir, exe_file), filename=exe_file)
 
 
 @app.get("/api/download/server")
@@ -4895,7 +4914,7 @@ def api_download_server():
     path = os.path.join(dl_dir, "yishao-agent-server.zip")
     if not os.path.isfile(path):
         raise HTTPException(status_code=404, detail="服务器版安装包尚未构建")
-    return FileResponse(path, filename="yishao-agent-server.zip")
+    return _file_response(path, filename="yishao-agent-server.zip")
 
 
 # ── File Download ──
@@ -4936,14 +4955,14 @@ def download_file(filename: str, request: Request, project_id: str = None, name:
             proj_dir = resolve_project_storage(project_id, auto_create=False)
             filepath = os.path.join(proj_dir, filename)
             if os.path.exists(filepath):
-                return FileResponse(filepath, filename=download_name)
+                return _file_response(filepath, filename=download_name)
         except Exception:
             pass
 
     filepath = os.path.join(EXPORT_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(filepath, filename=download_name)
+    return _file_response(filepath, filename=download_name)
 
 
 # ── TTS ──
@@ -5841,10 +5860,24 @@ def member_renew(req: dict, request: Request):
              plan["duration_days"], payment_method, payment_ref, now),
         )
 
-        # Mark for admin re-approval
-        db.execute("UPDATE users SET is_approved=0, updated_at=? WHERE id=?",
-                   (now, user["id"]))
-        db.execute("UPDATE users SET token_version=token_version+1 WHERE id=?", (user["id"],))
+        # Only mark for admin re-approval if member has expired.
+        # Active members keep their access — renewal extends on approval.
+        is_expired = True
+        if user["expires_at"]:
+            try:
+                expires = datetime.fromisoformat(user["expires_at"])
+                if expires >= datetime.utcnow():
+                    is_expired = False
+            except (ValueError, TypeError):
+                pass
+        else:
+            # No expiry = permanent access
+            is_expired = False
+
+        if is_expired:
+            db.execute("UPDATE users SET is_approved=0, updated_at=? WHERE id=?",
+                       (now, user["id"]))
+            db.execute("UPDATE users SET token_version=token_version+1 WHERE id=?", (user["id"],))
 
         _write_audit(db, user["id"], "member.renew", "user", user["id"],
                       json.dumps({"plan_id": plan_id, "payment_method": payment_method,
@@ -6011,7 +6044,7 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
     db = get_db()
     try:
         m = db.execute(
-            "SELECT id, username, user_type, is_approved FROM users WHERE id=?",
+            "SELECT id, username, user_type, is_approved, expires_at FROM users WHERE id=?",
             (user_id,),
         ).fetchone()
         if not m:
@@ -6022,7 +6055,6 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
             raise HTTPException(400, "该用户已处理过")
 
         from datetime import datetime as _dt, timedelta as _td
-        expires_at = (_dt.utcnow() + _td(days=int(duration_days))).isoformat()
 
         # Check if user submitted a payment record (paid plan)
         payment = db.execute(
@@ -6031,13 +6063,22 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
             (user_id,),
         ).fetchone()
 
-        # Determine which role to assign
-        if payment and payment["amount_cents"] > 0:
+        # Determine which role to assign (based on whether payment was submitted, not amount)
+        if payment:
             role_name = "付费会员"
         else:
             role_name = "试用会员"
 
-        expires_at = (_dt.utcnow() + _td(days=int(duration_days))).isoformat()
+        # Extend from current expiry if still valid, otherwise from now
+        base = _dt.utcnow()
+        if m["expires_at"]:
+            try:
+                current = _dt.fromisoformat(m["expires_at"])
+                if current > base:
+                    base = current
+            except (ValueError, TypeError):
+                pass
+        expires_at = (base + _td(days=int(duration_days))).isoformat()
 
         db.execute(
             "UPDATE users SET is_approved=1, approved_by=?, approved_at=?, "
@@ -6632,13 +6673,12 @@ else:
     FRONTEND_DIST = os.path.join(WORKSPACE_ROOT, "frontend", "dist")
 if os.path.isdir(FRONTEND_DIST):
     import os as _os
-    from fastapi.responses import FileResponse as _FileResponse
 
     @app.get("/{full_path:path}")
     async def _spa_fallback(full_path: str):
         # HTML 一律 no-cache：防止手机浏览器缓存旧入口页后加载旧 JS（带 hash 的 assets 不受影响）
         def _serve(path: str):
-            resp = _FileResponse(path)
+            resp = _file_response(path)
             if path.endswith(".html"):
                 resp.headers["Cache-Control"] = "no-cache"
             return resp

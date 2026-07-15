@@ -74,3 +74,16 @@ scp -r d:\YISHAOAGENT\frontend\dist\mobile root@120.25.251.172:/opt/yishao-agent
    - 工作区分配：加载 `api.listWorkspaces()` 取全部工作区；已分配列表带 × 移除调用 `api.removeUserWorkspace`；下拉过滤后"添加"调用 `api.addUserWorkspaces`
    - 复用接口全部现成，桌面版已在用，无后端改动
    - 测试：test_mobile_phase2.py 扩展到 **41 项 ALL PASS**，新增 5 项：编辑弹层含角色/工作区分配区、角色分配后出现标签、角色移除后标签消失、工作区添加后出现删除按钮、工作区移除后删除按钮消失。产物 dist/mobile/assets/index-4ro8AuuG.js
+
+## Bug 修复（同日，续费登录锁 + 下载乱码 + 套餐 0 元）
+
+5. **续费后有效期内会员被锁**（app.py `member_renew`）：
+   - 根因：续费接口无条件设 `is_approved=0` + `token_version+1`，导致会员立即被登录拦截且现有 token 失效
+   - 修复：仅当会员已过期时才标记待审批；有效期内会员只创建付款记录，不影响登录状态
+   - 同时修复 `approve_member`：到期时间从当前有效期延长（而非从 now 开始），与 `record_payment` 一致；移除了重复的 `expires_at` 计算行
+6. **Chrome 下载文件乱码**（app.py FileResponse）：
+   - 根因：`FileResponse` 未设 `Content-Type` charset，Chrome 对 .txt/.html/.json 等文本文件猜测编码错误
+   - 修复：新增 `_file_response()` 包装函数，对文本类扩展名自动追加 `; charset=utf-8`；替换全部 6 处 `FileResponse` 调用
+7. **套餐 0 元支持**：
+   - 前端校验 `qc < 0` / `uc < 0` 只拦截负数，0 元原本就可保存
+   - `approve_member` 角色分配从 `amount_cents > 0` 改为 `if payment`（是否走付费流程，与金额无关）
