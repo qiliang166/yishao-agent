@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 const isImagePath = (v: string) =>
@@ -7,7 +7,6 @@ const isImagePath = (v: string) =>
 
 export default function MemberLoginPage() {
   const { memberLogin, user } = useAuth()
-  const navigate = useNavigate()
   const [brandName, setBrandName] = useState('')
   const [brandLogo, setBrandLogo] = useState('')
   const [contactInfo, setContactInfo] = useState('')
@@ -30,12 +29,9 @@ export default function MemberLoginPage() {
     }).catch(() => {})
   }, [])
 
-  // Already logged in → redirect to appropriate home
-  useEffect(() => {
-    if (user) {
-      navigate(user.user_type === 'member' ? '/app' : '/', { replace: true })
-    }
-  }, [user, navigate])
+  if (user) {
+    return <Navigate to={user.user_type === 'member' ? '/app' : '/'} replace />
+  }
 
   const handleSubmit = async () => {
     if (!username.trim() || !password.trim()) {
