@@ -329,7 +329,7 @@ export default function MRegister() {
               </button>
               <button className="m-btn-primary" style={{ flex: 1 }}
                 disabled={loading} onClick={handleSubmit}>
-                {loading ? '提交中…' : planType === 'trial' ? '开始试用' : '立即注册'}
+                {loading ? '提交中…' : planType === 'trial' ? '开始试用' : '提交审批'}
               </button>
             </div>
           </>

@@ -370,7 +370,7 @@ export default function MemberRegisterPage() {
               </button>
               <button className="btn btn-primary" onClick={handleSubmit}
                 disabled={loading} style={{ flex: 1 }}>
-                {loading ? '提交中...' : planType === 'trial' ? '开始试用' : '立即注册'}
+                {loading ? '提交中...' : planType === 'trial' ? '开始试用' : '提交审批'}
               </button>
             </div>
           </>

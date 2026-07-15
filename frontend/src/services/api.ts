@@ -897,6 +897,25 @@ export const api = {
     }).then(d => d as { ok: boolean }),
 
   // Members
+  listPendingMembers: (page?: number, pageSize?: number) => {
+    const params = new URLSearchParams()
+    if (page) params.set('page', String(page))
+    if (pageSize) params.set('page_size', String(pageSize))
+    const qs = params.toString()
+    return request('/api/members/pending' + (qs ? '?' + qs : '')).then(d => d as { members: any[]; total: number; page: number; page_size: number })
+  },
+  approveMember: (userId: string, durationDays?: number, note?: string) =>
+    request('/api/members/' + userId + '/approve', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ duration_days: durationDays || 30, note: note || '' }),
+    }).then(d => d as { ok: boolean; message: string; expires_at: string }),
+  rejectMember: (userId: string, reason?: string) =>
+    request('/api/members/' + userId + '/reject', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '' }),
+    }).then(d => d as { ok: boolean; message: string }),
   recordPayment: (userId: string, data: { amount_cents: number; plan_name: string; duration_days: number; payment_method?: string; note?: string }) =>
     request('/api/members/' + userId + '/payment', {
       method: 'POST',
@@ -929,6 +948,22 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(d => d as { ok: boolean; message: string; duration_days?: number }),
+
+  listPendingUpgrades: () =>
+    request('/api/members/pending-upgrades').then(d => d as { members: any[]; total: number }),
+
+  approveUpgrade: (userId: string) =>
+    request('/api/members/' + userId + '/approve-upgrade', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+    }).then(d => d as { ok: boolean; message: string; role: string }),
+
+  rejectUpgrade: (userId: string, reason?: string) =>
+    request('/api/members/' + userId + '/reject-upgrade', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '' }),
+    }).then(d => d as { ok: boolean; message: string }),
 
   listMyPayments: () =>
     request('/api/member/my-payments').then(d => d as { payments: any[] }),

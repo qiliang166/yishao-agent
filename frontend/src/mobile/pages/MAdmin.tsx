@@ -47,13 +47,22 @@ export default function MAdmin() {
   const canRole = !!user?.permissions?.includes('role.manage')
   const iAmSuper = user?.username === 'admin'
 
-  const [tab, setTab] = useState<'member' | 'admin' | 'plan' | 'stats'>('member')
+  const [tab, setTab] = useState<'member' | 'admin' | 'pending' | 'plan' | 'stats'>('member')
 
   // ── 会员/管理员列表 ──
   const [users, setUsers] = useState<any[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
+
+  // ── 待审批/审批明细 ──
+  const [pendingFilter, setPendingFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
+  const [upgrades, setUpgrades] = useState<any[]>([])
+  const [pending, setPending] = useState<any[]>([])
+  const [pendingPage, setPendingPage] = useState(1)
+  const [pendingTotal, setPendingTotal] = useState(0)
+  const [upgradeTotal, setUpgradeTotal] = useState(0)
+  const [pendingLoading, setPendingLoading] = useState(false)
 
   // ── 弹层 ──
   const [renewTarget, setRenewTarget] = useState<any | null>(null)
@@ -86,6 +95,20 @@ export default function MAdmin() {
   const [paymentsTarget, setPaymentsTarget] = useState<any | null>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
+
+  const [approveTarget, setApproveTarget] = useState<any | null>(null)
+  const [approveDays, setApproveDays] = useState('7')
+  const [approveNote, setApproveNote] = useState('')
+  const [approveSubmitting, setApproveSubmitting] = useState(false)
+
+  const [rejectTarget, setRejectTarget] = useState<any | null>(null)
+  const [rejectReason, setRejectReason] = useState('')
+  const [rejectSubmitting, setRejectSubmitting] = useState(false)
+
+  // ── 拒绝升级 ──
+  const [rejectUpgradeTarget, setRejectUpgradeTarget] = useState<any | null>(null)
+  const [rejectUpgradeReason, setRejectUpgradeReason] = useState('')
+  const [rejectUpgradeSubmitting, setRejectUpgradeSubmitting] = useState(false)
 
   const [busyUserId, setBusyUserId] = useState('')
 
@@ -133,6 +156,45 @@ export default function MAdmin() {
     }
   }, [])
 
+  const loadPending = useCallback(async (status: string, p: number) => {
+    setPendingLoading(true)
+    try {
+      const up = await api.listPendingUpgrades()
+      if (up != null && Array.isArray(up.members)) {
+        setUpgrades(up.members)
+        setUpgradeTotal(Number(up.total) || up.members.length)
+      } else {
+        setUpgrades([])
+        setUpgradeTotal(0)
+      }
+
+      if (status === 'pending') {
+        const pm = await api.listPendingMembers(p, PAGE_SIZE)
+        if (pm != null && Array.isArray(pm.members)) {
+          setPending(pm.members)
+          setPendingTotal(Number(pm.total) || 0)
+        } else {
+          setPending([])
+          setPendingTotal(0)
+        }
+      } else {
+        const st = status === 'all' ? undefined : status
+        const data = await api.listUsers({ user_type: 'member', status: st, page: p, page_size: PAGE_SIZE }) as any
+        if (data != null && Array.isArray(data.users)) {
+          setPending(data.users)
+          setPendingTotal(Number(data.total) || 0)
+        } else {
+          setPending([])
+          setPendingTotal(0)
+        }
+      }
+    } catch (e: any) {
+      mToast(`加载失败: ${e?.message || e}`, 'error')
+    } finally {
+      setPendingLoading(false)
+    }
+  }, [])
+
   const loadPlanSettings = useCallback(async () => {
     try {
       const data = await api.getSettings() as any
@@ -164,10 +226,18 @@ export default function MAdmin() {
     if (!canMember) return
     if (tab === 'member' || tab === 'admin') {
       loadUsers(tab, page)
+    } else if (tab === 'pending') {
+      loadPending(pendingFilter, pendingPage)
     } else if (tab === 'plan') {
       loadPlanSettings()
     }
-  }, [canMember, tab, page, loadUsers, loadPlanSettings])
+  }, [canMember, tab, page, pendingPage, pendingFilter, loadUsers, loadPending, loadPlanSettings])
+
+  // 进页时拉一次角标数
+  useEffect(() => {
+    if (!canMember) return
+    loadPending('pending', 1)
+  }, [canMember, loadPending])
 
   const handleToggleActive = async (u: any) => {
     const action = u.is_active === 0 ? '启用' : '停用'
@@ -439,6 +509,94 @@ export default function MAdmin() {
     }
   }
 
+  const openApprove = (m: any) => {
+    setApproveTarget(m)
+    setApproveDays(String(m?.payment?.duration_days || 7))
+    setApproveNote('')
+  }
+
+  const handleApprove = async () => {
+    if (approveTarget == null) return
+    const days = parseInt(approveDays, 10)
+    if (!Number.isFinite(days) || days <= 0) {
+      mToast('请填写有效天数', 'error')
+      return
+    }
+    setApproveSubmitting(true)
+    try {
+      const result = await api.approveMember(approveTarget.id, days, approveNote.trim())
+      if (result != null && result.ok) {
+        mToast(`已通过，到期时间：${fmtDate(result.expires_at)}`)
+        setApproveTarget(null)
+        await loadPending(pendingFilter, pendingPage)
+      } else {
+        mToast('审批失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`审批失败: ${e?.message || e}`, 'error')
+    } finally {
+      setApproveSubmitting(false)
+    }
+  }
+
+  const handleReject = async () => {
+    if (rejectTarget == null) return
+    setRejectSubmitting(true)
+    try {
+      const result = await api.rejectMember(rejectTarget.id, rejectReason.trim() || undefined)
+      if (result != null && result.ok) {
+        mToast('已拒绝')
+        setRejectTarget(null)
+        setRejectReason('')
+        await loadPending(pendingFilter, pendingPage)
+      } else {
+        mToast('操作失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`操作失败: ${e?.message || e}`, 'error')
+    } finally {
+      setRejectSubmitting(false)
+    }
+  }
+
+  const handleApproveUpgrade = async (m: any) => {
+    if (!window.confirm(`确定通过「${m.display_name || m.username}」的升级申请？`)) return
+    setBusyUserId(m.id)
+    try {
+      const result = await api.approveUpgrade(m.id)
+      if (result != null && result.ok) {
+        mToast('升级已通过')
+        await loadPending(pendingFilter, pendingPage)
+      } else {
+        mToast('操作失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`操作失败: ${e?.message || e}`, 'error')
+    } finally {
+      setBusyUserId('')
+    }
+  }
+
+  const handleRejectUpgrade = async () => {
+    if (rejectUpgradeTarget == null) return
+    setRejectUpgradeSubmitting(true)
+    try {
+      const result = await api.rejectUpgrade(rejectUpgradeTarget.id, rejectUpgradeReason.trim() || undefined)
+      if (result != null && result.ok) {
+        mToast('已拒绝升级')
+        setRejectUpgradeTarget(null)
+        setRejectUpgradeReason('')
+        await loadPending(pendingFilter, pendingPage)
+      } else {
+        mToast('操作失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`操作失败: ${e?.message || e}`, 'error')
+    } finally {
+      setRejectUpgradeSubmitting(false)
+    }
+  }
+
   const handleQrUpload = (which: 'wechat' | 'alipay') => (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -496,14 +654,43 @@ export default function MAdmin() {
     )
   }
 
+  const badge = upgradeTotal + pendingTotal
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const pendingPages = Math.max(1, Math.ceil(pendingTotal / PAGE_SIZE))
   const availableRoles = allRoles.filter(r => !editRoles.some(er => er.id === r.id))
   const availableWs = allWs.filter(w => !editWs.some(ew => ew.id === w.id))
 
   const statusBadge = (u: any) => {
     if (u.is_active === 0) return <span className="m-badge warn">已停用</span>
+    if (u.is_approved === 0) return <span className="m-badge warn">待审批</span>
+    if (u.is_approved === 2) return <span className="m-badge">已拒绝</span>
     return <span className="m-badge completed">正常</span>
   }
+
+  const paymentInfo = (m: any) => {
+    if (m.payment == null) return <span className="m-badge">试用</span>
+    return (
+      <>
+        {m.payment.plan_name || '付费'} {fmtYuan(m.payment.amount_cents)} · {payLabel(m.payment.payment_method)}
+        {m.payment.payment_ref ? ` · 单号 ${m.payment.payment_ref}` : ''}
+        {m.payment.note ? ` · ${m.payment.note}` : ''}
+      </>
+    )
+  }
+
+  // 审批状态筛选标签
+  const approvalFilterTabs = () => (
+    <div className="m-tabs" style={{ marginBottom: 12 }}>
+      <button className={`m-tab ${pendingFilter === 'pending' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('pending'); setPendingPage(1) }}>待审批</button>
+      <button className={`m-tab ${pendingFilter === 'approved' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('approved'); setPendingPage(1) }}>已通过</button>
+      <button className={`m-tab ${pendingFilter === 'rejected' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('rejected'); setPendingPage(1) }}>已拒绝</button>
+      <button className={`m-tab ${pendingFilter === 'all' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('all'); setPendingPage(1) }}>全部</button>
+    </div>
+  )
 
   return (
     <>
@@ -513,6 +700,10 @@ export default function MAdmin() {
           onClick={() => { setTab('member'); setPage(1) }}>会员</button>
         <button className={`m-tab ${tab === 'admin' ? 'active' : ''}`}
           onClick={() => { setTab('admin'); setPage(1) }}>管理员</button>
+        <button className={`m-tab ${tab === 'pending' ? 'active' : ''}`}
+          onClick={() => { setTab('pending'); setPendingFilter('pending'); setPendingPage(1) }}>
+          审批{badge > 0 && <span className="m-tab-badge">{badge}</span>}
+        </button>
         {canGlobal && (
           <button className={`m-tab ${tab === 'plan' ? 'active' : ''}`}
             onClick={() => setTab('plan')}>套餐</button>
@@ -530,8 +721,9 @@ export default function MAdmin() {
             <>
               {users.map(u => {
                 const isSuperAdmin = u.user_type === 'admin' && u.username === 'admin'
+                const isRejected = u.is_approved === 2
                 return (
-                  <div key={u.id} className="m-user-row" style={{ opacity: u.is_active ? 1 : 0.5 }}>
+                  <div key={u.id} className="m-user-row" style={{ opacity: (u.is_active && !isRejected) ? 1 : 0.5 }}>
                     <div className="m-user-head">
                       <div className="m-user-name">{u.display_name || u.username}</div>
                       {statusBadge(u)}
@@ -553,6 +745,7 @@ export default function MAdmin() {
                         <div style={{ marginTop: 2 }}>备注：{u.admin_note}</div>
                       )}
                     </div>
+                    {!isRejected && (
                       <div className="m-row-actions">
                         <button className="m-mini-btn" onClick={() => openEdit(u)}>编辑</button>
                         {tab === 'member' && (
@@ -576,6 +769,7 @@ export default function MAdmin() {
                             onClick={() => handleDelete(u)}>删除</button>
                         )}
                       </div>
+                    )}
                   </div>
                 )
               })}
@@ -585,6 +779,96 @@ export default function MAdmin() {
                   <span>{page} / {totalPages}</span>
                   <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>下一页</button>
                 </div>
+              )}
+            </>
+          )
+        )}
+
+        {tab === 'pending' && (
+          pendingLoading ? (
+            <div className="m-loading">加载中…</div>
+          ) : (
+            <>
+              {pendingFilter === 'pending' && upgrades.length > 0 && (
+                <>
+                  <div className="m-section-title">升级申请（{upgrades.length}）</div>
+                  {upgrades.map(m => (
+                    <div key={m.id} className="m-user-row">
+                      <div className="m-user-head">
+                        <div className="m-user-name">{m.display_name || m.username}</div>
+                        <span className="m-badge">升级</span>
+                      </div>
+                      <div className="m-user-meta">
+                        {m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}
+                        <br />{paymentInfo(m)}
+                      </div>
+                      <div className="m-row-actions">
+                        <button className="m-mini-btn primary" disabled={busyUserId === m.id}
+                          onClick={() => handleApproveUpgrade(m)}>通过升级</button>
+                        <button className="m-mini-btn warn"
+                          onClick={() => { setRejectUpgradeTarget(m); setRejectUpgradeReason('') }}>拒绝</button>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {approvalFilterTabs()}
+
+              {pending.length === 0 ? (
+                <div className="m-empty">
+                  {pendingFilter === 'pending' ? '暂无待审批会员' :
+                   pendingFilter === 'approved' ? '暂无已通过会员' :
+                   pendingFilter === 'rejected' ? '暂无已拒绝会员' : '暂无记录'}
+                </div>
+              ) : (
+                <>
+                  {pending.map(m => (
+                    <div key={m.id} className="m-user-row">
+                      <div className="m-user-head">
+                        <div className="m-user-name">{m.display_name || m.username}</div>
+                        {pendingFilter === 'pending' ? (
+                          <>
+                            {m.expires_at ? (
+                              <span className="m-badge" style={{ background: 'rgba(59,130,246,0.08)', color: 'var(--primary)', fontWeight: 600 }}>续费</span>
+                            ) : (
+                              <span className="m-badge" style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600 }}>新注册</span>
+                            )}
+                            {m.payment ? (
+                              <span className="m-badge" style={{ background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600 }}>付费</span>
+                            ) : (
+                              <span className="m-badge" style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600 }}>试用</span>
+                            )}
+                          </>
+                        ) : (
+                          statusBadge(m)
+                        )}
+                      </div>
+                      <div className="m-user-meta">
+                        <div>{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
+                        <div>注册：{fmtDate(m.created_at)} · {pendingFilter === 'pending' ? '原到期：' : '会员到期：'}{fmtDate(m.expires_at)}</div>
+                        {m.payment != null && <div style={{ marginTop: 2 }}>{paymentInfo(m)}</div>}
+
+                      </div>
+                      <div className="m-row-actions">
+                        {pendingFilter === 'pending' && (
+                          <>
+                            <button className="m-mini-btn primary" onClick={() => openApprove(m)}>通过</button>
+                            <button className="m-mini-btn warn" onClick={() => { setRejectTarget(m); setRejectReason('') }}>拒绝</button>
+                          </>
+                        )}
+                        <button className="m-mini-btn" onClick={() => openPayments(m)}>明细</button>
+                      </div>
+                    </div>
+                  ))}
+                  {pendingPages > 1 && (
+                    <div className="m-pager">
+                      <button disabled={pendingPage <= 1} onClick={() => setPendingPage(p => p - 1)}>上一页</button>
+                      <span>{pendingPage} / {pendingPages}</span>
+                      <button disabled={pendingPage >= pendingPages} onClick={() => setPendingPage(p => p + 1)}>下一页</button>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )
@@ -978,6 +1262,69 @@ export default function MAdmin() {
         </MSheet>
       )}
 
+      {approveTarget != null && (
+        <MSheet title={`通过审批 · ${approveTarget.display_name || approveTarget.username}`}
+          onClose={() => { if (!approveSubmitting) setApproveTarget(null) }}>
+          <div className="m-user-meta" style={{ marginBottom: 12 }}>
+            {approveTarget.payment != null
+              ? <>付款信息：{approveTarget.payment.plan_name || ''} {fmtYuan(approveTarget.payment.amount_cents)} · {payLabel(approveTarget.payment.payment_method)}{approveTarget.payment.payment_ref ? ` · 单号 ${approveTarget.payment.payment_ref}` : ''}</>
+              : '试用会员：默认 7 天有效期'}
+          </div>
+          <div className="m-field">
+            <label>生效天数</label>
+            <input className="m-input" type="number" inputMode="numeric" value={approveDays}
+              onChange={e => setApproveDays(e.target.value)} />
+          </div>
+          <div className="m-field">
+            <label>审批意见（可选）</label>
+            <input className="m-input" value={approveNote}
+              placeholder="可填写审批说明，将显示在审批记录中"
+              onChange={e => setApproveNote(e.target.value)} />
+          </div>
+          <div className="m-sheet-actions">
+            <button disabled={approveSubmitting} onClick={() => setApproveTarget(null)}>取消</button>
+            <button className="primary" disabled={approveSubmitting} onClick={handleApprove}>
+              {approveSubmitting ? '提交中…' : '确认通过'}
+            </button>
+          </div>
+        </MSheet>
+      )}
+
+      {rejectTarget != null && (
+        <MSheet title={`拒绝审批 · ${rejectTarget.display_name || rejectTarget.username}`}
+          onClose={() => { if (!rejectSubmitting) setRejectTarget(null) }}>
+          <div className="m-field">
+            <label>拒绝原因（可选）</label>
+            <input className="m-input" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
+          </div>
+          <div className="m-sheet-actions">
+            <button disabled={rejectSubmitting} onClick={() => setRejectTarget(null)}>取消</button>
+            <button className="primary" disabled={rejectSubmitting} onClick={handleReject}>
+              {rejectSubmitting ? '提交中…' : '确认拒绝'}
+            </button>
+          </div>
+        </MSheet>
+      )}
+
+      {rejectUpgradeTarget != null && (
+        <MSheet title={`拒绝升级 · ${rejectUpgradeTarget.display_name || rejectUpgradeTarget.username}`}
+          onClose={() => { if (!rejectUpgradeSubmitting) setRejectUpgradeTarget(null) }}>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>
+            驳回后将标记升级付款记录为已处理，会员状态不受影响。
+          </p>
+          <div className="m-field">
+            <label>拒绝原因（可选）</label>
+            <input className="m-input" value={rejectUpgradeReason} onChange={e => setRejectUpgradeReason(e.target.value)}
+              placeholder="如：查不到订单编号" />
+          </div>
+          <div className="m-sheet-actions">
+            <button disabled={rejectUpgradeSubmitting} onClick={() => setRejectUpgradeTarget(null)}>取消</button>
+            <button className="primary" disabled={rejectUpgradeSubmitting} onClick={handleRejectUpgrade}>
+              {rejectUpgradeSubmitting ? '提交中…' : '确认拒绝'}
+            </button>
+          </div>
+        </MSheet>
+      )}
     </>
   )
 }

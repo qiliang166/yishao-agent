@@ -6390,34 +6390,8 @@ def member_register(req: dict, request: Request):
                  duration_days, payment_method, payment_ref, now),
             )
 
-            # Auto-approve: set expiry, assign paid role, grant points
-            expires_at = (datetime.utcnow() + _td_dt(days=duration_days)).isoformat()
-            db.execute("UPDATE users SET expires_at=?, approved_by=?, approved_at=?, updated_at=? WHERE id=?",
-                       (expires_at, user_id, now, now, user_id))
-
-            role = db.execute("SELECT id FROM roles WHERE name='付费会员' AND is_system=1").fetchone()
-            if role:
-                db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
-                           (user_id, role["id"]))
-
-            # Grant points from payment + new user bonus
-            try:
-                points_per_yuan = _get_points_per_yuan()
-                points_granted = round(amount_cents / 100.0 * points_per_yuan * 10)
-                if points_granted > 0:
-                    _add_points(db, user_id, points_granted, "purchase",
-                               ref_id=payment_id, ref_type="payment",
-                               note=f"购买 {plan_name} 获 {points_granted/10:.1f} 积分",
-                               expires_at=expires_at)
-                    db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
-                              (points_granted, payment_id))
-                bonus_deci = _new_user_bonus_deci()
-                if bonus_deci > 0:
-                    _add_points(db, user_id, bonus_deci, "signup_bonus",
-                               note=f"新人礼包 {bonus_deci/10:.1f} 积分",
-                               expires_at=expires_at)
-            except Exception as e:
-                print(f"[Points] Warning: failed to grant points on registration: {e}")
+            # Paid registration: set pending, requires admin to verify payment
+            db.execute("UPDATE users SET is_approved=0, updated_at=? WHERE id=?", (now, user_id))
 
             audit_detail["plan_id"] = plan_id
             audit_detail["payment_method"] = payment_method
@@ -6435,7 +6409,8 @@ def member_register(req: dict, request: Request):
         db.commit()
     finally:
         db.close()
-    return {"ok": True, "message": "注册成功"}
+    msg = "注册成功" if plan_type != "paid" else "已提交，等待管理员审核付款"
+    return {"ok": True, "message": msg}
 
 
 @app.post("/api/member/renew")
