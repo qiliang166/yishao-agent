@@ -217,13 +217,17 @@ def list_users(user_type: str = None, status: str = None, search: str = None,
             params + [page_size, offset]).fetchall()
 
         users = []
+        is_superadmin = user.get("username") == "admin"
         for r in rows:
             u = {
                 "id": r["id"], "username": r["username"], "display_name": r["display_name"],
                 "email": r["email"], "phone": dict(r).get("phone", ""), "user_type": r["user_type"],
                 "is_active": r["is_active"], "is_approved": r["is_approved"],
                 "expires_at": r["expires_at"], "created_at": r["created_at"],
+                "approval_note": dict(r).get("approval_note", "") or "",
             }
+            if is_superadmin:
+                u["admin_note"] = dict(r).get("admin_note", "") or ""
             # Get roles
             role_rows = db.execute(
                 "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
@@ -245,6 +249,8 @@ def get_user(user_id: str, user=require_perm("member.manage")):
             raise HTTPException(404, "用户不存在")
         u = dict(row)
         u.pop("password_hash", None)
+        if user.get("username") != "admin":
+            u.pop("admin_note", None)
         role_rows = db.execute(
             "SELECT r.id, r.name FROM roles r JOIN user_roles ur ON r.id = ur.role_id WHERE ur.user_id = ?",
             (user_id,)).fetchall()
@@ -290,7 +296,7 @@ def create_user(req: dict, user=require_perm("member.manage")):
             email_exist = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
             if email_exist:
                 raise HTTPException(400, "邮箱已被注册")
-        expires_val = None if user_type == "admin" else "datetime('now', '+30 days')"
+        expires_val = "NULL" if user_type == "admin" else "datetime('now', '+30 days')"
         db.execute(
             f"""INSERT INTO users (id, username, password_hash, display_name, email, user_type,
                is_active, is_approved, approved_by, approved_at, expires_at, created_at, updated_at)
@@ -302,6 +308,8 @@ def create_user(req: dict, user=require_perm("member.manage")):
         row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         result = dict(row)
         result.pop("password_hash", None)
+        if user.get("username") != "admin":
+            result.pop("admin_note", None)
         return result
     finally:
         db.close()
@@ -326,10 +334,17 @@ def update_user(user_id: str, req: dict, user=require_perm("member.manage")):
                 raise HTTPException(403, "超级管理员不可停用")
             db.execute("UPDATE users SET is_active = ?, updated_at = datetime('now') WHERE id = ?",
                        (req["is_active"], user_id))
+        if "admin_note" in req:
+            if user.get("username") != "admin":
+                raise HTTPException(403, "仅超级管理员可修改备注")
+            db.execute("UPDATE users SET admin_note = ?, updated_at = datetime('now') WHERE id = ?",
+                       ((req["admin_note"] or "").strip(), user_id))
         db.commit()
         row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         result = dict(row)
         result.pop("password_hash", None)
+        if user.get("username") != "admin":
+            result.pop("admin_note", None)
         return result
     finally:
         db.close()

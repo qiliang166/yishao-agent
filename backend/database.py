@@ -1179,6 +1179,16 @@ def init_db():
         except Exception as e:
             print(f"[DB] Warning: could not add upgrade_expires_at to users: {e}")
 
+        # Ensure admin_note (超管专用备注) / approval_note (审批意见) columns exist
+        try:
+            users_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
+            if "admin_note" not in users_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN admin_note TEXT DEFAULT ''")
+            if "approval_note" not in users_cols:
+                conn.execute("ALTER TABLE users ADD COLUMN approval_note TEXT DEFAULT ''")
+        except Exception as e:
+            print(f"[DB] Warning: could not add admin_note/approval_note to users: {e}")
+
         # Backfill: existing users with 开发体验员 role get upgrade_expires_at = expires_at
         try:
             conn.execute("""

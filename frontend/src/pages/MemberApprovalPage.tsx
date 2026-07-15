@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/api'
+import PaymentHistoryDialog from '../components/PaymentHistoryDialog'
 
 interface PaymentInfo {
   plan_name: string
@@ -9,7 +10,7 @@ interface PaymentInfo {
   payment_ref: string
 }
 
-interface PendingMember {
+interface MemberRow {
   id: string
   username: string
   display_name: string
@@ -17,7 +18,9 @@ interface PendingMember {
   phone: string
   is_approved: number
   created_at: string
-  payment: PaymentInfo | null
+  expires_at?: string | null
+  approval_note?: string
+  payment?: PaymentInfo | null
 }
 
 interface PendingUpgrade {
@@ -32,6 +35,15 @@ interface PendingUpgrade {
   payment: PaymentInfo | null
 }
 
+type StatusFilter = 'pending' | 'approved' | 'rejected' | 'all'
+
+const FILTER_TABS: { key: StatusFilter; label: string }[] = [
+  { key: 'pending', label: '待审批' },
+  { key: 'approved', label: '已通过' },
+  { key: 'rejected', label: '已拒绝' },
+  { key: 'all', label: '全部' },
+]
+
 function formatAmount(cents: number): string {
   return (cents / 100).toFixed(2)
 }
@@ -40,18 +52,38 @@ function paymentMethodLabel(m: string): string {
   return m === 'wechat' ? '微信支付' : m === 'alipay' ? '支付宝' : m || '—'
 }
 
+function statusBadge(isApproved: number) {
+  const map: Record<number, { text: string; bg: string; color: string }> = {
+    0: { text: '待审批', bg: 'rgba(240,173,78,0.12)', color: '#f0ad4e' },
+    1: { text: '已通过', bg: 'rgba(92,184,92,0.12)', color: '#5cb85c' },
+    2: { text: '已拒绝', bg: 'rgba(217,83,79,0.12)', color: 'var(--warning)' },
+  }
+  const s = map[isApproved] || map[0]
+  return (
+    <span style={{
+      marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+      background: s.bg, color: s.color, fontWeight: 600,
+    }}>
+      {s.text}
+    </span>
+  )
+}
+
 export default function MemberApprovalPage() {
-  const [members, setMembers] = useState<PendingMember[]>([])
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending')
+  const [members, setMembers] = useState<MemberRow[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [approveId, setApproveId] = useState<string | null>(null)
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [durationDays, setDurationDays] = useState(7)
+  const [approveNote, setApproveNote] = useState('')
   const [rejectReason, setRejectReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
+  const [payHistUser, setPayHistUser] = useState<MemberRow | null>(null)
 
   // Pending upgrades
   const [upgrades, setUpgrades] = useState<PendingUpgrade[]>([])
@@ -60,16 +92,36 @@ export default function MemberApprovalPage() {
 
   const pageSize = 20
 
-  const loadMembers = () => {
+  const loadMembers = useCallback(async () => {
     setLoading(true)
-    api.listPendingMembers(page, pageSize)
-      .then(data => {
-        setMembers(data.members as PendingMember[])
-        setTotal(data.total)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }
+    try {
+      if (statusFilter === 'pending') {
+        const data = await api.listPendingMembers(page, pageSize)
+        if (data != null && Array.isArray(data.members)) {
+          setMembers(data.members as MemberRow[])
+          setTotal(Number(data.total) || 0)
+        } else {
+          setMembers([]); setTotal(0)
+        }
+      } else {
+        const data = await api.listUsers({
+          user_type: 'member',
+          status: statusFilter === 'all' ? undefined : statusFilter,
+          page, page_size: pageSize,
+        }) as any
+        if (data != null && Array.isArray(data.users)) {
+          setMembers(data.users as MemberRow[])
+          setTotal(Number(data.total) || 0)
+        } else {
+          setMembers([]); setTotal(0)
+        }
+      }
+    } catch {
+      setMembers([]); setTotal(0)
+    } finally {
+      setLoading(false)
+    }
+  }, [statusFilter, page])
 
   const loadUpgrades = () => {
     setUpgradeLoading(true)
@@ -79,7 +131,7 @@ export default function MemberApprovalPage() {
       .finally(() => setUpgradeLoading(false))
   }
 
-  useEffect(() => { loadMembers() }, [page])
+  useEffect(() => { loadMembers() }, [loadMembers])
   useEffect(() => { loadUpgrades() }, [])
 
   const showToast = (msg: string) => {
@@ -94,10 +146,12 @@ export default function MemberApprovalPage() {
     setActionLoading(true)
     setError('')
     try {
-      await api.approveMember(approveId, durationDays)
+      const result = await api.approveMember(approveId, durationDays, approveNote.trim())
+      if (result == null) { setError('操作失败：服务器未确认'); return }
       showToast('审批通过')
       setApproveId(null)
       setDurationDays(7)
+      setApproveNote('')
       loadMembers()
     } catch (e: any) {
       setError(e.message || '操作失败')
@@ -111,7 +165,8 @@ export default function MemberApprovalPage() {
     setActionLoading(true)
     setError('')
     try {
-      await api.rejectMember(rejectId, rejectReason)
+      const result = await api.rejectMember(rejectId, rejectReason)
+      if (result == null) { setError('操作失败：服务器未确认'); return }
       showToast('已拒绝')
       setRejectId(null)
       setRejectReason('')
@@ -128,7 +183,8 @@ export default function MemberApprovalPage() {
     setActionLoading(true)
     setError('')
     try {
-      await api.approveUpgrade(approveUpgradeId)
+      const result = await api.approveUpgrade(approveUpgradeId)
+      if (result == null) { setError('操作失败：服务器未确认'); return }
       showToast('升级审批通过')
       setApproveUpgradeId(null)
       loadUpgrades()
@@ -139,9 +195,10 @@ export default function MemberApprovalPage() {
     }
   }
 
-  const openApprove = (m: PendingMember) => {
+  const openApprove = (m: MemberRow) => {
     setApproveId(m.id)
     setDurationDays(m.payment ? (m.payment.duration_days || 90) : 7)
+    setApproveNote('')
     setError('')
   }
 
@@ -152,7 +209,7 @@ export default function MemberApprovalPage() {
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 24px 0' }}>会员审批</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 16px 0' }}>会员审批</h1>
 
       {toast && (
         <div style={{
@@ -164,8 +221,26 @@ export default function MemberApprovalPage() {
         </div>
       )}
 
-      {/* ── Pending Upgrades ── */}
-      {upgrades.length > 0 && (
+      {/* ── Status Filter Tabs ── */}
+      <div style={{ display: 'flex', marginBottom: 20, borderBottom: '1px solid var(--border)' }}>
+        {FILTER_TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => { setStatusFilter(t.key); setPage(1) }}
+            style={{
+              padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: statusFilter === t.key ? 700 : 400,
+              color: statusFilter === t.key ? 'var(--primary)' : 'var(--text-secondary)',
+              borderBottom: statusFilter === t.key ? '2px solid var(--primary)' : '2px solid transparent',
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Pending Upgrades (only under pending filter) ── */}
+      {statusFilter === 'pending' && upgrades.length > 0 && (
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>
             待审批升级 ({upgrades.length})
@@ -222,9 +297,10 @@ export default function MemberApprovalPage() {
         </div>
       )}
 
-      {/* ── Pending Members ── */}
+      {/* ── Members ── */}
       <h2 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>
-        待审批会员
+        {statusFilter === 'pending' ? '待审批会员' : statusFilter === 'approved' ? '已通过会员' : statusFilter === 'rejected' ? '已拒绝会员' : '全部会员'}
+        {statusFilter !== 'pending' && total > 0 && ` (${total})`}
       </h2>
 
       {loading ? (
@@ -234,8 +310,8 @@ export default function MemberApprovalPage() {
           textAlign: 'center', padding: 64,
           color: 'var(--text-secondary)', fontSize: 12,
         }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
-          <p>全部已处理</p>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>{statusFilter === 'pending' ? '✅' : '📭'}</div>
+          <p>{statusFilter === 'pending' ? '全部已处理' : '暂无记录'}</p>
         </div>
       ) : (
         <>
@@ -255,44 +331,68 @@ export default function MemberApprovalPage() {
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
                       @{m.username}
                     </span>
-                    {m.payment ? (
-                      <span style={{
-                        marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
-                        background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600,
-                      }}>
-                        付费
-                      </span>
+                    {statusFilter === 'pending' ? (
+                      m.payment ? (
+                        <span style={{
+                          marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                          background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600,
+                        }}>
+                          付费
+                        </span>
+                      ) : (
+                        <span style={{
+                          marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                          background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600,
+                        }}>
+                          试用
+                        </span>
+                      )
                     ) : (
-                      <span style={{
-                        marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
-                        background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600,
-                      }}>
-                        试用
-                      </span>
+                      statusBadge(m.is_approved)
                     )}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                     {m.email || '无邮箱'}{m.phone ? ` · ${m.phone}` : ''} · 注册于 {new Date(m.created_at).toLocaleString('zh-CN')}
                   </div>
+                  {statusFilter !== 'pending' && m.expires_at && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      会员到期：{new Date(m.expires_at).toLocaleDateString('zh-CN')}
+                    </div>
+                  )}
                   {m.payment && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                       付款单号：{m.payment.payment_ref || '—'} · {paymentMethodLabel(m.payment.payment_method)} · ￥{formatAmount(m.payment.amount_cents)}
                     </div>
                   )}
+                  {statusFilter !== 'pending' && m.approval_note && (
+                    <div style={{ fontSize: 11, color: 'var(--text)', marginTop: 2 }}>
+                      审批意见：{m.approval_note}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => openApprove(m)}
-                  >
-                    通过
-                  </button>
+                  {m.is_approved === 0 && statusFilter === 'pending' && (
+                    <>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={() => openApprove(m)}
+                      >
+                        通过
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => { setRejectId(m.id); setRejectReason(''); setError('') }}
+                        style={{ color: 'var(--warning)' }}
+                      >
+                        拒绝
+                      </button>
+                    </>
+                  )}
                   <button
                     className="btn btn-ghost btn-sm"
-                    onClick={() => { setRejectId(m.id); setRejectReason(''); setError('') }}
-                    style={{ color: 'var(--warning)' }}
+                    onClick={() => setPayHistUser(m)}
                   >
-                    拒绝
+                    明细
                   </button>
                 </div>
               </div>
@@ -314,6 +414,9 @@ export default function MemberApprovalPage() {
           )}
         </>
       )}
+
+      {/* Payment History Dialog */}
+      <PaymentHistoryDialog user={payHistUser} onClose={() => setPayHistUser(null)} />
 
       {/* Approve Member Dialog */}
       {approveId && selectedMember && (
@@ -376,6 +479,17 @@ export default function MemberApprovalPage() {
               onChange={e => setDurationDays(Number(e.target.value))}
               style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
             />
+            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>
+              审批意见（可选）
+            </label>
+            <textarea
+              className="form-input"
+              rows={2}
+              value={approveNote}
+              onChange={e => setApproveNote(e.target.value)}
+              placeholder="可填写审批说明，将显示在审批记录中"
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, resize: 'vertical' }}
+            />
             {error && (
               <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>{error}</div>
             )}
@@ -395,7 +509,7 @@ export default function MemberApprovalPage() {
           <div className="dialog-box" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
             <div className="dialog-title">拒绝审批</div>
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              拒绝后该会员将无法登录。可附带拒绝原因。
+              拒绝后该会员将无法登录。可附带拒绝原因（作为审批意见保存）。
             </p>
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
               拒绝原因（可选）

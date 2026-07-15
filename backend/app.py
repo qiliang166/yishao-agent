@@ -6026,6 +6026,7 @@ def list_pending_members(page: int = 1, page_size: int = 20, user=require_perm("
 
 class ApproveMemberReq(BaseModel):
     duration_days: int = 30
+    note: str = ""
 
 class RejectMemberReq(BaseModel):
     reason: str = ""
@@ -6085,9 +6086,9 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
 
         db.execute(
             "UPDATE users SET is_approved=1, approved_by=?, approved_at=?, "
-            "expires_at=?, updated_at=? WHERE id=?",
+            "expires_at=?, approval_note=?, updated_at=? WHERE id=?",
             (user["sub"], _dt.utcnow().isoformat(), expires_at,
-             _dt.utcnow().isoformat(), user_id),
+             (body.note or "").strip(), _dt.utcnow().isoformat(), user_id),
         )
 
         # Assign role
@@ -6149,8 +6150,9 @@ async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
         from datetime import datetime as _dt
         db.execute(
             "UPDATE users SET is_approved=2, approved_by=?, approved_at=?, "
-            "updated_at=? WHERE id=?",
-            (user["sub"], _dt.utcnow().isoformat(), _dt.utcnow().isoformat(), user_id),
+            "approval_note=?, updated_at=? WHERE id=?",
+            (user["sub"], _dt.utcnow().isoformat(), (reason or "").strip(),
+             _dt.utcnow().isoformat(), user_id),
         )
         _write_audit(db, user["sub"], "member.reject", "user", user_id,
                       json.dumps({"reason": reason}), ip_address=ip)

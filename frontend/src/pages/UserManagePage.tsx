@@ -1,17 +1,21 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
+import { useAuth } from '../contexts/AuthContext'
+import PaymentHistoryDialog from '../components/PaymentHistoryDialog'
 
 interface UserItem {
   id: string
   username: string
   display_name: string
   email: string
+  phone?: string
   user_type: string
   is_active: number
   is_approved: number
   expires_at: string | null
   created_at: string
+  admin_note?: string
   roles: { id: string; name: string }[]
 }
 
@@ -32,6 +36,8 @@ interface WorkspaceItem {
 export default function UserManagePage() {
   const canManageMembers = usePermission('member.manage')
   const canManageRoles = usePermission('role.manage')
+  const { user: authUser } = useAuth()
+  const isSuperAdmin = authUser?.username === 'admin'
   const [tab, setTab] = useState<'admin' | 'member'>('admin')
   const [users, setUsers] = useState<UserItem[]>([])
   const [total, setTotal] = useState(0)
@@ -53,6 +59,7 @@ export default function UserManagePage() {
   const [editUser, setEditUser] = useState<UserItem | null>(null)
   const [editDisplayName, setEditDisplayName] = useState('')
   const [editEmail, setEditEmail] = useState('')
+  const [editAdminNote, setEditAdminNote] = useState('')
   const [userRoles, setUserRoles] = useState<{id:string;name:string}[]>([])
   const [allRoles, setAllRoles] = useState<RoleItem[]>([])
   const [userWorkspaces, setUserWorkspaces] = useState<WorkspaceItem[]>([])
@@ -61,6 +68,9 @@ export default function UserManagePage() {
   const [editError, setEditError] = useState('')
   const [resetPwValue, setResetPwValue] = useState('')
   const [resetPwLoading, setResetPwLoading] = useState(false)
+
+  // Payment history dialog
+  const [payHistUser, setPayHistUser] = useState<UserItem | null>(null)
 
   // Payment dialog
   const [payUser, setPayUser] = useState<UserItem | null>(null)
@@ -101,6 +111,7 @@ export default function UserManagePage() {
     setEditUser(u)
     setEditDisplayName(u.display_name)
     setEditEmail(u.email || '')
+    setEditAdminNote(u.admin_note || '')
     setEditError('')
     setSelectedRoleId('')
     setSelectedWsId('')
@@ -123,10 +134,15 @@ export default function UserManagePage() {
     setEditLoading(true)
     setEditError('')
     try {
-      await api.updateUser(editUser.id, {
+      const payload: any = {
         display_name: editDisplayName,
         email: editEmail,
-      })
+      }
+      if (isSuperAdmin && editAdminNote !== (editUser.admin_note || '')) {
+        payload.admin_note = editAdminNote
+      }
+      const result = await api.updateUser(editUser.id, payload)
+      if (result == null) { setEditError('保存失败：服务器未确认'); return }
       showToast('用户信息已更新')
       setEditUser(null)
       loadUsers()
@@ -390,10 +406,17 @@ export default function UserManagePage() {
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
                     {u.email || '无邮箱'}
+                    {u.phone ? ` · ${u.phone}` : ''}
+                    {` · 注册：${new Date(u.created_at).toLocaleDateString('zh-CN')}`}
                     {tab === 'member' && (
                       <span> · 会员：{expiresInfo(u)}</span>
                     )}
                   </div>
+                  {isSuperAdmin && u.admin_note && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 3 }}>
+                      备注：{u.admin_note}
+                    </div>
+                  )}
                   {tab === 'member' && u.roles && u.roles.length > 0 && (
                     <div style={{ fontSize: 11, marginTop: 3, display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                       <span style={{ color: 'var(--text-secondary)', flexShrink: 0 }}>角色：</span>
@@ -423,8 +446,11 @@ export default function UserManagePage() {
                     <button className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>编辑</button>
                   )}
                   {tab === 'member' && canManageMembers && (
-                    <button className="btn btn-ghost btn-sm" onClick={() => openPayment(u)}
-                      style={{ color: 'var(--primary)' }}>付费</button>
+                    <>
+                      <button className="btn btn-ghost btn-sm" onClick={() => openPayment(u)}
+                        style={{ color: 'var(--primary)' }}>付费</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setPayHistUser(u)}>明细</button>
+                    </>
                   )}
                   {u.username !== 'admin' && canManageMembers && (
                     <>
@@ -464,6 +490,18 @@ export default function UserManagePage() {
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>邮箱</label>
             <input className="form-input" value={editEmail} onChange={e => setEditEmail(e.target.value)}
               style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
+
+            {isSuperAdmin && (
+              <>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>
+                  备注（仅超级管理员可见）
+                </label>
+                <textarea className="form-input" rows={2} value={editAdminNote}
+                  onChange={e => setEditAdminNote(e.target.value)}
+                  placeholder="如：某学校李老师、老客户等"
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, resize: 'vertical' }} />
+              </>
+            )}
 
             {/* Roles */}
             {canManageRoles && (
@@ -567,6 +605,9 @@ export default function UserManagePage() {
           </div>
         </div>
       )}
+
+      {/* Payment History Dialog */}
+      <PaymentHistoryDialog user={payHistUser} onClose={() => setPayHistUser(null)} />
 
       {/* Payment Dialog */}
       {payUser && (

@@ -28,6 +28,12 @@ def db_get(sql, args=()):
     db.close()
     return dict(row) if row else None
 
+def db_exec(sql, args=()):
+    db = sqlite3.connect(DB)
+    db.execute(sql, args)
+    db.commit()
+    db.close()
+
 def mint_token(user_row_filter):
     db = sqlite3.connect(DB)
     db.row_factory = sqlite3.Row
@@ -395,7 +401,7 @@ def run_ui_tests(admin_token, uid, s0):
             check('续费提交成功(%s)' % order_no, ok)
 
         # Make member appear expired so renewal triggers is_approved=0 (pending)
-        db_get("UPDATE users SET expires_at = datetime('now', '-1 day') WHERE username = ?", (TEST_USER,))
+        db_exec("UPDATE users SET expires_at = datetime('now', '-1 day') WHERE username = ?", (TEST_USER,))
 
         submit_renew('TEST-ORDER-001')
 
@@ -432,7 +438,7 @@ def run_ui_tests(admin_token, uid, s0):
             check('审批通过后 is_approved=1', t5 is not None and t5.get('is_approved') == 1, t5 and t5.get('is_approved'))
 
         # 第二次续费 → 拒绝（先过期，否则不会标记待审批）
-        db_get("UPDATE users SET expires_at = datetime('now', '-1 day') WHERE username = ?", (TEST_USER,))
+        db_exec("UPDATE users SET expires_at = datetime('now', '-1 day') WHERE username = ?", (TEST_USER,))
         submit_renew('TEST-ORDER-002')
         open_pending_tab()
         prow2 = page4.evaluate("""() => {

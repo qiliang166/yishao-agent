@@ -45,6 +45,7 @@ export default function MAdmin() {
   const canMember = user?.user_type === 'admin' && !!user?.permissions?.includes('member.manage')
   const canGlobal = !!user?.permissions?.includes('config.global')
   const canRole = !!user?.permissions?.includes('role.manage')
+  const iAmSuper = user?.username === 'admin'
 
   const [tab, setTab] = useState<'member' | 'admin' | 'pending' | 'plan'>('member')
 
@@ -76,6 +77,7 @@ export default function MAdmin() {
   const [editName, setEditName] = useState('')
   const [editEmail, setEditEmail] = useState('')
   const [editPassword, setEditPassword] = useState('')
+  const [editAdminNote, setEditAdminNote] = useState('')
   const [editSubmitting, setEditSubmitting] = useState(false)
   const [editLoading, setEditLoading] = useState(false)
 
@@ -96,6 +98,7 @@ export default function MAdmin() {
 
   const [approveTarget, setApproveTarget] = useState<any | null>(null)
   const [approveDays, setApproveDays] = useState('7')
+  const [approveNote, setApproveNote] = useState('')
   const [approveSubmitting, setApproveSubmitting] = useState(false)
 
   const [rejectTarget, setRejectTarget] = useState<any | null>(null)
@@ -255,6 +258,7 @@ export default function MAdmin() {
     setEditName(u.display_name || '')
     setEditEmail(u.email || '')
     setEditPassword('')
+    setEditAdminNote(u.admin_note || '')
     setEditRoles([])
     setAllRoles([])
     setEditRoleId('')
@@ -286,11 +290,14 @@ export default function MAdmin() {
     if (editTarget == null) return
     setEditSubmitting(true)
     try {
-      if (editName !== (editTarget.display_name || '') || editEmail !== (editTarget.email || '')) {
-        const result = await api.updateUser(editTarget.id, {
+      const noteChanged = iAmSuper && editAdminNote !== (editTarget.admin_note || '')
+      if (editName !== (editTarget.display_name || '') || editEmail !== (editTarget.email || '') || noteChanged) {
+        const payload: any = {
           display_name: editName.trim() || undefined,
           email: editEmail.trim() || undefined,
-        })
+        }
+        if (noteChanged) payload.admin_note = editAdminNote
+        const result = await api.updateUser(editTarget.id, payload)
         if (result == null) { mToast('保存失败：服务器未确认', 'error'); return }
       }
       if (editPassword.trim() && editPassword.trim().length >= 8) {
@@ -428,6 +435,7 @@ export default function MAdmin() {
   const openApprove = (m: any) => {
     setApproveTarget(m)
     setApproveDays(String(m?.payment?.duration_days || 7))
+    setApproveNote('')
   }
 
   const handleApprove = async () => {
@@ -439,7 +447,7 @@ export default function MAdmin() {
     }
     setApproveSubmitting(true)
     try {
-      const result = await api.approveMember(approveTarget.id, days)
+      const result = await api.approveMember(approveTarget.id, days, approveNote.trim())
       if (result != null && result.ok) {
         mToast(`已通过，到期时间：${fmtDate(result.expires_at)}`)
         setApproveTarget(null)
@@ -633,6 +641,9 @@ export default function MAdmin() {
                           ))}
                         </div>
                       )}
+                      {iAmSuper && u.admin_note && (
+                        <div style={{ marginTop: 2 }}>备注：{u.admin_note}</div>
+                      )}
                     </div>
                     <div className="m-row-actions">
                       <button className="m-mini-btn" onClick={() => openEdit(u)}>编辑</button>
@@ -715,6 +726,9 @@ export default function MAdmin() {
                         <div>@{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
                         <div>注册：{fmtDate(m.created_at)} · 到期：{fmtDate(m.expires_at)}</div>
                         {m.payment != null && <div style={{ marginTop: 2 }}>{paymentInfo(m)}</div>}
+                        {pendingFilter !== 'pending' && m.approval_note && (
+                          <div style={{ marginTop: 2 }}>审批意见：{m.approval_note}</div>
+                        )}
                       </div>
                       <div className="m-row-actions">
                         {pendingFilter === 'pending' && (
@@ -834,6 +848,14 @@ export default function MAdmin() {
                 <input className="m-input" type="password" value={editPassword} autoComplete="new-password"
                   onChange={e => setEditPassword(e.target.value)} />
               </div>
+              {iAmSuper && (
+                <div className="m-field">
+                  <label>备注（仅超级管理员可见）</label>
+                  <input className="m-input" value={editAdminNote}
+                    placeholder="如：某学校李老师、老客户等"
+                    onChange={e => setEditAdminNote(e.target.value)} />
+                </div>
+              )}
 
               {canRole && (
                 <>
@@ -998,6 +1020,12 @@ export default function MAdmin() {
             <label>生效天数</label>
             <input className="m-input" type="number" inputMode="numeric" value={approveDays}
               onChange={e => setApproveDays(e.target.value)} />
+          </div>
+          <div className="m-field">
+            <label>审批意见（可选）</label>
+            <input className="m-input" value={approveNote}
+              placeholder="可填写审批说明，将显示在审批记录中"
+              onChange={e => setApproveNote(e.target.value)} />
           </div>
           <div className="m-sheet-actions">
             <button disabled={approveSubmitting} onClick={() => setApproveTarget(null)}>取消</button>

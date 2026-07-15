@@ -904,11 +904,11 @@ export const api = {
     const qs = params.toString()
     return request('/api/members/pending' + (qs ? '?' + qs : '')).then(d => d as { members: any[]; total: number; page: number; page_size: number })
   },
-  approveMember: (userId: string, durationDays?: number) =>
+  approveMember: (userId: string, durationDays?: number, note?: string) =>
     request('/api/members/' + userId + '/approve', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ duration_days: durationDays || 30 }),
+      body: JSON.stringify({ duration_days: durationDays || 30, note: note || '' }),
     }).then(d => d as { ok: boolean; message: string; expires_at: string }),
   rejectMember: (userId: string, reason?: string) =>
     request('/api/members/' + userId + '/reject', {
@@ -1005,7 +1005,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(d => d as any),
-  updateUser: (id: string, data: { display_name?: string; email?: string; is_active?: number }) =>
+  updateUser: (id: string, data: { display_name?: string; email?: string; is_active?: number; admin_note?: string }) =>
     request('/api/users/' + id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
