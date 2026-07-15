@@ -11,6 +11,8 @@ export default function MHome() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(true)
 
+  const canAdmin = user?.user_type === 'admin' && !!user?.permissions?.includes('member.manage')
+
   useEffect(() => {
     let cancelled = false
     const load = async () => {
@@ -42,6 +44,18 @@ export default function MHome() {
         action={{ label: '退出', onClick: logout }}
       />
       <div className="m-content">
+        <div className="m-entry-grid">
+          {canAdmin && (
+            <button className="m-entry-card" onClick={() => navigate('/admin')}>
+              <span className="m-entry-icon">👥</span>
+              <span>用户管理</span>
+            </button>
+          )}
+          <button className="m-entry-card" onClick={() => navigate('/me')}>
+            <span className="m-entry-icon">👤</span>
+            <span>个人中心</span>
+          </button>
+        </div>
         {loading ? (
           <div className="m-loading">加载中…</div>
         ) : workspaces.length === 0 ? (

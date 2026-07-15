@@ -3,12 +3,16 @@ import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../services/api'
 import { applyThemeToDOM, resetThemeToDefault } from '../services/theme'
+import { injectManifest, isStandalone, isWeChat, promptInstall } from './a2hs'
 import MLogin from './pages/MLogin'
 import MMemberLogin from './pages/MMemberLogin'
 import MHome from './pages/MHome'
 import MProjects from './pages/MProjects'
 import MProject from './pages/MProject'
 import MPreview from './pages/MPreview'
+import MAdmin from './pages/MAdmin'
+import MMe from './pages/MMe'
+import MRenew from './pages/MRenew'
 
 // ── 轻量 toast：window 事件驱动，各页面调用 mToast() ──
 export function mToast(msg: string, kind: 'info' | 'error' = 'info') {
@@ -103,17 +107,88 @@ function ThemeSync() {
   return null
 }
 
+// ── 首次"添加到桌面"引导条 ──
+function A2hsBanner() {
+  const [visible, setVisible] = useState(false)
+  const [iosGuide, setIosGuide] = useState(false)
+
+  useEffect(() => {
+    if (isWeChat() || isStandalone()) return
+    if (localStorage.getItem('a2hs_dismissed')) return
+    setVisible(true)
+  }, [])
+
+  const dismiss = () => {
+    localStorage.setItem('a2hs_dismissed', '1')
+    setVisible(false)
+  }
+
+  const handleAdd = async () => {
+    try {
+      const result = await promptInstall()
+      if (result === 'accepted') {
+        mToast('已添加到桌面')
+        dismiss()
+      } else if (result === 'ios') {
+        setIosGuide(true)
+      } else if (result === 'prompted') {
+        // 用户在原生弹窗里点了取消 → 保留引导条
+      } else if (result === 'installed') {
+        dismiss()
+      } else {
+        mToast('当前浏览器不支持，请在浏览器菜单中选择"添加到主屏幕"')
+      }
+    } catch (e: any) {
+      mToast(`操作失败: ${e?.message || e}`, 'error')
+    }
+  }
+
+  if (!visible) return null
+  return (
+    <>
+      <div className="m-a2hs-banner">
+        <span className="msg">添加到手机桌面，下次一键打开</span>
+        <button onClick={handleAdd}>添加</button>
+        <button className="ghost" onClick={dismiss}>×</button>
+      </div>
+      {iosGuide && (
+        <div className="m-sheet-mask" onClick={() => setIosGuide(false)}>
+          <div className="m-sheet" onClick={e => e.stopPropagation()}>
+            <div className="m-sheet-title">添加到主屏幕</div>
+            <div style={{ fontSize: 14, lineHeight: 2, padding: '0 4px' }}>
+              1. 点击 Safari 底部的 <b>分享按钮</b>（方框加向上箭头 ⬆）<br />
+              2. 向下滑动，选择<b>「添加到主屏幕」</b><br />
+              3. 点击右上角<b>「添加」</b>完成
+            </div>
+            <div className="m-sheet-actions">
+              <button className="primary" onClick={() => { setIosGuide(false); dismiss() }}>知道了</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function MobileApp() {
+  useEffect(() => {
+    injectManifest()
+  }, [])
+
   return (
     <div className="m-shell">
       <ThemeSync />
+      <A2hsBanner />
       <Routes>
         <Route path="/login" element={<MLogin />} />
         <Route path="/member" element={<MMemberLogin />} />
+        <Route path="/renew" element={<MRenew />} />
         <Route path="/" element={<RequireAuth><MHome /></RequireAuth>} />
         <Route path="/ws/:wid" element={<RequireAuth><MProjects /></RequireAuth>} />
         <Route path="/project/:id" element={<RequireAuth><MProject /></RequireAuth>} />
         <Route path="/preview" element={<RequireAuth><MPreview /></RequireAuth>} />
+        <Route path="/admin" element={<RequireAuth><MAdmin /></RequireAuth>} />
+        <Route path="/me" element={<RequireAuth><MMe /></RequireAuth>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <Toaster />

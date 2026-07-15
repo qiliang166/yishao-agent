@@ -1,7 +1,7 @@
-# 手机版第二期设计：管理端 + 个人中心 + 续费
+# 手机版第二期设计：管理端 + 个人中心 + 续费 + 添加到桌面
 
 日期：2026-07-15
-状态：用户已确认设计
+状态：用户已确认设计，已实现并通过全量回归（dev-log/test_mobile_phase2.py ALL PASS）
 回滚点：git tag `backup/pre-mobile-phase2`；服务器 DB 备份 yishao-backup-20260715.db
 
 ## 目标
@@ -11,6 +11,7 @@
 1. **管理端**：管理员在手机上管理用户（列表/停启用/录入续期）、审批会员（注册/升级）、设置套餐与收款码
 2. **会员个人中心**：查看到期时间
 3. **续费**：会员在手机上提交续费申请（含已过期登录不了的会员）
+4. **添加到桌面（A2HS）**：一键把手机版加到手机桌面，图标用网站 LOGO
 
 约束：**后端零改动、桌面版代码零改动**，只在 `frontend/src/mobile/` 内新增/修改，复用 `frontend/src/services/api.ts` 现有方法。
 
@@ -23,6 +24,7 @@
 | 续费入口 | 一页两入口：个人中心（预填用户名）+ 会员登录页链接（服务已过期会员） |
 | 套餐设置 | PC 在全局设置里，手机端作为用户管理第 4 个 Tab（业务上属会员注册/续费一环） |
 | 角色管理页 | 不做（低频、小屏体验差） |
+| A2HS | 并入第二期；图标用网站 LOGO（动态）；两个入口：首次浏览器打开自动引导条 + 个人中心常驻按钮 |
 
 ## 新增页面（frontend/src/mobile/pages/）
 
@@ -53,6 +55,7 @@
 - 数据源 `/api/auth/me`：api.ts 无现成方法，与桌面 MemberCenterPage.tsx:45 相同做法——带 Bearer token 的 fetch
 - 显示：display_name、@username、邮箱、账号类型、会员到期时间 expires_at（null 显示"永久"）、体验员到期 upgrade_expires_at（有才显示）、角色标签
 - 会员（user_type==='member'）显示"续费"按钮 → `/renew?u=<username>`
+- "添加到桌面"常驻按钮：调 a2hs.ts 的 `promptInstall()`，按返回值弹原生弹窗/iOS 图文引导/微信提示
 
 ### 3. MRenew.tsx — 续费页（路由 /renew，公开无守卫）
 
@@ -62,14 +65,25 @@
 - 成功页：提示"续费申请已提交，管理员审批通过后生效" + 返回登录链接
 - 注意：后端提交成功后将该会员置 is_approved=0 并递增 token_version（旧登录失效），页面成功文案需说明需等待审批
 
+## 添加到桌面（frontend/src/mobile/a2hs.ts，新增模块）
+
+- **动态 manifest**：静态 manifest 无法携带运行时配置的 LOGO，故运行时注入——fetch `/api/settings` 取 brand_name/brand_logo → 构造 manifest JSON（name、start_url: `origin + '/mobile/index.html#/'`、display: standalone、icons: brand_logo 的绝对 URL，无 LOGO 则省略 icons）→ blob URL 注入 `<link rel="manifest">`；同时注入 `<link rel="apple-touch-icon">`（iOS）
+- **promptInstall()**：模块级捕获 `beforeinstallprompt` 事件；返回值分支——
+  - 安卓 Chrome 系：有事件 → 原生安装弹窗（'accepted'/'prompted'）
+  - iOS Safari：返回 'ios'，调用方显示图文引导弹层（分享 ⬆ → 添加到主屏幕）
+  - 微信内置浏览器（MicroMessenger UA）：返回 'wechat'，提示在浏览器中打开
+  - 已安装（display-mode: standalone）：'installed'；其他不支持：'unavailable'
+- **首次引导条**（MobileApp.tsx 的 A2hsBanner）：非微信、非 standalone、localStorage 无 `a2hs_dismissed` 时顶部显示"添加到手机桌面，下次一键打开 [添加] [×]"；点 × 记 localStorage 永不再弹
+- index.html 不改动（manifest 全动态注入）
+
 ## 修改现有文件（Write 整文件重写）
 
 | 文件 | 改动 |
 |------|------|
-| MobileApp.tsx | 加路由：/admin、/me（RequireAuth）、/renew（公开） |
+| MobileApp.tsx | 加路由：/admin、/me（RequireAuth）、/renew（公开）；挂 A2hsBanner；启动时 injectManifest() |
 | MHome.tsx | 内容区顶部入口卡片："用户管理"（admin 且 member.manage 才显示）、"个人中心"（都显示） |
 | MMemberLogin.tsx | 底部加"已过期？去续费"链接 → /renew |
-| mobile.css | 新增 .m-tabs/.m-tab、行操作按钮、弹层表单（.m-sheet）、二维码预览等样式 |
+| mobile.css | 新增 .m-tabs/.m-tab、行操作按钮、弹层表单（.m-sheet）、二维码预览、入口卡片、A2HS 引导条等样式 |
 
 ## 错误处理
 
@@ -86,10 +100,13 @@
   4. 续费页提交（测试会员）→ 待审批 Tab 出现该申请（含单号）→ 通过 → 到期时间生效；再提交一次 → 拒绝流程
   5. 套餐 Tab 改价格保存 → 续费页显示新价格 → 改回
   6. 个人中心显示到期时间；无权限会员看不到"用户管理"入口
+  7. A2HS：manifest 已注入（display=standalone）、引导条显示、× 后消失且记住
 - 回归：工作区/项目/文件预览/音频播放不受影响
 - `npx tsc --noEmit` 0 错误
 - 规则 8：重建 yishao-agent-server.zip + YishaoAgent-Setup.exe
 
+测试结果：dev-log/test_mobile_phase2.py 共 26 项检查 ALL PASS（2026-07-15）。
+
 ## 部署
 
-前端-only：用户上传 `frontend/dist/mobile/` 一个文件夹（scp 命令同第一期）。
+前端-only：用户上传 `frontend/dist/mobile/` 一个文件夹（scp 命令同第一期）。后端零改动，无需重启。
