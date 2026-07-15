@@ -171,7 +171,8 @@ export default function MProject() {
     if (kind === 'office') {
       // 浏览器无法渲染 office → 直接打开文件地址：
       // 微信内置浏览器弹出文件预览页（可选打开方式），普通浏览器触发下载并在通知栏显示
-      if (!f.download_url) {
+      // 安全：只允许本站 /api/ 相对路径
+      if (!f.download_url || !f.download_url.startsWith('/api/') || f.download_url.startsWith('//')) {
         mToast('该文件暂不支持预览', 'error')
         return
       }

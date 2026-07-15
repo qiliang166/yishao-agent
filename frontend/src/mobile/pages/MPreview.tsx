@@ -9,10 +9,15 @@ const withToken = (url: string) => {
   return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token)
 }
 
+// 安全：src 来自 URL 参数，只允许本站 /api/ 相对路径，
+// 防止构造外部地址骗取带 Authorization/token 的请求
+const isSafeSrc = (u: string) => u.startsWith('/api/') && !u.startsWith('//')
+
 export default function MPreview() {
   const [params] = useSearchParams()
   const kind = params.get('kind') || ''
-  const src = params.get('src') || ''
+  const rawSrc = params.get('src') || ''
+  const src = isSafeSrc(rawSrc) ? rawSrc : ''
   const name = params.get('name') || '预览'
   const pid = params.get('pid') || ''
   const sn = params.get('sn') || ''
