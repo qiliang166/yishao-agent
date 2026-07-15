@@ -12,6 +12,7 @@ export default function MRenew() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [verifying, setVerifying] = useState(false)
   const [qrWechat, setQrWechat] = useState('')
   const [qrAlipay, setQrAlipay] = useState('')
   const [planName, setPlanName] = useState('标准套餐')
@@ -48,7 +49,7 @@ export default function MRenew() {
     return () => { cancelled = true }
   }, [])
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     setError('')
     if (!username.trim() || !password.trim()) {
       setError('请输入用户名和密码')
@@ -58,13 +59,29 @@ export default function MRenew() {
       setError('密码长度不能少于 8 位')
       return
     }
-    setStep(1)
+    setVerifying(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error((err as any)?.detail || '用户名或密码错误')
+      }
+      setStep(1)
+    } catch (e: any) {
+      setError(e.message || '用户名或密码错误')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const handleSubmit = async () => {
     setError('')
     if (!paymentRef.trim()) {
-      setError('请填写付款单号/订单号')
+      setError('请填写交易单号')
       return
     }
     setSubmitting(true)
@@ -143,7 +160,9 @@ export default function MRenew() {
                   onChange={e => { setPassword(e.target.value); setError('') }}
                   onKeyDown={e => { if (e.key === 'Enter') handleVerify() }} />
               </div>
-              <button className="m-btn-primary" onClick={handleVerify}>下一步</button>
+              <button className="m-btn-primary" disabled={verifying} onClick={handleVerify}>
+                {verifying ? '验证中…' : '下一步'}
+              </button>
             </>
           ) : (
             <>
@@ -170,7 +189,7 @@ export default function MRenew() {
               )}
 
               <div className="m-field" style={{ marginTop: 10 }}>
-                <label>付款单号/订单号（付款后在微信/支付宝账单中查看）</label>
+                <label>交易单号（付款后在微信/支付宝账单中查看）</label>
                 <input className="m-input" value={paymentRef} placeholder="扫码付款后填写"
                   onChange={e => { setPaymentRef(e.target.value); setError('') }} />
               </div>

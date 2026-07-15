@@ -15,6 +15,7 @@ export default function MemberRenewPage() {
   const [paymentRef, setPaymentRef] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [verifying, setVerifying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [qrCodes, setQrCodes] = useState<QRState>({ wechat: '', alipay: '' })
   const [brandName, setBrandName] = useState('')
@@ -33,14 +34,14 @@ export default function MemberRenewPage() {
         try {
           const p = JSON.parse(s.member_plan)
           const q = p.quarterly || p[Object.keys(p)[0]] || {}
-          if (q.amount_cents) setPlanPrice((q.amount_cents / 100).toFixed(2))
+          if (q.amount_cents != null) setPlanPrice((q.amount_cents / 100).toFixed(2))
           if (q.duration_days) setPlanDays(String(q.duration_days))
         } catch {}
       }
     }).catch(() => {})
   }, [])
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     setError('')
     if (!username.trim() || !password.trim()) {
       setError('请输入用户名和密码')
@@ -50,13 +51,29 @@ export default function MemberRenewPage() {
       setError('密码长度不能少于 8 位')
       return
     }
-    setStep(1)
+    setVerifying(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.trim(), password }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error((err as any)?.detail || '用户名或密码错误')
+      }
+      setStep(1)
+    } catch (e: any) {
+      setError(e.message || '用户名或密码错误')
+    } finally {
+      setVerifying(false)
+    }
   }
 
   const handleSubmit = async () => {
     setError('')
     if (!paymentRef.trim()) {
-      setError('请填写付款单号/订单号')
+      setError('请填写交易单号')
       return
     }
     setLoading(true)
@@ -181,8 +198,9 @@ export default function MemberRenewPage() {
             )}
 
             <button className="btn btn-primary" onClick={handleVerify}
+              disabled={verifying}
               style={{ width: '100%', marginTop: 20 }}>
-              下一步
+              {verifying ? '验证中…' : '下一步'}
             </button>
           </>
         )}
@@ -270,7 +288,7 @@ export default function MemberRenewPage() {
               )}
 
               <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>
-                付款单号/订单号
+                交易单号
               </div>
               <input
                 className="form-input"
@@ -281,7 +299,7 @@ export default function MemberRenewPage() {
                 style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }}
               />
               <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
-                付款后请在支付宝/微信中查看订单号并填入上方
+                付款后请在支付宝/微信中查看交易单号并填入上方
               </div>
             </div>
 
