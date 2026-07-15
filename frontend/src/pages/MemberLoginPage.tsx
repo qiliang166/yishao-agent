@@ -46,7 +46,6 @@ export default function MemberLoginPage() {
     setError('')
     try {
       await memberLogin(username.trim(), password)
-      navigate('/app', { replace: true })
     } catch (e: any) {
       setError(e.message || '登录失败')
     } finally {
