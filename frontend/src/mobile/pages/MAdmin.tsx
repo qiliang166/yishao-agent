@@ -45,6 +45,7 @@ export default function MAdmin() {
   const { user } = useAuth()
   const canMember = user?.user_type === 'admin' && !!user?.permissions?.includes('member.manage')
   const canGlobal = !!user?.permissions?.includes('config.global')
+  const canRole = !!user?.permissions?.includes('role.manage')
 
   const [tab, setTab] = useState<'member' | 'admin' | 'pending' | 'plan'>('member')
 
@@ -76,6 +77,17 @@ export default function MAdmin() {
   const [editEmail, setEditEmail] = useState('')
   const [editPassword, setEditPassword] = useState('')
   const [editSubmitting, setEditSubmitting] = useState(false)
+  const [editLoading, setEditLoading] = useState(false)
+
+  // ── 编辑弹层：角色分配 ──
+  const [editRoles, setEditRoles] = useState<any[]>([])
+  const [allRoles, setAllRoles] = useState<any[]>([])
+  const [editRoleId, setEditRoleId] = useState('')
+
+  // ── 编辑弹层：工作区分配 ──
+  const [editWs, setEditWs] = useState<any[]>([])
+  const [allWs, setAllWs] = useState<any[]>([])
+  const [editWsId, setEditWsId] = useState('')
 
   const [approveTarget, setApproveTarget] = useState<any | null>(null)
   const [approveDays, setApproveDays] = useState('7')
@@ -222,11 +234,38 @@ export default function MAdmin() {
     }
   }
 
-  const openEdit = (u: any) => {
+  const openEdit = async (u: any) => {
     setEditTarget(u)
     setEditName(u.display_name || '')
     setEditEmail(u.email || '')
     setEditPassword('')
+    setEditRoleId('')
+    setEditWsId('')
+    setEditRoles([])
+    setAllRoles([])
+    setEditWs([])
+    setAllWs([])
+    setEditLoading(true)
+    try {
+      const full = await api.getUser(u.id) as any
+      if (full != null) {
+        if (Array.isArray(full.roles)) setEditRoles(full.roles)
+        if (Array.isArray(full.workspaces)) setEditWs(full.workspaces)
+      }
+    } catch {}
+    try {
+      if (canRole) {
+        const roles = await api.listRoles(u.user_type) as any
+        if (roles != null) setAllRoles(roles)
+      }
+    } catch {}
+    try {
+      const [wss] = await Promise.all([
+        api.listWorkspaces() as any,
+      ])
+      if (wss != null && Array.isArray(wss.workspaces)) setAllWs(wss.workspaces as any[])
+    } catch {}
+    setEditLoading(false)
   }
 
   const handleEditSubmit = async () => {
@@ -263,6 +302,66 @@ export default function MAdmin() {
       mToast(`保存失败: ${e?.message || e}`, 'error')
     } finally {
       setEditSubmitting(false)
+    }
+  }
+
+  const handleAddRole = async () => {
+    if (!editTarget || !editRoleId) { mToast('请选择角色', 'error'); return }
+    try {
+      const result = await api.addUserRole(editTarget.id, editRoleId) as any
+      if (result != null && result.ok) {
+        const role = allRoles.find(r => r.id === editRoleId)
+        if (role) setEditRoles(prev => [...prev, role])
+        setEditRoleId('')
+      } else {
+        mToast('分配失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`分配失败: ${e?.message || e}`, 'error')
+    }
+  }
+
+  const handleRemoveRole = async (roleId: string) => {
+    if (!editTarget) return
+    try {
+      const result = await api.removeUserRole(editTarget.id, roleId) as any
+      if (result != null && result.ok) {
+        setEditRoles(prev => prev.filter(r => r.id !== roleId))
+      } else {
+        mToast('移除失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`移除失败: ${e?.message || e}`, 'error')
+    }
+  }
+
+  const handleAddWs = async () => {
+    if (!editTarget || !editWsId) { mToast('请选择工作区', 'error'); return }
+    try {
+      const result = await api.addUserWorkspaces(editTarget.id, [editWsId]) as any
+      if (result != null && result.ok) {
+        const ws = allWs.find(w => w.id === editWsId)
+        if (ws) setEditWs(prev => [...prev, ws])
+        setEditWsId('')
+      } else {
+        mToast('添加失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`添加失败: ${e?.message || e}`, 'error')
+    }
+  }
+
+  const handleRemoveWs = async (wsId: string) => {
+    if (!editTarget) return
+    try {
+      const result = await api.removeUserWorkspace(editTarget.id, wsId) as any
+      if (result != null && result.ok) {
+        setEditWs(prev => prev.filter(w => w.id !== wsId))
+      } else {
+        mToast('移除失败：服务器未确认', 'error')
+      }
+    } catch (e: any) {
+      mToast(`移除失败: ${e?.message || e}`, 'error')
     }
   }
 
@@ -433,6 +532,8 @@ export default function MAdmin() {
   const badge = upgradeTotal + pendingTotal
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const pendingPages = Math.max(1, Math.ceil(pendingTotal / PAGE_SIZE))
+  const availableRoles = allRoles.filter(r => !editRoles.some(er => er.id === r.id))
+  const availableWs = allWs.filter(w => !editWs.some(ew => ew.id === w.id))
 
   const statusBadge = (u: any) => {
     if (u.is_active === 0) return <span className="m-badge warn">已停用</span>
@@ -655,25 +756,89 @@ export default function MAdmin() {
       {editTarget != null && (
         <MSheet title={`编辑用户 · @${editTarget.username}`}
           onClose={() => { if (!editSubmitting) setEditTarget(null) }}>
-          <div className="m-field">
-            <label>显示名</label>
-            <input className="m-input" value={editName} onChange={e => setEditName(e.target.value)} />
-          </div>
-          <div className="m-field">
-            <label>邮箱（可留空）</label>
-            <input className="m-input" value={editEmail} onChange={e => setEditEmail(e.target.value)} />
-          </div>
-          <div className="m-field">
-            <label>重置密码（留空则不修改，至少 8 位）</label>
-            <input className="m-input" type="password" value={editPassword} autoComplete="new-password"
-              onChange={e => setEditPassword(e.target.value)} />
-          </div>
-          <div className="m-sheet-actions">
-            <button disabled={editSubmitting} onClick={() => setEditTarget(null)}>取消</button>
-            <button className="primary" disabled={editSubmitting} onClick={handleEditSubmit}>
-              {editSubmitting ? '保存中…' : '保存'}
-            </button>
-          </div>
+          {editLoading ? (
+            <div className="m-loading">加载中…</div>
+          ) : (
+            <>
+              <div className="m-field">
+                <label>显示名</label>
+                <input className="m-input" value={editName} onChange={e => setEditName(e.target.value)} />
+              </div>
+              <div className="m-field">
+                <label>邮箱（可留空）</label>
+                <input className="m-input" value={editEmail} onChange={e => setEditEmail(e.target.value)} />
+              </div>
+              <div className="m-field">
+                <label>重置密码（留空则不修改，至少 8 位）</label>
+                <input className="m-input" type="password" value={editPassword} autoComplete="new-password"
+                  onChange={e => setEditPassword(e.target.value)} />
+              </div>
+
+              {canRole && (
+                <>
+                  <div className="m-section-title">角色分配</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                    {editRoles.map(r => (
+                      <span key={r.id} className="m-badge completed" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        {r.name}
+                        <button className="m-mini-btn"
+                          style={{ padding: '0 4px', fontSize: 11, lineHeight: '16px' }}
+                          onClick={() => handleRemoveRole(r.id)}>×</button>
+                      </span>
+                    ))}
+                    {editRoles.length === 0 && (
+                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>未分配角色</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <select className="m-input" style={{ flex: 1 }} value={editRoleId}
+                      onChange={e => setEditRoleId(e.target.value)}>
+                      <option value="">选择角色…</option>
+                      {availableRoles.map(r => (
+                        <option key={r.id} value={r.id}>{r.name}</option>
+                      ))}
+                    </select>
+                    <button className="m-mini-btn primary" disabled={!editRoleId}
+                      onClick={handleAddRole}>分配</button>
+                  </div>
+                </>
+              )}
+
+              <div className="m-section-title">可访问工作区</div>
+              <div style={{ marginBottom: 8 }}>
+                {editWs.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>未分配工作区</div>
+                ) : (
+                  editWs.map(w => (
+                    <div key={w.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span>{w.name}</span>
+                      <button className="m-mini-btn warn"
+                        style={{ padding: '0 6px', fontSize: 11 }}
+                        onClick={() => handleRemoveWs(w.id)}>×</button>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <select className="m-input" style={{ flex: 1 }} value={editWsId}
+                  onChange={e => setEditWsId(e.target.value)}>
+                  <option value="">添加工作区…</option>
+                  {availableWs.map(w => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+                <button className="m-mini-btn primary" disabled={!editWsId}
+                  onClick={handleAddWs}>添加</button>
+              </div>
+
+              <div className="m-sheet-actions" style={{ marginTop: 16 }}>
+                <button disabled={editSubmitting} onClick={() => setEditTarget(null)}>取消</button>
+                <button className="primary" disabled={editSubmitting} onClick={handleEditSubmit}>
+                  {editSubmitting ? '保存中…' : '保存'}
+                </button>
+              </div>
+            </>
+          )}
         </MSheet>
       )}
 

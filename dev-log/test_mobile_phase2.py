@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""手机版第二期回归：管理端 4 Tab（含编辑/删除）/ 个人中心补全 / 续费全链路 / A2HS 引导 / 第一期回归。
+"""手机版第二期回归：管理端 4 Tab（含编辑/删除/角色分配/工作区分配）/ 个人中心补全 / 续费全链路 / A2HS 引导 / 第一期回归。
 使用临时测试会员，测后删除并恢复套餐设置。"""
 import sys, json, sqlite3, datetime, urllib.request, urllib.error
 sys.stdout.reconfigure(encoding='utf-8')
@@ -196,6 +196,81 @@ def run_ui_tests(admin_token, uid, s0):
             t_e = next((u for u in (u_e.get('users') or []) if u['id'] == uid), None)
             check('编辑后显示名已改', t_e is not None and t_e.get('display_name') == '第二期测试会员改', t_e and t_e.get('display_name'))
             check('编辑后邮箱已改', t_e is not None and t_e.get('email') == 'mtest2@example.com', t_e and t_e.get('email'))
+
+        # 5b. 编辑弹层：角色分配 + 工作区分配
+        found = page.evaluate(row_sel)
+        if found is not None:
+            page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[0].click()", found['idx'])
+            page.wait_for_timeout(1500)  # wait for async getUser + listRoles + listWorkspaces
+
+            sections = page.evaluate("() => Array.from(document.querySelectorAll('.m-sheet .m-section-title')).map(e => e.textContent)")
+            has_role = any('角色分配' in s for s in sections)
+            has_ws = any('可访问工作区' in s for s in sections)
+            check('编辑弹层含角色分配区', has_role)
+            check('编辑弹层含工作区分配区', has_ws)
+
+            # 角色分配：分配 → 标签出现 → 移除
+            if has_role:
+                n_selects = page.evaluate("() => document.querySelectorAll('.m-sheet select.m-input').length")
+                if n_selects >= 1:
+                    has_opts = page.evaluate("""() => {
+                        const sel = document.querySelectorAll('.m-sheet select.m-input')[0];
+                        return sel.querySelectorAll('option').length > 1;
+                    }""")
+                    if has_opts:
+                        page.evaluate("""() => {
+                            const sel = document.querySelectorAll('.m-sheet select.m-input')[0];
+                            const opts = sel.querySelectorAll('option');
+                            sel.value = opts[1].value;
+                            sel.dispatchEvent(new Event('change', {bubbles:true}));
+                        }""")
+                        page.evaluate("() => { const b = Array.from(document.querySelectorAll('.m-sheet button')).find(x => x.textContent === '\\u5206\\u914d'); b.click() }")
+                        page.wait_for_timeout(1000)
+                        badge_count = page.evaluate("() => document.querySelectorAll('.m-sheet .m-badge.completed .m-mini-btn').length")
+                        check('角色分配后出现标签', badge_count > 0)
+                        if badge_count > 0:
+                            page.evaluate("() => { const btn = document.querySelector('.m-sheet .m-badge.completed .m-mini-btn'); if (btn) btn.click() }")
+                            page.wait_for_timeout(800)
+                            badge_after = page.evaluate("() => document.querySelectorAll('.m-sheet .m-badge.completed .m-mini-btn').length")
+                            check('角色移除后标签消失', badge_after < badge_count)
+                    else:
+                        check('角色下拉有可选项', False, 'no available roles in dropdown')
+                else:
+                    check('角色选择器存在', False)
+
+            # 工作区分配：添加 → 出现 → 移除
+            if has_ws:
+                n_selects = page.evaluate("() => document.querySelectorAll('.m-sheet select.m-input').length")
+                ws_sel_idx = 1 if has_role else 0  # second select if role section exists
+                if n_selects > ws_sel_idx:
+                    has_ws_opts = page.evaluate("""(idx) => {
+                        const sel = document.querySelectorAll('.m-sheet select.m-input')[idx];
+                        return sel.querySelectorAll('option').length > 1;
+                    }""", ws_sel_idx)
+                    if has_ws_opts:
+                        page.evaluate("""(idx) => {
+                            const sel = document.querySelectorAll('.m-sheet select.m-input')[idx];
+                            const opts = sel.querySelectorAll('option');
+                            sel.value = opts[1].value;
+                            sel.dispatchEvent(new Event('change', {bubbles:true}));
+                        }""", ws_sel_idx)
+                        page.evaluate("() => { const b = Array.from(document.querySelectorAll('.m-sheet button')).find(x => x.textContent === '\\u6dfb\\u52a0'); b.click() }")
+                        page.wait_for_timeout(1000)
+                        ws_items = page.evaluate("() => { const sects = Array.from(document.querySelectorAll('.m-sheet .m-section-title')); const ws = sects.find(x => x.textContent.includes('\\u53ef\\u8bbf\\u95ee\\u5de5\\u4f5c\\u533a')); if (!ws || !ws.parentElement) return 0; return ws.parentElement.querySelectorAll('.m-mini-btn.warn').length }")
+                        check('工作区添加后出现删除按钮', ws_items > 0)
+                        if ws_items > 0:
+                            page.evaluate("() => { const sects = Array.from(document.querySelectorAll('.m-sheet .m-section-title')); const ws = sects.find(x => x.textContent.includes('\\u53ef\\u8bbf\\u95ee\\u5de5\\u4f5c\\u533a')); const btn = ws.parentElement.querySelector('.m-mini-btn.warn'); if (btn) btn.click() }")
+                            page.wait_for_timeout(800)
+                            ws_after = page.evaluate("() => { const sects = Array.from(document.querySelectorAll('.m-sheet .m-section-title')); const ws = sects.find(x => x.textContent.includes('\\u53ef\\u8bbf\\u95ee\\u5de5\\u4f5c\\u533a')); if (!ws || !ws.parentElement) return 0; return ws.parentElement.querySelectorAll('.m-mini-btn.warn').length }")
+                            check('工作区移除后删除按钮消失', ws_after < ws_items)
+                    else:
+                        check('工作区下拉有可选项', False, 'no available workspaces in dropdown')
+                else:
+                    check('工作区选择器存在', False)
+
+            # Close edit sheet
+            page.evaluate("() => { const b = Array.from(document.querySelectorAll('.m-sheet-actions button')).find(x => x.textContent === '\\u53d6\\u6d88'); b.click() }")
+            page.wait_for_timeout(400)
 
         # 6. 录入续期
         found = page.evaluate(row_sel)

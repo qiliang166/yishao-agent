@@ -66,3 +66,11 @@ scp -r d:\YISHAOAGENT\frontend\dist\mobile root@120.25.251.172:/opt/yishao-agent
 3. **个人中心补全**（MMe.tsx，对齐桌面 MemberCenterPage）：+注册时间、账号状态；会员有效期着色（已过期红/≤7 天橙/正常绿+剩余天数）；角色升级区（付费未过期未升级 → 申请开发体验员弹层：收款码+单号 → `api.memberUpgrade`；已升级显示有效期）；修改密码（旧/新/确认 → POST /api/auth/change-password）
 
 测试：test_mobile_phase2.py 重写扩展到 **36 项 ALL PASS**，新增覆盖：安卓引导弹层（引导条+个人中心两处）、编辑显示名/邮箱 API 验证、UI 删除后用户不存在、/me 注册时间/账号状态行、错误旧密码报错、正确改密后 DB password_hash 变化（改密后续费流程用新密码）。产物 dist/mobile/assets/index-Bv57Gzz7.js；两个规则 8 产物已重建。
+
+## 补强 4（同日，编辑弹层角色+工作区）
+
+4. **编辑弹层补全角色分配 + 工作区分配**（MAdmin.tsx）：
+   - 角色分配（需 `role.manage`）：打开弹层时异步加载 `api.getUser(id)` 取当前角色 + `api.listRoles(user_type)` 取可选角色；已分配角色以 `.m-badge` 标签展示，× 移除调用 `api.removeUserRole`；下拉选择器过滤已分配角色，点击"分配"调用 `api.addUserRole`
+   - 工作区分配：加载 `api.listWorkspaces()` 取全部工作区；已分配列表带 × 移除调用 `api.removeUserWorkspace`；下拉过滤后"添加"调用 `api.addUserWorkspaces`
+   - 复用接口全部现成，桌面版已在用，无后端改动
+   - 测试：test_mobile_phase2.py 扩展到 **41 项 ALL PASS**，新增 5 项：编辑弹层含角色/工作区分配区、角色分配后出现标签、角色移除后标签消失、工作区添加后出现删除按钮、工作区移除后删除按钮消失。产物 dist/mobile/assets/index-4ro8AuuG.js
