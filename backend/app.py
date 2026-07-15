@@ -5723,14 +5723,6 @@ def member_login(req: dict, request: Request):
 def member_register(req: dict, request: Request):
     """Self-registration for members. Supports trial and paid plans."""
     ip = _get_client_ip(request)
-    allowed, retry = _check_rate_limit(f"register:{ip}", _REGISTER_RATE_MAX, _REGISTER_RATE_WINDOW)
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail=f"注册请求过于频繁，请 {retry} 秒后再试",
-            headers={"Retry-After": str(retry)},
-        )
-
     username = (req.get("username", "") or "").strip()
     password = req.get("password", "") or ""
     display_name = (req.get("display_name", "") or "").strip() or username
@@ -5769,6 +5761,16 @@ def member_register(req: dict, request: Request):
             # Check email format
             if "@" not in email or "." not in email.split("@")[-1]:
                 raise HTTPException(status_code=400, detail="邮箱格式不正确")
+
+        # Only count valid submissions toward rate limit
+        allowed, retry = _check_rate_limit(f"register:{ip}", _REGISTER_RATE_MAX, _REGISTER_RATE_WINDOW)
+        if not allowed:
+            db.close()
+            raise HTTPException(
+                status_code=429,
+                detail=f"注册请求过于频繁，请 {retry} 秒后再试",
+                headers={"Retry-After": str(retry)},
+            )
 
         import uuid as _uuid
         user_id = str(_uuid.uuid4())
