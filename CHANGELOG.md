@@ -2,6 +2,14 @@
 
 ## 2026-07-16
 
+- fix: atomic UPDATE in _deduct_points to prevent TOCTOU race condition
+
+## 2026-07-16
+
+- feat: 绉垎绯荤粺 鈥?鏁版嵁搴撱€丄PI銆侀槻澶嶅埗銆佸墠绔細鍛樼绉垎鏄剧ず - build: 閲嶆柊鏋勫缓 server.zip锛岀粦瀹氭渶缁?commit 03f14ec
+
+## 2026-07-16
+
 - fix: 鍘绘帀鐢ㄦ埛鍚岪鍓嶇紑 + 鍥為€€HTML涓嬭浇鐨勯敊璇慨澶?
 
 ## 2026-07-16
