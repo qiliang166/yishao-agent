@@ -47,6 +47,13 @@ if (-not $SkipFrontend) {
 }
 Set-Location $root
 
+# Step 1.5: Write build version stamp (BOM-free UTF-8)
+$commit = git rev-parse HEAD 2>$null
+$buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$stampContent = "commit=$commit`ntime=$buildTime"
+[System.IO.File]::WriteAllText("$root\backend\build_version.txt", $stampContent, [System.Text.Encoding]::UTF8)
+Write-Host "  Build stamp: commit=$commit, time=$buildTime"
+
 # Step 2: Prepare dynamic build config (app name + icon from DB)
 Write-Host "[2/4] Reading app settings & generating icon..."
 $python = "$root\backend\venv\Scripts\python.exe"
@@ -63,7 +70,7 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 # Clean up temp spec
 Remove-Item "$root\build_temp.spec" -Force -ErrorAction SilentlyContinue
 
-# Step 4: Copy to downloads (always use English filename)
+# Step 4: Copy to downloads
 Write-Host "[4/4] Copying to downloads..."
 $downloadsDir = "$root\backend\data\downloads"
 if (-not (Test-Path $downloadsDir)) { New-Item -ItemType Directory -Path $downloadsDir -Force | Out-Null }
@@ -73,6 +80,12 @@ if ($builtExe) {
     $destName = "YishaoAgent-Setup.exe"
     Copy-Item $builtExe.FullName "$downloadsDir\$destName" -Force -ErrorAction SilentlyContinue
     Write-Host "  Copied to downloads as $destName"
+}
+
+# Also copy CHANGELOG alongside the installer
+if (Test-Path "$root\CHANGELOG.md") {
+    Copy-Item "$root\CHANGELOG.md" "$root\dist\CHANGELOG.md" -Force
+    Write-Host "  CHANGELOG.md copied to dist"
 }
 
 Write-Host ""

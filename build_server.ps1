@@ -28,6 +28,13 @@ if (-not $SkipFrontend) {
 }
 Set-Location $root
 
+# Step 1.5: Write build version stamp (BOM-free UTF-8)
+$commit = git rev-parse HEAD 2>$null
+$buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+$stampContent = "commit=$commit`ntime=$buildTime"
+[System.IO.File]::WriteAllText("$root\backend\build_version.txt", $stampContent, [System.Text.Encoding]::UTF8)
+Write-Host "  Build stamp: commit=$commit, time=$buildTime"
+
 # Step 2: Package
 Write-Host "[2/2] Packaging..."
 $distDir = "$root\dist_server"
@@ -70,10 +77,11 @@ Copy-Item "$root\backend\data\templates\*" "$distDir\backend\data\templates\" -R
 # Copy built frontend
 Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force
 
-# Copy production start scripts and install guide
+# Copy production start scripts, install guide, and changelog
 Copy-Item "$root\start_prod.bat" "$distDir\" -ErrorAction SilentlyContinue
 Copy-Item "$root\start_prod.sh" "$distDir\" -ErrorAction SilentlyContinue
 Copy-Item "$root\INSTALL.txt" "$distDir\" -ErrorAction SilentlyContinue
+Copy-Item "$root\CHANGELOG.md" "$distDir\" -ErrorAction SilentlyContinue
 
 # Build the server deployment zip
 $zipFile = "$root\yishao-agent-server.zip"

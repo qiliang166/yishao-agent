@@ -6556,11 +6556,32 @@ def browse_folder():
 VERSION = "1.0.0"
 UPDATE_CHECK_URL = "https://raw.githubusercontent.com/qiliang166/yishao-agent/master/version.json"
 
+# Build stamp — written by build_server.ps1 / build_desktop.ps1
+import os as _os
+_BUILD_COMMIT = ""
+_BUILD_TIME = ""
+_version_file = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "build_version.txt")
+if _os.path.exists(_version_file):
+    try:
+        with open(_version_file, "r", encoding="utf-8-sig") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line.startswith("commit="):
+                    _BUILD_COMMIT = _line[7:]
+                elif _line.startswith("time="):
+                    _BUILD_TIME = _line[5:]
+    except Exception:
+        pass
+
 
 @app.get("/api/version")
 def api_version():
-    ver = _get_setting("app_version")
-    return {"version": ver if ver else VERSION, "app": _get_site_name()}
+    return {
+        "version": VERSION,
+        "build_commit": _BUILD_COMMIT,
+        "build_time": _BUILD_TIME,
+        "app": _get_site_name(),
+    }
 
 
 @app.get("/api/check-update")
