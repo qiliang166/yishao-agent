@@ -952,10 +952,11 @@ export const api = {
   listPendingUpgrades: () =>
     request('/api/members/pending-upgrades').then(d => d as { members: any[]; total: number }),
 
-  approveUpgrade: (userId: string) =>
+  approveUpgrade: (userId: string, pointsGranted?: number) =>
     request('/api/members/' + userId + '/approve-upgrade', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ points_granted: pointsGranted }),
     }).then(d => d as { ok: boolean; message: string; role: string }),
 
   rejectUpgrade: (userId: string, reason?: string) =>

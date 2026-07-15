@@ -81,6 +81,7 @@ export default function MemberApprovalPage() {
   const [approveNote, setApproveNote] = useState('')
   const [pointsGranted, setPointsGranted] = useState<number>(0)  // deci
   const [pointsPerYuan, setPointsPerYuan] = useState<number>(1.0)
+  const [upgradePointsGranted, setUpgradePointsGranted] = useState<number>(0)  // deci
   const [rejectReason, setRejectReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
@@ -189,10 +190,11 @@ export default function MemberApprovalPage() {
     setActionLoading(true)
     setError('')
     try {
-      const result = await api.approveUpgrade(approveUpgradeId)
+      const result = await api.approveUpgrade(approveUpgradeId, upgradePointsGranted > 0 ? upgradePointsGranted : undefined)
       if (result == null) { setError('操作失败：服务器未确认'); return }
       showToast('升级审批通过')
       setApproveUpgradeId(null)
+      setUpgradePointsGranted(0)
       loadUpgrades()
     } catch (e: any) {
       setError(e.message || '操作失败')
@@ -324,7 +326,15 @@ export default function MemberApprovalPage() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={() => { setApproveUpgradeId(u.id); setError('') }}
+                    onClick={() => {
+                      setApproveUpgradeId(u.id)
+                      setError('')
+                      if (u.payment && u.payment.amount_cents > 0) {
+                        setUpgradePointsGranted(Math.round(u.payment.amount_cents / 100.0 * pointsPerYuan * 10))
+                      } else {
+                        setUpgradePointsGranted(0)
+                      }
+                    }}
                   >
                     通过升级
                   </button>
@@ -681,6 +691,26 @@ export default function MemberApprovalPage() {
                   <div>交易单号：<strong>{selectedUpgrade.payment.payment_ref || '—'}</strong></div>
                 </div>
               </div>
+            )}
+
+            {selectedUpgrade.payment && selectedUpgrade.payment.amount_cents > 0 && (
+              <>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                  获得积分
+                </label>
+                <input
+                  className="form-input"
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  value={upgradePointsGranted / 10}
+                  onChange={e => setUpgradePointsGranted(Math.round(parseFloat(e.target.value || '0') * 10))}
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
+                />
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2, marginBottom: 12 }}>
+                  默认 {pointsPerYuan} 积分/元，￥{formatAmount(selectedUpgrade.payment.amount_cents)} × {pointsPerYuan} = {(selectedUpgrade.payment.amount_cents / 100.0 * pointsPerYuan).toFixed(1)} 积分
+                </div>
+              </>
             )}
 
             <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>

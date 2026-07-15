@@ -6938,9 +6938,17 @@ def list_pending_upgrades(user=require_perm("member.manage")):
 
 
 @app.put("/api/members/{user_id}/approve-upgrade")
-def approve_upgrade(user_id: str, request: Request, user=require_perm("member.manage")):
+async def approve_upgrade(user_id: str, request: Request, user=require_perm("member.manage")):
     """Approve a member's upgrade to 开发体验员."""
     ip = _get_client_ip(request)
+    points_granted_override = None
+    try:
+        body = await request.json()
+        if isinstance(body, dict) and body.get("points_granted") is not None:
+            points_granted_override = int(body["points_granted"])
+    except Exception:
+        pass
+
     db = get_db()
     try:
         m = db.execute(
@@ -7030,11 +7038,14 @@ def approve_upgrade(user_id: str, request: Request, user=require_perm("member.ma
             ).fetchone()
             if upgrade_payment and upgrade_payment["amount_cents"] > 0:
                 points_per_yuan = _get_points_per_yuan()
-                points_granted = round(upgrade_payment["amount_cents"] / 100.0 * points_per_yuan * 10)
+                if points_granted_override is not None:
+                    points_granted = points_granted_override
+                else:
+                    points_granted = round(upgrade_payment["amount_cents"] / 100.0 * points_per_yuan * 10)
                 if points_granted > 0:
                     _add_points(db, user_id, points_granted, "purchase",
                                ref_id=upgrade_payment["id"], ref_type="payment",
-                               note=f"升级 {upgrade_payment['plan_name']} 获 {points_granted/10:.1f} 积分",
+                               note=f"升级 {upgrade_payment['plan_name']} 获 {points_granted/10:.1f} 积分 (汇率: 1元={points_per_yuan}积分)",
                                expires_at=upgrade_expires)
                     db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
                               (points_granted, upgrade_payment["id"]))
