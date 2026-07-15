@@ -141,16 +141,22 @@ def _add_points(db, user_id: str, amount_deci: int, ttype: str,
 
 def _deduct_points(db, user_id: str, amount_deci: int, ttype: str,
                    ref_id: str = "", ref_type: str = "", note: str = "") -> dict:
-    """Deduct points from user. Raises HTTPException if insufficient. Must be called within a transaction."""
+    """Deduct points from user. Atomic UPDATE avoids TOCTOU race. Must be called within a transaction."""
     import uuid as _uuid
-    pts = _get_user_points(db, user_id)
-    if pts["balance_deci"] < amount_deci:
-        raise HTTPException(status_code=402, detail=f"积分不足：需要 {amount_deci/10:.1f} 积分，当前余额 {pts['balance_deci']/10:.1f} 积分")
-    new_balance = pts["balance_deci"] - amount_deci
-    db.execute(
-        "UPDATE user_points SET balance_deci=?, updated_at=? WHERE user_id=?",
-        (new_balance, datetime.utcnow().isoformat(), user_id),
+    now = datetime.utcnow().isoformat()
+    # Atomic: only deduct if balance >= amount, using a single UPDATE that checks the rowcount
+    cursor = db.execute(
+        "UPDATE user_points SET balance_deci = balance_deci - ?, updated_at = ? WHERE user_id = ? AND balance_deci >= ?",
+        (amount_deci, now, user_id, amount_deci),
     )
+    if cursor.rowcount == 0:
+        pts = _get_user_points(db, user_id)
+        if pts["balance_deci"] < amount_deci:
+            raise HTTPException(status_code=402, detail=f"积分不足：需要 {amount_deci/10:.1f} 积分，当前余额 {pts['balance_deci']/10:.1f} 积分")
+        raise HTTPException(status_code=500, detail="扣除积分失败")
+    # Read the new balance for transaction logging
+    row = db.execute("SELECT balance_deci FROM user_points WHERE user_id=?", (user_id,)).fetchone()
+    new_balance = int(row["balance_deci"]) if row else 0
     tx_id = str(_uuid.uuid4())
     db.execute(
         """INSERT INTO points_transactions (id, user_id, amount_deci, balance_after_deci,
