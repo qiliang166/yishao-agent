@@ -54,7 +54,7 @@ if (document.readyState === 'complete') { report() } else { window.addEventListe
 setTimeout(report, 300); setTimeout(report, 1200);
 })()<\/script>`
 
-// 父页面兜底测量（同源 blob 可读时），与 MEASURE_SCRIPT 同一套包围盒并集逻辑
+// 父页面兜底测量（srcdoc 同源可读时），与 MEASURE_SCRIPT 同一套包围盒并集逻辑
 const measureDoc = (doc: Document): { w: number; h: number } => {
   const de = doc.documentElement
   const b = doc.body
@@ -85,12 +85,13 @@ export default function MPreview() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [textContent, setTextContent] = useState('')
-  const [blobUrl, setBlobUrl] = useState('')
+  // 微信 X5/XWeb 对 blob: iframe 支持不可靠（真机空白），改用 srcdoc 内联 HTML
+  const [htmlDoc, setHtmlDoc] = useState('')
+  const [mediaUrl, setMediaUrl] = useState('')
   const [frameDims, setFrameDims] = useState<{ w: number; h: number; scale: number } | null>(null)
 
   const containerRef = useRef<HTMLDivElement | null>(null)
   const iframeRef = useRef<HTMLIFrameElement | null>(null)
-  const blobUrlRef = useRef('')
 
   const applyDims = (w: number, h: number) => {
     const cw = containerRef.current?.clientWidth || window.innerWidth
@@ -138,7 +139,7 @@ export default function MPreview() {
           setTextContent(target.raw_content || target.processed_content || '（素材内容为空）')
         } else if (kind === 'html') {
           if (!src) throw new Error('缺少文件地址')
-          // 统一 fetch 取文本 → 注入测量脚本 → blob 加载
+          // 统一 fetch 取文本 → 注入测量脚本 → srcdoc 内联加载
           // 安全：不强制 MIME，仅当服务器声明 text/html 时才渲染
           const token = localStorage.getItem('auth_token')
           const headers: Record<string, string> = {}
@@ -148,15 +149,11 @@ export default function MPreview() {
           const ct = resp.headers.get('content-type') || ''
           if (!ct.includes('text/html')) throw new Error('该文件不是 HTML，无法预览')
           const html = await resp.text()
-          if (cancelled) return
-          const blob = new Blob([html + MEASURE_SCRIPT], { type: 'text/html' })
-          const url = URL.createObjectURL(blob)
-          blobUrlRef.current = url
-          setBlobUrl(url)
+          if (!cancelled) setHtmlDoc(html + MEASURE_SCRIPT)
         } else if (kind === 'image' || kind === 'video' || kind === 'audio') {
           if (!src) throw new Error('缺少文件地址')
           // 媒体标签无法带 Authorization 头，用 token 查询参数（src 已限定本站 /api/）
-          if (!cancelled) setBlobUrl(kind === 'audio' ? src : withToken(src))
+          if (!cancelled) setMediaUrl(kind === 'audio' ? src : withToken(src))
         } else {
           throw new Error('不支持的预览类型')
         }
@@ -167,16 +164,10 @@ export default function MPreview() {
       }
     }
     load()
-    return () => {
-      cancelled = true
-      if (blobUrlRef.current) {
-        URL.revokeObjectURL(blobUrlRef.current)
-        blobUrlRef.current = ''
-      }
-    }
+    return () => { cancelled = true }
   }, [kind, src, pid, sn, name])
 
-  // 兜底：部分浏览器可直接同源读取 iframe 内容
+  // 兜底：srcdoc iframe 同源，多数浏览器可直接读取内容
   const handleFrameLoad = () => {
     try {
       const doc = iframeRef.current?.contentDocument
@@ -211,24 +202,24 @@ export default function MPreview() {
         ) : kind === 'html' ? (
           frameDims != null ? (
             <div style={{ width: frameDims.w * frameDims.scale, height: frameDims.h * frameDims.scale, overflow: 'hidden' }}>
-              <iframe ref={iframeRef} src={blobUrl} onLoad={handleFrameLoad} title={name}
+              <iframe ref={iframeRef} srcDoc={htmlDoc} onLoad={handleFrameLoad} title={name}
                 style={{
                   width: frameDims.w, height: frameDims.h, border: 'none',
                   transform: `scale(${frameDims.scale})`, transformOrigin: '0 0',
                 }} />
             </div>
           ) : (
-            <iframe ref={iframeRef} src={blobUrl} onLoad={handleFrameLoad} title={name}
+            <iframe ref={iframeRef} srcDoc={htmlDoc} onLoad={handleFrameLoad} title={name}
               className="m-preview-frame" />
           )
         ) : kind === 'image' ? (
-          <img className="m-preview-img" src={blobUrl} alt={name} />
+          <img className="m-preview-img" src={mediaUrl} alt={name} />
         ) : kind === 'video' ? (
-          <video className="m-preview-video" src={blobUrl} controls playsInline />
+          <video className="m-preview-video" src={mediaUrl} controls playsInline />
         ) : kind === 'audio' ? (
           <div className="m-preview-audio-wrap">
             <div className="m-preview-audio-name">{name}</div>
-            <audio src={blobUrl} controls style={{ width: '100%' }} />
+            <audio src={mediaUrl} controls style={{ width: '100%' }} />
           </div>
         ) : null}
       </div>
