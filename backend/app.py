@@ -6636,15 +6636,21 @@ if os.path.isdir(FRONTEND_DIST):
 
     @app.get("/{full_path:path}")
     async def _spa_fallback(full_path: str):
+        # HTML 一律 no-cache：防止手机浏览器缓存旧入口页后加载旧 JS（带 hash 的 assets 不受影响）
+        def _serve(path: str):
+            resp = _FileResponse(path)
+            if path.endswith(".html"):
+                resp.headers["Cache-Control"] = "no-cache"
+            return resp
         # Resolve and verify the path stays within FRONTEND_DIST to prevent path traversal
         raw = _os.path.join(FRONTEND_DIST, full_path)
         real = _os.path.realpath(raw)
         dist_real = _os.path.realpath(FRONTEND_DIST)
         if _os.path.commonpath([real, dist_real]) != dist_real:
-            return _FileResponse(_os.path.join(FRONTEND_DIST, "index.html"))
+            return _serve(_os.path.join(FRONTEND_DIST, "index.html"))
         if _os.path.isfile(real):
-            return _FileResponse(real)
-        return _FileResponse(_os.path.join(FRONTEND_DIST, "index.html"))
+            return _serve(real)
+        return _serve(_os.path.join(FRONTEND_DIST, "index.html"))
 
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
