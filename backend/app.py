@@ -61,6 +61,121 @@ def _load_plans() -> dict:
 # Allowed domains for TTS audio download (SSRF prevention)
 _AUDIO_ALLOWED_HOSTS = {"dashscope.aliyuncs.com", "dashscope-intl.aliyuncs.com", "aliyuncs.com"}
 
+# ── Points system helpers ─────────────────────────────────────────────
+
+def _get_points_setting(key: str, default=None):
+    """Read a points-related setting from the settings table."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        if row and row["value"] is not None:
+            return row["value"]
+        return default
+    finally:
+        db.close()
+
+def _get_user_points(db, user_id: str) -> dict:
+    """Get user points balance + expiry. Returns zero balance if no record."""
+    row = db.execute(
+        "SELECT balance_deci, expires_at, updated_at FROM user_points WHERE user_id=?",
+        (user_id,),
+    ).fetchone()
+    if not row:
+        return {"balance_deci": 0, "expires_at": None, "updated_at": None}
+    # Check expiry
+    balance = int(row["balance_deci"])
+    expires = row["expires_at"]
+    if expires and balance > 0:
+        try:
+            if datetime.utcnow() > datetime.fromisoformat(expires):
+                # Points expired — zero out
+                db.execute("UPDATE user_points SET balance_deci=0, updated_at=? WHERE user_id=?",
+                           (datetime.utcnow().isoformat(), user_id))
+                return {"balance_deci": 0, "expires_at": expires, "updated_at": datetime.utcnow().isoformat()}
+        except (ValueError, TypeError):
+            pass
+    return {"balance_deci": balance, "expires_at": expires, "updated_at": row["updated_at"]}
+
+def _ensure_user_points(db, user_id: str, expires_at: str = None) -> dict:
+    """Ensure user_points row exists, return current state. Creates if missing."""
+    existing = db.execute("SELECT balance_deci, expires_at FROM user_points WHERE user_id=?", (user_id,)).fetchone()
+    if not existing:
+        now = datetime.utcnow().isoformat()
+        db.execute(
+            "INSERT INTO user_points (user_id, balance_deci, expires_at, updated_at) VALUES (?, 0, ?, ?)",
+            (user_id, expires_at, now),
+        )
+        return {"balance_deci": 0, "expires_at": expires_at, "updated_at": now}
+    return {"balance_deci": existing["balance_deci"], "expires_at": existing["expires_at"], "updated_at": None}
+
+def _add_points(db, user_id: str, amount_deci: int, ttype: str,
+                ref_id: str = "", ref_type: str = "", note: str = "",
+                created_by: str = None, expires_at: str = None) -> dict:
+    """Add points to user. Returns new balance info. Must be called within a transaction."""
+    import uuid as _uuid
+    # Ensure user_points row exists
+    pts = _ensure_user_points(db, user_id, expires_at)
+    old_balance = pts["balance_deci"]
+    new_balance = old_balance + amount_deci
+    # Update expiry if provided
+    if expires_at:
+        db.execute(
+            "UPDATE user_points SET balance_deci=?, expires_at=?, updated_at=? WHERE user_id=?",
+            (new_balance, expires_at, datetime.utcnow().isoformat(), user_id),
+        )
+    else:
+        db.execute(
+            "UPDATE user_points SET balance_deci=?, updated_at=? WHERE user_id=?",
+            (new_balance, datetime.utcnow().isoformat(), user_id),
+        )
+    # Record transaction
+    tx_id = str(_uuid.uuid4())
+    db.execute(
+        """INSERT INTO points_transactions (id, user_id, amount_deci, balance_after_deci,
+           type, ref_id, ref_type, note, created_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (tx_id, user_id, amount_deci, new_balance, ttype, ref_id, ref_type, note, created_by),
+    )
+    return {"balance_deci": new_balance, "added": amount_deci,
+            "old_balance_deci": old_balance, "expires_at": expires_at}
+
+def _deduct_points(db, user_id: str, amount_deci: int, ttype: str,
+                   ref_id: str = "", ref_type: str = "", note: str = "") -> dict:
+    """Deduct points from user. Raises HTTPException if insufficient. Must be called within a transaction."""
+    import uuid as _uuid
+    pts = _get_user_points(db, user_id)
+    if pts["balance_deci"] < amount_deci:
+        raise HTTPException(status_code=402, detail=f"积分不足：需要 {amount_deci/10:.1f} 积分，当前余额 {pts['balance_deci']/10:.1f} 积分")
+    new_balance = pts["balance_deci"] - amount_deci
+    db.execute(
+        "UPDATE user_points SET balance_deci=?, updated_at=? WHERE user_id=?",
+        (new_balance, datetime.utcnow().isoformat(), user_id),
+    )
+    tx_id = str(_uuid.uuid4())
+    db.execute(
+        """INSERT INTO points_transactions (id, user_id, amount_deci, balance_after_deci,
+           type, ref_id, ref_type, note)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (tx_id, user_id, -amount_deci, new_balance, ttype, ref_id, ref_type, note),
+    )
+    return {"balance_deci": new_balance, "deducted": amount_deci}
+
+def _get_points_per_yuan() -> float:
+    """Get configurable points-per-yuan ratio. Default 1.0."""
+    try:
+        val = _get_points_setting("points_per_yuan", "1.0")
+        return float(val)
+    except (ValueError, TypeError):
+        return 1.0
+
+def _new_user_bonus_deci() -> int:
+    """Get configurable new user signup bonus in deci-points. Default 5 (=0.5 points)."""
+    try:
+        val = _get_points_setting("new_user_points_deci", "5")
+        return int(val)
+    except (ValueError, TypeError):
+        return 5
+
 def _is_safe_audio_url(url: str) -> bool:
     try:
         host = url.split("/")[2]  # https://host/path → host
@@ -1221,6 +1336,22 @@ def api_download_all(project_id: str, request: Request, user=require_perm("stage
     files = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f))]
     if not files:
         raise HTTPException(status_code=404, detail="项目文件夹为空")
+
+    # Points unlock check + download logging
+    db = get_db()
+    try:
+        _check_unlock_and_log(db, user, project_id, "", "zip_all", _get_client_ip(request))
+        db.commit()
+    except HTTPException:
+        db.close()
+        raise
+    except Exception:
+        db.close()
+        raise
+    finally:
+        if db:
+            db.close()
+
     proj = _get_project(project_id)
     safe_name = "".join(c for c in (proj["name"] if proj else project_id) if c.isalnum() or c in "._- ()（）").strip() or project_id[:8]
     buf = io.BytesIO()
@@ -1240,6 +1371,22 @@ async def api_download_selected(project_id: str, request: Request, user=require_
     """Download selected files as a zip archive."""
     verify_project_access(project_id, user)
     body = await request.json()
+
+    # Points unlock check + download logging
+    db = get_db()
+    try:
+        _check_unlock_and_log(db, user, project_id, "", "zip_selected", _get_client_ip(request))
+        db.commit()
+    except HTTPException:
+        db.close()
+        raise
+    except Exception:
+        db.close()
+        raise
+    finally:
+        if db:
+            db.close()
+
     import zipfile, io
     proj = _get_project(project_id)
     safe_name = "".join(c for c in (proj["name"] if proj else project_id) if c.isalnum() or c in "._- ()（）").strip() or project_id[:8]
@@ -4874,6 +5021,349 @@ def api_export_sop(req: SOPExportRequest, user=require_perm("stage5.download")):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+# ── Points system API ─────────────────────────────────────────────────
+
+@app.get("/api/member/points")
+def api_my_points(user=Depends(get_current_user)):
+    """Get current user's point balance, expiry, and unlocked projects count."""
+    db = get_db()
+    try:
+        uid = user["sub"]
+        pts = _get_user_points(db, uid)
+        unlocked_count = db.execute(
+            "SELECT COUNT(*) FROM project_unlocks WHERE user_id=?",
+            (uid,),
+        ).fetchone()[0]
+        points_per_yuan = _get_points_per_yuan()
+        return {
+            "balance_deci": pts["balance_deci"],
+            "balance_display": f"{pts['balance_deci'] / 10:.1f}",
+            "expires_at": pts["expires_at"],
+            "points_per_yuan": points_per_yuan,
+            "unlocked_count": unlocked_count,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/member/points/transactions")
+def api_my_points_transactions(page: int = 1, page_size: int = 20,
+                                user=Depends(get_current_user)):
+    """Get current user's points transaction history."""
+    db = get_db()
+    try:
+        uid = user["sub"]
+        total = db.execute(
+            "SELECT COUNT(*) FROM points_transactions WHERE user_id=?", (uid,)
+        ).fetchone()[0]
+        offset = (page - 1) * page_size
+        rows = db.execute(
+            "SELECT * FROM points_transactions WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (uid, page_size, offset),
+        ).fetchall()
+        return {
+            "transactions": [dict(r) for r in rows],
+            "total": total, "page": page, "page_size": page_size,
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/member/unlocked-projects")
+def api_my_unlocked_projects(user=Depends(get_current_user)):
+    """Get current user's unlocked projects list."""
+    db = get_db()
+    try:
+        uid = user["sub"]
+        rows = db.execute(
+            """SELECT pu.project_id, pu.points_spent_deci, pu.unlocked_at, pu.expires_at,
+                      p.name as project_name
+               FROM project_unlocks pu
+               JOIN projects p ON p.id = pu.project_id
+               WHERE pu.user_id = ?
+               ORDER BY pu.unlocked_at DESC""",
+            (uid,),
+        ).fetchall()
+        return {"unlocked": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/member/can-download")
+async def api_can_download(request: Request, user=Depends(get_current_user)):
+    """Pre-check: which projects need unlock before download."""
+    body = await request.json()
+    files = body.get("files", [])
+    if not files:
+        raise HTTPException(400, "请提供要下载的文件列表")
+
+    uid = user["sub"]
+    db = get_db()
+    try:
+        # Collect unique project IDs
+        project_ids = list(set(f.get("project_id", "") for f in files if f.get("project_id")))
+        need_unlock = []
+        already_unlocked = []
+        not_downloadable = []
+        total_cost = 0
+
+        # Admins bypass all checks
+        if user.get("user_type") == "admin":
+            for pid in project_ids:
+                proj = db.execute("SELECT id, name FROM projects WHERE id=?", (pid,)).fetchone()
+                if proj:
+                    already_unlocked.append({"project_id": pid, "project_name": proj["name"]})
+            pts = _get_user_points(db, uid)
+            return {
+                "need_unlock": [], "already_unlocked": already_unlocked,
+                "not_downloadable": [], "total_cost_deci": 0,
+                "balance_deci": pts["balance_deci"], "can_afford": True,
+                "is_admin": True,
+            }
+
+        pts = _get_user_points(db, uid)
+
+        for pid in project_ids:
+            proj = db.execute(
+                "SELECT id, name, is_downloadable, point_cost_deci FROM projects WHERE id=?",
+                (pid,),
+            ).fetchone()
+            if not proj:
+                continue
+
+            # Check if already unlocked and not expired
+            unlock = db.execute(
+                """SELECT 1 FROM project_unlocks
+                   WHERE user_id=? AND project_id=?
+                   AND (expires_at IS NULL OR expires_at > datetime('now'))""",
+                (uid, pid),
+            ).fetchone()
+            if unlock:
+                already_unlocked.append({"project_id": pid, "project_name": proj["name"]})
+                continue
+
+            # Check if downloadable
+            if not proj["is_downloadable"]:
+                not_downloadable.append({"project_id": pid, "project_name": proj["name"]})
+                continue
+
+            cost = int(proj["point_cost_deci"])
+            need_unlock.append({
+                "project_id": pid,
+                "project_name": proj["name"],
+                "point_cost_deci": cost,
+            })
+            total_cost += cost
+
+        return {
+            "need_unlock": need_unlock,
+            "already_unlocked": already_unlocked,
+            "not_downloadable": not_downloadable,
+            "total_cost_deci": total_cost,
+            "balance_deci": pts["balance_deci"],
+            "can_afford": pts["balance_deci"] >= total_cost,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/member/unlock-projects")
+async def api_unlock_projects(request: Request, user=Depends(get_current_user)):
+    """Batch unlock projects by spending points."""
+    body = await request.json()
+    project_ids = body.get("project_ids", [])
+    if not project_ids:
+        raise HTTPException(400, "请提供要解锁的明细 ID 列表")
+    project_ids = list(set(project_ids))  # dedup
+
+    uid = user["sub"]
+    if user.get("user_type") == "admin":
+        raise HTTPException(400, "管理员无需解锁")
+
+    db = get_db()
+    try:
+        pts = _get_user_points(db, uid)
+
+        unlocked = []
+        already = []
+        total_cost = 0
+
+        for pid in project_ids:
+            # Check already unlocked
+            existing = db.execute(
+                """SELECT 1 FROM project_unlocks
+                   WHERE user_id=? AND project_id=?
+                   AND (expires_at IS NULL OR expires_at > datetime('now'))""",
+                (uid, pid),
+            ).fetchone()
+            if existing:
+                proj = db.execute("SELECT name FROM projects WHERE id=?", (pid,)).fetchone()
+                already.append(pid)
+                continue
+
+            proj = db.execute(
+                "SELECT id, name, is_downloadable, point_cost_deci FROM projects WHERE id=?",
+                (pid,),
+            ).fetchone()
+            if not proj or not proj["is_downloadable"]:
+                continue
+
+            cost = int(proj["point_cost_deci"])
+            total_cost += cost
+            unlocked.append({"project_id": pid, "name": proj["name"], "point_cost_deci": cost})
+
+        if not unlocked:
+            return {"unlocked": [], "already_unlocked": already,
+                    "total_spent_deci": 0, "balance_after_deci": pts["balance_deci"]}
+
+        # Deduct points atomically
+        result = _deduct_points(db, uid, total_cost, "unlock",
+                                ref_id=",".join(p["project_id"] for p in unlocked),
+                                ref_type="project",
+                                note=f"解锁 {len(unlocked)} 个明细")
+        balance_after = result["balance_deci"]
+
+        # Create unlock records
+        expires = pts["expires_at"]  # Unlock expires when points expire
+        now = datetime.utcnow().isoformat()
+        for p in unlocked:
+            db.execute(
+                """INSERT OR REPLACE INTO project_unlocks
+                   (user_id, project_id, points_spent_deci, unlocked_at, expires_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (uid, p["project_id"], p["point_cost_deci"], now, expires),
+            )
+
+        db.commit()
+        return {
+            "unlocked": unlocked,
+            "already_unlocked": already,
+            "total_spent_deci": total_cost,
+            "balance_after_deci": balance_after,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"解锁失败: {e}")
+    finally:
+        db.close()
+
+
+# ── Admin points management ───────────────────────────────────────────
+
+@app.get("/api/members/{user_id}/points")
+def api_admin_get_points(user_id: str, user=require_perm("member.manage")):
+    """Admin: view any user's points."""
+    db = get_db()
+    try:
+        pts = _get_user_points(db, user_id)
+        transactions = db.execute(
+            "SELECT * FROM points_transactions WHERE user_id=? ORDER BY created_at DESC LIMIT 20",
+            (user_id,),
+        ).fetchall()
+        unlocked = db.execute(
+            """SELECT pu.project_id, pu.points_spent_deci, pu.unlocked_at, pu.expires_at,
+                      p.name as project_name
+               FROM project_unlocks pu
+               JOIN projects p ON p.id = pu.project_id
+               WHERE pu.user_id = ?
+               ORDER BY pu.unlocked_at DESC""",
+            (user_id,),
+        ).fetchall()
+        return {
+            "balance_deci": pts["balance_deci"],
+            "balance_display": f"{pts['balance_deci'] / 10:.1f}",
+            "expires_at": pts["expires_at"],
+            "transactions": [dict(r) for r in transactions],
+            "unlocked": [dict(r) for r in unlocked],
+        }
+    finally:
+        db.close()
+
+
+@app.put("/api/members/{user_id}/points")
+async def api_admin_set_points(user_id: str, request: Request,
+                                 user=require_perm("member.manage")):
+    """Admin: manually set a user's point balance (absolute value)."""
+    body = await request.json()
+    new_balance_deci = int(body.get("balance_deci", 0))
+    note = body.get("note", "管理员手动调整").strip()
+
+    db = get_db()
+    try:
+        m = db.execute("SELECT id, username FROM users WHERE id=?", (user_id,)).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+
+        old_pts = _get_user_points(db, user_id)
+        delta = new_balance_deci - old_pts["balance_deci"]
+
+        if delta != 0:
+            if delta > 0:
+                _add_points(db, user_id, delta, "admin_adjust",
+                           note=note, created_by=user["sub"])
+            else:
+                # Use _deduct_points logic but allow going negative via direct update
+                _add_points(db, user_id, delta, "admin_adjust",
+                           note=note, created_by=user["sub"])
+
+        db.commit()
+        return {"ok": True, "balance_deci": new_balance_deci,
+                "balance_display": f"{new_balance_deci / 10:.1f}",
+                "previous_deci": old_pts["balance_deci"],
+                "delta_deci": delta}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"修改积分失败: {e}")
+    finally:
+        db.close()
+
+
+# ── Download statistics ───────────────────────────────────────────────
+
+@app.get("/api/admin/stats/downloads/projects")
+def api_download_stats_projects(user=require_perm("member.manage")):
+    """Admin: download count per downloadable project."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            """SELECT p.id, p.name, p.download_count, p.point_cost_deci, p.is_downloadable,
+                      COUNT(dl.id) as total_logs
+               FROM projects p
+               LEFT JOIN download_logs dl ON dl.project_id = p.id
+               WHERE p.is_downloadable = 1
+               GROUP BY p.id
+               ORDER BY p.download_count DESC""",
+        ).fetchall()
+        return {"projects": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/stats/downloads/members")
+def api_download_stats_members(user=require_perm("member.manage")):
+    """Admin: download activity per member."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            """SELECT u.id, u.username, u.display_name, u.user_type,
+                      COUNT(dl.id) as total_downloads,
+                      COUNT(DISTINCT dl.project_id) as unique_projects,
+                      MAX(dl.created_at) as last_download
+               FROM users u
+               LEFT JOIN download_logs dl ON dl.user_id = u.id
+               WHERE u.user_type = 'member'
+               GROUP BY u.id
+               ORDER BY total_downloads DESC""",
+        ).fetchall()
+        return {"members": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
 # ── Public download endpoints (no auth required, must precede /api/download/{filename}) ──
 
 @app.get("/api/download/info")
@@ -4920,6 +5410,72 @@ def api_download_server():
 # ── File Download ──
 
 @app.get("/api/download/{filename}")
+def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
+                           download_type: str = "file", ip: str = "") -> bool:
+    """Check if user can download this project. Returns True if download allowed.
+    - Admins always allowed
+    - is_downloadable=0 projects: requires stage5.download permission (existing behavior)
+    - is_downloadable=1 projects: requires unlock OR admin
+    On success, increments download_count and inserts download_logs.
+    """
+    uid = user.get("user_id", user.get("sub", ""))
+    is_admin = user.get("user_type") == "admin"
+
+    proj = db.execute(
+        "SELECT id, name, is_downloadable, point_cost_deci, download_count FROM projects WHERE id=?",
+        (project_id,),
+    ).fetchone()
+    if not proj:
+        return False
+
+    if is_admin:
+        import uuid as _uuid
+        db.execute("UPDATE projects SET download_count = download_count + 1 WHERE id=?", (project_id,))
+        db.execute(
+            "INSERT INTO download_logs (id, user_id, project_id, filename, download_type, ip_address) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (str(_uuid.uuid4()), uid, project_id, filename, download_type, ip),
+        )
+        return True
+
+    # Not downloadable: use existing stage5.download permission
+    if not proj["is_downloadable"]:
+        perms = set(user.get("permissions", []))
+        if "stage5.download" in perms:
+            import uuid as _uuid
+            db.execute("UPDATE projects SET download_count = download_count + 1 WHERE id=?", (project_id,))
+            db.execute(
+                "INSERT INTO download_logs (id, user_id, project_id, filename, download_type, ip_address) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (str(_uuid.uuid4()), uid, project_id, filename, download_type, ip),
+            )
+            return True
+        return False
+
+    # Downloadable project: check unlock
+    unlock = db.execute(
+        """SELECT 1 FROM project_unlocks
+           WHERE user_id=? AND project_id=?
+           AND (expires_at IS NULL OR expires_at > datetime('now'))""",
+        (uid, project_id),
+    ).fetchone()
+    if not unlock:
+        raise HTTPException(
+            status_code=402,
+            detail=f"请先消耗 {proj['point_cost_deci']/10:.1f} 积分解锁「{proj['name']}」后再下载",
+        )
+
+    # Log and allow
+    import uuid as _uuid
+    db.execute("UPDATE projects SET download_count = download_count + 1 WHERE id=?", (project_id,))
+    db.execute(
+        "INSERT INTO download_logs (id, user_id, project_id, filename, download_type, ip_address) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (str(_uuid.uuid4()), uid, project_id, filename, download_type, ip),
+    )
+    return True
+
+
 def download_file(filename: str, request: Request, project_id: str = None, name: str = None):
     download_name = name or filename
     if project_id:
@@ -4951,6 +5507,22 @@ def download_file(filename: str, request: Request, project_id: str = None, name:
         if "stage5.download" not in perms:
             raise HTTPException(status_code=403, detail="缺少权限: stage5.download")
         verify_project_access(project_id, user)
+
+        # Points unlock check + download logging
+        db = get_db()
+        try:
+            _check_unlock_and_log(db, user, project_id, filename, "file", _get_client_ip(request))
+            db.commit()
+        except HTTPException:
+            db.close()
+            raise
+        except Exception:
+            db.close()
+            raise
+        finally:
+            if db:
+                db.close()
+
         try:
             proj_dir = resolve_project_storage(project_id, auto_create=False)
             filepath = os.path.join(proj_dir, filename)
@@ -6116,6 +6688,31 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
                 (user["sub"], expires_at, payment["id"]),
             )
 
+        # ── Points system: grant points from payment + new user bonus ──
+        try:
+            points_per_yuan = _get_points_per_yuan()
+            if payment and payment["amount_cents"] > 0:
+                # Grant points from payment: amount_cents / 100 * points_per_yuan → deci
+                points_granted = round(payment["amount_cents"] / 100.0 * points_per_yuan * 10)
+                if points_granted > 0:
+                    _add_points(db, user_id, points_granted, "purchase",
+                               ref_id=payment["id"], ref_type="payment",
+                               note=f"购买 {payment['plan_name']} 获 {points_granted/10:.1f} 积分",
+                               expires_at=expires_at)
+                    db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
+                              (points_granted, payment["id"]))
+
+            # New user signup bonus (only for first approval, no prior points record)
+            bonus_deci = _new_user_bonus_deci()
+            existing_pts = db.execute("SELECT balance_deci FROM user_points WHERE user_id=?", (user_id,)).fetchone()
+            if bonus_deci > 0 and not existing_pts:
+                _add_points(db, user_id, bonus_deci, "signup_bonus",
+                           note=f"新人礼包 {bonus_deci/10:.1f} 积分",
+                           expires_at=expires_at)
+        except Exception as e:
+            print(f"[Points] Warning: failed to grant points on approval: {e}")
+            # Don't block approval on points failure
+
         _write_audit(db, user["sub"], "member.approve", "user", user_id,
                       json.dumps({"role": role_name, "duration_days": duration_days,
                                   "expires_at": expires_at,
@@ -6332,6 +6929,27 @@ def approve_upgrade(user_id: str, request: Request, user=require_perm("member.ma
             (user["sub"], upgrade_expires, user_id, plan_name),
         )
 
+        # ── Points system: grant points from upgrade payment ──
+        try:
+            upgrade_payment = db.execute(
+                "SELECT id, amount_cents, plan_name FROM payment_records "
+                "WHERE user_id=? AND plan_name=? AND recorded_by IS NOT NULL "
+                "ORDER BY paid_at DESC LIMIT 1",
+                (user_id, plan_name),
+            ).fetchone()
+            if upgrade_payment and upgrade_payment["amount_cents"] > 0:
+                points_per_yuan = _get_points_per_yuan()
+                points_granted = round(upgrade_payment["amount_cents"] / 100.0 * points_per_yuan * 10)
+                if points_granted > 0:
+                    _add_points(db, user_id, points_granted, "purchase",
+                               ref_id=upgrade_payment["id"], ref_type="payment",
+                               note=f"升级 {upgrade_payment['plan_name']} 获 {points_granted/10:.1f} 积分",
+                               expires_at=upgrade_expires)
+                    db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
+                              (points_granted, upgrade_payment["id"]))
+        except Exception as e:
+            print(f"[Points] Warning: failed to grant points on upgrade: {e}")
+
         _write_audit(db, user["sub"], "member.approve_upgrade", "user", user_id,
                       json.dumps({"role": "开发体验员", "upgrade_expires": upgrade_expires,
                                   "upgrade_days": upgrade_days}),
@@ -6467,6 +7085,20 @@ async def record_payment(user_id: str, body: PaymentRecordReq, request: Request,
             "UPDATE users SET expires_at=?, updated_at=? WHERE id=?",
             (new_expires_str, now.isoformat(), user_id),
         )
+        # ── Points system: grant points from manual payment ──
+        try:
+            points_per_yuan = _get_points_per_yuan()
+            points_granted = round(amount_cents / 100.0 * points_per_yuan * 10)
+            if points_granted > 0:
+                _add_points(db, user_id, points_granted, "purchase",
+                           ref_id=pid, ref_type="payment",
+                           note=f"管理员录入 {plan_name} 获 {points_granted/10:.1f} 积分",
+                           created_by=user["sub"], expires_at=new_expires_str)
+                db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
+                          (points_granted, pid))
+        except Exception as e:
+            print(f"[Points] Warning: failed to grant points on manual payment: {e}")
+
         _write_audit(db, user["sub"], "member.payment", "user", user_id,
                       json.dumps({"amount_cents": amount_cents, "plan": plan_name,
                                   "days": duration_days, "new_expires": new_expires_str}),

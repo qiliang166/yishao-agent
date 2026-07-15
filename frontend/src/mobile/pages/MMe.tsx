@@ -64,6 +64,10 @@ export default function MMe() {
   const [pwMsg, setPwMsg] = useState('')
   const [pwError, setPwError] = useState('')
 
+  // ── 积分 ──
+  const [points, setPoints] = useState<{ balance_deci: number; balance_display: string; expires_at: string | null; unlocked_count: number } | null>(null)
+  const [unlockedProjects, setUnlockedProjects] = useState<any[]>([])
+
   // ── 申请记录 ──
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(true)
@@ -118,9 +122,23 @@ export default function MMe() {
         if (!cancelled) setPaymentsLoading(false)
       }
     }
+    const loadPoints = async () => {
+      try {
+        const d = await api.getMyPoints()
+        if (!cancelled && d != null) setPoints(d)
+      } catch {}
+    }
+    const loadUnlocked = async () => {
+      try {
+        const d = await api.getMyUnlockedProjects()
+        if (!cancelled && d?.unlocked) setUnlockedProjects(d.unlocked)
+      } catch {}
+    }
     load()
     loadSettings()
     loadPayments()
+    loadPoints()
+    loadUnlocked()
     return () => { cancelled = true }
   }, [])
 
@@ -265,6 +283,40 @@ export default function MMe() {
                   onClick={() => navigate(`/renew?u=${encodeURIComponent(me.username || '')}`)}>
                   会员续费
                 </button>
+
+                {/* 积分余额 */}
+                {points != null && (
+                  <>
+                    <div className="m-section-title">积分余额</div>
+                    <div className="m-kv-group">
+                      <div className="m-kv">
+                        <span className="m-kv-label">当前积分</span>
+                        <span className="m-kv-value" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: 16 }}>
+                          {points.balance_display}
+                        </span>
+                      </div>
+                      {points.expires_at && (
+                        <div className="m-kv">
+                          <span className="m-kv-label">有效期至</span>
+                          <span className="m-kv-value">
+                            {new Date(points.expires_at).toLocaleDateString('zh-CN')}
+                            {new Date(points.expires_at).getTime() < Date.now() && (
+                              <span style={{ color: 'var(--warning)', marginLeft: 6, fontSize: 11 }}>(已过期)</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
+                      {unlockedProjects.length > 0 && (
+                        <div className="m-kv">
+                          <span className="m-kv-label">已解锁明细</span>
+                          <span className="m-kv-value" style={{ fontSize: 11 }}>
+                            {unlockedProjects.map((p: any) => p.project_name).join('、')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
 
                 {/* 申请记录 — 与桌面 MemberCenterPage 一致 */}
                 {!paymentsLoading && payments.length > 0 && (

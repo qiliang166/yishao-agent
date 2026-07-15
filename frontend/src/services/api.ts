@@ -1083,4 +1083,66 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
     }).then(d => d as { ok: boolean }),
+
+  // ── Points system ──
+
+  getMyPoints: () =>
+    request('/api/member/points').then(d => d as {
+      balance_deci: number; balance_display: string; expires_at: string | null;
+      points_per_yuan: number; unlocked_count: number;
+    }),
+
+  getMyPointsTransactions: (page?: number, pageSize?: number) => {
+    const qs = new URLSearchParams()
+    if (page) qs.set('page', String(page))
+    if (pageSize) qs.set('page_size', String(pageSize))
+    const q = qs.toString()
+    return request('/api/member/points/transactions' + (q ? '?' + q : ''))
+      .then(d => d as { transactions: any[]; total: number; page: number; page_size: number })
+  },
+
+  getMyUnlockedProjects: () =>
+    request('/api/member/unlocked-projects').then(d => d as { unlocked: any[] }),
+
+  canDownload: (files: { project_id: string; filename: string }[]) =>
+    request('/api/member/can-download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files }),
+    }).then(d => d as {
+      need_unlock: any[]; already_unlocked: any[]; not_downloadable: any[];
+      total_cost_deci: number; balance_deci: number; can_afford: boolean;
+      is_admin?: boolean;
+    }),
+
+  unlockProjects: (projectIds: string[]) =>
+    request('/api/member/unlock-projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_ids: projectIds }),
+    }).then(d => d as {
+      unlocked: any[]; already_unlocked: string[];
+      total_spent_deci: number; balance_after_deci: number;
+    }),
+
+  // Admin points
+  getUserPoints: (userId: string) =>
+    request('/api/members/' + userId + '/points').then(d => d as {
+      balance_deci: number; balance_display: string; expires_at: string | null;
+      transactions: any[]; unlocked: any[];
+    }),
+
+  setUserPoints: (userId: string, balanceDeci: number, note?: string) =>
+    request('/api/members/' + userId + '/points', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ balance_deci: balanceDeci, note }),
+    }).then(d => d as { ok: boolean; balance_deci: number; balance_display: string }),
+
+  // Download stats
+  getDownloadStatsByProject: () =>
+    request('/api/admin/stats/downloads/projects').then(d => d as { projects: any[] }),
+
+  getDownloadStatsByMember: () =>
+    request('/api/admin/stats/downloads/members').then(d => d as { members: any[] }),
 }

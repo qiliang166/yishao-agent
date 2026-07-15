@@ -7306,6 +7306,9 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     flex-shrink: 0;
     transform-origin: top left;
   }}
+  /* anti-copy */
+  * {{ -webkit-user-select: none; user-select: none; }}
+  img {{ pointer-events: none; -webkit-touch-callout: none; }}
 </style>
 </head>
 <body>
@@ -7332,6 +7335,16 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
   window.addEventListener('resize', fit);
   fit();
 }})();
+/* anti-copy */
+document.addEventListener('contextmenu', function(e){{ e.preventDefault(); }});
+document.addEventListener('selectstart', function(e){{ e.preventDefault(); }});
+document.addEventListener('dragstart', function(e){{ e.preventDefault(); }});
+document.addEventListener('copy', function(e){{ e.preventDefault(); return false; }});
+document.addEventListener('keydown', function(e){{
+  if(e.key==='F12'||(e.ctrlKey&&e.shiftKey&&e.key==='I')||(e.ctrlKey&&e.key==='s')||(e.ctrlKey&&e.key==='u')||(e.ctrlKey&&e.key==='p')){{
+    e.preventDefault(); return false;
+  }}
+}});
 </script>
 </body>
 </html>"""

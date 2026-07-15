@@ -43,6 +43,10 @@ export default function MemberCenterPage() {
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(true)
 
+  // Points
+  const [points, setPoints] = useState<{ balance_deci: number; balance_display: string; expires_at: string | null; unlocked_count: number } | null>(null)
+  const [unlockedProjects, setUnlockedProjects] = useState<any[]>([])
+
   useEffect(() => {
     const token = localStorage.getItem('auth_token')
     fetch('/api/auth/me', {
@@ -69,6 +73,12 @@ export default function MemberCenterPage() {
       .then(data => setPayments(data?.payments || []))
       .catch(() => {})
       .finally(() => setPaymentsLoading(false))
+
+    // Points
+    api.getMyPoints().then(d => { if (d) setPoints(d) }).catch(() => {})
+    api.getMyUnlockedProjects().then(d => {
+      if (d?.unlocked) setUnlockedProjects(d.unlocked)
+    }).catch(() => {})
   }, [])
 
   const handleChangePassword = async () => {
@@ -209,6 +219,30 @@ export default function MemberCenterPage() {
           </div>
         )}
       </div>
+
+      {/* Points Balance */}
+      {points != null && (
+        <div className="ac-sub-item" style={{ marginBottom: 16 }}>
+          <div className="ac-sub-item-header">积分余额</div>
+          <div style={{ fontSize: 13, padding: '4px 0' }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--primary)' }}>
+              {points.balance_display}
+            </span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 11, marginLeft: 6 }}>积分</span>
+            {points.expires_at && (
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                · 有效期至 {new Date(points.expires_at).toLocaleDateString('zh-CN')}
+              </span>
+            )}
+          </div>
+          {unlockedProjects.length > 0 && (
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
+              已解锁 {unlockedProjects.length} 个明细：
+              {unlockedProjects.map((p: any) => p.project_name).join('、')}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Upgrade Section */}
       {isPaid && !isUpgraded && !isExpired && upgradePlan && (

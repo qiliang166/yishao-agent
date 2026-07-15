@@ -1368,6 +1368,67 @@ def _migrate_v1_create_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at)")
 
+    # ── Points system tables ──
+
+    # 8. user_points table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_points (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            balance_deci INTEGER NOT NULL DEFAULT 0,
+            expires_at TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY (user_id)
+        )
+    """)
+
+    # 9. points_transactions table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS points_transactions (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            amount_deci INTEGER NOT NULL,
+            balance_after_deci INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            ref_id TEXT DEFAULT '',
+            ref_type TEXT DEFAULT '',
+            note TEXT DEFAULT '',
+            created_by TEXT REFERENCES users(id),
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pt_user ON points_transactions(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pt_created ON points_transactions(created_at)")
+
+    # 10. project_unlocks table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS project_unlocks (
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            points_spent_deci INTEGER NOT NULL,
+            unlocked_at TEXT NOT NULL DEFAULT (datetime('now')),
+            expires_at TEXT,
+            PRIMARY KEY (user_id, project_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pu_user ON project_unlocks(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_pu_project ON project_unlocks(project_id)")
+
+    # 11. download_logs table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS download_logs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            filename TEXT DEFAULT '',
+            download_type TEXT NOT NULL DEFAULT 'file',
+            ip_address TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dl_user ON download_logs(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dl_project ON download_logs(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_dl_created ON download_logs(created_at)")
+
     # Migrate: add must_change_password to users (first-time setup wizard flag)
     try:
         users_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
@@ -1412,6 +1473,26 @@ def _migrate_v1_create_tables(conn):
             conn.execute("ALTER TABLE payment_records ADD COLUMN payment_ref TEXT DEFAULT ''")
     except Exception as e:
         print(f"[DB] Warning: could not add payment_ref to payment_records: {e}")
+
+    # Migrate: points system columns on projects
+    try:
+        proj_cols = [r[1] for r in conn.execute("PRAGMA table_info(projects)").fetchall()]
+        if "point_cost_deci" not in proj_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN point_cost_deci INTEGER NOT NULL DEFAULT 5")
+        if "is_downloadable" not in proj_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN is_downloadable INTEGER NOT NULL DEFAULT 0")
+        if "download_count" not in proj_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0")
+    except Exception as e:
+        print(f"[DB] Warning: could not add points columns to projects: {e}")
+
+    # Migrate: points_granted_deci on payment_records
+    try:
+        pr_cols = [r[1] for r in conn.execute("PRAGMA table_info(payment_records)").fetchall()]
+        if "points_granted_deci" not in pr_cols:
+            conn.execute("ALTER TABLE payment_records ADD COLUMN points_granted_deci INTEGER NOT NULL DEFAULT 0")
+    except Exception as e:
+        print(f"[DB] Warning: could not add points_granted_deci to payment_records: {e}")
 
     # Add created_by to existing tables (NULL = super admin)
     _tables_for_created_by = [

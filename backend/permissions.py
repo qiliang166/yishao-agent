@@ -69,3 +69,31 @@ def verify_project_access(project_id: str, user: dict) -> None:
             raise HTTPException(status_code=403, detail="无权访问此项目资源")
     finally:
         db.close()
+
+
+def verify_project_unlock(project_id: str, user: dict) -> None:
+    """Raise 402 if user hasn't unlocked this project. Admins are exempt."""
+    if user.get("user_type") == "admin":
+        return
+    db = get_db()
+    try:
+        proj = db.execute(
+            "SELECT is_downloadable FROM projects WHERE id=?", (project_id,)
+        ).fetchone()
+        if not proj or not proj["is_downloadable"]:
+            # Not a downloadable project — fall through to existing permission checks
+            return
+        uid = user.get("user_id", user.get("sub", ""))
+        unlock = db.execute(
+            """SELECT 1 FROM project_unlocks
+               WHERE user_id=? AND project_id=?
+               AND (expires_at IS NULL OR expires_at > datetime('now'))""",
+            (uid, project_id),
+        ).fetchone()
+        if not unlock:
+            raise HTTPException(
+                status_code=402,
+                detail="请先消耗积分解锁此明细后再下载",
+            )
+    finally:
+        db.close()
