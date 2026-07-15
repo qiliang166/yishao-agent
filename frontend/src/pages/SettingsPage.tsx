@@ -109,6 +109,9 @@ function SettingsPage() {
   const [upgradePlanName, setUpgradePlanName] = useState('体验管理员升级')
   const [upgradePlanPrice, setUpgradePlanPrice] = useState('19.90')
   const [upgradePlanDays, setUpgradePlanDays] = useState('30')
+  // 积分换算
+  const [pointsPerYuan, setPointsPerYuan] = useState('1.0')
+  const [newUserPointsDeci, setNewUserPointsDeci] = useState('5')
 
   const [adminPasswordEnabled, setAdminPasswordEnabled] = useState(true)
 
@@ -168,6 +171,8 @@ function SettingsPage() {
           }
         } catch {}
       }
+      if (s.points_per_yuan) setPointsPerYuan(s.points_per_yuan)
+      if (s.new_user_points_deci) setNewUserPointsDeci(s.new_user_points_deci)
       setAdminPasswordEnabled(s.admin_password_enabled !== '0')
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
@@ -294,6 +299,8 @@ function SettingsPage() {
             duration_days: parseInt(upgradePlanDays, 10) || 30,
           },
         }),
+        points_per_yuan: pointsPerYuan,
+        new_user_points_deci: newUserPointsDeci,
       })
       const fallback = (await api.getVersion()).app || ''
       document.title = brandName || fallback
@@ -1058,6 +1065,27 @@ function SettingsPage() {
                 onChange={e => setUpgradePlanDays(e.target.value)}
                 disabled={!canSaveGlobal} style={{ maxWidth: 100 }} />
               <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>不超过会员剩余天数时使用此值</span>
+            </div>
+
+            <h3 style={{ marginTop: 32 }}>积分换算</h3>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              设置积分兑换比例和新用户注册奖励。修改后仅对新审批生效，已发放积分不受影响。
+            </p>
+            <div className="settings-row">
+              <label>1元 = 积分</label>
+              <input className="form-input" type="number" step="0.1" min="0.1"
+                value={pointsPerYuan}
+                onChange={e => setPointsPerYuan(e.target.value)}
+                disabled={!canSaveGlobal} style={{ maxWidth: 100 }} />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>付费购买时，金额 × 汇率 = 获得积分</span>
+            </div>
+            <div className="settings-row">
+              <label>新人礼包（积分）</label>
+              <input className="form-input" type="number" step="0.1" min="0"
+                value={parseFloat(newUserPointsDeci) / 10}
+                onChange={e => setNewUserPointsDeci(String(Math.round(parseFloat(e.target.value || '0') * 10)))}
+                disabled={!canSaveGlobal} style={{ maxWidth: 100 }} />
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>新用户首次审批通过时赠送，0 表示不赠送</span>
             </div>
           </div>
         </>)}

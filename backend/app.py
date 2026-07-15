@@ -5871,6 +5871,10 @@ def get_settings(request: Request):
                 except Exception:
                     pass
 
+        # Include points system config
+        settings["points_per_yuan"] = str(_get_points_per_yuan())
+        settings["new_user_points_deci"] = str(_new_user_bonus_deci())
+
         return JSONResponse(
             content={"settings": settings},
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
@@ -6638,6 +6642,7 @@ def list_pending_members(page: int = 1, page_size: int = 20, user=require_perm("
 class ApproveMemberReq(BaseModel):
     duration_days: int = 30
     note: str = ""
+    points_granted: Optional[int] = None  # override auto-calculated purchase points (deci)
 
 class RejectMemberReq(BaseModel):
     reason: str = ""
@@ -6733,8 +6738,11 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
         try:
             points_per_yuan = _get_points_per_yuan()
             if payment and payment["amount_cents"] > 0:
-                # Grant points from payment: amount_cents / 100 * points_per_yuan → deci
-                points_granted = round(payment["amount_cents"] / 100.0 * points_per_yuan * 10)
+                # Use explicit override if admin specified, otherwise auto-calculate
+                if body.points_granted is not None:
+                    points_granted = body.points_granted
+                else:
+                    points_granted = round(payment["amount_cents"] / 100.0 * points_per_yuan * 10)
                 if points_granted > 0:
                     _add_points(db, user_id, points_granted, "purchase",
                                ref_id=payment["id"], ref_type="payment",

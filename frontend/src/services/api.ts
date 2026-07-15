@@ -904,11 +904,11 @@ export const api = {
     const qs = params.toString()
     return request('/api/members/pending' + (qs ? '?' + qs : '')).then(d => d as { members: any[]; total: number; page: number; page_size: number })
   },
-  approveMember: (userId: string, durationDays?: number, note?: string) =>
+  approveMember: (userId: string, durationDays?: number, note?: string, pointsGranted?: number) =>
     request('/api/members/' + userId + '/approve', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ duration_days: durationDays || 30, note: note || '' }),
+      body: JSON.stringify({ duration_days: durationDays || 30, note: note || '', points_granted: pointsGranted }),
     }).then(d => d as { ok: boolean; message: string; expires_at: string }),
   rejectMember: (userId: string, reason?: string) =>
     request('/api/members/' + userId + '/reject', {

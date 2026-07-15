@@ -79,6 +79,8 @@ export default function MemberApprovalPage() {
   const [rejectId, setRejectId] = useState<string | null>(null)
   const [durationDays, setDurationDays] = useState(7)
   const [approveNote, setApproveNote] = useState('')
+  const [pointsGranted, setPointsGranted] = useState<number>(0)  // deci
+  const [pointsPerYuan, setPointsPerYuan] = useState<number>(1.0)
   const [rejectReason, setRejectReason] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
@@ -148,12 +150,14 @@ export default function MemberApprovalPage() {
     setActionLoading(true)
     setError('')
     try {
-      const result = await api.approveMember(approveId, durationDays, approveNote.trim())
+      const result = await api.approveMember(approveId, durationDays, approveNote.trim(),
+        pointsGranted > 0 ? pointsGranted : undefined)
       if (result == null) { setError('操作失败：服务器未确认'); return }
       showToast('审批通过')
       setApproveId(null)
       setDurationDays(7)
       setApproveNote('')
+      setPointsGranted(0)
       loadMembers()
     } catch (e: any) {
       setError(e.message || '操作失败')
@@ -215,11 +219,25 @@ export default function MemberApprovalPage() {
     }
   }
 
+  // Load points-per-yuan rate on mount
+  useEffect(() => {
+    api.getSettings().then((data: any) => {
+      const s = data?.settings || {}
+      if (s.points_per_yuan) setPointsPerYuan(parseFloat(s.points_per_yuan) || 1.0)
+    }).catch(() => {})
+  }, [])
+
   const openApprove = (m: MemberRow) => {
     setApproveId(m.id)
     setDurationDays(m.payment ? (m.payment.duration_days || 90) : 7)
     setApproveNote('')
     setError('')
+    // Calculate default points from payment amount
+    if (m.payment && m.payment.amount_cents > 0) {
+      setPointsGranted(Math.round(m.payment.amount_cents / 100.0 * pointsPerYuan * 10))
+    } else {
+      setPointsGranted(0)
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
@@ -552,6 +570,25 @@ export default function MemberApprovalPage() {
               onChange={e => setDurationDays(Number(e.target.value))}
               style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
             />
+            {selectedMember.payment && selectedMember.payment.amount_cents > 0 && (
+              <>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>
+                  获得积分
+                </label>
+                <input
+                  className="form-input"
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  value={pointsGranted / 10}
+                  onChange={e => setPointsGranted(Math.round(parseFloat(e.target.value || '0') * 10))}
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
+                />
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2 }}>
+                  默认 {pointsPerYuan} 积分/元，￥{formatAmount(selectedMember.payment.amount_cents)} × {pointsPerYuan} = {(selectedMember.payment.amount_cents / 100.0 * pointsPerYuan).toFixed(1)} 积分
+                </div>
+              </>
+            )}
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>
               审批意见（可选）
             </label>
