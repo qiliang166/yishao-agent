@@ -9,9 +9,16 @@ const withToken = (url: string) => {
   return url + (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token)
 }
 
-// 安全：src 来自 URL 参数，只允许本站 /api/ 相对路径，
-// 防止构造外部地址骗取带 Authorization/token 的请求
-const isSafeSrc = (u: string) => u.startsWith('/api/') && !u.startsWith('//')
+// 安全：src 来自 URL 参数，规范化后只允许本站 /api/ 路径，
+// 防止构造外部地址或 /api/../ 绕过骗取带 Authorization/token 的请求
+const isSafeSrc = (u: string) => {
+  try {
+    const parsed = new URL(u, window.location.origin)
+    return parsed.origin === window.location.origin && parsed.pathname.startsWith('/api/')
+  } catch {
+    return false
+  }
+}
 
 export default function MPreview() {
   const [params] = useSearchParams()
