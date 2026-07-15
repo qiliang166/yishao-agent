@@ -164,7 +164,7 @@ export default function MemberCenterPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
           <div style={{ display: 'flex' }}>
             <span style={{ width: 80, color: 'var(--text-secondary)', flexShrink: 0 }}>用户名</span>
-            <span>@{profile?.username}</span>
+            <span>{profile?.username}</span>
           </div>
           <div style={{ display: 'flex' }}>
             <span style={{ width: 80, color: 'var(--text-secondary)', flexShrink: 0 }}>显示名</span>

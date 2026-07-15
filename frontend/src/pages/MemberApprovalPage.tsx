@@ -280,7 +280,7 @@ export default function MemberApprovalPage() {
                   <div style={{ fontWeight: 600, fontSize: 12 }}>
                     {u.display_name}
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
-                      @{u.username}
+                      {u.username}
                     </span>
                     <span style={{
                       marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
@@ -356,7 +356,7 @@ export default function MemberApprovalPage() {
                   <div style={{ fontWeight: 600, fontSize: 12 }}>
                     {m.display_name}
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
-                      @{m.username}
+                      {m.username}
                     </span>
                     {statusFilter === 'pending' ? (
                       <>

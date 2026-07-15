@@ -682,16 +682,17 @@ class HTMLDesigner:
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.1">
+<meta name="viewport" content="width=1280, initial-scale=1.0">
 <title>{_esc(title)} — {_esc(self._name)}</title>
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
+html {{ overflow-x: hidden; }}
 body {{
   font-family: {self._body_font};
   background: #1a1a2e;
   color: {self._text};
-  width: 100vw;
-	  overflow-x: hidden;
+  overflow-x: hidden;
+  max-width: 100vw;
 }}
 .deck {{
   display: flex;
@@ -724,12 +725,15 @@ body {{
   function fit() {{
     var avail = Math.min(window.innerWidth - pad, W);
     if (avail >= W) {{
-      slides.forEach(function(s) {{ s.style.zoom = ''; }});
+      slides.forEach(function(s) {{ s.style.transform = ''; s.style.marginBottom = ''; }});
       return;
     }}
     var scale = avail / W;
+    if (scale < 0.5) return;
+    var offsetX = (window.innerWidth - pad - W * scale) / 2;
     slides.forEach(function(s) {{
-      s.style.zoom = scale;
+      s.style.transform = 'translateX(' + offsetX + 'px) scale(' + scale + ')';
+      s.style.marginBottom = (H * (scale - 1)) + 'px';
     }});
   }}
   window.addEventListener('resize', fit);

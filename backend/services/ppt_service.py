@@ -7280,10 +7280,11 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.1">
+<meta name="viewport" content="width={canvas_w}, initial-scale=1.0">
 <title>{title}</title>
 <style>
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  html {{ overflow-x: hidden; }}
 {root_vars}
   body {{
     background: {body_bg};
@@ -7293,8 +7294,8 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     gap: 24px;
     padding: 24px;
     font-family: system-ui, -apple-system, sans-serif;
-    width: 100vw;
     overflow-x: hidden;
+    max-width: 100vw;
   }}
   .slide-wrapper {{
     width: {canvas_w}px;
@@ -7317,12 +7318,15 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
   function fit() {{
     var avail = Math.min(window.innerWidth - pad, W);
     if (avail >= W) {{
-      wrappers.forEach(function(w) {{ w.style.zoom = ''; }});
+      wrappers.forEach(function(w) {{ w.style.transform = ''; w.style.marginBottom = ''; }});
       return;
     }}
     var s = avail / W;
+    if (s < 0.5) return;
+    var offsetX = (window.innerWidth - pad - W * s) / 2;
     wrappers.forEach(function(w) {{
-      w.style.zoom = s;
+      w.style.transform = 'translateX(' + offsetX + 'px) scale(' + s + ')';
+      w.style.marginBottom = (H * (s - 1)) + 'px';
     }});
   }}
   window.addEventListener('resize', fit);

@@ -216,7 +216,7 @@ export default function MMe() {
               </div>
               <div className="m-kv">
                 <span className="m-kv-label">用户名</span>
-                <span className="m-kv-value">@{me.username}</span>
+                <span className="m-kv-value">{me.username}</span>
               </div>
               <div className="m-kv">
                 <span className="m-kv-label">邮箱</span>

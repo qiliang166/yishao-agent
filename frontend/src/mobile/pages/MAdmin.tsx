@@ -655,7 +655,7 @@ export default function MAdmin() {
                       {statusBadge(u)}
                     </div>
                     <div className="m-user-meta">
-                      <div>@{u.username}{u.email ? ` · ${u.email}` : ''}{u.phone ? ` · ${u.phone}` : ''}</div>
+                      <div>{u.username}{u.email ? ` · ${u.email}` : ''}{u.phone ? ` · ${u.phone}` : ''}</div>
                       <div>
                         注册：{fmtDate(u.created_at)}
                         {tab === 'member' && <> · 到期：{fmtDate(u.expires_at)}</>}
@@ -722,7 +722,7 @@ export default function MAdmin() {
                         <span className="m-badge">升级</span>
                       </div>
                       <div className="m-user-meta">
-                        @{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}
+                        {m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}
                         <br />{paymentInfo(m)}
                       </div>
                       <div className="m-row-actions">
@@ -768,7 +768,7 @@ export default function MAdmin() {
                         )}
                       </div>
                       <div className="m-user-meta">
-                        <div>@{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
+                        <div>{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
                         <div>注册：{fmtDate(m.created_at)} · {pendingFilter === 'pending' ? '原到期：' : '会员到期：'}{fmtDate(m.expires_at)}</div>
                         {m.payment != null && <div style={{ marginTop: 2 }}>{paymentInfo(m)}</div>}
 
@@ -872,7 +872,7 @@ export default function MAdmin() {
       </div>
 
       {editTarget != null && (
-        <MSheet title={`编辑用户 · @${editTarget.username}`}
+        <MSheet title={`编辑用户 · ${editTarget.username}`}
           onClose={() => { if (!editSubmitting) setEditTarget(null) }}>
           {editLoading ? (
             <div className="m-loading">加载中…</div>

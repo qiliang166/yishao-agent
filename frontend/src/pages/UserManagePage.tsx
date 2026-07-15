@@ -545,7 +545,7 @@ export default function UserManagePage() {
                   <div style={{ fontWeight: 600, fontSize: 12 }}>
                     {u.display_name}
                     <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
-                      @{u.username}
+                      {u.username}
                     </span>
                     {!u.is_active && (
                       <span style={{ fontSize: 10, color: '#fff', background: '#999', padding: '1px 6px', borderRadius: 3, marginLeft: 8 }}>已停用</span>
@@ -694,7 +694,7 @@ export default function UserManagePage() {
       {editUser && (
         <div className="dialog-overlay" onClick={() => setEditUser(null)}>
           <div className="dialog-box" style={{ width: 500, maxHeight: '80vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div className="dialog-title">编辑用户 — @{editUser.username}</div>
+            <div className="dialog-title">编辑用户 — {editUser.username}</div>
 
             <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>显示名</label>
             <input className="form-input" value={editDisplayName} onChange={e => setEditDisplayName(e.target.value)}
@@ -826,7 +826,7 @@ export default function UserManagePage() {
       {payUser && (
         <div className="dialog-overlay" onClick={() => setPayUser(null)}>
           <div className="dialog-box" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
-            <div className="dialog-title">记录付费 — @{payUser.username}</div>
+            <div className="dialog-title">记录付费 — {payUser.username}</div>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
               当前到期：{payUser.expires_at ? new Date(payUser.expires_at).toLocaleString('zh-CN') : '永久'}
             </p>

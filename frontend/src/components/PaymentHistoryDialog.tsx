@@ -78,7 +78,7 @@ export default function PaymentHistoryDialog({ user, onClose }: {
   return (
     <div className="dialog-overlay" onClick={onClose}>
       <div className="dialog-box" style={{ width: 480, maxHeight: '75vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
-        <div className="dialog-title">付款明细 — {user.display_name} @{user.username}</div>
+        <div className="dialog-title">付款明细 — {user.display_name} {user.username}</div>
 
         <input
           className="form-input"
