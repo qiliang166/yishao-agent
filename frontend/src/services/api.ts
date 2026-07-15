@@ -962,10 +962,11 @@ export const api = {
   listPendingRenewals: () =>
     request('/api/members/pending-renewals').then(d => d as { members: any[]; total: number }),
 
-  approveRenewal: (userId: string) =>
+  approveRenewal: (userId: string, pointsGranted?: number) =>
     request('/api/members/' + userId + '/approve-renewal', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ points_granted: pointsGranted }),
     }).then(d => d as { ok: boolean; message: string; expires_at: string; plan_name: string; points_granted_deci: number }),
 
   rejectUpgrade: (userId: string, reason?: string) =>

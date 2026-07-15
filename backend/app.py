@@ -7252,9 +7252,21 @@ def list_pending_renewals(user=require_perm("member.manage")):
 
 
 @app.put("/api/members/{user_id}/approve-renewal")
-def approve_renewal(user_id: str, request: Request, user=require_perm("member.manage")):
+async def approve_renewal(user_id: str, request: Request, user=require_perm("member.manage")):
     """Approve a pending renewal payment. Extends membership and grants points."""
     ip = _get_client_ip(request)
+    points_granted_override = None
+    try:
+        req_body = await request.json()
+        if isinstance(req_body, dict) and req_body.get("points_granted") is not None:
+            val = int(req_body["points_granted"])
+            if val < 0:
+                raise HTTPException(400, "积分不能为负数")
+            points_granted_override = val
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     db = get_db()
     try:
         m = db.execute(
@@ -7300,7 +7312,10 @@ def approve_renewal(user_id: str, request: Request, user=require_perm("member.ma
 
         # Grant points
         points_per_yuan = _get_points_per_yuan()
-        points_granted = round(payment["amount_cents"] / 100.0 * points_per_yuan * 10)
+        if points_granted_override is not None:
+            points_granted = points_granted_override
+        else:
+            points_granted = round(payment["amount_cents"] / 100.0 * points_per_yuan * 10)
         if points_granted > 0:
             _add_points(db, user_id, points_granted, "purchase",
                        ref_id=payment["id"], ref_type="payment",

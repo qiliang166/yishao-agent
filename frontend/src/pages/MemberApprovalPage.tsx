@@ -98,6 +98,8 @@ export default function MemberApprovalPage() {
   // Pending renewals
   const [renewals, setRenewals] = useState<any[]>([])
   const [renewalLoading, setRenewalLoading] = useState(true)
+  const [approveRenewalTarget, setApproveRenewalTarget] = useState<any | null>(null)
+  const [renewalPointsGranted, setRenewalPointsGranted] = useState<number>(0)
 
   const pageSize = 20
 
@@ -216,13 +218,15 @@ export default function MemberApprovalPage() {
     }
   }
 
-  const handleApproveRenewal = async (userId: string) => {
+  const handleApproveRenewal = async () => {
+    if (!approveRenewalTarget) return
     setActionLoading(true)
     setError('')
     try {
-      const result = await api.approveRenewal(userId)
+      const result = await api.approveRenewal(approveRenewalTarget.user_id, renewalPointsGranted > 0 ? renewalPointsGranted : undefined)
       if (result == null) { setError('操作失败：服务器未确认'); return }
       showToast(`续费审批通过 — ${result.plan_name}，获 ${(result.points_granted_deci / 10).toFixed(1)} 积分`)
+      setApproveRenewalTarget(null)
       loadRenewals()
     } catch (e: any) {
       setError(e.message || '操作失败')
@@ -420,7 +424,15 @@ export default function MemberApprovalPage() {
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={() => handleApproveRenewal(r.user_id)}
+                    onClick={() => {
+                      setApproveRenewalTarget(r)
+                      setError('')
+                      if (r.payment && r.payment.amount_cents > 0) {
+                        setRenewalPointsGranted(Math.round(r.payment.amount_cents / 100.0 * pointsPerYuan * 10))
+                      } else {
+                        setRenewalPointsGranted(0)
+                      }
+                    }}
                     disabled={actionLoading}
                   >
                     确认收款
@@ -810,6 +822,80 @@ export default function MemberApprovalPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setApproveUpgradeId(null)}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={handleApproveUpgrade} disabled={actionLoading}>
                 {actionLoading ? '处理中...' : '确认通过升级'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approve Renewal Dialog */}
+      {approveRenewalTarget && (
+        <div className="dialog-overlay" onClick={() => setApproveRenewalTarget(null)}>
+          <div className="dialog-box" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">续费审批</div>
+
+            <div style={{
+              background: '#f8fafc', borderRadius: 8, padding: 12, marginBottom: 16,
+              fontSize: 12, lineHeight: 1.8,
+            }}>
+              <div><strong>用户名：</strong>{approveRenewalTarget.username}</div>
+              <div><strong>显示名：</strong>{approveRenewalTarget.display_name}</div>
+              {approveRenewalTarget.email && <div><strong>邮箱：</strong>{approveRenewalTarget.email}</div>}
+              {approveRenewalTarget.phone && <div><strong>手机号：</strong>{approveRenewalTarget.phone}</div>}
+              <div><strong>注册时间：</strong>{new Date(approveRenewalTarget.created_at).toLocaleString('zh-CN')}</div>
+              {approveRenewalTarget.expires_at && (
+                <div><strong>当前到期：</strong>{new Date(approveRenewalTarget.expires_at).toLocaleDateString('zh-CN')}</div>
+              )}
+            </div>
+
+            {approveRenewalTarget.payment && (
+              <div style={{
+                background: 'rgba(240,173,78,0.05)', borderRadius: 8, padding: 12, marginBottom: 16,
+                border: '1px solid rgba(240,173,78,0.2)',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#f0ad4e' }}>
+                  续费付款信息
+                </div>
+                <div style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--text)' }}>
+                  <div>套餐：{approveRenewalTarget.payment.plan_name}</div>
+                  <div>金额：￥{formatAmount(approveRenewalTarget.payment.amount_cents)}</div>
+                  <div>续期天数：{approveRenewalTarget.payment.duration_days} 天</div>
+                  <div>单号：<strong>{approveRenewalTarget.payment.payment_ref || '—'}</strong></div>
+                </div>
+              </div>
+            )}
+
+            {approveRenewalTarget.payment && approveRenewalTarget.payment.amount_cents > 0 && (
+              <>
+                <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                  获得积分
+                </label>
+                <input
+                  className="form-input"
+                  type="number"
+                  step="0.1"
+                  min={0}
+                  value={renewalPointsGranted / 10}
+                  onChange={e => setRenewalPointsGranted(Math.round(parseFloat(e.target.value || '0') * 10))}
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }}
+                />
+                <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 2, marginBottom: 12 }}>
+                  默认 {pointsPerYuan} 积分/元，￥{formatAmount(approveRenewalTarget.payment.amount_cents)} × {pointsPerYuan} = {(approveRenewalTarget.payment.amount_cents / 100.0 * pointsPerYuan).toFixed(1)} 积分
+                </div>
+              </>
+            )}
+
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              确认收款后将自动延长会员有效期并发放积分。
+            </p>
+
+            {error && (
+              <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>{error}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setApproveRenewalTarget(null)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleApproveRenewal} disabled={actionLoading}>
+                {actionLoading ? '处理中...' : '确认收款'}
               </button>
             </div>
           </div>
