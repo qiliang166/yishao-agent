@@ -22,6 +22,8 @@ if (-not $SkipFrontend) {
     }
     npm run build
     if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
+    npx vite build --config vite.mobile.config.ts
+    if ($LASTEXITCODE -ne 0) { throw "Mobile frontend build failed" }
     Write-Host "  Done"
 }
 Set-Location $root
