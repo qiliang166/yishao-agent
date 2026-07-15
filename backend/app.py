@@ -6458,7 +6458,7 @@ def member_register(req: dict, request: Request):
 
 @app.post("/api/member/renew")
 def member_renew(req: dict, request: Request):
-    """Self-service renewal for members. Creates payment record and auto-applies."""
+    """Self-service renewal for members. Creates payment record, requires admin approval."""
     ip = _get_client_ip(request)
 
     username = (req.get("username", "") or "").strip()
@@ -6493,7 +6493,6 @@ def member_renew(req: dict, request: Request):
         if not payment_ref:
             raise HTTPException(status_code=400, detail="请填写付款单号")
 
-        from datetime import timedelta as _td_dt
         now = datetime.utcnow().isoformat()
         import uuid as _uuid
         payment_id = str(_uuid.uuid4())
@@ -6506,44 +6505,15 @@ def member_renew(req: dict, request: Request):
              plan["duration_days"], payment_method, payment_ref, now),
         )
 
-        # Auto-apply renewal: extend expiry from max(current, existing_expiry)
-        base = datetime.utcnow()
-        if user["expires_at"]:
-            try:
-                current = datetime.fromisoformat(user["expires_at"])
-                if current > base:
-                    base = current
-            except (ValueError, TypeError):
-                pass
-        expires_at = (base + _td_dt(days=plan["duration_days"])).isoformat()
-
-        db.execute("UPDATE users SET expires_at=?, updated_at=? WHERE id=?",
-                   (expires_at, now, user["id"]))
-        db.execute("UPDATE users SET token_version=token_version+1 WHERE id=?", (user["id"],))
-
-        # Grant points from payment
-        try:
-            points_per_yuan = _get_points_per_yuan()
-            points_granted = round(plan["amount_cents"] / 100.0 * points_per_yuan * 10)
-            if points_granted > 0:
-                _add_points(db, user["id"], points_granted, "purchase",
-                           ref_id=payment_id, ref_type="payment",
-                           note=f"续费 {plan['name']} 获 {points_granted/10:.1f} 积分",
-                           expires_at=expires_at)
-                db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
-                          (points_granted, payment_id))
-        except Exception as e:
-            print(f"[Points] Warning: failed to grant points on renewal: {e}")
-
+        # Do NOT auto-apply: admin must verify payment first
         _write_audit(db, user["id"], "member.renew", "user", user["id"],
                       json.dumps({"plan_id": plan_id, "payment_method": payment_method,
                                   "payment_ref": payment_ref,
-                                  "amount_cents": plan["amount_cents"],
-                                  "expires_at": expires_at}), ip)
+                                  "amount_cents": plan["amount_cents"]}), ip)
         db.commit()
     finally:
         db.close()
-    return {"ok": True, "message": "续费成功", "expires_at": expires_at}
+    return {"ok": True, "message": "已提交续费申请，等待管理员审核付款"}
 
 
 @app.post("/api/member/upgrade")
@@ -6785,6 +6755,8 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
             if payment and payment["amount_cents"] > 0:
                 # Use explicit override if admin specified, otherwise auto-calculate
                 if body.points_granted is not None:
+                    if body.points_granted < 0:
+                        raise HTTPException(400, "积分不能为负数")
                     points_granted = body.points_granted
                 else:
                     points_granted = round(payment["amount_cents"] / 100.0 * points_per_yuan * 10)
@@ -6945,7 +6917,12 @@ async def approve_upgrade(user_id: str, request: Request, user=require_perm("mem
     try:
         body = await request.json()
         if isinstance(body, dict) and body.get("points_granted") is not None:
-            points_granted_override = int(body["points_granted"])
+            val = int(body["points_granted"])
+            if val < 0:
+                raise HTTPException(400, "积分不能为负数")
+            points_granted_override = val
+    except HTTPException:
+        raise
     except Exception:
         pass
 
@@ -7231,7 +7208,123 @@ def list_payments(user_id: str, page: int = 1, page_size: int = 20, q: str = "",
             f"SELECT * FROM payment_records WHERE {where} ORDER BY paid_at DESC LIMIT ? OFFSET ?",
             params + [page_size, offset],
         ).fetchall()
-        return {"payments": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+        payments = []
+        for r in rows:
+            d = dict(r)
+            d["status"] = "confirmed" if d.get("recorded_by") else "pending"
+            payments.append(d)
+        return {"payments": payments, "total": total, "page": page, "page_size": page_size}
+    finally:
+        db.close()
+
+
+@app.get("/api/members/pending-renewals")
+def list_pending_renewals(user=require_perm("member.manage")):
+    """List users who have pending renewal payments (recorded_by IS NULL on an approved member)."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            """SELECT pr.id as payment_id, pr.amount_cents, pr.plan_name, pr.duration_days,
+                      pr.payment_method, pr.payment_ref, pr.paid_at, pr.points_granted_deci,
+                      u.id as user_id, u.username, u.display_name, u.email, u.phone,
+                      u.expires_at, u.created_at
+               FROM payment_records pr
+               JOIN users u ON u.id = pr.user_id
+               WHERE pr.recorded_by IS NULL AND u.is_approved = 1 AND u.user_type = 'member'
+               ORDER BY pr.paid_at DESC""",
+        ).fetchall()
+        members = []
+        for r in rows:
+            d = dict(r)
+            d["payment"] = {
+                "plan_name": d.pop("plan_name"),
+                "amount_cents": d.pop("amount_cents"),
+                "duration_days": d.pop("duration_days"),
+                "payment_method": d.pop("payment_method"),
+                "payment_ref": d.pop("payment_ref"),
+                "paid_at": d.pop("paid_at"),
+                "points_granted_deci": d.pop("points_granted_deci"),
+            }
+            members.append(d)
+        return {"members": members, "total": len(members)}
+    finally:
+        db.close()
+
+
+@app.put("/api/members/{user_id}/approve-renewal")
+def approve_renewal(user_id: str, request: Request, user=require_perm("member.manage")):
+    """Approve a pending renewal payment. Extends membership and grants points."""
+    ip = _get_client_ip(request)
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, username, expires_at, is_approved FROM users WHERE id=? AND user_type='member'",
+            (user_id,),
+        ).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+        if not m["is_approved"]:
+            raise HTTPException(400, "该会员尚未通过基础审批")
+
+        payment = db.execute(
+            """SELECT id, amount_cents, plan_name, duration_days, payment_ref
+               FROM payment_records
+               WHERE user_id=? AND recorded_by IS NULL
+               ORDER BY paid_at DESC LIMIT 1""",
+            (user_id,),
+        ).fetchone()
+        if not payment:
+            raise HTTPException(404, "没有待审批的续费付款")
+
+        from datetime import timedelta as _td
+        now = datetime.utcnow()
+        # Extend expiry from max(now, existing_expiry)
+        base = now
+        if m["expires_at"]:
+            try:
+                current = datetime.fromisoformat(m["expires_at"])
+                if current > base:
+                    base = current
+            except (ValueError, TypeError):
+                pass
+        new_expires = (base + _td(days=int(payment["duration_days"]))).isoformat()
+
+        db.execute("UPDATE users SET expires_at=?, updated_at=? WHERE id=?",
+                   (new_expires, now.isoformat(), user_id))
+
+        # Mark payment as recorded
+        db.execute(
+            "UPDATE payment_records SET recorded_by=?, expires_before=?, expires_after=? WHERE id=?",
+            (user["sub"], m["expires_at"], new_expires, payment["id"]),
+        )
+
+        # Grant points
+        points_per_yuan = _get_points_per_yuan()
+        points_granted = round(payment["amount_cents"] / 100.0 * points_per_yuan * 10)
+        if points_granted > 0:
+            _add_points(db, user_id, points_granted, "purchase",
+                       ref_id=payment["id"], ref_type="payment",
+                       note=f"续费 {payment['plan_name']} 获 {points_granted/10:.1f} 积分 (汇率: 1元={points_per_yuan}积分)",
+                       expires_at=new_expires)
+            db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
+                      (points_granted, payment["id"]))
+
+        _write_audit(db, user["sub"], "member.approve_renewal", "user", user_id,
+                      json.dumps({"payment_id": payment["id"], "plan": payment["plan_name"],
+                                  "amount_cents": payment["amount_cents"],
+                                  "duration_days": payment["duration_days"],
+                                  "new_expires": new_expires}), ip)
+        db.commit()
+        return {"ok": True, "message": "续费审批通过", "expires_at": new_expires,
+                "plan_name": payment["plan_name"],
+                "points_granted_deci": points_granted}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).error("approve_renewal failed for user %s: %s", user_id, e, exc_info=True)
+        raise HTTPException(500, "续费审批失败，请稍后重试")
     finally:
         db.close()
 

@@ -95,6 +95,10 @@ export default function MemberApprovalPage() {
   const [rejectUpgradeId, setRejectUpgradeId] = useState<string | null>(null)
   const [rejectUpgradeReason, setRejectUpgradeReason] = useState('')
 
+  // Pending renewals
+  const [renewals, setRenewals] = useState<any[]>([])
+  const [renewalLoading, setRenewalLoading] = useState(true)
+
   const pageSize = 20
 
   const loadMembers = useCallback(async () => {
@@ -136,8 +140,17 @@ export default function MemberApprovalPage() {
       .finally(() => setUpgradeLoading(false))
   }
 
+  const loadRenewals = () => {
+    setRenewalLoading(true)
+    api.listPendingRenewals()
+      .then(data => setRenewals(data.members as any[] || []))
+      .catch(() => {})
+      .finally(() => setRenewalLoading(false))
+  }
+
   useEffect(() => { loadMembers() }, [loadMembers])
   useEffect(() => { loadUpgrades() }, [])
+  useEffect(() => { loadRenewals() }, [])
 
   const showToast = (msg: string) => {
     setToast(msg)
@@ -196,6 +209,21 @@ export default function MemberApprovalPage() {
       setApproveUpgradeId(null)
       setUpgradePointsGranted(0)
       loadUpgrades()
+    } catch (e: any) {
+      setError(e.message || '操作失败')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleApproveRenewal = async (userId: string) => {
+    setActionLoading(true)
+    setError('')
+    try {
+      const result = await api.approveRenewal(userId)
+      if (result == null) { setError('操作失败：服务器未确认'); return }
+      showToast(`续费审批通过 — ${result.plan_name}，获 ${(result.points_granted_deci / 10).toFixed(1)} 积分`)
+      loadRenewals()
     } catch (e: any) {
       setError(e.message || '操作失败')
     } finally {
@@ -344,6 +372,64 @@ export default function MemberApprovalPage() {
                     style={{ color: 'var(--warning)' }}
                   >
                     拒绝
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Pending Renewals (only under pending filter) ── */}
+      {statusFilter === 'pending' && renewals.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 12px 0', color: 'var(--text-secondary)' }}>
+            待审批续费 ({renewals.length})
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {renewals.map((r) => (
+              <div key={r.payment_id} className="card" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 12 }}>
+                    {r.display_name}
+                    <span style={{ fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 8, fontSize: 12 }}>
+                      {r.username}
+                    </span>
+                    <span style={{
+                      marginLeft: 8, fontSize: 11, padding: '2px 6px', borderRadius: 4,
+                      background: 'rgba(240,173,78,0.1)', color: '#f0ad4e', fontWeight: 600,
+                    }}>
+                      待审核续费
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {r.email || '无邮箱'}{r.phone ? ` · ${r.phone}` : ''} · 注册于 {new Date(r.created_at).toLocaleString('zh-CN')}
+                  </div>
+                  {r.expires_at && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      当前到期：{new Date(r.expires_at).toLocaleDateString('zh-CN')}
+                    </div>
+                  )}
+                  {r.payment && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      续费套餐：{r.payment.plan_name} · ￥{formatAmount(r.payment.amount_cents)} · {r.payment.duration_days}天
+                      · 单号：{r.payment.payment_ref || '—'}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => handleApproveRenewal(r.user_id)}
+                    disabled={actionLoading}
+                  >
+                    确认收款
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => setPayHistUser({ id: r.user_id, username: r.username, display_name: r.display_name } as MemberRow)}
+                  >
+                    明细
                   </button>
                 </div>
               </div>
