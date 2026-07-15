@@ -5293,7 +5293,10 @@ def get_settings(request: Request):
                 except Exception:
                     pass
 
-        return {"settings": settings}
+        return JSONResponse(
+            content={"settings": settings},
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     finally:
         db.close()
 

@@ -7289,7 +7289,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     background: {body_bg};
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: 24px;
     padding: 24px;
     font-family: system-ui, -apple-system, sans-serif;
@@ -7302,7 +7302,7 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
     border-radius: 4px;
     box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     flex-shrink: 0;
-    transform-origin: top center;
+    transform-origin: top left;
   }}
 </style>
 </head>
@@ -7320,8 +7320,9 @@ def _assemble_html_deck(slides: list, title: str = "Presentation",
       return;
     }}
     var s = avail / W;
+    var offsetX = (window.innerWidth - pad - W * s) / 2;
     wrappers.forEach(function(w) {{
-      w.style.transform = 'scale(' + s + ')';
+      w.style.transform = 'translateX(' + offsetX + 'px) scale(' + s + ')';
       w.style.marginBottom = (H * (s - 1)) + 'px';
     }});
   }}

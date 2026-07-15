@@ -695,7 +695,7 @@ body {{
 .deck {{
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 48px;
   padding: 48px 20px;
 }}
@@ -703,7 +703,7 @@ body {{
   flex-shrink: 0;
   border-radius: 10px;
   box-shadow: {self._shadow_lg};
-  transform-origin: top center;
+  transform-origin: top left;
 }}
 @media print {{
   body {{ background: white; }}
@@ -727,8 +727,9 @@ body {{
       return;
     }}
     var scale = avail / W;
+    var offsetX = (window.innerWidth - pad - W * scale) / 2;
     slides.forEach(function(s) {{
-      s.style.transform = 'scale(' + scale + ')';
+      s.style.transform = 'translateX(' + offsetX + 'px) scale(' + scale + ')';
       s.style.marginBottom = (H * (scale - 1)) + 'px';
     }});
   }}

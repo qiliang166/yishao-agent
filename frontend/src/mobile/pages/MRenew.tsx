@@ -22,7 +22,7 @@ export default function MRenew() {
     let cancelled = false
     const load = async () => {
       try {
-        const resp = await fetch('/api/settings')
+        const resp = await fetch(`/api/settings?_t=${Date.now()}`)
         if (!resp.ok) return
         const data = await resp.json()
         if (cancelled || data == null) return

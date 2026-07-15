@@ -68,7 +68,7 @@ def goto(page, hash_path):
     page.wait_for_timeout(1800)
 
 # React 受控输入赋值
-SET_INPUT = """const set = (el, v) => { const p = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set; p.call(el, v); el.dispatchEvent(new Event('input', {bubbles:true})) };"""
+SET_INPUT = """const set = (el, v) => { const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'); if (d && d.set) d.set.call(el, v); el.dispatchEvent(new Event('input', {bubbles:true})); };"""
 
 def main():
     admin_token, admin_row = mint_token("user_type='admin' ORDER BY created_at")
@@ -154,7 +154,7 @@ def run_ui_tests(admin_token, uid, s0):
         check('4 个 Tab 渲染', tabs is not None and len(tabs) == 4, tabs)
 
         # 4. 会员列表含测试号 + 行按钮齐全 + 停用/启用
-        # 行按钮顺序（非超管会员）：编辑(0) / 停用(1) / 录入续期(2) / 删除(3)
+        # 行按钮顺序（非超管会员）：编辑(0) / 明细(1) / 停用(2) / 录入续期(3) / 删除(4)
         row_sel = """() => {
             const rows = Array.from(document.querySelectorAll('.m-user-row'));
             const r = rows.find(x => x.textContent.includes('mtest_phase2'));
@@ -164,17 +164,17 @@ def run_ui_tests(admin_token, uid, s0):
         }"""
         found = page.evaluate(row_sel)
         check('会员列表含测试号', found is not None, found and found['text'][:60])
-        check('行操作含编辑/停用/录入续期/删除', found is not None and found['btns'] == ['编辑', '停用', '录入续期', '删除'], found and found['btns'])
+        check('行操作含编辑/明细/停用/录入续期/删除', found is not None and found['btns'] == ['编辑', '明细', '停用', '录入续期', '删除'], found and found['btns'])
         if found is not None:
             page.once('dialog', lambda d: d.accept())
-            page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[1].click()", found['idx'])
+            page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[2].click()", found['idx'])
             page.wait_for_timeout(1500)
             u2, _ = api('/api/users?user_type=member&search=' + TEST_USER, token=admin_token)
             t2 = next((u for u in (u2.get('users') or []) if u['id'] == uid), None)
             check('停用生效', t2 is not None and t2.get('is_active') == 0, t2 and t2.get('is_active'))
             found = page.evaluate(row_sel)
             page.once('dialog', lambda d: d.accept())
-            page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[1].click()", found['idx'])
+            page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[2].click()", found['idx'])
             page.wait_for_timeout(1500)
             u3, _ = api('/api/users?user_type=member&search=' + TEST_USER, token=admin_token)
             t3 = next((u for u in (u3.get('users') or []) if u['id'] == uid), None)
@@ -201,7 +201,7 @@ def run_ui_tests(admin_token, uid, s0):
         found = page.evaluate(row_sel)
         if found is not None:
             page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[0].click()", found['idx'])
-            page.wait_for_timeout(1500)  # wait for async getUser + listRoles + listWorkspaces
+            page.wait_for_timeout(3000)  # wait for async getUser + listRoles + listWorkspaces + getUserWorkspaces
 
             sections = page.evaluate("() => Array.from(document.querySelectorAll('.m-sheet .m-section-title')).map(e => e.textContent)")
             has_role = any('角色分配' in s for s in sections)
@@ -213,6 +213,15 @@ def run_ui_tests(admin_token, uid, s0):
             if has_role:
                 n_selects = page.evaluate("() => document.querySelectorAll('.m-sheet select.m-input').length")
                 if n_selects >= 1:
+                    # Debug: check toast messages and sheet state
+                    toast_text = page.evaluate("() => { const el = document.querySelector('.m-toast'); return el ? el.textContent : '' }")
+                    print(f"DEBUG toast: {toast_text}")
+                    debug_opts = page.evaluate("""() => {
+                        const sel = document.querySelectorAll('.m-sheet select.m-input')[0];
+                        const opts = Array.from(sel.querySelectorAll('option')).map(o => o.value + ':' + o.textContent);
+                        return JSON.stringify({n: opts.length, opts: opts, nSelects: document.querySelectorAll('.m-sheet select.m-input').length});
+                    }""")
+                    print(f"DEBUG role dropdown: {debug_opts}")
                     has_opts = page.evaluate("""() => {
                         const sel = document.querySelectorAll('.m-sheet select.m-input')[0];
                         return sel.querySelectorAll('option').length > 1;
@@ -275,7 +284,7 @@ def run_ui_tests(admin_token, uid, s0):
         # 6. 录入续期
         found = page.evaluate(row_sel)
         if found is not None:
-            page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[2].click()", found['idx'])
+            page.evaluate("(i) => document.querySelectorAll('.m-user-row')[i].querySelectorAll('.m-row-actions button')[3].click()", found['idx'])
             page.wait_for_timeout(500)
             sheet = page.evaluate("() => !!document.querySelector('.m-sheet')")
             check('续期弹层打开', sheet)
@@ -385,6 +394,9 @@ def run_ui_tests(admin_token, uid, s0):
             ok = page3.evaluate("() => document.body.textContent.includes('\\u5df2\\u63d0\\u4ea4')")
             check('续费提交成功(%s)' % order_no, ok)
 
+        # Make member appear expired so renewal triggers is_approved=0 (pending)
+        db_get("UPDATE users SET expires_at = datetime('now', '-1 day') WHERE username = ?", (TEST_USER,))
+
         submit_renew('TEST-ORDER-001')
 
         # 管理员待审批出现 → 通过
@@ -400,7 +412,7 @@ def run_ui_tests(admin_token, uid, s0):
             goto(page4, '/admin')
             page4.reload()
             page4.wait_for_timeout(1800)
-            page4.evaluate("() => { const t = Array.from(document.querySelectorAll('.m-tab')).find(x => x.textContent.includes('\\u5f85\\u5ba1\\u6279')); t.click() }")
+            page4.evaluate("() => { const t = Array.from(document.querySelectorAll('.m-tab')).find(x => x.textContent.includes('\\u5ba1\\u6279')); t.click() }")
             page4.wait_for_timeout(1800)
 
         open_pending_tab()
@@ -419,7 +431,8 @@ def run_ui_tests(admin_token, uid, s0):
             t5 = next((u for u in (u5.get('users') or []) if u['id'] == uid), None)
             check('审批通过后 is_approved=1', t5 is not None and t5.get('is_approved') == 1, t5 and t5.get('is_approved'))
 
-        # 第二次续费 → 拒绝
+        # 第二次续费 → 拒绝（先过期，否则不会标记待审批）
+        db_get("UPDATE users SET expires_at = datetime('now', '-1 day') WHERE username = ?", (TEST_USER,))
         submit_renew('TEST-ORDER-002')
         open_pending_tab()
         prow2 = page4.evaluate("""() => {

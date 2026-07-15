@@ -25,7 +25,6 @@ const payLabel = (m?: string | null) => {
   return m || '其他'
 }
 
-// 底部弹层容器
 function MSheet({ title, onClose, children }: {
   title: string
   onClose: () => void
@@ -55,7 +54,8 @@ export default function MAdmin() {
   const [total, setTotal] = useState(0)
   const [listLoading, setListLoading] = useState(false)
 
-  // ── 待审批 ──
+  // ── 待审批/审批明细 ──
+  const [pendingFilter, setPendingFilter] = useState<'pending' | 'approved' | 'rejected' | 'all'>('pending')
   const [upgrades, setUpgrades] = useState<any[]>([])
   const [pending, setPending] = useState<any[]>([])
   const [pendingPage, setPendingPage] = useState(1)
@@ -88,6 +88,11 @@ export default function MAdmin() {
   const [editWs, setEditWs] = useState<any[]>([])
   const [allWs, setAllWs] = useState<any[]>([])
   const [editWsId, setEditWsId] = useState('')
+
+  // ── 付费明细弹层 ──
+  const [paymentsTarget, setPaymentsTarget] = useState<any | null>(null)
+  const [payments, setPayments] = useState<any[]>([])
+  const [paymentsLoading, setPaymentsLoading] = useState(false)
 
   const [approveTarget, setApproveTarget] = useState<any | null>(null)
   const [approveDays, setApproveDays] = useState('7')
@@ -129,7 +134,7 @@ export default function MAdmin() {
     }
   }, [])
 
-  const loadPending = useCallback(async (p: number) => {
+  const loadPending = useCallback(async (status: string, p: number) => {
     setPendingLoading(true)
     try {
       const up = await api.listPendingUpgrades()
@@ -140,13 +145,26 @@ export default function MAdmin() {
         setUpgrades([])
         setUpgradeTotal(0)
       }
-      const pm = await api.listPendingMembers(p, PAGE_SIZE)
-      if (pm != null && Array.isArray(pm.members)) {
-        setPending(pm.members)
-        setPendingTotal(Number(pm.total) || 0)
+
+      if (status === 'pending') {
+        const pm = await api.listPendingMembers(p, PAGE_SIZE)
+        if (pm != null && Array.isArray(pm.members)) {
+          setPending(pm.members)
+          setPendingTotal(Number(pm.total) || 0)
+        } else {
+          setPending([])
+          setPendingTotal(0)
+        }
       } else {
-        setPending([])
-        setPendingTotal(0)
+        const st = status === 'all' ? undefined : status
+        const data = await api.listUsers({ user_type: 'member', status: st, page: p, page_size: PAGE_SIZE }) as any
+        if (data != null && Array.isArray(data.users)) {
+          setPending(data.users)
+          setPendingTotal(Number(data.total) || 0)
+        } else {
+          setPending([])
+          setPendingTotal(0)
+        }
       }
     } catch (e: any) {
       mToast(`加载失败: ${e?.message || e}`, 'error')
@@ -187,16 +205,16 @@ export default function MAdmin() {
     if (tab === 'member' || tab === 'admin') {
       loadUsers(tab, page)
     } else if (tab === 'pending') {
-      loadPending(pendingPage)
+      loadPending(pendingFilter, pendingPage)
     } else if (tab === 'plan' && !planLoaded) {
       loadPlanSettings()
     }
-  }, [canMember, tab, page, pendingPage, planLoaded, loadUsers, loadPending, loadPlanSettings])
+  }, [canMember, tab, page, pendingPage, pendingFilter, planLoaded, loadUsers, loadPending, loadPlanSettings])
 
   // 进页时拉一次角标数
   useEffect(() => {
     if (!canMember) return
-    loadPending(1)
+    loadPending('pending', 1)
   }, [canMember, loadPending])
 
   const handleToggleActive = async (u: any) => {
@@ -217,15 +235,13 @@ export default function MAdmin() {
   }
 
   const handleDelete = async (u: any) => {
-    if (!window.confirm(`确定删除用户「${u.display_name || u.username}」？该操作不可恢复，将同时删除其角色、工作区分配和付费记录。`)) return
+    if (!window.confirm(`确定删除用户「${u.display_name || u.username}」？此操作不可恢复，将级联删除其角色、工作区和付费记录。`)) return
     setBusyUserId(u.id)
     try {
-      const result = await api.deleteUser(u.id) as any
+      const result = await api.deleteUser(u.id)
       if (result != null) {
         mToast('已删除')
         await loadUsers(tab, page)
-      } else {
-        mToast('删除失败：服务器未确认', 'error')
       }
     } catch (e: any) {
       mToast(`删除失败: ${e?.message || e}`, 'error')
@@ -239,63 +255,51 @@ export default function MAdmin() {
     setEditName(u.display_name || '')
     setEditEmail(u.email || '')
     setEditPassword('')
-    setEditRoleId('')
-    setEditWsId('')
     setEditRoles([])
     setAllRoles([])
+    setEditRoleId('')
     setEditWs([])
     setAllWs([])
+    setEditWsId('')
     setEditLoading(true)
     try {
-      const full = await api.getUser(u.id) as any
-      if (full != null) {
-        if (Array.isArray(full.roles)) setEditRoles(full.roles)
-        if (Array.isArray(full.workspaces)) setEditWs(full.workspaces)
+      const detail = await api.getUser(u.id) as any
+      if (detail != null) {
+        setEditRoles(Array.isArray(detail.roles) ? detail.roles : [])
       }
-    } catch {}
-    try {
       if (canRole) {
-        const roles = await api.listRoles(u.user_type) as any
-        if (roles != null) setAllRoles(roles)
+        const rl = await api.listRoles(u.user_type)
+        if (Array.isArray(rl)) setAllRoles(rl)
       }
-    } catch {}
-    try {
-      const [wss] = await Promise.all([
-        api.listWorkspaces() as any,
-      ])
-      if (wss != null && Array.isArray(wss.workspaces)) setAllWs(wss.workspaces as any[])
-    } catch {}
-    setEditLoading(false)
+      const wl = await api.listWorkspaces() as any
+      if (wl != null && Array.isArray(wl.workspaces)) setAllWs(wl.workspaces)
+      const uw = await api.getUserWorkspaces(u.id) as any[]
+      if (Array.isArray(uw)) setEditWs(uw)
+    } catch (e: any) {
+      mToast(`加载用户信息失败: ${e?.message || e}`, 'error')
+    } finally {
+      setEditLoading(false)
+    }
   }
 
   const handleEditSubmit = async () => {
     if (editTarget == null) return
-    if (!editName.trim()) {
-      mToast('显示名不能为空', 'error')
-      return
-    }
-    if (editPassword && editPassword.length < 8) {
-      mToast('重置密码至少 8 位', 'error')
-      return
-    }
     setEditSubmitting(true)
     try {
-      const result = await api.updateUser(editTarget.id, {
-        display_name: editName.trim(),
-        email: editEmail.trim(),
-      })
-      if (result == null) {
-        mToast('保存失败：服务器未确认', 'error')
-        return
+      if (editName !== (editTarget.display_name || '') || editEmail !== (editTarget.email || '')) {
+        const result = await api.updateUser(editTarget.id, {
+          display_name: editName.trim() || undefined,
+          email: editEmail.trim() || undefined,
+        })
+        if (result == null) { mToast('保存失败：服务器未确认', 'error'); return }
       }
-      if (editPassword) {
-        const pw = await api.resetUserPassword(editTarget.id, editPassword) as any
-        if (pw == null || !pw.ok) {
-          mToast('资料已保存，但密码重置失败', 'error')
-          return
-        }
+      if (editPassword.trim() && editPassword.trim().length >= 8) {
+        const pr = await api.resetUserPassword(editTarget.id, editPassword.trim()) as any
+        if (pr == null || !pr.ok) { mToast('密码重置失败：服务器未确认', 'error'); return }
+      } else if (editPassword.trim() && editPassword.trim().length < 8) {
+        mToast('密码至少 8 位', 'error'); return
       }
-      mToast(editPassword ? '已保存，密码已重置' : '已保存')
+      mToast('保存成功')
       setEditTarget(null)
       await loadUsers(tab, page)
     } catch (e: any) {
@@ -374,6 +378,22 @@ export default function MAdmin() {
     setRenewNote('')
   }
 
+  const openPayments = async (u: any) => {
+    setPaymentsTarget(u)
+    setPayments([])
+    setPaymentsLoading(true)
+    try {
+      const data = await api.listPayments(u.id) as any
+      if (data != null && Array.isArray(data.payments)) {
+        setPayments(data.payments)
+      }
+    } catch (e: any) {
+      mToast(`加载付费明细失败: ${e?.message || e}`, 'error')
+    } finally {
+      setPaymentsLoading(false)
+    }
+  }
+
   const handleRenewSubmit = async () => {
     if (renewTarget == null) return
     const cents = Math.round(parseFloat(renewYuan) * 100)
@@ -423,7 +443,7 @@ export default function MAdmin() {
       if (result != null && result.ok) {
         mToast(`已通过，到期时间：${fmtDate(result.expires_at)}`)
         setApproveTarget(null)
-        await loadPending(pendingPage)
+        await loadPending(pendingFilter, pendingPage)
       } else {
         mToast('审批失败：服务器未确认', 'error')
       }
@@ -443,7 +463,7 @@ export default function MAdmin() {
         mToast('已拒绝')
         setRejectTarget(null)
         setRejectReason('')
-        await loadPending(pendingPage)
+        await loadPending(pendingFilter, pendingPage)
       } else {
         mToast('操作失败：服务器未确认', 'error')
       }
@@ -461,7 +481,7 @@ export default function MAdmin() {
       const result = await api.approveUpgrade(m.id)
       if (result != null && result.ok) {
         mToast('升级已通过')
-        await loadPending(pendingPage)
+        await loadPending(pendingFilter, pendingPage)
       } else {
         mToast('操作失败：服务器未确认', 'error')
       }
@@ -538,6 +558,7 @@ export default function MAdmin() {
   const statusBadge = (u: any) => {
     if (u.is_active === 0) return <span className="m-badge warn">已停用</span>
     if (u.is_approved === 0) return <span className="m-badge warn">待审批</span>
+    if (u.is_approved === 2) return <span className="m-badge">已拒绝</span>
     return <span className="m-badge completed">正常</span>
   }
 
@@ -547,9 +568,24 @@ export default function MAdmin() {
       <>
         {m.payment.plan_name || '付费'} {fmtYuan(m.payment.amount_cents)} · {payLabel(m.payment.payment_method)}
         {m.payment.payment_ref ? ` · 单号 ${m.payment.payment_ref}` : ''}
+        {m.payment.note ? ` · ${m.payment.note}` : ''}
       </>
     )
   }
+
+  // 审批状态筛选标签
+  const approvalFilterTabs = () => (
+    <div className="m-tabs" style={{ marginBottom: 12 }}>
+      <button className={`m-tab ${pendingFilter === 'pending' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('pending'); setPendingPage(1) }}>待审批</button>
+      <button className={`m-tab ${pendingFilter === 'approved' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('approved'); setPendingPage(1) }}>已通过</button>
+      <button className={`m-tab ${pendingFilter === 'rejected' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('rejected'); setPendingPage(1) }}>已拒绝</button>
+      <button className={`m-tab ${pendingFilter === 'all' ? 'active' : ''}`}
+        onClick={() => { setPendingFilter('all'); setPendingPage(1) }}>全部</button>
+    </div>
+  )
 
   return (
     <>
@@ -560,8 +596,8 @@ export default function MAdmin() {
         <button className={`m-tab ${tab === 'admin' ? 'active' : ''}`}
           onClick={() => { setTab('admin'); setPage(1) }}>管理员</button>
         <button className={`m-tab ${tab === 'pending' ? 'active' : ''}`}
-          onClick={() => { setTab('pending'); setPendingPage(1) }}>
-          待审批{badge > 0 && <span className="m-tab-badge">{badge}</span>}
+          onClick={() => { setTab('pending'); setPendingFilter('pending'); setPendingPage(1) }}>
+          审批{badge > 0 && <span className="m-tab-badge">{badge}</span>}
         </button>
         {canGlobal && (
           <button className={`m-tab ${tab === 'plan' ? 'active' : ''}`}
@@ -585,11 +621,24 @@ export default function MAdmin() {
                       {statusBadge(u)}
                     </div>
                     <div className="m-user-meta">
-                      @{u.username}{u.email ? ` · ${u.email}` : ''}
-                      {tab === 'member' && <> · 到期：{fmtDate(u.expires_at)}</>}
+                      <div>@{u.username}{u.email ? ` · ${u.email}` : ''}{u.phone ? ` · ${u.phone}` : ''}</div>
+                      <div>
+                        注册：{fmtDate(u.created_at)}
+                        {tab === 'member' && <> · 到期：{fmtDate(u.expires_at)}</>}
+                      </div>
+                      {Array.isArray(u.roles) && u.roles.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                          {u.roles.map((r: any) => (
+                            <span key={r.id} className="m-badge" style={{ fontSize: 11, padding: '1px 6px' }}>{r.name}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="m-row-actions">
                       <button className="m-mini-btn" onClick={() => openEdit(u)}>编辑</button>
+                      {tab === 'member' && (
+                        <button className="m-mini-btn" onClick={() => openPayments(u)}>明细</button>
+                      )}
                       {!isSuperAdmin && (
                         <button className={`m-mini-btn ${u.is_active === 0 ? '' : 'warn'}`}
                           disabled={busyUserId === u.id}
@@ -624,7 +673,7 @@ export default function MAdmin() {
             <div className="m-loading">加载中…</div>
           ) : (
             <>
-              {upgrades.length > 0 && (
+              {pendingFilter === 'pending' && upgrades.length > 0 && (
                 <>
                   <div className="m-section-title">升级申请（{upgrades.length}）</div>
                   {upgrades.map(m => (
@@ -645,24 +694,36 @@ export default function MAdmin() {
                   ))}
                 </>
               )}
-              <div className="m-section-title">待审批会员（{pendingTotal}）</div>
+
+              {approvalFilterTabs()}
+
               {pending.length === 0 ? (
-                <div className="m-empty">暂无待审批会员</div>
+                <div className="m-empty">
+                  {pendingFilter === 'pending' ? '暂无待审批会员' :
+                   pendingFilter === 'approved' ? '暂无已通过会员' :
+                   pendingFilter === 'rejected' ? '暂无已拒绝会员' : '暂无记录'}
+                </div>
               ) : (
                 <>
                   {pending.map(m => (
                     <div key={m.id} className="m-user-row">
                       <div className="m-user-head">
                         <div className="m-user-name">{m.display_name || m.username}</div>
-                        {m.payment != null ? <span className="m-badge completed">付费</span> : <span className="m-badge">试用</span>}
+                        {statusBadge(m)}
                       </div>
                       <div className="m-user-meta">
-                        @{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}
-                        <br />{paymentInfo(m)}
+                        <div>@{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
+                        <div>注册：{fmtDate(m.created_at)} · 到期：{fmtDate(m.expires_at)}</div>
+                        {m.payment != null && <div style={{ marginTop: 2 }}>{paymentInfo(m)}</div>}
                       </div>
                       <div className="m-row-actions">
-                        <button className="m-mini-btn primary" onClick={() => openApprove(m)}>通过</button>
-                        <button className="m-mini-btn warn" onClick={() => { setRejectTarget(m); setRejectReason('') }}>拒绝</button>
+                        {pendingFilter === 'pending' && (
+                          <>
+                            <button className="m-mini-btn primary" onClick={() => openApprove(m)}>通过</button>
+                            <button className="m-mini-btn warn" onClick={() => { setRejectTarget(m); setRejectReason('') }}>拒绝</button>
+                          </>
+                        )}
+                        <button className="m-mini-btn" onClick={() => openPayments(m)}>明细</button>
                       </div>
                     </div>
                   ))}
@@ -871,7 +932,8 @@ export default function MAdmin() {
           </div>
           <div className="m-field">
             <label>备注（可选）</label>
-            <input className="m-input" value={renewNote} onChange={e => setRenewNote(e.target.value)} />
+            <input className="m-input" value={renewNote} onChange={e => setRenewNote(e.target.value)}
+              placeholder="可填写付款人、用途等备注信息" />
           </div>
           <div className="m-sheet-actions">
             <button disabled={renewSubmitting} onClick={() => setRenewTarget(null)}>取消</button>
@@ -879,6 +941,48 @@ export default function MAdmin() {
               {renewSubmitting ? '提交中…' : '确认续期'}
             </button>
           </div>
+        </MSheet>
+      )}
+
+      {paymentsTarget != null && (
+        <MSheet title={`付费明细 · ${paymentsTarget.display_name || paymentsTarget.username}`}
+          onClose={() => setPaymentsTarget(null)}>
+          {paymentsLoading ? (
+            <div className="m-loading">加载中…</div>
+          ) : payments.length === 0 ? (
+            <div className="m-empty">暂无付费记录</div>
+          ) : (
+            <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+              {payments.map((p: any) => (
+                <div key={p.id} style={{
+                  borderBottom: '1px solid var(--border)', padding: '10px 0',
+                  fontSize: 13, lineHeight: 1.7,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong>{p.plan_name}</strong>
+                    <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{fmtYuan(p.amount_cents)}</span>
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    {payLabel(p.payment_method)} · {p.duration_days} 天
+                    {p.payment_ref ? ` · 单号: ${p.payment_ref}` : ''}
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                    {fmtDate(p.paid_at)}
+                    {p.expires_before && ` · 续前到期: ${fmtDate(p.expires_before)}`}
+                    {p.expires_after && ` → 续后到期: ${fmtDate(p.expires_after)}`}
+                  </div>
+                  {p.note && (
+                    <div style={{
+                      background: 'var(--bg-secondary)', padding: '4px 8px',
+                      borderRadius: 4, marginTop: 4, fontSize: 12,
+                    }}>
+                      备注：{p.note}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </MSheet>
       )}
 
