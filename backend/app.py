@@ -6365,7 +6365,7 @@ def reject_upgrade(user_id: str, body: RejectUpgradeReq, request: Request,
             db.execute(
                 "UPDATE payment_records SET note=?, recorded_by=? "
                 "WHERE user_id=? AND plan_name=? AND recorded_by IS NULL",
-                ((reason or "").strip(), user["sub"], user_id, plan_name),
+                ("[已拒绝] " + (reason or "").strip(), user["sub"], user_id, plan_name),
             )
         else:
             db.execute(
