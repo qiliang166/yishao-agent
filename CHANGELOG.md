@@ -2,6 +2,10 @@
 
 ## 2026-07-15
 
+- fix: 浼氬憳鐧诲綍鍚庤烦杞け璐?鈥?绉婚櫎鍙岄噸瀵艰埅瀵艰嚧鐨勭珵鎬佹潯浠?- chore: 鑷姩鏇存柊 CHANGELOG + server.zip (绉婚櫎 approval_note 杩斿洖鍊?
+
+## 2026-07-15
+
 - fix: list_users 涓嶅啀杩斿洖 approval_note锛堝凡杩佺Щ鑷?payment_records.note锛?- chore: 鑷姩鏇存柊 CHANGELOG + server.zip (瀹℃壒鎰忚杩佺Щ)
 
 ## 2026-07-15
