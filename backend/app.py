@@ -5748,7 +5748,7 @@ def member_register(req: dict, request: Request):
     if not phone:
         raise HTTPException(status_code=400, detail="请填写手机号（用于审批联系与退款）")
     phone_digits = re.sub(r"\D", "", phone)
-    if len(phone_digits) < 7 or len(phone_digits) > 15:
+    if len(phone_digits) != 11:
         raise HTTPException(status_code=400, detail="手机号格式不正确")
 
     db = get_db()

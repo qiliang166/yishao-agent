@@ -71,7 +71,7 @@ export default function MemberRegisterPage() {
       return
     }
     const phoneDigits = phone.replace(/\D/g, '')
-    if (phoneDigits.length < 7 || phoneDigits.length > 15) {
+    if (phoneDigits.length !== 11) {
       setError('手机号格式不正确')
       return
     }

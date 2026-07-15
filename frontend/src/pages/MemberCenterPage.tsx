@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../services/api'
 
@@ -188,8 +189,16 @@ export default function MemberCenterPage() {
           {expiresInfo()}
         </div>
         {!isExpired && (
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
-            如需续期，请联系管理员
+          <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to={`/member/renew?username=${profile?.username || ''}`} style={{
+              fontSize: 11, color: 'var(--primary)', textDecoration: 'none',
+              fontWeight: 600,
+            }}>
+              续费 →
+            </Link>
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+              会员快到期？点击续费自助提交，管理员审批后自动延长
+            </span>
           </div>
         )}
       </div>
