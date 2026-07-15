@@ -6000,7 +6000,7 @@ def list_pending_members(page: int = 1, page_size: int = 20, user=require_perm("
             "SELECT COUNT(*) FROM users WHERE user_type='member' AND is_approved=0"
         ).fetchone()[0]
         rows = db.execute(
-            "SELECT id, username, display_name, email, phone, is_approved, created_at "
+            "SELECT id, username, display_name, email, phone, is_approved, created_at, expires_at "
             "FROM users WHERE user_type='member' AND is_approved=0 "
             "ORDER BY created_at DESC LIMIT ? OFFSET ?",
             (page_size, offset),
@@ -6187,8 +6187,15 @@ async def reject_member(user_id: str, body: RejectMemberReq, request: Request,
                 (user_id,),
             ).fetchone()
             if payment:
-                db.execute("UPDATE payment_records SET note=? WHERE id=?",
-                           ((reason or "").strip(), payment["id"]))
+                db.execute("UPDATE payment_records SET note=?, recorded_by=? WHERE id=?",
+                           (("[已拒绝] " + (reason or "").strip()), user["sub"], payment["id"]))
+        else:
+            # Still mark as processed even without reason
+            db.execute(
+                "UPDATE payment_records SET recorded_by=? "
+                "WHERE user_id=? AND recorded_by IS NULL",
+                (user["sub"], user_id),
+            )
         _write_audit(db, user["sub"], "member.reject", "user", user_id,
                       json.dumps({"reason": reason, "is_renewal": is_renewal}), ip_address=ip)
         db.commit()
@@ -6392,8 +6399,12 @@ def my_payments(current_user=Depends(get_current_user)):
         payments = []
         for r in rows:
             p = dict(r)
+            note = p.get("note") or ""
             if r["recorded_by"] is None:
                 p["status"] = "pending"
+            elif note.startswith("[已拒绝]"):
+                p["status"] = "rejected"
+                p["note"] = note[len("[已拒绝] "):] if note.startswith("[已拒绝] ") else note[len("[已拒绝]"):]
             else:
                 p["status"] = "confirmed"
             payments.append(p)

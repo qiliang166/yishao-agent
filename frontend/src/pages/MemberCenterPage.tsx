@@ -216,8 +216,8 @@ export default function MemberCenterPage() {
           <div className="ac-sub-item-header">申请记录</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {payments.map((p: any, i: number) => {
-              const statusLabel = p.status === 'pending' ? '待审核' : p.status === 'confirmed' ? '已确认' : p.status
-              const statusColor = p.status === 'pending' ? '#f0ad4e' : p.status === 'confirmed' ? '#5cb85c' : 'var(--text-secondary)'
+              const statusLabel = p.status === 'pending' ? '待审核' : p.status === 'rejected' ? '已拒绝' : p.status === 'confirmed' ? '已确认' : p.status
+              const statusColor = p.status === 'pending' ? '#f0ad4e' : p.status === 'rejected' ? 'var(--warning)' : p.status === 'confirmed' ? '#5cb85c' : 'var(--text-secondary)'
               return (
                 <div key={i} style={{
                   padding: '8px 12px', borderRadius: 6,
