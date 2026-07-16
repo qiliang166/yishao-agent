@@ -2436,13 +2436,27 @@ export default function ProjectPage() {
       {/* ═══ Sub Nav ═══ */}
       {STAGES.find(s => s.id === stage)?.subs.length ? (
         <div className="sub-nav">
-          {STAGES.find(s => s.id === stage)!.subs.map((sn, i) => (
-            <span key={sn.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {i > 0 && <span className="sn-sep">|</span>}
-              <div className={`sn-item${sub === sn.id ? ' active' : ''}`}
-                onClick={() => setSub(sn.id)}>{sn.label}</div>
-            </span>
-          ))}
+          {STAGES.find(s => s.id === stage)!.subs.map((sn, i) => {
+            const busy = (() => {
+              switch (sn.id) {
+                case '1a': case '1b': case '1c': return !!step1Generating[sn.id]
+                case '2a': case '2b': case '2c': return !!step2Generating[sn.id]
+                case '3a': return !!(pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc'])
+                case '3b': return !!(pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt'])
+                case '3c': return !!(pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt'])
+                case '4a': return Object.values(s4SpeechGenerating).some(Boolean)
+                case '4b': return ttsGenerating
+                default: return false
+              }
+            })()
+            return (
+              <span key={sn.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {i > 0 && <span className="sn-sep">|</span>}
+                <div className={`sn-item${sub === sn.id ? ' active' : ''}`}
+                  onClick={() => setSub(sn.id)}>{sn.label}{busy && <span style={{ marginLeft: 4 }}>⏳</span>}</div>
+              </span>
+            )
+          })}
         </div>
       ) : null}
 
