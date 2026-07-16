@@ -518,18 +518,18 @@ export default function ProjectDashboard() {
                         onChange={e => setEditPointValue(e.target.value)}
                         onKeyDown={async e => {
                           if (e.key === 'Enter') {
+                            e.preventDefault()
                             e.stopPropagation()
                             const v = Math.round(parseFloat(editPointValue || '0') * 10)
+                            setEditPointProject('')
                             if (!isNaN(v) && v >= 0) {
                               await api.updateProject(p.id, { point_cost_deci: v })
                               loadProjects(page)
                             }
-                            setEditPointProject('')
                           }
                           if (e.key === 'Escape') { e.stopPropagation(); setEditPointProject('') }
                         }}
                         onClick={e => e.stopPropagation()}
-                        onBlur={() => setEditPointProject('')}
                         autoFocus
                         style={{ width: 48, fontSize: 11, padding: '2px 4px' }} />
                       <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>积分</span>
