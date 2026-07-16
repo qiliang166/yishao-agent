@@ -5632,12 +5632,14 @@ def api_download_stats_projects(user=require_perm("member.manage")):
     try:
         rows = db.execute(
             """SELECT p.id as project_id, p.name as project_name,
+                      p.project_code, w.name as workspace_name,
                       p.download_count, p.point_cost_deci, p.is_downloadable,
                       p.category_id, p.author_id,
                       pc.name as category_name, au.name as author_name,
                       COUNT(dl.id) as total_logs
                FROM projects p
                LEFT JOIN download_logs dl ON dl.project_id = p.id
+               LEFT JOIN workspaces w ON w.id = p.workspace_id
                LEFT JOIN project_categories pc ON pc.id = p.category_id
                LEFT JOIN authors au ON au.id = p.author_id
                WHERE p.is_downloadable = 1
@@ -5665,7 +5667,18 @@ def api_download_stats_members(user=require_perm("member.manage")):
                GROUP BY u.id
                ORDER BY total_downloads DESC""",
         ).fetchall()
-        return {"members": [dict(r) for r in rows]}
+        members = [dict(r) for r in rows]
+        pay_map = {r["user_id"]: r["c"] for r in db.execute(
+            "SELECT user_id, COALESCE(SUM(amount_cents), 0) as c FROM payment_records GROUP BY user_id").fetchall()}
+        bal_map = {r["user_id"]: r["b"] for r in db.execute(
+            "SELECT user_id, balance_deci as b FROM user_points").fetchall()}
+        spent_map = {r["user_id"]: r["s"] for r in db.execute(
+            "SELECT user_id, COALESCE(SUM(-amount_deci), 0) as s FROM points_transactions WHERE amount_deci < 0 GROUP BY user_id").fetchall()}
+        for m in members:
+            m["total_paid_cents"] = pay_map.get(m["id"], 0)
+            m["balance_deci"] = bal_map.get(m["id"], 0)
+            m["spent_deci"] = spent_map.get(m["id"], 0)
+        return {"members": members}
     finally:
         db.close()
 

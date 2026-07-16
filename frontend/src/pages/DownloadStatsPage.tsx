@@ -122,19 +122,23 @@ export default function DownloadStatsPage() {
                 <thead>
                   <tr>
                     <th style={{ width: 50 }}>序号</th>
+                    <th style={{ width: 90 }}>菜谱编号</th>
                     <th>明细名称</th>
-                    <th style={{ width: 110 }}>分类</th>
-                    <th style={{ width: 110 }}>作者</th>
-                    <th style={{ width: 90 }}>下载次数</th>
-                    <th style={{ width: 70 }}>可下载</th>
-                    <th style={{ width: 70 }}>积分</th>
+                    <th style={{ width: 110 }}>所属项目</th>
+                    <th style={{ width: 100 }}>所属分类</th>
+                    <th style={{ width: 100 }}>作者</th>
+                    <th style={{ width: 80 }}>下载次数</th>
+                    <th style={{ width: 60 }}>可下载</th>
+                    <th style={{ width: 60 }}>积分</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredStats.map((p: any, i: number) => (
                     <tr key={p.project_id}>
                       <td style={{ color: 'var(--text-secondary)' }}>{i + 1}</td>
+                      <td style={{ fontSize: 11, fontFamily: 'monospace' }}>{p.project_code || '—'}</td>
                       <td>{p.project_name}</td>
+                      <td style={{ fontSize: 11 }}>{p.workspace_name || '—'}</td>
                       <td style={{ fontSize: 11 }}>{p.category_name || '—'}</td>
                       <td style={{ fontSize: 11 }}>{p.author_name || '—'}</td>
                       <td style={{ fontWeight: 600 }}>{p.download_count || 0}</td>
@@ -186,19 +190,27 @@ export default function DownloadStatsPage() {
             <table className="output-table">
               <thead>
                 <tr>
+                  <th style={{ width: 50 }}>序号</th>
                   <th>会员</th>
-                  <th style={{ width: 100 }}>下载次数</th>
-                  <th style={{ width: 100 }}>明细数</th>
-                  <th style={{ width: 140 }}>最近下载</th>
+                  <th style={{ width: 90 }}>充值金额</th>
+                  <th style={{ width: 80 }}>剩余积分</th>
+                  <th style={{ width: 80 }}>消耗积分</th>
+                  <th style={{ width: 80 }}>下载次数</th>
+                  <th style={{ width: 70 }}>明细数</th>
+                  <th style={{ width: 110 }}>最近下载</th>
                 </tr>
               </thead>
               <tbody>
-                {memberStats.map((m: any) => (
+                {memberStats.map((m: any, i: number) => (
                   <tr key={m.id}>
+                    <td style={{ color: 'var(--text-secondary)' }}>{i + 1}</td>
                     <td>
                       {m.display_name || m.username}
                       <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>{m.username}</span>
                     </td>
+                    <td>¥{((m.total_paid_cents || 0) / 100).toFixed(2)}</td>
+                    <td style={{ fontWeight: 600, color: 'var(--success)' }}>{((m.balance_deci || 0) / 10).toFixed(1)}</td>
+                    <td style={{ color: 'var(--warning)' }}>{((m.spent_deci || 0) / 10).toFixed(1)}</td>
                     <td style={{ fontWeight: 600 }}>{m.total_downloads || 0}</td>
                     <td>{m.unique_projects || 0}</td>
                     <td>{m.last_download ? new Date(m.last_download).toLocaleDateString('zh-CN') : '—'}</td>
