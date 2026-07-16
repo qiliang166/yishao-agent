@@ -32,6 +32,16 @@ interface WorkspaceItem {
   name: string
 }
 
+function typeLabel(t: string): string {
+  const map: Record<string, string> = {
+    purchase: '购买',
+    admin_adjust: '管理员调整',
+    admin_grant: '管理员赠送',
+    signup_bonus: '注册赠送',
+  }
+  return map[t] || t
+}
+
 export default function UserManagePage() {
   const canManageMembers = usePermission('member.manage')
   const canManageRoles = usePermission('role.manage')
@@ -1105,7 +1115,7 @@ export default function UserManagePage() {
                             <span style={{ color: tx.amount_deci > 0 ? 'var(--success)' : 'var(--warning)' }}>
                               {tx.amount_deci > 0 ? '+' : ''}{(tx.amount_deci / 10).toFixed(1)}
                             </span>
-                            <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>{tx.type}</span>
+                            <span style={{ color: 'var(--text-secondary)', marginLeft: 8 }}>{typeLabel(tx.type)}</span>
                           </span>
                           <span style={{ color: 'var(--text-secondary)' }}>
                             {tx.created_at ? new Date(tx.created_at).toLocaleDateString('zh-CN') : ''}

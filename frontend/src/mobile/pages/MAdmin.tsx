@@ -40,6 +40,16 @@ function MSheet({ title, onClose, children }: {
   )
 }
 
+function typeLabel(t: string): string {
+  const map: Record<string, string> = {
+    purchase: '购买',
+    admin_adjust: '管理员调整',
+    admin_grant: '管理员赠送',
+    signup_bonus: '注册赠送',
+  }
+  return map[t] || t
+}
+
 export default function MAdmin() {
   const { user } = useAuth()
   const canMember = user?.user_type === 'admin' && !!user?.permissions?.includes('member.manage')
@@ -1214,7 +1224,7 @@ export default function MAdmin() {
                           <span style={{ color: tx.amount_deci > 0 ? 'var(--success)' : 'var(--warning)' }}>
                             {tx.amount_deci > 0 ? '+' : ''}{(tx.amount_deci / 10).toFixed(1)}
                           </span>
-                          <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>{tx.type}</span>
+                          <span style={{ marginLeft: 8, color: 'var(--text-secondary)' }}>{typeLabel(tx.type)}</span>
                         </span>
                         <span style={{ color: 'var(--text-secondary)' }}>{fmtDate(tx.created_at)}</span>
                       </div>

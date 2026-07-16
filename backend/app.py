@@ -7190,12 +7190,15 @@ async def record_payment(user_id: str, body: PaymentRecordReq, request: Request,
 
 
 @app.put("/api/members/{user_id}/expiry")
-def update_member_expiry(user_id: str, body: dict = Body(...), request: Request = None,
-                         user=require_perm("member.manage")):
+async def update_member_expiry(user_id: str, request: Request, user=require_perm("member.manage")):
     """Update member expiry date directly."""
     from datetime import datetime as _dt
-    new_expires = body.get("expires_at")
-    ip = _get_client_ip(request) if request else None
+    try:
+        req_body = await request.json()
+        new_expires = req_body.get("expires_at") if isinstance(req_body, dict) else None
+    except Exception:
+        raise HTTPException(400, "无效的请求体")
+    ip = _get_client_ip(request)
 
     db = get_db()
     try:
