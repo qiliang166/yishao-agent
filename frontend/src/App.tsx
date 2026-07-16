@@ -23,6 +23,8 @@ import MemberDownloadsPage from './pages/MemberDownloadsPage'
 import RoleManagePage from './pages/RoleManagePage'
 import LandingPage from './pages/LandingPage'
 import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
+import BookletListPage from './booklet/BookletListPage'
+import BookletEditorPage from './booklet/BookletEditorPage'
 import { ModalProvider } from './components/ModalProvider'
 import AboutDialog from './components/AboutDialog'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -148,6 +150,11 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
             <span className="ico">🎨</span> 提示词工作室
           </button>
         )}
+        <button
+          className={`sidebar-item ${location.pathname.startsWith('/booklets') ? 'active' : ''}`}
+          onClick={() => navigate('/booklets')}>
+          <span className="ico">📚</span> 电子成册
+        </button>
         <button
           className={`sidebar-item ${location.pathname === '/manual' ? 'active' : ''}`}
           onClick={() => navigate('/manual')}>
@@ -392,6 +399,11 @@ function MemberSidebar() {
           <span className="ico">📥</span> 下载文件
         </button>
         <button
+          className={`sidebar-item ${location.pathname.startsWith('/app/booklets') ? 'active' : ''}`}
+          onClick={() => navigate('/app/booklets')}>
+          <span className="ico">📚</span> 我的册子
+        </button>
+        <button
           className={`sidebar-item ${location.pathname === '/app/manual' ? 'active' : ''}`}
           onClick={() => navigate('/app/manual')}>
           <span className="ico">📖</span> 操作说明
@@ -571,6 +583,8 @@ function MemberAppShell() {
             <Route path="/manual" element={<ManualPage />} />
             <Route path="/center" element={<MemberCenterPage />} />
             <Route path="/downloads" element={<MemberDownloadsPage />} />
+            <Route path="/booklets" element={<BookletListPage />} />
+            <Route path="/booklets/:id" element={<BookletEditorPage />} />
             <Route path="/" element={<MemberHomePage />} />
           </Routes>
         </div>
@@ -652,6 +666,8 @@ function AppShell() {
             <Route path="/templates" element={<TemplateManager />} />
             <Route path="/proj-settings" element={<SettingsLock><ProjSettingsPage /></SettingsLock>} />
             <Route path="/prompt-studio" element={<PromptStudioPage />} />
+            <Route path="/booklets" element={<BookletListPage />} />
+            <Route path="/booklets/:id" element={<BookletEditorPage />} />
             <Route path="/members" element={<UserManagePage />} />
             <Route path="/members/pending" element={<MemberApprovalPage />} />
             <Route path="/members/stats" element={<DownloadStatsPage />} />

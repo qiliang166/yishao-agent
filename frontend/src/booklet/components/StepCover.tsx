@@ -1,0 +1,165 @@
+import { useState, useEffect, useRef } from 'react'
+import { api } from '../../services/api'
+import { useModal } from '../../components/ModalProvider'
+import { BookletDraft, Theme } from '../types'
+
+interface Props {
+  draft: BookletDraft
+  onChange: (updater: (d: BookletDraft) => BookletDraft) => void
+}
+
+export default function StepCover({ draft, onChange }: Props) {
+  const { toast } = useModal()
+  const [themes, setThemes] = useState<Theme[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    api.bookletThemes()
+      .then(list => { if (list != null) setThemes(list) })
+      .catch((e: any) => toast(`加载主题失败: ${e?.message || e}`, 'error'))
+  }, [])
+
+  const setCover = (patch: Record<string, any>) =>
+    onChange(d => ({ ...d, cover: { ...d.cover, ...patch } }))
+
+  const handleUploadLogo = async (file: File) => {
+    setUploading(true)
+    try {
+      const r = await api.uploadLogo(file)
+      if (r != null && r.url) {
+        setCover({ logo_url: r.url })
+        toast('LOGO 已上传', 'success')
+      }
+    } catch (e: any) {
+      toast(`上传失败: ${e?.message || e}`, 'error')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0]
+  const colors = theme?.colors || { primary: 'var(--primary)', accent: 'var(--primary)', bg: 'var(--card)', text: 'var(--text)' }
+
+  return (
+    <div className="panel-grid">
+      <div className="panel-left">
+        <div className="card">
+          <div className="card-title">📝 封面与署名</div>
+          <div className="form-group">
+            <label className="form-label">书名</label>
+            <input className="form-input" value={draft.title}
+              onChange={e => onChange(d => ({ ...d, title: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">副标题</label>
+            <input className="form-input" value={draft.subtitle} placeholder="选填"
+              onChange={e => onChange(d => ({ ...d, subtitle: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">署名（作者/编者）</label>
+            <input className="form-input" value={draft.author} placeholder="例如：张三"
+              onChange={e => onChange(d => ({ ...d, author: e.target.value }))} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">单位</label>
+            <input className="form-input" value={draft.cover.org || ''} placeholder="选填"
+              onChange={e => setCover({ org: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">日期文字</label>
+            <input className="form-input" value={draft.cover.date_text || ''} placeholder="留空则用合成当天日期"
+              onChange={e => setCover({ date_text: e.target.value })} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">LOGO</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {draft.cover.logo_url && (
+                <img src={draft.cover.logo_url} alt="logo" style={{ height: 32, maxWidth: 90, objectFit: 'contain' }} />
+              )}
+              <button className="btn btn-ghost btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                {uploading ? '上传中...' : draft.cover.logo_url ? '更换' : '📁 上传 LOGO'}
+              </button>
+              {draft.cover.logo_url && (
+                <button className="btn btn-ghost btn-sm" onClick={() => setCover({ logo_url: '' })}>移除</button>
+              )}
+              <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadLogo(f); e.target.value = '' }} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">扉页文字（封面背面的编制说明）</label>
+            <textarea className="form-input" value={draft.cover.flyleaf_text || ''} placeholder="选填，如编制说明、致读者"
+              onChange={e => setCover({ flyleaf_text: e.target.value })}
+              style={{ height: 64, resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">封底文字</label>
+            <textarea className="form-input" value={draft.cover.back_cover_text || ''} placeholder="选填，如致谢、版权说明"
+              onChange={e => setCover({ back_cover_text: e.target.value })}
+              style={{ height: 64, resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-title">🎨 主题配色</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+            {themes.map(t => (
+              <div key={t.id} onClick={() => setCover({ theme_id: t.id, theme_colors: {} })}
+                style={{
+                  padding: '6px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11,
+                  border: `2px solid ${draft.cover.theme_id === t.id ? 'var(--primary)' : 'var(--border)'}`,
+                }}>
+                <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
+                  {[t.colors.primary, t.colors.accent, t.colors.bg].map((c, i) => (
+                    <span key={i} style={{ width: 14, height: 14, borderRadius: 3, background: c, border: '1px solid var(--border)' }} />
+                  ))}
+                </div>
+                <div>{t.name}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-secondary)' }}>{t.source === 'builtin' ? '内置主题' : '风格模板配色'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="panel-right">
+        <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          <div className="card-title">👁 封面实时预览</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16 }}>
+            <div style={{
+              width: draft.book_type === 'ppt' ? 480 : 340,
+              height: draft.book_type === 'ppt' ? 270 : 480,
+              background: colors.bg, color: colors.text,
+              boxShadow: '0 4px 18px rgba(0,0,0,0.25)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+              position: 'relative', overflow: 'hidden', flexShrink: 0,
+            }}>
+              <div style={{ width: '100%', height: 6, background: colors.accent, flexShrink: 0 }} />
+              {draft.cover.logo_url && (
+                <img src={draft.cover.logo_url} alt="logo"
+                  style={{ maxHeight: 40, maxWidth: 110, objectFit: 'contain', marginTop: draft.book_type === 'ppt' ? 18 : 44 }} />
+              )}
+              <div style={{
+                marginTop: draft.cover.logo_url ? 16 : (draft.book_type === 'ppt' ? 46 : 96),
+                fontSize: draft.book_type === 'ppt' ? 22 : 24, fontWeight: 700, color: colors.primary,
+                padding: '0 24px', lineHeight: 1.4, letterSpacing: '0.08em',
+              }}>
+                {draft.title || '（书名）'}
+              </div>
+              {draft.subtitle && (
+                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75, letterSpacing: '0.2em' }}>{draft.subtitle}</div>
+              )}
+              <div style={{ width: 60, height: 2, background: colors.accent, marginTop: 18 }} />
+              <div style={{ marginTop: 'auto', paddingBottom: 18, fontSize: 11, lineHeight: 1.9 }}>
+                <div style={{ fontWeight: 600, color: colors.primary, fontSize: 12 }}>{draft.author || ''}</div>
+                <div>{draft.cover.org || ''}</div>
+                <div>{draft.cover.date_text || ''}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

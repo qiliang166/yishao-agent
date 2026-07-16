@@ -1215,4 +1215,40 @@ export const api = {
 
   getDownloadStatsByMember: () =>
     request('/api/admin/stats/downloads/members').then(d => d as { members: any[] }),
+
+  // ── Booklets (电子成册) ──
+  listBooklets: () =>
+    request('/api/booklets').then(d => d.booklets as {
+      id: string; owner_id: string; owner_role: string; book_type: string
+      title: string; subtitle: string; chapter_count: number; updated_at: string
+    }[]),
+  createBooklet: (title: string, bookType: string) =>
+    request('/api/booklets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, book_type: bookType }) }),
+  getBooklet: (id: string) =>
+    request(`/api/booklets/${id}`),
+  updateBooklet: (id: string, data: { title?: string; subtitle?: string; author?: string; cover?: any; chapters?: any[] }) =>
+    request(`/api/booklets/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  deleteBooklet: (id: string) =>
+    request(`/api/booklets/${id}`, { method: 'DELETE' }),
+  bookletAvailableContent: (bookType: string, workspaceId?: string) => {
+    const qs = workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    return request(`/api/booklets/available-content?book_type=${encodeURIComponent(bookType)}${qs}`)
+  },
+  bookletContentItem: (projectId: string, sourceType: string, sourceKey: string) =>
+    request(`/api/booklets/content-item?project_id=${encodeURIComponent(projectId)}&source_type=${encodeURIComponent(sourceType)}&source_key=${encodeURIComponent(sourceKey)}`)
+      .then(d => d as { content: string; content_format: 'md' | 'html' }),
+  bookletThemes: () =>
+    request('/api/booklets/themes').then(d => d.themes as {
+      id: string; name: string; source: 'builtin' | 'style_tmpl'
+      colors: { primary: string; accent: string; bg: string; text: string; card_bg?: string; font?: string }
+    }[]),
+  renderBooklet: async (id: string) => {
+    const res = await fetch(`/api/booklets/${id}/render`, { method: 'POST', headers: getAuthHeaders() })
+    if (!res.ok) {
+      let detail = `服务器错误 (${res.status})`
+      try { detail = (await res.json()).detail || detail } catch { /* not json */ }
+      throw new Error(detail)
+    }
+    return res.text()
+  },
 }
