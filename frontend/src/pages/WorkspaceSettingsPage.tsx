@@ -101,6 +101,13 @@ export default function WorkspaceSettingsPage() {
   const [memberRoles, setMemberRoles] = useState<{id:string;name:string}[]>([])
   const [wsSaving, setWsSaving] = useState(false)
 
+  // Project categories
+  const [categories, setCategories] = useState<{id:string;name:string}[]>([])
+  const [newCatName, setNewCatName] = useState('')
+  const [catAdding, setCatAdding] = useState(false)
+  const [editingCatId, setEditingCatId] = useState<string | null>(null)
+  const [editingCatName, setEditingCatName] = useState('')
+
   // Column configs
   const [columnConfigs, setColumnConfigs] = useState<ColumnConfig[]>([])
   const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
@@ -148,6 +155,8 @@ export default function WorkspaceSettingsPage() {
       setWsLogo(ws.logo || '')
       setWsRoleIds(ws.role_ids || [])
       setWsCreatedBy(ws.created_by ?? null)
+
+      api.listCategories(wid).then(d => setCategories((d?.categories || []) as {id:string;name:string}[])).catch(() => {})
 
       // Try loading workspace configs; if empty, copy from seed
       let cc = await api.listColumnConfigs(wid)
@@ -226,6 +235,44 @@ export default function WorkspaceSettingsPage() {
     } catch (e: any) {
       modal.toast('保存失败: ' + e.message, 'error')
     } finally { setWsSaving(false) }
+  }
+
+  const addCategory = async () => {
+    if (!wid || !newCatName.trim()) return
+    setCatAdding(true)
+    try {
+      const cat: any = await api.createCategory(wid, newCatName.trim())
+      if (cat != null) {
+        setCategories(prev => [...prev, { id: cat.id, name: cat.name }])
+        setNewCatName('')
+      }
+    } catch (e: any) {
+      modal.toast('添加失败: ' + e.message, 'error')
+    } finally { setCatAdding(false) }
+  }
+
+  const saveCategoryName = async (catId: string) => {
+    if (!wid || !editingCatName.trim()) return
+    try {
+      await api.updateCategory(wid, catId, editingCatName.trim())
+      setCategories(prev => prev.map(c => c.id === catId ? { ...c, name: editingCatName.trim() } : c))
+      setEditingCatId(null)
+    } catch (e: any) {
+      modal.toast('重命名失败: ' + e.message, 'error')
+    }
+  }
+
+  const removeCategory = async (catId: string, catName: string) => {
+    if (!wid) return
+    const ok = await modal.confirm(`确定删除分类「${catName}」？引用该分类的明细将变为无分类。`)
+    if (!ok) return
+    try {
+      await api.deleteCategory(wid, catId)
+      setCategories(prev => prev.filter(c => c.id !== catId))
+      modal.toast('已删除', 'success')
+    } catch (e: any) {
+      modal.toast('删除失败: ' + e.message, 'error')
+    }
   }
 
   const toggleCol = (id: string) => {
@@ -369,6 +416,52 @@ export default function WorkspaceSettingsPage() {
                 </div>
               </div>
             )}
+            <div className="form-group">
+              <label className="form-label">明细分类</label>
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
+                本项目专属的明细分类，新建明细时可选择，列表页可按分类筛选
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {categories.map(cat => (
+                  <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--card-bg)' }}>
+                    {editingCatId === cat.id ? (
+                      <>
+                        <input className="form-input" style={{ flex: 1, padding: '4px 8px', fontSize: 12 }}
+                          value={editingCatName} autoFocus
+                          onChange={e => setEditingCatName(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') saveCategoryName(cat.id); if (e.key === 'Escape') setEditingCatId(null) }} />
+                        <button className="btn btn-primary btn-sm" onClick={() => saveCategoryName(cat.id)}>保存</button>
+                        <button className="btn btn-ghost btn-sm" onClick={() => setEditingCatId(null)}>取消</button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ flex: 1, fontSize: 12 }}>{cat.name}</span>
+                        {canEdit && <>
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
+                            onClick={() => { setEditingCatId(cat.id); setEditingCatName(cat.name) }}>重命名</button>
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--warning)' }}
+                            onClick={() => removeCategory(cat.id, cat.name)}>删除</button>
+                        </>}
+                      </>
+                    )}
+                  </div>
+                ))}
+                {categories.length === 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', padding: '4px 0' }}>暂无分类</div>
+                )}
+                {canEdit && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input className="form-input" style={{ flex: 1, padding: '4px 8px', fontSize: 12 }}
+                      placeholder="新分类名称" value={newCatName}
+                      onChange={e => setNewCatName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') addCategory() }} />
+                    <button className="btn btn-primary btn-sm" disabled={catAdding || !newCatName.trim()} onClick={addCategory}>
+                      {catAdding ? '添加中...' : '添加'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
             {canEdit && <button className="btn btn-primary btn-sm" onClick={saveWorkspace} disabled={wsSaving}>
               {wsSaving ? '保存中...' : '保存'}
             </button>}

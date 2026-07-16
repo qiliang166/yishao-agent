@@ -16,6 +16,9 @@ interface DlProject {
   name: string
   point_cost_deci: number
   workspace_id: string
+  category_name: string
+  author_id: string
+  author_name: string
   unlocked: {
     is_unlocked: boolean
     unlocked_at: string | null
@@ -31,6 +34,21 @@ export default function MemberDownloadsPage() {
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
   const [toast, setToast] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [authorDialog, setAuthorDialog] = useState<{ name: string; intro: string; license_text: string } | null>(null)
+  const [authorLoading, setAuthorLoading] = useState(false)
+
+  const openAuthorDialog = async (authorId: string) => {
+    if (authorLoading) return
+    setAuthorLoading(true)
+    try {
+      const a = await api.getAuthorPublic(authorId)
+      if (a != null) setAuthorDialog(a)
+    } catch (e: any) {
+      showToast(`加载作者信息失败: ${e?.message || e}`)
+    } finally {
+      setAuthorLoading(false)
+    }
+  }
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -242,6 +260,21 @@ export default function MemberDownloadsPage() {
                       transition: 'transform 0.15s',
                     }}>▼</span>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>{proj.name}</span>
+                  {proj.category_name && (
+                    <span style={{
+                      fontSize: 10, color: 'var(--primary)', background: 'var(--primary-light, rgba(59,130,246,0.12))',
+                      padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap',
+                    }}>{proj.category_name}</span>
+                  )}
+                  {proj.author_name && proj.author_id && (
+                    <span
+                      onClick={() => openAuthorDialog(proj.author_id)}
+                      title="点击查看作者简介与授权说明"
+                      style={{
+                        fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
+                        padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap', cursor: 'pointer',
+                      }}>✍ {proj.author_name}</span>
+                  )}
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     {proj.files.length} 个文件
                   </span>
@@ -305,6 +338,41 @@ export default function MemberDownloadsPage() {
           onConfirm={handleUnlockConfirm}
           onCancel={() => { setUnlockCheck(null); setUnlockProject(null); setUnlockPendingFiles([]) }}
         />
+      )}
+
+      {authorDialog && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setAuthorDialog(null)}>
+          <div style={{
+            background: 'var(--bg-primary, #fff)', borderRadius: 12, padding: 24, width: 420,
+            maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <span style={{ fontSize: 20 }}>✍</span>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{authorDialog.name}</h2>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>作者简介</div>
+              <div style={{ fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                {authorDialog.intro || '暂无简介'}
+              </div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>授权说明</div>
+              <div style={{
+                fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap',
+                background: 'var(--bg-secondary, #f5f5f5)', padding: '10px 12px', borderRadius: 6,
+              }}>
+                {authorDialog.license_text || '暂无授权说明'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary btn-sm" onClick={() => setAuthorDialog(null)}>关闭</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

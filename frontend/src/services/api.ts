@@ -130,6 +130,10 @@ export interface Project {
   is_downloadable?: number
   copied_from_project_id?: string
   workspace_id?: string
+  category_id?: string
+  author_id?: string
+  category_name?: string
+  author_name?: string
   created_by?: string
   created_at: string
   updated_at: string
@@ -220,15 +224,39 @@ export const api = {
   },
   getProject: (id: string) => request(`/api/projects/${id}`),
   listProjectVideos: (id: string) => request(`/api/projects/${id}/videos`),
-  createProject: (name: string, workspaceId: string, opts?: { point_cost_deci?: number; is_downloadable?: number }) =>
+  createProject: (name: string, workspaceId: string, opts?: { point_cost_deci?: number; is_downloadable?: number; category_id?: string; author_id?: string }) =>
     request('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, workspace_id: workspaceId, source_type: 'text', ...opts }),
     }),
-  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number; point_cost_deci?: number; is_downloadable?: number}) =>
+  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number; point_cost_deci?: number; is_downloadable?: number; category_id?: string; author_id?: string}) =>
     request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
+
+  // Project categories (per-workspace)
+  listCategories: (workspaceId: string) =>
+    request(`/api/workspaces/${workspaceId}/categories`).then(d => d as { categories: { id: string; name: string; sort_order: number }[] }),
+  createCategory: (workspaceId: string, name: string) =>
+    request(`/api/workspaces/${workspaceId}/categories`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }),
+  updateCategory: (workspaceId: string, categoryId: string, name: string) =>
+    request(`/api/workspaces/${workspaceId}/categories/${categoryId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }),
+  deleteCategory: (workspaceId: string, categoryId: string) =>
+    request(`/api/workspaces/${workspaceId}/categories/${categoryId}`, { method: 'DELETE' }),
+
+  // Authors (global attribution)
+  listAuthors: () =>
+    request('/api/authors').then(d => d as { authors: { id: string; name: string; intro: string; license_text: string; created_at: string }[] }),
+  listAuthorOptions: () =>
+    request('/api/authors/options').then(d => d as { authors: { id: string; name: string }[] }),
+  getAuthorPublic: (authorId: string) =>
+    request(`/api/authors/${authorId}/public`).then(d => d as { id: string; name: string; intro: string; license_text: string }),
+  createAuthor: (data: { name: string; intro?: string; license_text?: string }) =>
+    request('/api/authors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  updateAuthor: (authorId: string, data: { name?: string; intro?: string; license_text?: string }) =>
+    request(`/api/authors/${authorId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  deleteAuthor: (authorId: string) =>
+    request(`/api/authors/${authorId}`, { method: 'DELETE' }),
   batchDeleteProjects: (ids: string[]) =>
     request('/api/projects/batch-delete', {
       method: 'POST',
@@ -1129,8 +1157,9 @@ export const api = {
   getDownloadableProjects: () =>
     request('/api/member/downloadable-projects').then(d => d as {
       projects: { id: string; name: string; point_cost_deci: number; workspace_id: string;
+        category_name: string; author_id: string; author_name: string;
         unlocked: { is_unlocked: boolean; unlocked_at: string | null; expires_at: string | null };
-        files: { filename: string; size: number; ext: string; category: string; download_url: string }[];
+        files: { filename: string; display_name: string; size: number; ext: string; category: string; download_url: string }[];
       }[]
     }),
 

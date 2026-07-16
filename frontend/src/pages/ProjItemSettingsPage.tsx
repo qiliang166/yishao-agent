@@ -64,6 +64,10 @@ export default function ProjItemSettingsPage() {
   const [projCopyright, setProjCopyright] = useState('')
   const [projSignature, setProjSignature] = useState('')
   const [projSaving, setProjSaving] = useState(false)
+  const [projCategoryId, setProjCategoryId] = useState('')
+  const [projAuthorId, setProjAuthorId] = useState('')
+  const [categories, setCategories] = useState<{id:string;name:string}[]>([])
+  const [authorOptions, setAuthorOptions] = useState<{id:string;name:string}[]>([])
 
   // Column prompt values: itemId → { prompt, skill }
   const [colValues, setColValues] = useState<Record<string, { prompt: string; skill: string }>>({})
@@ -122,7 +126,16 @@ export default function ProjItemSettingsPage() {
   // Load project name
   useEffect(() => {
     if (!projectId) return
-    api.getProject(projectId).then((d: any) => { setProjName(d.name || ''); setProjCreatedBy(d.created_by ?? null) }).catch(() => {})
+    api.getProject(projectId).then((d: any) => {
+      setProjName(d.name || '')
+      setProjCreatedBy(d.created_by ?? null)
+      setProjCategoryId(d.category_id || '')
+      setProjAuthorId(d.author_id || '')
+      if (d.workspace_id) {
+        api.listCategories(d.workspace_id).then(r => setCategories((r?.categories || []) as {id:string;name:string}[])).catch(() => {})
+      }
+    }).catch(() => {})
+    api.listAuthorOptions().then(r => setAuthorOptions((r?.authors || []) as {id:string;name:string}[])).catch(() => {})
   }, [projectId])
 
   const handleInitFromFactory = async () => {
@@ -172,7 +185,7 @@ export default function ProjItemSettingsPage() {
     setProjSaving(true)
     try {
       // Update project name
-      await api.updateProject(projectId, { name: projName })
+      await api.updateProject(projectId, { name: projName, category_id: projCategoryId, author_id: projAuthorId })
       // Update or create project_config item
       const cfgItem = items.find(i => i.output_mode === 'project_config')
       const configJson = JSON.stringify({ copyright: projCopyright, signature: projSignature })
@@ -262,6 +275,22 @@ export default function ProjItemSettingsPage() {
                 <div className="ac-field">
                   <label>项目名称</label>
                   <input className="form-input" value={projName} onChange={e => setProjName(e.target.value)} disabled={!canEdit} />
+                </div>
+                <div className="ac-field">
+                  <label>分类</label>
+                  <select className="form-input" value={projCategoryId}
+                    onChange={e => setProjCategoryId(e.target.value)} disabled={!canEdit}>
+                    <option value="">无分类</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="ac-field">
+                  <label>出处作者</label>
+                  <select className="form-input" value={projAuthorId}
+                    onChange={e => setProjAuthorId(e.target.value)} disabled={!canEdit}>
+                    <option value="">无署名</option>
+                    {authorOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
                 </div>
               </div>
               <div className="ac-field-row">

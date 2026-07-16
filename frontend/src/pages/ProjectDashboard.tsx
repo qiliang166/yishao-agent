@@ -54,6 +54,11 @@ export default function ProjectDashboard() {
   const [createName, setCreateName] = useState('')
   const [createPointCost, setCreatePointCost] = useState('0.5')
   const [createDownloadable, setCreateDownloadable] = useState(false)
+  const [createCategoryId, setCreateCategoryId] = useState('')
+  const [createAuthorId, setCreateAuthorId] = useState('')
+  const [categories, setCategories] = useState<{id:string;name:string}[]>([])
+  const [authorOptions, setAuthorOptions] = useState<{id:string;name:string}[]>([])
+  const [catFilter, setCatFilter] = useState('')
   const [createCopy, setCreateCopy] = useState(false)
   const [createSourceQuery, setCreateSourceQuery] = useState('')
   const [createSourceId, setCreateSourceId] = useState('')
@@ -85,6 +90,8 @@ export default function ProjectDashboard() {
   useEffect(() => {
     if (!wid) return
     api.getWorkspace(wid).then(setWorkspace).catch(() => {})
+    api.listCategories(wid).then(d => setCategories((d?.categories || []) as {id:string;name:string}[])).catch(() => {})
+    api.listAuthorOptions().then(d => setAuthorOptions((d?.authors || []) as {id:string;name:string}[])).catch(() => {})
   }, [wid])
 
   useEffect(() => {
@@ -121,6 +128,8 @@ export default function ProjectDashboard() {
     setCreateSourceQuery('')
     setCreateSourceId('')
     setCreateSourceName('')
+    setCreateCategoryId('')
+    setCreateAuthorId('')
     setSrcDropdown(false)
     try {
       const data = await api.listProjects(1, 1000, wid)
@@ -140,6 +149,8 @@ export default function ProjectDashboard() {
       const project = await api.createProject(createName.trim(), wid, {
         point_cost_deci: costDeci,
         is_downloadable: createDownloadable ? 1 : 0,
+        category_id: createCategoryId || undefined,
+        author_id: createAuthorId || undefined,
       })
       if (createCopy && createSourceId) {
         try {
@@ -485,9 +496,10 @@ export default function ProjectDashboard() {
     return acc
   }, {})
 
-  const filtered = search
-    ? projects.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
-    : projects
+  const filtered = projects.filter(p =>
+    (!search || p.name.toLowerCase().includes(search.toLowerCase())) &&
+    (!catFilter || (p as any).category_id === catFilter)
+  )
 
   const filteredProjectFiles = fileSearch
     ? projectFiles.filter(f => f.filename.toLowerCase().includes(fileSearch.toLowerCase()))
@@ -503,6 +515,13 @@ export default function ProjectDashboard() {
         <input className="form-input" type="text" placeholder="搜索明细..."
           style={{ flex: 1, maxWidth: 300 }}
           value={search} onChange={e => setSearch(e.target.value)} />
+        {categories.length > 0 && (
+          <select className="form-input" style={{ width: 140, fontSize: 12 }}
+            value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+            <option value="">全部分类</option>
+            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
         <HelpButton location="dashboard" />
         {canCreate && <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建明细</button>}
 
@@ -584,6 +603,18 @@ export default function ProjectDashboard() {
                 )}
                 <span className="pc-name" style={{ cursor: 'pointer' }}
                   onClick={() => navigate(projectUrl(p.id))}>{p.name}</span>
+                {p.category_name && (
+                  <span style={{
+                    fontSize: 10, color: 'var(--primary)', background: 'var(--primary-light, rgba(59,130,246,0.12))',
+                    padding: '1px 6px', borderRadius: 3, marginLeft: 4, whiteSpace: 'nowrap',
+                  }}>{p.category_name}</span>
+                )}
+                {p.author_name && (
+                  <span style={{
+                    fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
+                    padding: '1px 6px', borderRadius: 3, marginLeft: 2, whiteSpace: 'nowrap',
+                  }}>✍ {p.author_name}</span>
+                )}
                 {p.copied_from_project_id && (
                   <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 4 }} title="从其他明细复制">📋</span>
                 )}
@@ -890,6 +921,31 @@ export default function ProjectDashboard() {
                 onKeyDown={e => { if (e.key === 'Enter' && createName.trim()) handleCreate() }}
                 placeholder="输入明细名称" autoFocus />
             </div>
+
+            {(categories.length > 0 || authorOptions.length > 0) && (
+              <div className="form-group" style={{ display: 'flex', gap: 12 }}>
+                {categories.length > 0 && (
+                  <div style={{ flex: 1 }}>
+                    <label className="form-label">分类</label>
+                    <select className="form-input" value={createCategoryId}
+                      onChange={e => setCreateCategoryId(e.target.value)} style={{ fontSize: 13 }}>
+                      <option value="">无分类</option>
+                      {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                )}
+                {authorOptions.length > 0 && (
+                  <div style={{ flex: 1 }}>
+                    <label className="form-label">出处作者</label>
+                    <select className="form-input" value={createAuthorId}
+                      onChange={e => setCreateAuthorId(e.target.value)} style={{ fontSize: 13 }}>
+                      <option value="">无署名</option>
+                      {authorOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">下载所需积分</label>

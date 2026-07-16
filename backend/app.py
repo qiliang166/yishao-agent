@@ -972,7 +972,13 @@ def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", re
                     "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                     (page_size, offset)
                 ).fetchall()
-        return {"projects": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+        projects = [dict(r) for r in rows]
+        cat_map = {c["id"]: c["name"] for c in db.execute("SELECT id, name FROM project_categories").fetchall()}
+        auth_map = {a["id"]: a["name"] for a in db.execute("SELECT id, name FROM authors").fetchall()}
+        for p in projects:
+            p["category_name"] = cat_map.get(p.get("category_id") or "", "")
+            p["author_name"] = auth_map.get(p.get("author_id") or "", "")
+        return {"projects": projects, "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
 
@@ -1100,10 +1106,11 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         project_code = f"KH{today}-{today_count + 1:04d}"
 
         db.execute(
-            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable, category_id, author_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, user["sub"],
              req.point_cost_deci if req.point_cost_deci is not None else 5,
-             req.is_downloadable if req.is_downloadable is not None else 0))
+             req.is_downloadable if req.is_downloadable is not None else 0,
+             req.category_id or "", req.author_id or ""))
         db.commit()
         # Initialize project_items from workspace configs
         _init_project_items_from_factory(pid, req.workspace_id)
@@ -1516,9 +1523,171 @@ def update_project(project_id: str, req: ProjectUpdate, user=require_perm("proje
             db.execute("UPDATE projects SET point_cost_deci = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.point_cost_deci, project_id))
         if req.is_downloadable is not None:
             db.execute("UPDATE projects SET is_downloadable = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.is_downloadable, project_id))
+        if req.category_id is not None:
+            db.execute("UPDATE projects SET category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.category_id, project_id))
+        if req.author_id is not None:
+            db.execute("UPDATE projects SET author_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.author_id, project_id))
         db.commit()
         row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
         return dict(row)
+    finally:
+        db.close()
+
+
+# ── Project Categories (per-workspace) ──
+
+@app.get("/api/workspaces/{workspace_id}/categories")
+def list_project_categories(workspace_id: str, request: Request):
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM project_categories WHERE workspace_id = ? ORDER BY sort_order, created_at",
+            (workspace_id,)).fetchall()
+        return {"categories": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/workspaces/{workspace_id}/categories")
+def create_project_category(workspace_id: str, req: dict, user=require_perm("config.project")):
+    name = (req.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "分类名称不能为空")
+    db = get_db()
+    try:
+        cid = f"pc-{uuid.uuid4().hex[:8]}"
+        max_order = db.execute(
+            "SELECT COALESCE(MAX(sort_order), 0) FROM project_categories WHERE workspace_id = ?",
+            (workspace_id,)).fetchone()[0]
+        db.execute(
+            "INSERT INTO project_categories (id, workspace_id, name, sort_order) VALUES (?, ?, ?, ?)",
+            (cid, workspace_id, name, max_order + 1))
+        db.commit()
+        row = db.execute("SELECT * FROM project_categories WHERE id = ?", (cid,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.put("/api/workspaces/{workspace_id}/categories/{category_id}")
+def update_project_category(workspace_id: str, category_id: str, req: dict, user=require_perm("config.project")):
+    name = (req.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "分类名称不能为空")
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE project_categories SET name = ? WHERE id = ? AND workspace_id = ?",
+            (name, category_id, workspace_id))
+        db.commit()
+        row = db.execute("SELECT * FROM project_categories WHERE id = ?", (category_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "分类不存在")
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.delete("/api/workspaces/{workspace_id}/categories/{category_id}")
+def delete_project_category(workspace_id: str, category_id: str, user=require_perm("config.project")):
+    db = get_db()
+    try:
+        db.execute("UPDATE projects SET category_id = '' WHERE category_id = ?", (category_id,))
+        db.execute("DELETE FROM project_categories WHERE id = ? AND workspace_id = ?",
+                   (category_id, workspace_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+# ── Authors (global attribution) ──
+
+@app.get("/api/authors")
+def list_authors(user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        rows = db.execute("SELECT * FROM authors ORDER BY created_at").fetchall()
+        return {"authors": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.get("/api/authors/options")
+def list_author_options(request: Request):
+    """Lightweight author list (id + name) for project selectors."""
+    db = get_db()
+    try:
+        rows = db.execute("SELECT id, name FROM authors ORDER BY created_at").fetchall()
+        return {"authors": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.get("/api/authors/{author_id}/public")
+def get_author_public(author_id: str, request: Request):
+    """Public author profile for member-facing attribution dialog."""
+    db = get_db()
+    try:
+        row = db.execute(
+            "SELECT id, name, intro, license_text FROM authors WHERE id = ?",
+            (author_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "作者不存在")
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.post("/api/authors")
+def create_author(req: dict, user=require_perm("member.manage")):
+    name = (req.get("name") or "").strip()
+    if not name:
+        raise HTTPException(400, "作者姓名不能为空")
+    db = get_db()
+    try:
+        aid = f"au-{uuid.uuid4().hex[:8]}"
+        db.execute(
+            "INSERT INTO authors (id, name, intro, license_text) VALUES (?, ?, ?, ?)",
+            (aid, name, req.get("intro") or "", req.get("license_text") or ""))
+        db.commit()
+        row = db.execute("SELECT * FROM authors WHERE id = ?", (aid,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.put("/api/authors/{author_id}")
+def update_author(author_id: str, req: dict, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        existing = db.execute("SELECT id FROM authors WHERE id = ?", (author_id,)).fetchone()
+        if not existing:
+            raise HTTPException(404, "作者不存在")
+        if req.get("name") is not None:
+            name = (req.get("name") or "").strip()
+            if not name:
+                raise HTTPException(400, "作者姓名不能为空")
+            db.execute("UPDATE authors SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (name, author_id))
+        if req.get("intro") is not None:
+            db.execute("UPDATE authors SET intro = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.get("intro"), author_id))
+        if req.get("license_text") is not None:
+            db.execute("UPDATE authors SET license_text = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.get("license_text"), author_id))
+        db.commit()
+        row = db.execute("SELECT * FROM authors WHERE id = ?", (author_id,)).fetchone()
+        return dict(row)
+    finally:
+        db.close()
+
+
+@app.delete("/api/authors/{author_id}")
+def delete_author(author_id: str, user=require_perm("member.manage")):
+    db = get_db()
+    try:
+        db.execute("UPDATE projects SET author_id = '' WHERE author_id = ?", (author_id,))
+        db.execute("DELETE FROM authors WHERE id = ?", (author_id,))
+        db.commit()
+        return {"ok": True}
     finally:
         db.close()
 
@@ -5110,6 +5279,8 @@ def api_downloadable_projects(user=Depends(get_current_user)):
         ).fetchall()
 
         projects = []
+        cat_map = {c["id"]: c["name"] for c in db.execute("SELECT id, name FROM project_categories").fetchall()}
+        auth_map = {a["id"]: a["name"] for a in db.execute("SELECT id, name FROM authors").fetchall()}
         for row in rows:
             pid = row["id"]
             unlocked = db.execute(
@@ -5138,6 +5309,9 @@ def api_downloadable_projects(user=Depends(get_current_user)):
                 "point_cost_deci": row["point_cost_deci"] or 5,
                 "is_downloadable": row["is_downloadable"],
                 "workspace_id": row["workspace_id"],
+                "category_name": cat_map.get(row["category_id"] or "", ""),
+                "author_id": row["author_id"] or "",
+                "author_name": auth_map.get(row["author_id"] or "", ""),
                 "unlocked": {
                     "is_unlocked": unlocked is not None,
                     "unlocked_at": unlocked["unlocked_at"] if unlocked else None,
@@ -5451,10 +5625,15 @@ def api_download_stats_projects(user=require_perm("member.manage")):
     db = get_db()
     try:
         rows = db.execute(
-            """SELECT p.id, p.name, p.download_count, p.point_cost_deci, p.is_downloadable,
+            """SELECT p.id as project_id, p.name as project_name,
+                      p.download_count, p.point_cost_deci, p.is_downloadable,
+                      p.category_id, p.author_id,
+                      pc.name as category_name, au.name as author_name,
                       COUNT(dl.id) as total_logs
                FROM projects p
                LEFT JOIN download_logs dl ON dl.project_id = p.id
+               LEFT JOIN project_categories pc ON pc.id = p.category_id
+               LEFT JOIN authors au ON au.id = p.author_id
                WHERE p.is_downloadable = 1
                GROUP BY p.id
                ORDER BY p.download_count DESC""",

@@ -1309,6 +1309,36 @@ def init_db():
         except Exception as e:
             print(f"[DB] Warning: could not add rate to payment_records: {e}")
 
+        # Migrate: project categories + authors (attribution)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_categories (
+                id TEXT PRIMARY KEY,
+                workspace_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                sort_order INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pcat_ws ON project_categories(workspace_id)")
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS authors (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                intro TEXT DEFAULT '',
+                license_text TEXT DEFAULT '',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        try:
+            proj_cols2 = [r[1] for r in conn.execute("PRAGMA table_info(projects)").fetchall()]
+            if "category_id" not in proj_cols2:
+                conn.execute("ALTER TABLE projects ADD COLUMN category_id TEXT DEFAULT ''")
+            if "author_id" not in proj_cols2:
+                conn.execute("ALTER TABLE projects ADD COLUMN author_id TEXT DEFAULT ''")
+        except Exception as e:
+            print(f"[DB] Warning: could not add category/author columns to projects: {e}")
+
         conn.commit()
     finally:
         conn.close()

@@ -27,6 +27,8 @@ class ProjectCreate(BaseModel):
     copied_from_project_id: Optional[str] = None
     point_cost_deci: Optional[int] = None
     is_downloadable: Optional[int] = None
+    category_id: Optional[str] = None
+    author_id: Optional[str] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -36,6 +38,8 @@ class ProjectUpdate(BaseModel):
     is_locked: Optional[int] = None
     point_cost_deci: Optional[int] = None
     is_downloadable: Optional[int] = None
+    category_id: Optional[str] = None
+    author_id: Optional[str] = None
 
 
 class StepResultSave(BaseModel):
