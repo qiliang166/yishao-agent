@@ -15,6 +15,7 @@
 import base64
 import html as html_lib
 import importlib.util
+import io
 import json
 import os
 import re
@@ -22,7 +23,7 @@ import uuid
 from datetime import date
 from urllib.parse import quote as url_quote
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
 from database import get_db
@@ -669,6 +670,168 @@ def content_item(request: Request, project_id: str, source_type: str, source_key
 def list_themes(request: Request):
     _require_user(request)
     return {"themes": _all_themes()}
+
+
+# ── API #10 文件导入（docx/xlsx → Markdown） ──
+
+_IMPORT_MAX_BYTES = 15 * 1024 * 1024
+_IMPORT_IMG_MAX_BYTES = 2 * 1024 * 1024
+_XLSX_MAX_SHEETS = 5
+_XLSX_MAX_ROWS = 300
+_XLSX_MAX_COLS = 20
+_XLSX_MAX_CELL_CHARS = 500
+
+
+def _md_escape_cell(text: str) -> str:
+    return (text or "").replace("\r", "").replace("\n", " ").replace("|", "\\|").strip()
+
+
+def _docx_para_to_md(para) -> str:
+    """段落 → md 行：标题样式→#、加粗 run→**、内嵌图片→base64 data URI。"""
+    from docx.oxml.ns import qn
+
+    # 标题级别（style_id Heading1-9；中文 Word 的内置标题 style_id 不变）
+    style = para.style
+    style_id = getattr(style, "style_id", "") or ""
+    style_name = getattr(style, "name", "") or ""
+    level = 0
+    m = re.match(r"^Heading\s*(\d)$", style_id) or re.match(r"^(?:Heading|标题)\s*(\d)$", style_name)
+    if m:
+        level = min(int(m.group(1)), 6)
+
+    is_list = "List" in style_id or "List" in style_name or para._p.find(".//" + qn("w:numPr")) is not None
+
+    parts = []
+    bold_buf = []
+
+    def _flush_bold():
+        if bold_buf:
+            parts.append("**" + "".join(bold_buf) + "**")
+            bold_buf.clear()
+
+    for run in para.runs:
+        # 内嵌图片（≤2MB 才内联，超限跳过）
+        for blip in run._element.findall(".//" + qn("a:blip")):
+            rid = blip.get(qn("r:embed"))
+            if rid and rid in para.part.related_parts:
+                img_part = para.part.related_parts[rid]
+                blob = getattr(img_part, "blob", b"")
+                if blob and len(blob) <= _IMPORT_IMG_MAX_BYTES:
+                    _flush_bold()
+                    ct = getattr(img_part, "content_type", "") or "image/png"
+                    parts.append(f"\n![图片](data:{ct};base64,{base64.b64encode(blob).decode()})\n")
+        text = run.text or ""
+        if not text:
+            continue
+        if run.bold and not level:
+            bold_buf.append(text)
+        else:
+            _flush_bold()
+            parts.append(text)
+    _flush_bold()
+
+    line = "".join(parts)
+    if not line.strip():
+        return line.strip()
+    if level:
+        return "#" * level + " " + line.strip()
+    if is_list:
+        return "- " + line.strip()
+    return line
+
+
+def _docx_table_to_md(table) -> str:
+    rows = []
+    for r in table.rows:
+        cells = [_md_escape_cell(c.text) for c in r.cells]
+        rows.append(cells)
+    if not rows:
+        return ""
+    width = max(len(r) for r in rows)
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    out = ["| " + " | ".join(rows[0]) + " |", "|" + " --- |" * width]
+    for r in rows[1:]:
+        out.append("| " + " | ".join(r) + " |")
+    return "\n".join(out)
+
+
+def _docx_to_markdown(data: bytes) -> str:
+    try:
+        import docx
+        from docx.oxml.ns import qn
+        from docx.table import Table
+        from docx.text.paragraph import Paragraph
+    except ImportError:
+        raise HTTPException(500, "服务器缺少 python-docx 组件，无法解析 Word 文件")
+    try:
+        document = docx.Document(io.BytesIO(data))
+    except Exception:
+        raise HTTPException(400, "无法解析该 Word 文件 — 请确认是有效的 .docx（老版 .doc 请先另存为 .docx）")
+
+    lines = []
+    for child in document.element.body.iterchildren():
+        if child.tag == qn("w:p"):
+            md = _docx_para_to_md(Paragraph(child, document))
+            lines.append(md)
+        elif child.tag == qn("w:tbl"):
+            md = _docx_table_to_md(Table(child, document))
+            if md:
+                lines.append("")
+                lines.append(md)
+                lines.append("")
+    # 折叠连续空行
+    text = "\n".join(lines)
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
+def _xlsx_to_markdown(data: bytes) -> str:
+    try:
+        import openpyxl
+    except ImportError:
+        raise HTTPException(500, "服务器缺少 openpyxl 组件，无法解析 Excel 文件")
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except Exception:
+        raise HTTPException(400, "无法解析该 Excel 文件 — 请确认是有效的 .xlsx")
+
+    sections = []
+    for ws in wb.worksheets[:_XLSX_MAX_SHEETS]:
+        rows = []
+        for row in ws.iter_rows(max_row=_XLSX_MAX_ROWS, max_col=_XLSX_MAX_COLS, values_only=True):
+            cells = ["" if v is None else str(v)[:_XLSX_MAX_CELL_CHARS] for v in row]
+            if any(c.strip() for c in cells):
+                rows.append([_md_escape_cell(c) for c in cells])
+        if not rows:
+            continue
+        width = max(len(r) for r in rows)
+        rows = [r + [""] * (width - len(r)) for r in rows]
+        table = ["| " + " | ".join(rows[0]) + " |", "|" + " --- |" * width]
+        for r in rows[1:]:
+            table.append("| " + " | ".join(r) + " |")
+        title = f"### {ws.title}\n\n" if len(wb.worksheets) > 1 else ""
+        sections.append(title + "\n".join(table))
+    wb.close()
+    return "\n\n".join(sections).strip()
+
+
+@router.post("/import-file")
+async def import_file(request: Request, file: UploadFile = File(...)):
+    _require_user(request)
+    name = file.filename or ""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext == "doc":
+        raise HTTPException(400, "暂不支持老版 .doc 格式 — 请用 Word 打开后「另存为 .docx」再导入")
+    if ext not in ("docx", "xlsx"):
+        raise HTTPException(400, f"不支持的文件类型: .{ext}（支持 .docx / .xlsx）")
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "文件内容为空")
+    if len(data) > _IMPORT_MAX_BYTES:
+        raise HTTPException(400, "文件超过 15MB 上限")
+    md = _docx_to_markdown(data) if ext == "docx" else _xlsx_to_markdown(data)
+    if not md.strip():
+        raise HTTPException(400, "未能从文件中提取到内容")
+    return {"markdown": md, "filename": name}
 
 
 # ══ 草稿 CRUD ══

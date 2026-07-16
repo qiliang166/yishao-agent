@@ -111,8 +111,23 @@ export default function StepContent({ draft, onChange }: Props) {
     }
   }
 
+  const [importing, setImporting] = useState(false)
+
   const handleImportFile = async (file: File) => {
+    const officeExt = /\.(docx?|xlsx)$/i.exec(file.name)?.[1]?.toLowerCase()
     try {
+      if (officeExt) {
+        // Word/Excel 走服务端转 Markdown
+        setImporting(true)
+        const r = await api.bookletImportFile(file)
+        if (r != null && r.markdown) {
+          setCustomFormat('md')
+          setCustomText(r.markdown)
+          if (!customTitle.trim()) setCustomTitle(file.name.replace(/\.(docx?|xlsx)$/i, ''))
+          toast(`已导入 ${file.name}（已转换为可编辑文本）`, 'success')
+        }
+        return
+      }
       const text = await file.text()
       if (text == null || !text.trim()) { toast('文件内容为空', 'error'); return }
       const isHtmlFile = /\.html?$/i.test(file.name)
@@ -124,6 +139,8 @@ export default function StepContent({ draft, onChange }: Props) {
         : `已导入 ${file.name}`, 'success')
     } catch (e: any) {
       toast(`导入失败: ${e?.message || e}`, 'error')
+    } finally {
+      setImporting(false)
     }
   }
 
@@ -193,11 +210,12 @@ export default function StepContent({ draft, onChange }: Props) {
                 </div>
               )}
               <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
-                  📁 导入文件
-                  <input type="file" accept=".md,.txt,.html,.htm" style={{ display: 'none' }}
+                <label className="btn btn-ghost btn-sm" style={{ cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.6 : 1 }}>
+                  {importing ? '⏳ 转换中...' : '📁 导入文件'}
+                  <input type="file" accept=".md,.txt,.html,.htm,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={importing}
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = '' }} />
                 </label>
+                <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>支持 md/txt/html/Word/Excel</span>
                 <span style={{ flex: 1 }} />
                 <button className="btn btn-ghost btn-sm" onClick={resetCustom}>取消</button>
                 <button className="btn btn-primary btn-sm" onClick={handleAddCustom}>加入册子</button>

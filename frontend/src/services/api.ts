@@ -1251,4 +1251,12 @@ export const api = {
     }
     return res.text()
   },
+  bookletImportFile: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/booklets/import-file', { method: 'POST', body: formData, headers: getAuthHeaders() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || '导入失败')
+    return data as { markdown: string; filename: string }
+  },
 }
