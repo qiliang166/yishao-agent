@@ -1,4 +1,13 @@
-"""Prompt Studio — LLM generates all configs from industry topic + purpose description."""
+"""Prompt Studio — LLM generates all configs from industry topic + purpose description.
+
+结构契约（代码即契约）：
+- column_configs 必须覆盖 9 个 slot，前端按 sort_order/name 消费：
+  col1 sort 0/1/2 = 直接输入/视频/文件三种素材入口（ProjectPage applyCol12Configs）
+  col2 sort 3/4/5 = 标准/分析/综合三份文档
+  col3/col4/col5 按 name 精确匹配 文档课件/分析PPT/综合PPT
+- speech/tts 前端按 label 精确匹配，label 固定为三类
+- 应用 = 原子替换目标工作区全部配置；id 由服务端生成，杜绝跨工作区主键冲突
+"""
 
 import json
 import os
@@ -48,7 +57,28 @@ class UpdateTemplateRequest(BaseModel):
     content: str
 
 
-# ── Config table names for reference loading ──
+# ── Structural contract (single source of truth for validation AND apply) ──
+
+# (slot, column_id, sort_order, forced_label or None)
+COLUMN_SLOTS = [
+    ("c1_text",  "col1", 0, None),
+    ("c1_video", "col1", 1, None),
+    ("c1_file",  "col1", 2, None),
+    ("c2_sop",   "col2", 3, None),
+    ("c2_dao",   "col2", 4, None),
+    ("c2_yanxi", "col2", 5, None),
+    ("c3",       "col3", 6, "文档课件"),
+    ("c4",       "col4", 7, "分析PPT"),
+    ("c5",       "col5", 8, "综合PPT"),
+]
+SLOT_META = {s[0]: (s[1], s[2], s[3]) for s in COLUMN_SLOTS}
+# slots grouped by column, in sort order — used for slot inference on legacy configs
+_SLOTS_BY_COLUMN = {}
+for _s in COLUMN_SLOTS:
+    _SLOTS_BY_COLUMN.setdefault(_s[1], []).append(_s[0])
+
+SPEECH_LABELS = ["文档演讲", "分析演讲", "综合演讲"]
+TTS_LABELS = ["文档语音", "分析语音", "综合语音"]
 
 CONFIG_TABLES = [
     "column_configs",
@@ -222,8 +252,21 @@ async def generate_prompts(req: GenerateRequest):
 
     configs = _parse_llm_response(raw)
     _validate_configs(configs)
+    _ensure_row_ids(configs)
 
     return {"configs": configs, "provider": {"id": provider_id, "model": model}}
+
+
+def _ensure_row_ids(configs: dict):
+    """Fill missing/duplicate row ids — the frontend editor locates rows by id."""
+    seen = set()
+    for table in CONFIG_TABLES:
+        for row in configs.get(table, []):
+            rid = row.get("id")
+            if not rid or rid in seen:
+                rid = _new_id()
+                row["id"] = rid
+            seen.add(rid)
 
 
 def _parse_llm_response(raw: str) -> dict:
@@ -253,23 +296,112 @@ def _parse_llm_response(raw: str) -> dict:
     raise HTTPException(500, f"LLM 返回的内容不是有效的 JSON: {raw[:300]}")
 
 
-def _validate_configs(configs: dict):
-    """Validate the generated configs have the expected structure."""
-    expected = {
-        "column_configs": (5, 5),
-        "speech_configs": (2, 5),
-        "tts_configs": (2, 5),
-        "core_prompt_configs": (25, 40),
-    }
+def _normalize_column_configs(rows: list) -> list:
+    """Ensure every column config row carries a valid slot; infer for legacy configs.
 
-    for table, (min_count, max_count) in expected.items():
-        rows = configs.get(table, [])
-        if not isinstance(rows, list):
-            raise HTTPException(500, f"configs.{table} 必须是数组")
-        if len(rows) < min_count:
-            raise HTTPException(500, f"configs.{table} 至少需要 {min_count} 条，实际生成 {len(rows)} 条")
-        if len(rows) > max_count:
-            raise HTTPException(500, f"configs.{table} 最多 {max_count} 条，实际生成 {len(rows)} 条")
+    Mutates rows in place (fills the `slot` field) and returns them.
+    Raises HTTPException(400) with a precise message when the structure
+    cannot satisfy the 9-slot contract.
+    """
+    if not isinstance(rows, list):
+        raise HTTPException(400, "configs.column_configs 必须是数组")
+
+    has_any_slot = any(r.get("slot") for r in rows)
+    if has_any_slot:
+        seen = set()
+        for r in rows:
+            slot = r.get("slot", "")
+            if slot not in SLOT_META:
+                raise HTTPException(400, f"column_configs 存在无效 slot: {slot!r}，有效值: {', '.join(SLOT_META)}")
+            if slot in seen:
+                raise HTTPException(400, f"column_configs 的 slot 重复: {slot}")
+            seen.add(slot)
+        missing = [s for s in SLOT_META if s not in seen]
+        if missing:
+            raise HTTPException(400, f"column_configs 缺少 slot: {', '.join(missing)}，请重新生成完整配置")
+    else:
+        # Legacy configs (no slot field): infer by column_id grouping.
+        by_col = {}
+        for r in rows:
+            by_col.setdefault(r.get("column_id", ""), []).append(r)
+        expected_counts = {col: len(slots) for col, slots in _SLOTS_BY_COLUMN.items()}
+        problems = []
+        for col, cnt in expected_counts.items():
+            actual = len(by_col.get(col, []))
+            if actual != cnt:
+                problems.append(f"{col} 需要 {cnt} 条，实际 {actual} 条")
+        extra_cols = [c for c in by_col if c not in expected_counts]
+        if extra_cols:
+            problems.append(f"存在未知列: {', '.join(extra_cols)}")
+        if problems:
+            raise HTTPException(
+                400,
+                "该配置结构不完整，无法应用（" + "；".join(problems)
+                + "）。旧版生成的配置不满足 9 项列配置契约，请在提示词工作室重新生成。")
+        for col, slots in _SLOTS_BY_COLUMN.items():
+            for slot, r in zip(slots, by_col[col]):
+                r["slot"] = slot
+
+    # Per-row content checks + enforce fixed labels
+    for r in rows:
+        slot = r["slot"]
+        column_id, _sort, forced_label = SLOT_META[slot]
+        r["column_id"] = column_id
+        if forced_label:
+            r["label"] = forced_label
+        if not (r.get("label") or "").strip():
+            raise HTTPException(400, f"column_configs slot {slot} 缺少 label")
+        if not (r.get("prompt") or "").strip():
+            raise HTTPException(400, f"column_configs slot {slot} 的 prompt 为空，请重新生成")
+        if not (r.get("skill") or "").strip():
+            raise HTTPException(400, f"column_configs slot {slot} 的 skill 为空，请重新生成")
+    return rows
+
+
+def _normalize_labeled_configs(rows: list, required_labels: list, table: str) -> list:
+    """Validate speech/tts configs: exactly one row per required label."""
+    if not isinstance(rows, list):
+        raise HTTPException(400, f"configs.{table} 必须是数组")
+    by_label = {}
+    for r in rows:
+        label = (r.get("label") or "").strip()
+        if label not in required_labels:
+            raise HTTPException(
+                400,
+                f"{table} 存在无效 label: {label!r}，label 必须为: {', '.join(required_labels)}（前端按 label 匹配，不可自定义）")
+        if label in by_label:
+            raise HTTPException(400, f"{table} 的 label 重复: {label}")
+        if not (r.get("prompt") or "").strip():
+            raise HTTPException(400, f"{table}「{label}」的 prompt 为空，请重新生成")
+        by_label[label] = r
+    missing = [l for l in required_labels if l not in by_label]
+    if missing:
+        raise HTTPException(400, f"{table} 缺少: {', '.join(missing)}，请重新生成完整配置")
+    # Return in canonical label order so sort_order is deterministic
+    return [by_label[l] for l in required_labels]
+
+
+def _validate_configs(configs: dict):
+    """Validate + normalize the generated configs against the structural contract."""
+    configs["column_configs"] = _normalize_column_configs(configs.get("column_configs", []))
+    configs["speech_configs"] = _normalize_labeled_configs(
+        configs.get("speech_configs", []), SPEECH_LABELS, "speech_configs")
+    configs["tts_configs"] = _normalize_labeled_configs(
+        configs.get("tts_configs", []), TTS_LABELS, "tts_configs")
+
+    core_rows = configs.get("core_prompt_configs", [])
+    if not isinstance(core_rows, list):
+        raise HTTPException(400, "configs.core_prompt_configs 必须是数组")
+    if not (25 <= len(core_rows) <= 40):
+        raise HTTPException(400, f"core_prompt_configs 需要 25-40 条，实际 {len(core_rows)} 条")
+    seen_keys = set()
+    for r in core_rows:
+        key = (r.get("prompt_key") or "").strip()
+        if not key:
+            raise HTTPException(400, "core_prompt_configs 存在空 prompt_key")
+        if key in seen_keys:
+            raise HTTPException(400, f"core_prompt_configs 的 prompt_key 重复: {key}")
+        seen_keys.add(key)
 
 
 # ── Saved Configs CRUD ──
@@ -411,24 +543,70 @@ def delete_save(save_id: str):
         db.close()
 
 
+# ── Apply (atomic replace) ──
+
+
+def _new_id() -> str:
+    return f"gen-{uuid.uuid4().hex[:12]}"
+
+
 @router.post("/apply")
 def apply_prompts(req: ApplyRequest):
-    """Apply generated configs to a target workspace."""
+    """Apply generated configs to a target workspace.
+
+    原子替换：先校验整套配置满足结构契约，再在同一事务内清空该工作区的
+    4 张配置表并写入新配置。id 一律由服务端生成（LLM 提供的固定 id 曾因
+    单列主键在跨工作区应用时被 INSERT OR IGNORE 静默丢弃）。
+    """
+    _validate_configs(req.configs)
+
     db = get_db()
     try:
         ws = db.execute("SELECT id FROM workspaces WHERE id = ?", (req.workspace_id,)).fetchone()
         if not ws:
             raise HTTPException(404, "工作区不存在")
 
-        configs = req.configs
+        wid = req.workspace_id
+        for table in CONFIG_TABLES:
+            db.execute(f"DELETE FROM {table} WHERE workspace_id = ?", (wid,))
+
         applied = {}
 
-        for table in CONFIG_TABLES:
-            rows = configs.get(table, [])
-            if not rows:
-                continue
-            count = _apply_table_configs(db, table, rows, req.workspace_id)
-            applied[table] = count
+        col_rows = req.configs["column_configs"]
+        for r in col_rows:
+            column_id, sort_order, forced_label = SLOT_META[r["slot"]]
+            db.execute(
+                "INSERT INTO column_configs (id, workspace_id, column_id, label, prompt, skill, "
+                "has_template, template_path, rules, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (_new_id(), wid, column_id, forced_label or r["label"],
+                 r.get("prompt") or "", r.get("skill") or "",
+                 1 if r.get("has_template") else 0, r.get("template_path"),
+                 r.get("rules") or "{}", sort_order))
+        applied["column_configs"] = len(col_rows)
+
+        for i, r in enumerate(req.configs["speech_configs"]):
+            db.execute(
+                "INSERT INTO speech_configs (id, workspace_id, label, prompt, skill, sort_order) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (_new_id(), wid, r["label"], r.get("prompt") or "", r.get("skill") or "", i))
+        applied["speech_configs"] = len(req.configs["speech_configs"])
+
+        for i, r in enumerate(req.configs["tts_configs"]):
+            db.execute(
+                "INSERT INTO tts_configs (id, workspace_id, label, prompt, skill, sort_order) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (_new_id(), wid, r["label"], r.get("prompt") or "", r.get("skill") or "", i))
+        applied["tts_configs"] = len(req.configs["tts_configs"])
+
+        core_rows = req.configs.get("core_prompt_configs", [])
+        for i, r in enumerate(core_rows):
+            db.execute(
+                "INSERT INTO core_prompt_configs (id, workspace_id, prompt_key, category, label, "
+                "content, stage, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (_new_id(), wid, r["prompt_key"], r.get("category") or "",
+                 r.get("label") or r["prompt_key"], r.get("content") or "",
+                 r.get("stage") or "", i))
+        applied["core_prompt_configs"] = len(core_rows)
 
         db.commit()
         return {"ok": True, "applied": applied}
@@ -438,52 +616,3 @@ def apply_prompts(req: ApplyRequest):
         raise HTTPException(500, f"应用配置失败: {str(e)}")
     finally:
         db.close()
-
-
-def _apply_table_configs(db, table: str, rows: list, workspace_id: str) -> int:
-    """Insert or update config rows for a specific table and workspace."""
-    count = 0
-    for row in rows:
-        original_id = row.get("id", f"gen-{uuid.uuid4().hex[:12]}")
-
-        existing = db.execute(
-            f"SELECT id FROM {table} WHERE id = ? AND workspace_id = ?",
-            (original_id, workspace_id),
-        ).fetchone()
-
-        if existing:
-            set_parts = []
-            values = []
-            for key, val in row.items():
-                if key in ("id", "created_at", "updated_at"):
-                    continue
-                if key == "workspace_id":
-                    continue
-                set_parts.append(f"{key} = ?")
-                values.append(val)
-            if set_parts:
-                values.append(original_id)
-                values.append(workspace_id)
-                db.execute(
-                    f"UPDATE {table} SET {', '.join(set_parts)}, updated_at = CURRENT_TIMESTAMP "
-                    f"WHERE id = ? AND workspace_id = ?",
-                    values,
-                )
-        else:
-            cols = ["id", "workspace_id"]
-            vals = [original_id, workspace_id]
-            for key, val in row.items():
-                if key in ("id", "created_at", "updated_at"):
-                    continue
-                if key == "workspace_id":
-                    continue
-                cols.append(key)
-                vals.append(val)
-            placeholders = ", ".join(["?"] * len(cols))
-            col_names = ", ".join(cols)
-            db.execute(
-                f"INSERT OR IGNORE INTO {table} ({col_names}) VALUES ({placeholders})",
-                vals,
-            )
-        count += 1
-    return count

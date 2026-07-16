@@ -237,6 +237,8 @@ export default function PromptStudioPage() {
       toast('请选择目标工作区')
       return
     }
+    const wsName = workspaces.find(w => w.id === applyTarget)?.name || applyTarget
+    if (!confirm(`应用将覆盖工作区「${wsName}」现有的全部提示词配置（栏目/演讲/语音/核心提示词），是否继续？`)) return
     setApplying(true)
     try {
       await api.applyPrompts({ workspace_id: applyTarget, configs: configs as unknown as Record<string, any[]> })
@@ -544,6 +546,8 @@ export default function PromptStudioPage() {
   // ── Apply saved config ──
   const handleApplySave = async (saveId: string) => {
     if (!saveApplyTarget) { toast('请选择目标工作区'); return }
+    const wsName = workspaces.find(w => w.id === saveApplyTarget)?.name || saveApplyTarget
+    if (!confirm(`应用将覆盖工作区「${wsName}」现有的全部提示词配置（栏目/演讲/语音/核心提示词），是否继续？`)) return
     setSaveApplying(true)
     try {
       let cfg = expandedConfigs
