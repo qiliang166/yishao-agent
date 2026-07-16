@@ -9,23 +9,26 @@
 :root { {{THEME_CSS_VARS}} }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; background: var(--book-desk); }
+html { background: var(--book-desk); }
 body {
   font-family: var(--book-font);
   color: var(--book-text);
-  overflow: hidden;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
+  padding: 28px 0;
 }
 
-/* ═══ 幻灯片舞台：16:9 居中，等比缩放 ═══ */
-.bk-stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+/* ═══ 网页式：幻灯片纵向堆叠，滚动浏览 ═══ */
 .bk-slide {
   width: 1280px; height: 720px; background: var(--book-bg);
-  position: absolute; display: none; overflow: hidden;
-  transform-origin: center center;
+  position: relative; display: flex; flex-direction: column;
+  margin: 0 auto 28px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  overflow: hidden;
+  transform-origin: top center;
 }
-.bk-slide.bk-active { display: flex; flex-direction: column; }
+/* 文字内容页允许随内容变高 */
+.bk-prose-slide { height: auto; min-height: 720px; }
 
 /* ═══ 封面页 ═══ */
 .bk-cover { align-items: center; justify-content: center; text-align: center; }
@@ -57,7 +60,7 @@ body {
 
 /* ═══ 文字内容页（custom/md 章节） ═══ */
 .bk-prose-slide { padding: 60px 110px; }
-.bk-prose { font-size: 20px; line-height: 1.9; overflow-y: auto; }
+.bk-prose { font-size: 20px; line-height: 1.9; }
 .bk-prose h1, .bk-prose h2, .bk-prose h3 { color: var(--book-primary); margin: 22px 0 12px; }
 .bk-prose h1 { font-size: 32px; } .bk-prose h2 { font-size: 27px; } .bk-prose h3 { font-size: 23px; }
 .bk-prose p { margin: 10px 0; }
@@ -66,6 +69,7 @@ body {
 .bk-prose th, .bk-prose td { border: 1px solid var(--book-text); padding: 8px 12px; }
 .bk-prose th { background: var(--book-card-bg); color: var(--book-primary); }
 .bk-prose blockquote { border-left: 4px solid var(--book-accent); background: var(--book-card-bg); padding: 12px 18px; margin: 14px 0; }
+.bk-prose img { max-width: 100%; }
 
 /* ═══ 封底页 ═══ */
 .bk-back { align-items: center; justify-content: center; text-align: center; }
@@ -73,118 +77,82 @@ body {
 .bk-back-text { font-size: 22px; line-height: 2.2; max-width: 900px; white-space: pre-wrap; }
 .bk-back-brand { margin-top: 60px; font-size: 16px; opacity: 0.6; line-height: 1.9; }
 
-/* ═══ 控制条 ═══ */
-.bk-nav {
-  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 12px; align-items: center; z-index: 10;
-  background: rgba(0,0,0,0.55); color: #fff; padding: 8px 18px; border-radius: 20px;
-  font-size: 14px; font-family: sans-serif; user-select: none;
-}
-.bk-nav button {
-  background: none; border: 1px solid rgba(255,255,255,0.5); color: #fff;
-  border-radius: 14px; padding: 3px 14px; cursor: pointer; font-size: 14px;
-}
-.bk-nav button:hover { background: rgba(255,255,255,0.2); }
-
 /* ═══ 打印：横版每页一屏 ═══ */
 @page { size: 1280px 720px; margin: 0; }
 @media print {
-  html, body { background: none; overflow: visible; height: auto; }
-  .bk-stage { position: static; display: block; }
+  html, body { background: none; padding: 0; }
   .bk-slide {
-    display: flex !important; flex-direction: column; position: relative;
-    transform: none !important; page-break-after: always; break-after: page;
-    margin: 0;
+    transform: none !important; margin: 0 !important;
+    box-shadow: none; page-break-after: always; break-after: page;
   }
   .bk-slide:last-of-type { page-break-after: auto; break-after: auto; }
-  .bk-nav { display: none; }
 }
 </style>
 </head>
 <body>
 
-<div class="bk-stage" id="bkStage">
+<!-- ═══ 封面 ═══ -->
+<section class="bk-slide bk-cover">
+  <div class="bk-cover-band"></div>
+  {{BOOK_LOGO}}
+  <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
+  <div class="bk-cover-subtitle">{{BOOK_SUBTITLE}}</div>
+  <div class="bk-cover-rule"></div>
+  <div class="bk-cover-meta">
+    <div class="bk-cover-author">{{BOOK_AUTHOR}}</div>
+    <div>{{BOOK_ORG}} · {{BOOK_DATE}}</div>
+    <div style="opacity:0.6;font-size:15px;margin-top:10px;">{{FLYLEAF_TEXT}}</div>
+  </div>
+</section>
 
-  <!-- ═══ 封面 ═══ -->
-  <section class="bk-slide bk-cover bk-active">
-    <div class="bk-cover-band"></div>
-    {{BOOK_LOGO}}
-    <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
-    <div class="bk-cover-subtitle">{{BOOK_SUBTITLE}}</div>
-    <div class="bk-cover-rule"></div>
-    <div class="bk-cover-meta">
-      <div class="bk-cover-author">{{BOOK_AUTHOR}}</div>
-      <div>{{BOOK_ORG}} · {{BOOK_DATE}}</div>
-      <div style="opacity:0.6;font-size:15px;margin-top:10px;">{{FLYLEAF_TEXT}}</div>
-    </div>
-  </section>
+<!-- ═══ 目录 ═══ -->
+<section class="bk-slide bk-toc">
+  <div class="bk-toc-title">目 录</div>
+  <ul class="bk-toc-list">
+    {{TOC_ENTRIES}}
+  </ul>
+</section>
 
-  <!-- ═══ 目录 ═══ -->
-  <section class="bk-slide bk-toc">
-    <div class="bk-toc-title">目 录</div>
-    <ul class="bk-toc-list">
-      {{TOC_ENTRIES}}
-    </ul>
-  </section>
+<!-- ═══ 章节内容（隔页 + 幻灯片序列，纵向连续） ═══ -->
+{{CHAPTERS}}
 
-  <!-- ═══ 章节内容（隔页 + 幻灯片序列） ═══ -->
-  {{CHAPTERS}}
-
-  <!-- ═══ 封底 ═══ -->
-  <section class="bk-slide bk-back">
-    <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
-    <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}<br>全书共 {{PAGE_TOTAL}} 章</div>
-    <div class="bk-back-band"></div>
-  </section>
-
-</div>
-
-<div class="bk-nav">
-  <button id="bkPrev" type="button">← 上一页</button>
-  <span id="bkCounter">1 / 1</span>
-  <button id="bkNext" type="button">下一页 →</button>
-</div>
+<!-- ═══ 封底 ═══ -->
+<section class="bk-slide bk-back">
+  <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
+  <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}<br>全书共 {{PAGE_TOTAL}} 章</div>
+  <div class="bk-back-band"></div>
+</section>
 
 <script>
 (function () {
+  // 窄屏适配：按可视宽度整体缩放幻灯片，并补偿缩放后的空隙
   var slides = Array.prototype.slice.call(document.querySelectorAll('.bk-slide'));
-  var idx = 0;
-  var counter = document.getElementById('bkCounter');
 
   function fit() {
-    var scale = Math.min(window.innerWidth / 1280, (window.innerHeight - 70) / 720);
-    slides.forEach(function (s) { s.style.transform = 'scale(' + scale + ')'; });
+    var scale = Math.min(1, (window.innerWidth - 24) / 1280);
+    slides.forEach(function (s) {
+      if (scale >= 1) {
+        s.style.transform = '';
+        s.style.marginBottom = '';
+        return;
+      }
+      s.style.transform = 'scale(' + scale + ')';
+      var gap = s.offsetHeight * (1 - scale);
+      s.style.marginBottom = (28 - gap) + 'px';
+    });
   }
 
-  function show(i) {
-    if (i < 0) i = 0;
-    if (i > slides.length - 1) i = slides.length - 1;
-    idx = i;
-    slides.forEach(function (s, k) { s.classList.toggle('bk-active', k === idx); });
-    counter.textContent = (idx + 1) + ' / ' + slides.length;
-  }
-
-  document.getElementById('bkPrev').addEventListener('click', function () { show(idx - 1); });
-  document.getElementById('bkNext').addEventListener('click', function () { show(idx + 1); });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { show(idx + 1); e.preventDefault(); }
-    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(idx - 1); e.preventDefault(); }
-    if (e.key === 'Home') { show(0); }
-    if (e.key === 'End') { show(slides.length - 1); }
-  });
-
-  // 目录点击跳转：a[data-slide-target] → 对应章节隔页
+  // 目录点击滚动到对应章节隔页
   document.querySelectorAll('.bk-toc-list a[data-slide-target]').forEach(function (a) {
     a.addEventListener('click', function (e) {
       e.preventDefault();
       var target = document.getElementById(a.getAttribute('data-slide-target'));
-      if (target) show(slides.indexOf(target));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });
 
   window.addEventListener('resize', fit);
   fit();
-  show(0);
 })();
 </script>
 

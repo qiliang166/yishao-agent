@@ -14,6 +14,8 @@ export interface Chapter {
   content: string
   content_html: string
   enabled: boolean
+  content_format?: 'md' | 'html'
+  bg_color?: string
 }
 
 export interface Cover {
@@ -24,6 +26,8 @@ export interface Cover {
   back_cover_text?: string
   theme_id?: string
   theme_colors?: Record<string, string>
+  desk_none?: boolean
+  render_mode?: 'paged' | 'flow'
 }
 
 export interface BookletDraft {
@@ -53,7 +57,7 @@ export interface Theme {
   id: string
   name: string
   source: 'builtin' | 'style_tmpl'
-  colors: { primary: string; accent: string; bg: string; text: string; card_bg?: string; font?: string }
+  colors: { primary: string; accent: string; bg: string; text: string; card_bg?: string; desk?: string; font?: string }
 }
 
 export function mdToHtml(md: string): string {
@@ -62,6 +66,17 @@ export function mdToHtml(md: string): string {
   } catch {
     return ''
   }
+}
+
+/** 判断章节是否为 Markdown 可编辑正文（step_md 或 md 格式的自建章） */
+export function isProseChapter(c: Chapter): boolean {
+  if (c.source_type === 'step_md') return true
+  return c.source_type === 'custom' && c.content_format !== 'html'
+}
+
+/** 保存前统一从 md 原文重算渲染快照，不信任存量（旧草稿保存一次即自愈） */
+export function normalizeChapters(chapters: Chapter[]): Chapter[] {
+  return chapters.map(c => (isProseChapter(c) ? { ...c, content_html: mdToHtml(c.content) } : c))
 }
 
 export function newChapterId(): string {

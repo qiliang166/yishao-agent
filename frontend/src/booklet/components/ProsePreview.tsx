@@ -1,0 +1,58 @@
+import { CSSProperties } from 'react'
+import DOMPurify from 'dompurify'
+import { Theme } from '../types'
+
+interface Props {
+  html: string
+  theme?: Theme | null
+  bgColor?: string
+  style?: CSSProperties
+}
+
+const FALLBACK = {
+  primary: '#18181b', accent: '#3b82f6', bg: '#ffffff', text: '#27272a',
+  card_bg: '#f4f4f5', font: "'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif",
+}
+
+/** 与合成模板 .bk-prose 同款排版的预览容器 — 所见即成书（含主题配色） */
+export default function ProsePreview({ html, theme, bgColor, style }: Props) {
+  const c = { ...FALLBACK, ...(theme?.colors || {}) }
+  const vars = {
+    '--book-primary': c.primary,
+    '--book-accent': c.accent,
+    '--book-bg': c.bg,
+    '--book-text': c.text,
+    '--book-card-bg': c.card_bg || FALLBACK.card_bg,
+    '--book-font': c.font || FALLBACK.font,
+  } as CSSProperties
+
+  return (
+    <div style={{
+      ...vars,
+      background: bgColor || 'var(--book-bg)',
+      color: 'var(--book-text)',
+      fontFamily: 'var(--book-font)',
+      padding: '14px 18px',
+      borderRadius: 4,
+      ...style,
+    }}>
+      <style>{`
+        .bkp-prose { font-size: 13px; line-height: 1.95; }
+        .bkp-prose h1, .bkp-prose h2, .bkp-prose h3, .bkp-prose h4 { color: var(--book-primary); margin: 14px 0 7px; line-height: 1.5; }
+        .bkp-prose h1 { font-size: 19px; } .bkp-prose h2 { font-size: 17px; } .bkp-prose h3 { font-size: 15px; } .bkp-prose h4 { font-size: 14px; }
+        .bkp-prose p { margin: 6px 0; }
+        .bkp-prose ul, .bkp-prose ol { margin: 6px 0 6px 18px; }
+        .bkp-prose li { margin: 3px 0; }
+        .bkp-prose table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; }
+        .bkp-prose th, .bkp-prose td { border: 1px solid var(--book-text); padding: 4px 7px; }
+        .bkp-prose th { background: var(--book-card-bg); color: var(--book-primary); }
+        .bkp-prose blockquote { border-left: 3px solid var(--book-accent); background: var(--book-card-bg); padding: 6px 10px; margin: 8px 0; }
+        .bkp-prose code { background: var(--book-card-bg); padding: 1px 4px; border-radius: 2px; font-size: 12px; }
+        .bkp-prose pre { background: var(--book-card-bg); padding: 8px; overflow-x: auto; margin: 8px 0; }
+        .bkp-prose img { max-width: 100%; }
+        .bkp-prose hr { border: none; border-top: 1px solid var(--book-text); opacity: 0.25; margin: 12px 0; }
+      `}</style>
+      <div className="bkp-prose" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
+    </div>
+  )
+}

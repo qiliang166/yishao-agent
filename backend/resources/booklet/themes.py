@@ -4,8 +4,8 @@
 禁止在模板或代码中写死任何颜色实值。
 """
 
-# 变量键（与模板 var(--book-*) 一一对应）
-THEME_VAR_KEYS = ["primary", "accent", "bg", "text", "card_bg", "font"]
+# 变量键（与模板 var(--book-*) 一一对应）；desk = 产物页面外桌面底色
+THEME_VAR_KEYS = ["primary", "accent", "bg", "text", "card_bg", "desk", "font"]
 
 _DEFAULT_FONT = "'Noto Serif SC','Source Han Serif SC','SimSun',serif"
 _SANS_FONT = "'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif"
@@ -21,6 +21,7 @@ BUILTIN_THEMES = [
             "bg": "#ffffff",
             "text": "#27272a",
             "card_bg": "#f4f4f5",
+            "desk": "#52525b",
             "font": _SANS_FONT,
         },
     },
@@ -34,6 +35,7 @@ BUILTIN_THEMES = [
             "bg": "#ffffff",
             "text": "#1a202c",
             "card_bg": "#f0f4f8",
+            "desk": "#1f2937",
             "font": _SANS_FONT,
         },
     },
@@ -47,6 +49,7 @@ BUILTIN_THEMES = [
             "bg": "#faf5ff",
             "text": "#1e1b4b",
             "card_bg": "#ffffff",
+            "desk": "#2e1065",
             "font": _SANS_FONT,
         },
     },
@@ -60,6 +63,7 @@ BUILTIN_THEMES = [
             "bg": "#fafafa",
             "text": "#212121",
             "card_bg": "#ffffff",
+            "desk": "#37474f",
             "font": _DEFAULT_FONT,
         },
     },

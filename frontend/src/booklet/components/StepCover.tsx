@@ -44,7 +44,8 @@ export default function StepCover({ draft, onChange }: Props) {
   return (
     <div className="panel-grid">
       <div className="panel-left">
-        <div className="card">
+        {/* flexShrink:0 防止滚动列内卡片被压缩导致内容溢出重叠 */}
+        <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">📝 封面与署名</div>
           <div className="form-group">
             <label className="form-label">书名</label>
@@ -101,7 +102,7 @@ export default function StepCover({ draft, onChange }: Props) {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">🎨 主题配色</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
             {themes.map(t => (
@@ -119,6 +120,16 @@ export default function StepCover({ draft, onChange }: Props) {
                 <div style={{ fontSize: 9, color: 'var(--text-secondary)' }}>{t.source === 'builtin' ? '内置主题' : '风格模板配色'}</div>
               </div>
             ))}
+          </div>
+          <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!draft.cover.desk_none}
+                onChange={e => setCover({ desk_none: e.target.checked })} />
+              不要页面外背景色（合成后页面四周用白色底）
+            </label>
+            <div className="card-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+              不勾选时，页面外背景跟随所选主题的深色底，衬托书页更醒目。
+            </div>
           </div>
         </div>
       </div>

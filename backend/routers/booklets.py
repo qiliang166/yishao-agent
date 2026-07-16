@@ -231,10 +231,12 @@ def _workspace_labels(db, workspace_id: str) -> dict:
 # ── 装配辅助 ──
 
 
-def _load_book_template(book_type: str) -> str:
-    path = os.path.join(_BOOKLET_RES_DIR, f"{book_type}_book.html")
+def _load_book_template(book_type: str, render_mode: str = "paged") -> str:
+    """paged=分页式(a4_book/ppt_book)；flow=网页式连续长页(a4_flow/ppt_flow)。占位符契约相同。"""
+    suffix = "flow" if render_mode == "flow" else "book"
+    path = os.path.join(_BOOKLET_RES_DIR, f"{book_type}_{suffix}.html")
     if not os.path.isfile(path):
-        raise HTTPException(500, f"模板文件不存在: resources/booklet/{book_type}_book.html")
+        raise HTTPException(500, f"模板文件不存在: resources/booklet/{book_type}_{suffix}.html")
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
 
@@ -377,6 +379,23 @@ def _build_embed_srcdocs(source_html: str, page_size: tuple) -> list:
     return docs
 
 
+def _build_fulldoc_srcdoc(source_html: str, page_size: tuple) -> str:
+    """导入的整页 HTML（无 slide-wrapper 结构）→ 单页自包含 srcdoc。"""
+    styles = _sanitize_fragment(_extract_head_styles(source_html))
+    body_match = re.search(r"<body\b[^>]*>(.*?)</body>", source_html, flags=re.S | re.I)
+    body = _sanitize_fragment(body_match.group(1) if body_match else source_html)
+    if not body.strip():
+        return ""
+    w, h = page_size
+    doc = (
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+        f"{styles}"
+        f"<style>html,body{{margin:0;padding:0;width:{w}px;min-height:{h}px;overflow-x:hidden;}}</style>"
+        f"</head><body>{body}</body></html>"
+    )
+    return _srcdoc_escape(doc)
+
+
 def _esc(text: str) -> str:
     return html_lib.escape(text or "", quote=False)
 
@@ -391,9 +410,10 @@ def render_booklet(booklet: dict, theme: dict) -> str:
     渲染后断言无 {{PLACEHOLDER}} 残留，残留即抛 500。
     """
     book_type = booklet["book_type"]
-    template = _load_book_template(book_type)
-    themes_mod = _load_themes_module()
     cover = booklet.get("cover") or {}
+    render_mode = "flow" if cover.get("render_mode") == "flow" else "paged"
+    template = _load_book_template(book_type, render_mode)
+    themes_mod = _load_themes_module()
     chapters = [c for c in (booklet.get("chapters") or []) if c.get("enabled", True)]
     if not chapters:
         raise HTTPException(400, "册子没有启用的章节，无法合成")
@@ -409,20 +429,37 @@ def render_booklet(booklet: dict, theme: dict) -> str:
         title = _esc(ch.get("title") or f"第{i}章")
         src_name = _esc(ch.get("project_name") or "")
         src_line = f"来源：{src_name}" if src_name else "自建章节"
+        # 章节页面背景色（仅 hex 通过校验才注入，防 CSS 注入）
+        ch_bg = themes_mod._safe_css_value("bg", ch.get("bg_color") or "", "")
+        bg_style = f' style="background:{ch_bg}"' if ch_bg else ""
+
+        # custom 章节可携带整页 HTML（导入 .html），按嵌入页处理而非 prose
+        is_prose = (
+            ch.get("source_type") in ("step_md", "custom")
+            and not (ch.get("source_type") == "custom" and ch.get("content_format") == "html")
+        )
 
         if book_type == "a4":
             toc_parts.append(
                 f'<li><a href="#{anchor}"><span class="bk-toc-num">{i:02d}</span>'
                 f'<span class="bk-toc-label">{title}</span><span class="bk-toc-dots"></span></a></li>'
             )
-            if ch.get("source_type") in ("step_md", "custom"):
+            if is_prose:
                 body = _sanitize_fragment(ch.get("content_html") or "")
                 chapter_parts.append(
-                    f'<section class="bk-sheet bk-chapter" id="{anchor}"><div class="bk-sheet-inner">'
+                    f'<section class="bk-sheet bk-chapter" id="{anchor}"{bg_style}><div class="bk-sheet-inner">'
                     f'<div class="bk-chapter-head"><div class="bk-chapter-no">第 {i} 章</div>'
                     f'<div class="bk-chapter-title">{title}</div>'
                     f'<div class="bk-chapter-src">{src_line}</div></div>'
                     f'<div class="bk-prose">{body}</div></div></section>'
+                )
+            elif ch.get("source_type") == "custom":  # 导入的整页 HTML
+                sd = _build_fulldoc_srcdoc(ch.get("content") or "", (794, 1123))
+                if not sd:
+                    raise HTTPException(400, f"章节「{ch.get('title', '')}」HTML 内容为空或格式不支持")
+                chapter_parts.append(
+                    f'<section class="bk-sheet bk-embed-sheet bk-chapter" id="{anchor}">'
+                    f'<iframe class="bk-embed-frame" srcdoc="{sd}"></iframe></section>'
                 )
             else:  # a4_html：课件按页拆分，iframe 隔离
                 srcdocs = _build_embed_srcdocs(ch.get("content") or "", (794, 1123))
@@ -446,10 +483,18 @@ def render_booklet(booklet: dict, theme: dict) -> str:
                 f'<div class="bk-chapter-title">{title}</div>'
                 f'<div class="bk-chapter-src">{src_line}</div></section>'
             )
-            if ch.get("source_type") in ("step_md", "custom"):
+            if is_prose:
                 body = _sanitize_fragment(ch.get("content_html") or "")
                 chapter_parts.append(
-                    f'<section class="bk-slide bk-prose-slide"><div class="bk-prose">{body}</div></section>'
+                    f'<section class="bk-slide bk-prose-slide"{bg_style}><div class="bk-prose">{body}</div></section>'
+                )
+            elif ch.get("source_type") == "custom":  # 导入的整页 HTML
+                sd = _build_fulldoc_srcdoc(ch.get("content") or "", (1280, 720))
+                if not sd:
+                    raise HTTPException(400, f"章节「{ch.get('title', '')}」HTML 内容为空或格式不支持")
+                chapter_parts.append(
+                    f'<section class="bk-slide">'
+                    f'<iframe class="bk-embed-frame" srcdoc="{sd}"></iframe></section>'
                 )
             else:  # ppt_html：每片一屏
                 srcdocs = _build_embed_srcdocs(ch.get("content") or "", (1280, 720))
@@ -720,6 +765,8 @@ def render_booklet_api(booklet_id: str, request: Request):
         theme = {"id": "custom", "name": "自定义", "colors": theme_colors}
     elif theme_colors:
         theme = {**theme, "colors": {**theme["colors"], **theme_colors}}
+    if cover.get("desk_none"):
+        theme = {**theme, "colors": {**(theme.get("colors") or {}), "desk": "#ffffff"}}
 
     html_out = render_booklet(booklet, theme)
 

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
-import { BookletDraft, BOOK_TYPE_LABEL } from './types'
+import { BookletDraft, BOOK_TYPE_LABEL, normalizeChapters } from './types'
 import StepContent from './components/StepContent'
 import StepArrange from './components/StepArrange'
 import StepCover from './components/StepCover'
@@ -61,14 +61,17 @@ export default function BookletEditorPage() {
     if (!draft) return false
     setSaving(true)
     try {
+      // md 章节一律从原文重算渲染快照，不信任存量（旧草稿保存一次即自愈）
+      const chapters = normalizeChapters(draft.chapters)
       const r = await api.updateBooklet(draft.id, {
         title: draft.title || '未命名册子',
         subtitle: draft.subtitle,
         author: draft.author,
         cover: draft.cover,
-        chapters: draft.chapters,
+        chapters,
       })
       if (r != null) {
+        setDraft(d => (d ? { ...d, chapters } : d))
         setDirty(false)
         toast('草稿已保存', 'success')
         return true
@@ -133,7 +136,7 @@ export default function BookletEditorPage() {
         {step === 1 && <StepContent draft={draft} onChange={onChange} />}
         {step === 2 && <StepArrange draft={draft} onChange={onChange} />}
         {step === 3 && <StepCover draft={draft} onChange={onChange} />}
-        {step === 4 && <StepFinish draft={draft} dirty={dirty} onSave={handleSave} />}
+        {step === 4 && <StepFinish draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} />}
       </div>
 
       {/* 底部：上一步/下一步 */}

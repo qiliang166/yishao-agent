@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Chapter, ContentProject, mdToHtml, newChapterId } from '../types'
+import MdToolbar from './MdToolbar'
 
 interface Props {
   draft: BookletDraft
@@ -18,6 +19,8 @@ export default function StepContent({ draft, onChange }: Props) {
   const [showCustom, setShowCustom] = useState(false)
   const [customTitle, setCustomTitle] = useState('')
   const [customText, setCustomText] = useState('')
+  const [customFormat, setCustomFormat] = useState<'md' | 'html'>('md')
+  const customTaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     api.bookletAvailableContent(draft.book_type)
@@ -64,6 +67,7 @@ export default function StepContent({ draft, onChange }: Props) {
           source_key: item.source_key,
           content: r.content,
           content_html: isMd ? mdToHtml(r.content) : r.content,
+          content_format: isMd ? 'md' : 'html',
           enabled: true,
         }
         onChange(d => ({ ...d, chapters: [...d.chapters, ch] }))
@@ -75,10 +79,18 @@ export default function StepContent({ draft, onChange }: Props) {
     }
   }
 
+  const resetCustom = () => {
+    setShowCustom(false)
+    setCustomTitle('')
+    setCustomText('')
+    setCustomFormat('md')
+  }
+
   const handleAddCustom = async () => {
     if (!customTitle.trim()) { toast('请输入章节标题', 'error'); return }
     if (!customText.trim()) { toast('请输入章节内容', 'error'); return }
     try {
+      const isHtml = customFormat === 'html'
       const ch: Chapter = {
         id: newChapterId(),
         title: customTitle.trim(),
@@ -87,13 +99,12 @@ export default function StepContent({ draft, onChange }: Props) {
         project_name: '',
         source_key: '',
         content: customText,
-        content_html: mdToHtml(customText),
+        content_html: isHtml ? customText : mdToHtml(customText),
+        content_format: customFormat,
         enabled: true,
       }
       onChange(d => ({ ...d, chapters: [...d.chapters, ch] }))
-      setShowCustom(false)
-      setCustomTitle('')
-      setCustomText('')
+      resetCustom()
       toast('自建章节已加入', 'success')
     } catch (e: any) {
       toast(`加入失败: ${e?.message || e}`, 'error')
@@ -104,9 +115,13 @@ export default function StepContent({ draft, onChange }: Props) {
     try {
       const text = await file.text()
       if (text == null || !text.trim()) { toast('文件内容为空', 'error'); return }
+      const isHtmlFile = /\.html?$/i.test(file.name)
+      setCustomFormat(isHtmlFile ? 'html' : 'md')
       setCustomText(text)
       if (!customTitle.trim()) setCustomTitle(file.name.replace(/\.(md|txt|html?)$/i, ''))
-      toast(`已导入 ${file.name}`, 'success')
+      toast(isHtmlFile
+        ? `已导入 ${file.name}（HTML 页面章节，下一步可在页面里点字修改）`
+        : `已导入 ${file.name}`, 'success')
     } catch (e: any) {
       toast(`导入失败: ${e?.message || e}`, 'error')
     }
@@ -114,15 +129,16 @@ export default function StepContent({ draft, onChange }: Props) {
 
   return (
     <div className="panel-grid">
-      <div className="panel-left">
-        <div className="card">
-          <div className="card-title">📂 从工作区调取内容</div>
-          <div className="card-hint">勾选要装进册子的内容，可跨明细、跨工作区多选。</div>
-          <select className="form-input" value={wsId} onChange={e => setWsId(e.target.value)}>
+      {/* overflow hidden 覆盖全局 .panel-left 的滚动：让内容树卡片内部滚动，自建章节卡片始终可见 */}
+      <div className="panel-left" style={{ overflow: 'hidden' }}>
+        <div className="card" style={{ flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column' }}>
+          <div className="card-title" style={{ flexShrink: 0 }}>📂 从工作区调取内容</div>
+          <div className="card-hint" style={{ flexShrink: 0 }}>勾选要装进册子的内容，可跨明细、跨工作区多选。</div>
+          <select className="form-input" value={wsId} onChange={e => setWsId(e.target.value)} style={{ flexShrink: 0 }}>
             {workspaces.length === 0 && <option value="">（无可用工作区）</option>}
             {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
-          <div style={{ marginTop: 10, maxHeight: 380, overflowY: 'auto' }}>
+          <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {loadingTree ? (
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: 10 }}>加载中...</div>
             ) : projects.length === 0 ? (
@@ -153,7 +169,7 @@ export default function StepContent({ draft, onChange }: Props) {
           </div>
         </div>
 
-        <div className="card">
+        <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">✍ 自己写一章</div>
           {!showCustom ? (
             <button className="btn btn-ghost btn-sm" onClick={() => setShowCustom(true)}>➕ 新增自建章节</button>
@@ -161,17 +177,29 @@ export default function StepContent({ draft, onChange }: Props) {
             <div>
               <input className="form-input" placeholder="章节标题" value={customTitle}
                 onChange={e => setCustomTitle(e.target.value)} />
-              <textarea className="form-input" placeholder="输入或粘贴内容（支持 Markdown / 纯文本）"
-                value={customText} onChange={e => setCustomText(e.target.value)}
-                style={{ marginTop: 6, height: 140, resize: 'vertical', fontFamily: 'inherit' }} />
-              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
+              {customFormat === 'md' ? (
+                <div style={{ marginTop: 6 }}>
+                  <MdToolbar textareaRef={customTaRef} value={customText} onChange={setCustomText} />
+                  <textarea ref={customTaRef} className="form-input"
+                    placeholder="输入或粘贴内容（支持 Markdown / 纯文本，用上方按钮插入格式）"
+                    value={customText} onChange={e => setCustomText(e.target.value)}
+                    style={{ height: 120, resize: 'none', fontFamily: 'inherit', width: '100%' }} />
+                </div>
+              ) : (
+                <div className="card-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                  已导入 HTML 页面章节（{customText.length} 字符）— 加入后可在第②步页面里点字修改。
+                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px' }}
+                    onClick={() => { setCustomText(''); setCustomFormat('md') }}>清空重来</button>
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                 <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
                   📁 导入文件
                   <input type="file" accept=".md,.txt,.html,.htm" style={{ display: 'none' }}
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = '' }} />
                 </label>
                 <span style={{ flex: 1 }} />
-                <button className="btn btn-ghost btn-sm" onClick={() => setShowCustom(false)}>取消</button>
+                <button className="btn btn-ghost btn-sm" onClick={resetCustom}>取消</button>
                 <button className="btn btn-primary btn-sm" onClick={handleAddCustom}>加入册子</button>
               </div>
             </div>
@@ -196,14 +224,14 @@ export default function StepContent({ draft, onChange }: Props) {
                   <span style={{ color: 'var(--text-secondary)', width: 24 }}>{String(i + 1).padStart(2, '0')}</span>
                   <span style={{ flex: 1 }}>{c.title}</span>
                   <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                    {c.source_type === 'custom' ? '自建' : c.source_type === 'step_md' ? '文档' : '课件'}
+                    {c.source_type === 'custom' ? (c.content_format === 'html' ? '自建·页面' : '自建') : c.source_type === 'step_md' ? '文档' : '课件'}
                     {' · '}{(c.content || '').length} 字符
                   </span>
                 </div>
               ))}
             </div>
           )}
-          <div className="card-hint" style={{ marginTop: 8, marginBottom: 0 }}>
+          <div className="card-hint" style={{ marginTop: 8, marginBottom: 0, flexShrink: 0 }}>
             下一步可调整章节顺序、重命名和编辑内容。
           </div>
         </div>

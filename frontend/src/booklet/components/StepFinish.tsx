@@ -7,21 +7,25 @@ interface Props {
   draft: BookletDraft
   dirty: boolean
   onSave: () => Promise<boolean>
+  onChange: (updater: (d: BookletDraft) => BookletDraft) => void
 }
 
-export default function StepFinish({ draft, dirty, onSave }: Props) {
+export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
   const { toast } = useModal()
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewing, setPreviewing] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [zoom, setZoom] = useState(100)
 
   const enabledCount = draft.chapters.filter(c => c.enabled).length
+  const renderMode = draft.cover.render_mode || 'paged'
+
+  const setRenderMode = (mode: 'paged' | 'flow') =>
+    onChange(d => ({ ...d, cover: { ...d.cover, render_mode: mode } }))
 
   const ensureSavedAndRender = async (): Promise<string | null> => {
-    if (dirty) {
-      const ok = await onSave()
-      if (!ok) return null
-    }
+    const ok = await onSave()
+    if (!ok) return null
     return api.renderBooklet(draft.id)
   }
 
@@ -62,10 +66,12 @@ export default function StepFinish({ draft, dirty, onSave }: Props) {
     }
   }
 
+  const scale = zoom / 100
+
   return (
     <div className="panel-grid">
       <div className="panel-left">
-        <div className="card">
+        <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">📦 合成信息</div>
           <div style={{ fontSize: 12, lineHeight: 2.1 }}>
             <div>书名：<strong>{draft.title || '—'}</strong></div>
@@ -80,13 +86,38 @@ export default function StepFinish({ draft, dirty, onSave }: Props) {
             </div>
           )}
         </div>
-        <div className="card">
+
+        <div className="card" style={{ flexShrink: 0 }}>
+          <div className="card-title">🧩 合成方式</div>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 8 }}>
+            <input type="radio" name="bk-render-mode" checked={renderMode === 'paged'}
+              onChange={() => setRenderMode('paged')} style={{ marginTop: 2 }} />
+            <span>
+              <strong>分页式</strong>
+              <span style={{ display: 'block', fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                {draft.book_type === 'a4' ? '一页一张 A4 纸的书册形态，打印即得纸质书排版' : '一页一屏的幻灯片形态，方向键翻页'}
+              </span>
+            </span>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, cursor: 'pointer' }}>
+            <input type="radio" name="bk-render-mode" checked={renderMode === 'flow'}
+              onChange={() => setRenderMode('flow')} style={{ marginTop: 2 }} />
+            <span>
+              <strong>网页式</strong>
+              <span style={{ display: 'block', fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                连续长页不分页，从头滚到尾；打印/另存 PDF 时由浏览器自然分页
+              </span>
+            </span>
+          </label>
+        </div>
+
+        <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">📥 合成下载</div>
           <div className="card-hint">
             产物是一个自包含 HTML 文件：双击用浏览器打开即可翻阅；
             {draft.book_type === 'a4'
               ? '浏览器里 Ctrl+P 打印即得 A4 排版的纸质书/PDF。'
-              : '打开后用 ←/→ 方向键或底部按钮翻页。'}
+              : renderMode === 'paged' ? '打开后用 ←/→ 方向键或底部按钮翻页。' : '打开后上下滚动浏览全部页面。'}
           </div>
           <button className="btn btn-primary" style={{ width: '100%', padding: '10px 0', fontSize: 14 }}
             disabled={downloading || enabledCount === 0} onClick={handleDownload}>
@@ -104,12 +135,30 @@ export default function StepFinish({ draft, dirty, onSave }: Props) {
         </div>
       </div>
 
-      <div className="panel-right">
+      <div className="panel-right" style={{ overflow: 'hidden' }}>
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div className="card-title">📖 整书预览</div>
+          <div className="card-title" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>📖 整书预览</span>
+            <span style={{ flex: 1 }} />
+            {previewHtml && (
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400, fontSize: 11 }}>
+                显示比例
+                <input type="range" min={25} max={150} step={5} value={zoom}
+                  onChange={e => setZoom(Number(e.target.value))} style={{ width: 140 }} />
+                <span style={{ width: 38, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
+              </label>
+            )}
+          </div>
           {previewHtml ? (
-            <iframe srcDoc={previewHtml} title="booklet-preview" sandbox="allow-scripts"
-              style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', minHeight: 400 }} />
+            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }}>
+              <div style={{
+                width: `${10000 / zoom}%`, height: `${10000 / zoom}%`,
+                transform: `scale(${scale})`, transformOrigin: 'top left',
+              }}>
+                <iframe srcDoc={previewHtml} title="booklet-preview" sandbox="allow-scripts"
+                  style={{ width: '100%', height: '100%', border: 'none', display: 'block', background: '#fff' }} />
+              </div>
+            </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
               点击左侧「👁 整书预览」查看合成效果
