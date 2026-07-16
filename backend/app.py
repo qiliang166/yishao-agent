@@ -692,7 +692,12 @@ def list_workspaces(page: int = 1, page_size: int = 20, request: Request = None)
                 "SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                 (page_size, offset)
             ).fetchall()
-        return {"workspaces": [dict(r) for r in rows], "total": total, "page": page, "page_size": page_size}
+        result = [dict(r) for r in rows]
+        cnt_map = {r["workspace_id"]: r["c"] for r in db.execute(
+            "SELECT workspace_id, COUNT(*) as c FROM projects GROUP BY workspace_id").fetchall()}
+        for w in result:
+            w["project_count"] = cnt_map.get(w["id"], 0)
+        return {"workspaces": result, "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
 

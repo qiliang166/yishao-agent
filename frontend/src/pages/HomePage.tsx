@@ -167,22 +167,29 @@ function HomePage() {
                 onClick={() => navigate(`/workspace/${w.id}`)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   {w.logo ? (
-                    <img src={w.logo} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover' }} alt="" />
+                    <img src={w.logo} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} alt="" />
                   ) : (
-                    <span style={{ fontSize: 28 }}>📁</span>
+                    <span style={{ fontSize: 28, flexShrink: 0 }}>📁</span>
                   )}
+                  <span style={{ fontSize: 15, fontWeight: 600, wordBreak: 'break-word', minWidth: 0 }}>
+                    {w.name}
+                  </span>
                   <span style={{
-                    marginLeft: 'auto', fontSize: 10, padding: '2px 8px', borderRadius: 10,
+                    marginLeft: 'auto', fontSize: 10, padding: '2px 8px', borderRadius: 10, flexShrink: 0,
                     background: w.status === 'completed' ? 'rgba(34,197,94,0.12)' : 'rgba(148,163,184,0.12)',
                     color: w.status === 'completed' ? 'var(--success)' : 'var(--text-secondary)'
                   }}>
                     {statusLabel(w.status)}
                   </span>
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 14, wordBreak: 'break-word' }}>
-                  {w.name}
+                <div style={{
+                  fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.6,
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden', wordBreak: 'break-word', minHeight: 38,
+                }}>
+                  {w.description || '暂无简介'}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}
                   onClick={e => e.stopPropagation()}>
                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
                     onClick={() => navigate(`/workspace/${w.id}`)}>进入</button>
@@ -190,6 +197,9 @@ function HomePage() {
                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--warning)' }}
                       onClick={() => deleteWorkspace(w.id, w.name)}>删除</button>
                   )}
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)' }}>
+                    📄 {w.project_count ?? 0} 个食谱
+                  </span>
                 </div>
               </div>
               ))}

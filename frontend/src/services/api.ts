@@ -149,6 +149,7 @@ export interface Workspace {
   created_at: string
   updated_at: string
   role_ids?: string[]
+  project_count?: number
 }
 
 export interface Prompt {
