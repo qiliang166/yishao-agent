@@ -39,42 +39,44 @@ export default function MemberDownloadsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const downloadSingle = async (pid: string, f: { filename: string; download_url: string }) => {
+  const doDownload = async (project: DlProject, files: { filename: string; download_url: string }[]) => {
+    if (files.length === 0) return
     try {
-      await api.downloadWithName(f.download_url, f.filename)
-    } catch (e: any) {
-      showToast(`下载失败: ${e?.message || e}`)
-    }
-  }
-
-  const downloadAllFiles = async (project: DlProject) => {
-    if (project.files.length === 0) return
-    try {
-      const check = await api.canDownload(project.files.map(f => ({
+      const check = await api.canDownload(files.map(f => ({
         project_id: project.id,
         filename: f.filename,
       })))
+      if (check == null) { showToast('操作失败：服务器未确认'); return }
       if (check.is_admin) {
-        await api.downloadSelectedFiles(project.id, project.files.map(f => ({
-          filename: f.filename,
-          download_url: f.download_url,
-          display_name: f.filename,
-        })))
-        showToast(`已打包下载 ${project.files.length} 个文件`)
+        if (files.length === 1) {
+          await api.downloadWithName(files[0].download_url, files[0].filename)
+        } else {
+          await api.downloadSelectedFiles(project.id, files.map(f => ({
+            filename: f.filename,
+            download_url: f.download_url,
+            display_name: f.filename,
+          })))
+        }
+        showToast(`已下载 ${files.length} 个文件`)
         return
       }
       if (check.need_unlock && check.need_unlock.length > 0) {
         setUnlockCheck(check)
         setUnlockProject(project)
+        setUnlockPendingFiles(files)
         return
       }
       if (check.already_unlocked && check.already_unlocked.length > 0) {
-        await api.downloadSelectedFiles(project.id, project.files.map(f => ({
-          filename: f.filename,
-          download_url: f.download_url,
-          display_name: f.filename,
-        })))
-        showToast(`已下载 ${project.files.length} 个文件`)
+        if (files.length === 1) {
+          await api.downloadWithName(files[0].download_url, files[0].filename)
+        } else {
+          await api.downloadSelectedFiles(project.id, files.map(f => ({
+            filename: f.filename,
+            download_url: f.download_url,
+            display_name: f.filename,
+          })))
+        }
+        showToast(`已下载 ${files.length} 个文件`)
         return
       }
       showToast('无法下载：请联系管理员')
@@ -83,8 +85,17 @@ export default function MemberDownloadsPage() {
     }
   }
 
+  const downloadSingle = async (project: DlProject, f: { filename: string; download_url: string }) => {
+    doDownload(project, [f])
+  }
+
+  const downloadAllFiles = async (project: DlProject) => {
+    doDownload(project, project.files)
+  }
+
   const [unlockCheck, setUnlockCheck] = useState<any>(null)
   const [unlockProject, setUnlockProject] = useState<DlProject | null>(null)
+  const [unlockPendingFiles, setUnlockPendingFiles] = useState<{ filename: string; download_url: string }[]>([])
 
   const handleUnlockConfirm = async () => {
     if (!unlockCheck || !unlockProject) return
@@ -94,9 +105,21 @@ export default function MemberDownloadsPage() {
       // Refresh list after unlock
       const d = await api.getDownloadableProjects()
       setProjects((d as any)?.projects || [])
-      showToast('解锁成功')
+      showToast('解锁成功，开始下载...')
+      // Download the pending files
+      const files = unlockPendingFiles
+      if (files.length === 1) {
+        await api.downloadWithName(files[0].download_url, files[0].filename)
+      } else {
+        await api.downloadSelectedFiles(unlockProject.id, files.map(f => ({
+          filename: f.filename,
+          download_url: f.download_url,
+          display_name: f.filename,
+        })))
+      }
       setUnlockCheck(null)
       setUnlockProject(null)
+      setUnlockPendingFiles([])
     } catch (e: any) {
       showToast(`解锁失败: ${e?.message || e}`)
     }
@@ -195,7 +218,7 @@ export default function MemberDownloadsPage() {
                             {formatSize(f.size)}
                           </span>
                           <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }}
-                            onClick={() => downloadSingle(proj.id, f)}>
+                            onClick={() => downloadSingle(proj, f)}>
                             ⬇ 下载
                           </button>
                         </div>
@@ -217,7 +240,7 @@ export default function MemberDownloadsPage() {
           totalCostDeci={unlockCheck.total_cost_deci || 0}
           balanceDeci={unlockCheck.balance_deci || 0}
           onConfirm={handleUnlockConfirm}
-          onCancel={() => { setUnlockCheck(null); setUnlockProject(null) }}
+          onCancel={() => { setUnlockCheck(null); setUnlockProject(null); setUnlockPendingFiles([]) }}
         />
       )}
     </div>
