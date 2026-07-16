@@ -641,6 +641,8 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [editName, setEditName] = useState(false)
   const [editNameValue, setEditNameValue] = useState('')
+  const [hdrCategories, setHdrCategories] = useState<{id:string;name:string}[]>([])
+  const [hdrAuthors, setHdrAuthors] = useState<{id:string;name:string}[]>([])
   const styleColorMap = useRef<Record<string, any>>({})
   const workspaceIdRef = useRef<string | undefined>(undefined)
   const [stage, setStage] = useState<StageId>(1)
@@ -850,6 +852,10 @@ export default function ProjectPage() {
       setProjStoragePath(p.storage_path || '')
       workspaceIdRef.current = p.workspace_id
       wsidRef.current = p.workspace_id
+      if (p.workspace_id) {
+        api.listCategories(p.workspace_id).then(d => setHdrCategories((d?.categories || []) as {id:string;name:string}[])).catch(() => {})
+      }
+      api.listAuthorOptions().then(d => setHdrAuthors((d?.authors || []) as {id:string;name:string}[])).catch(() => {})
 
       // Load configs only after we have the workspace_id to avoid race condition
       // where listColumnConfigs(undefined) returns global seed configs instead of
@@ -2303,6 +2309,46 @@ export default function ProjectPage() {
           {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 锁定'}
         </button>
         </CanEdit>
+        {(hdrCategories.length > 0 || (project as any)?.category_id) && (
+          <select className="form-input" title="明细分类"
+            value={(project as any)?.category_id || ''}
+            disabled={readOnly}
+            style={{ width: 'auto', fontSize: 11, padding: '3px 6px', marginLeft: 6 }}
+            onChange={async e => {
+              if (!id) return
+              const v = e.target.value
+              try {
+                await api.updateProject(id, { category_id: v })
+                setProject(prev => prev ? { ...prev, category_id: v } as any : prev)
+                modal.toast('分类已保存', 'success')
+              } catch (err: any) {
+                modal.toast('保存失败: ' + err.message, 'error')
+              }
+            }}>
+            <option value="">无分类</option>
+            {hdrCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
+        {(hdrAuthors.length > 0 || (project as any)?.author_id) && (
+          <select className="form-input" title="出处作者"
+            value={(project as any)?.author_id || ''}
+            disabled={readOnly}
+            style={{ width: 'auto', fontSize: 11, padding: '3px 6px', marginLeft: 4 }}
+            onChange={async e => {
+              if (!id) return
+              const v = e.target.value
+              try {
+                await api.updateProject(id, { author_id: v })
+                setProject(prev => prev ? { ...prev, author_id: v } as any : prev)
+                modal.toast('作者已保存', 'success')
+              } catch (err: any) {
+                modal.toast('保存失败: ' + err.message, 'error')
+              }
+            }}>
+            <option value="">无署名</option>
+            {hdrAuthors.map(a => <option key={a.id} value={a.id}>✍ {a.name}</option>)}
+          </select>
+        )}
         {readOnly && (
           <span style={{ fontSize: 11, color: 'var(--warning)', marginLeft: 8, fontWeight: 600 }}>只读模式</span>
         )}
