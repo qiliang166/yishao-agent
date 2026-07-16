@@ -66,12 +66,28 @@ BUILTIN_THEMES = [
 ]
 
 
+import re
+
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{3,8}$")
+_FONT_FORBIDDEN_RE = re.compile(r"[;{}<>\\]|url\s*\(|expression\s*\(|@import", re.I)
+
+
+def _safe_css_value(key: str, val: str, fallback: str) -> str:
+    """CSS 注入防护：色键仅接受 hex，font 键拒绝危险片段，否则回退默认。"""
+    val = (val or "").strip()
+    if not val:
+        return fallback
+    if key == "font":
+        return val if not _FONT_FORBIDDEN_RE.search(val) else fallback
+    return val if _HEX_COLOR_RE.match(val) else fallback
+
+
 def theme_css_vars(colors: dict) -> str:
-    """把主题色归一化为模板 CSS 变量声明串（缺失键回退到第一套内置主题）。"""
+    """把主题色归一化为模板 CSS 变量声明串（缺失/非法值回退到第一套内置主题）。"""
     fallback = BUILTIN_THEMES[0]["colors"]
     parts = []
     for key in THEME_VAR_KEYS:
-        val = (colors or {}).get(key) or fallback[key]
+        val = _safe_css_value(key, (colors or {}).get(key, ""), fallback[key])
         css_key = key.replace("_", "-")
         parts.append(f"--book-{css_key}: {val};")
     return " ".join(parts)

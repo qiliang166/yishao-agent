@@ -284,7 +284,25 @@ def _logo_data_uri(logo_url: str) -> str:
 
 
 def _strip_scripts(fragment: str) -> str:
-    return re.sub(r"<script\b[^>]*>.*?</script>", "", fragment, flags=re.S | re.I)
+    fragment = re.sub(r"<script\b[^>]*>.*?</script>", "", fragment, flags=re.S | re.I)
+    fragment = re.sub(r"<script\b[^>]*/?>", "", fragment, flags=re.I)
+    return fragment
+
+
+# XSS 防护（零新增依赖分层策略：服务端正则加固 + 前端 DOMPurify + 预览 iframe sandbox）
+_DANGEROUS_TAGS_RE = re.compile(
+    r"</?(?:iframe|object|embed|form|meta|base|applet|frameset|frame)\b[^>]*>", re.I)
+_EVENT_ATTR_RE = re.compile(r"\s+on[a-zA-Z]+\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)", re.I)
+_JS_URI_RE = re.compile(
+    r"(\b(?:href|src|action|formaction|xlink:href)\s*=\s*[\"']?)\s*"
+    r"(?:javascript|vbscript|data:text/html)[^\"'>\s]*", re.I)
+
+
+def _strip_dangerous_html(fragment: str) -> str:
+    fragment = _DANGEROUS_TAGS_RE.sub("", fragment)
+    fragment = _EVENT_ATTR_RE.sub("", fragment)
+    fragment = _JS_URI_RE.sub(r"\1#", fragment)
+    return fragment
 
 
 def _remove_external_refs(fragment: str) -> str:
@@ -304,7 +322,7 @@ def _inline_local_images(fragment: str) -> str:
 
 
 def _sanitize_fragment(fragment: str) -> str:
-    return _inline_local_images(_remove_external_refs(_strip_scripts(fragment)))
+    return _inline_local_images(_remove_external_refs(_strip_dangerous_html(_strip_scripts(fragment))))
 
 
 def _extract_head_styles(source_html: str) -> str:
