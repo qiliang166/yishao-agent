@@ -2,6 +2,15 @@ import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/api'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 
+interface DlFile {
+  filename: string
+  display_name: string
+  size: number
+  ext: string
+  category: string
+  download_url: string
+}
+
 interface DlProject {
   id: string
   name: string
@@ -12,13 +21,7 @@ interface DlProject {
     unlocked_at: string | null
     expires_at: string | null
   }
-  files: {
-    filename: string
-    size: number
-    ext: string
-    category: string
-    download_url: string
-  }[]
+  files: DlFile[]
 }
 
 export default function MemberDownloadsPage() {
@@ -27,6 +30,7 @@ export default function MemberDownloadsPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
   const [toast, setToast] = useState('')
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -36,12 +40,26 @@ export default function MemberDownloadsPage() {
   useEffect(() => {
     setLoading(true)
     api.getDownloadableProjects()
-      .then(d => setProjects((d as any)?.projects || []))
+      .then(d => {
+        const list: DlProject[] = (d as any)?.projects || []
+        setProjects(list)
+        // 已解锁项目默认折叠
+        setCollapsed(new Set(list.filter(p => p.unlocked.is_unlocked).map(p => p.id)))
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
-  const doDownload = async (project: DlProject, files: { filename: string; download_url: string }[]) => {
+  const toggleCollapse = (pid: string) => {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(pid)) next.delete(pid)
+      else next.add(pid)
+      return next
+    })
+  }
+
+  const doDownload = async (project: DlProject, files: DlFile[]) => {
     if (files.length === 0) return
     try {
       const check = await api.canDownload(files.map(f => ({
@@ -51,12 +69,12 @@ export default function MemberDownloadsPage() {
       if (check == null) { showToast('操作失败：服务器未确认'); return }
       if (check.is_admin) {
         if (files.length === 1) {
-          await api.downloadWithName(files[0].download_url, files[0].filename)
+          await api.downloadWithName(files[0].download_url, files[0].display_name || files[0].filename)
         } else {
           await api.downloadSelectedFiles(project.id, files.map(f => ({
             filename: f.filename,
             download_url: f.download_url,
-            display_name: f.filename,
+            display_name: f.display_name || f.filename,
           })))
         }
         showToast(`已下载 ${files.length} 个文件`)
@@ -70,12 +88,12 @@ export default function MemberDownloadsPage() {
       }
       if (check.already_unlocked && check.already_unlocked.length > 0) {
         if (files.length === 1) {
-          await api.downloadWithName(files[0].download_url, files[0].filename)
+          await api.downloadWithName(files[0].download_url, files[0].display_name || files[0].filename)
         } else {
           await api.downloadSelectedFiles(project.id, files.map(f => ({
             filename: f.filename,
             download_url: f.download_url,
-            display_name: f.filename,
+            display_name: f.display_name || f.filename,
           })))
         }
         showToast(`已下载 ${files.length} 个文件`)
@@ -87,7 +105,7 @@ export default function MemberDownloadsPage() {
     }
   }
 
-  const downloadSingle = async (project: DlProject, f: { filename: string; download_url: string }) => {
+  const downloadSingle = async (project: DlProject, f: DlFile) => {
     doDownload(project, [f])
   }
 
@@ -97,7 +115,7 @@ export default function MemberDownloadsPage() {
 
   const [unlockCheck, setUnlockCheck] = useState<any>(null)
   const [unlockProject, setUnlockProject] = useState<DlProject | null>(null)
-  const [unlockPendingFiles, setUnlockPendingFiles] = useState<{ filename: string; download_url: string }[]>([])
+  const [unlockPendingFiles, setUnlockPendingFiles] = useState<DlFile[]>([])
 
   const handleUnlockConfirm = async () => {
     if (!unlockCheck || !unlockProject) return
@@ -111,12 +129,12 @@ export default function MemberDownloadsPage() {
       // Download the pending files
       const files = unlockPendingFiles
       if (files.length === 1) {
-        await api.downloadWithName(files[0].download_url, files[0].filename)
+        await api.downloadWithName(files[0].download_url, files[0].display_name || files[0].filename)
       } else {
         await api.downloadSelectedFiles(unlockProject.id, files.map(f => ({
           filename: f.filename,
           download_url: f.download_url,
-          display_name: f.filename,
+          display_name: f.display_name || f.filename,
         })))
       }
       setUnlockCheck(null)
@@ -143,8 +161,10 @@ export default function MemberDownloadsPage() {
   const pts = (d: number) => (d / 10).toFixed(1)
 
   const filtered = projects.filter(p => {
-    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase())
-      || p.files.some(f => f.filename.toLowerCase().includes(search.toLowerCase()))
+    const q = search.toLowerCase()
+    const matchSearch = !search || p.name.toLowerCase().includes(q)
+      || p.files.some(f => f.filename.toLowerCase().includes(q)
+        || (f.display_name || '').toLowerCase().includes(q))
     const matchFilter = filter === 'all'
       || (filter === 'unlocked' && p.unlocked.is_unlocked)
       || (filter === 'locked' && !p.unlocked.is_unlocked)
@@ -196,7 +216,8 @@ export default function MemberDownloadsPage() {
         </div>
       ) : (
         filtered.map(proj => {
-          const grouped = proj.files.reduce((acc: Record<string, typeof proj.files>, f) => {
+          const isCollapsed = collapsed.has(proj.id)
+          const grouped = proj.files.reduce((acc: Record<string, DlFile[]>, f) => {
             const g = f.category || '其他'
             if (!acc[g]) acc[g] = []
             acc[g].push(f)
@@ -205,14 +226,23 @@ export default function MemberDownloadsPage() {
 
           return (
             <div key={proj.id} className="card" style={{ padding: 0, marginBottom: 16 }}>
-              <div style={{
-                padding: '14px 20px',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                borderBottom: proj.files.length > 0 ? '1px solid var(--border)' : 'none',
-              }}>
-                <div>
+              <div
+                style={{
+                  padding: '14px 20px',
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  borderBottom: (!isCollapsed && proj.files.length > 0) ? '1px solid var(--border)' : 'none',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    onClick={() => toggleCollapse(proj.id)}
+                    style={{
+                      fontSize: 10, color: 'var(--text-secondary)',
+                      display: 'inline-block', cursor: 'pointer', padding: 4,
+                      transform: isCollapsed ? 'rotate(-90deg)' : 'none',
+                      transition: 'transform 0.15s',
+                    }}>▼</span>
                   <span style={{ fontWeight: 600, fontSize: 14 }}>{proj.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     {proj.files.length} 个文件
                   </span>
                 </div>
@@ -231,7 +261,7 @@ export default function MemberDownloadsPage() {
                   )}
                 </div>
               </div>
-              {proj.files.length > 0 && (
+              {!isCollapsed && proj.files.length > 0 && (
                 <div style={{ padding: '8px 0' }}>
                   {Object.entries(grouped).map(([cat, files]) => (
                     <div key={cat}>
@@ -246,7 +276,7 @@ export default function MemberDownloadsPage() {
                           display: 'flex', alignItems: 'center', padding: '6px 20px 6px 32px',
                           borderBottom: '1px solid var(--border)',
                         }}>
-                          <span style={{ flex: 1, fontSize: 12 }}>{f.filename}</span>
+                          <span style={{ flex: 1, fontSize: 12 }}>{f.display_name || f.filename}</span>
                           <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginRight: 8 }}>
                             {formatSize(f.size)}
                           </span>

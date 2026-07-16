@@ -1173,6 +1173,12 @@ def api_project_files(project_id: str, request: Request):
     user = getattr(request.state, "user", None)
     if user is not None:
         verify_project_access(project_id, user)
+    files, path = _list_project_files(project_id)
+    return {"files": files, "storage_path": path}
+
+
+def _list_project_files(project_id: str):
+    """Collect all output files for a project: disk files, source materials, PPT export runs."""
     path = resolve_project_storage(project_id, auto_create=False)
     files = []
 
@@ -1330,7 +1336,7 @@ def api_project_files(project_id: str, request: Request):
     finally:
         ppt_db.close()
 
-    return {"files": files, "storage_path": path}
+    return files, path
 
 
 @app.get("/api/projects/{project_id}/download-all")
@@ -5107,28 +5113,20 @@ def api_downloadable_projects(user=Depends(get_current_user)):
                 (uid, pid),
             ).fetchone()
 
-            path = resolve_project_storage(pid, auto_create=False)
             files = []
-            if os.path.isdir(path):
-                for f in sorted(os.listdir(path)):
-                    full = os.path.join(path, f)
-                    if not os.path.isfile(full):
-                        continue
-                    ext = f.rsplit(".", 1)[-1].lower() if "." in f else ""
-                    category = "其他"
-                    if ext in ("txt",):
-                        category = "2. 文档生成"
-                    elif ext in ("pptx", "svg", "html", "png", "jpg"):
-                        category = "3. 课件输出"
-                    elif ext in ("mp3", "wav"):
-                        category = "4. 演讲课件"
-                    files.append({
-                        "filename": f,
-                        "size": os.path.getsize(full),
-                        "ext": ext,
-                        "category": category,
-                        "download_url": f"/api/download/{f}?project_id={pid}",
-                    })
+            for fi in _list_project_files(pid)[0]:
+                if not fi.get("download_url"):
+                    continue
+                fn = fi["filename"]
+                ext = os.path.splitext(fn)[1].lstrip(".").lower()
+                files.append({
+                    "filename": fn,
+                    "display_name": fi.get("display_name") or fn,
+                    "size": fi["size"],
+                    "ext": ext,
+                    "category": fi["category"],
+                    "download_url": fi["download_url"],
+                })
 
             projects.append({
                 "id": pid,
