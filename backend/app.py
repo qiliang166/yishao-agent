@@ -1322,6 +1322,9 @@ def _list_project_files(project_id: str):
                             continue
                         if _rf_no_ext.endswith('_vars'):
                             continue
+                        # Skip per-page slide screenshots (slide_01.png etc.) — only show final HTML
+                        if re.match(r'^slide_\d+$', _rf_no_ext) and os.path.splitext(rf)[1].lower() in ('.png', '.jpg'):
+                            continue
                         ext = os.path.splitext(rf)[1].lower()
                         if ext in ('.html', '.svg', '.png', '.jpg'):
                             files.append({
