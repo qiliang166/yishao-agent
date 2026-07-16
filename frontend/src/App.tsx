@@ -24,6 +24,7 @@ import RoleManagePage from './pages/RoleManagePage'
 import LandingPage from './pages/LandingPage'
 import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
 import { ModalProvider } from './components/ModalProvider'
+import AboutDialog from './components/AboutDialog'
 import ProtectedRoute from './components/ProtectedRoute'
 import SettingsLock from './components/SettingsLock'
 import SetupWizard from './components/SetupWizard'
@@ -44,6 +45,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
   const [projName, setProjName] = useState('')
   const [sidebarWid, setSidebarWid] = useState('')
+  const [showAbout, setShowAbout] = useState(false)
   const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
   const currentWid = (() => {
     const parts = location.pathname.split('/')
@@ -237,6 +239,10 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
           <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
+        <div style={{ fontSize: 10, marginTop: 4 }}>
+          <span onClick={() => setShowAbout(true)}
+            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>ℹ️ 关于软件</span>
+        </div>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               👤 {user.display_name || user.username}
@@ -244,6 +250,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           )}
           <LogoutButton />
       </div>
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
     </aside>
   )
 }
@@ -317,6 +324,7 @@ function MemberSidebar() {
   const [brandSlogan, setBrandSlogan] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
   const [projName, setProjName] = useState('')
+  const [showAbout, setShowAbout] = useState(false)
   const isWorkspace = location.pathname.startsWith('/app/workspace/') || location.pathname.startsWith('/app/project/')
 
   useEffect(() => {
@@ -412,6 +420,10 @@ function MemberSidebar() {
           <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
           <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
+        <div style={{ fontSize: 10, marginTop: 4 }}>
+          <span onClick={() => setShowAbout(true)}
+            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>ℹ️ 关于软件</span>
+        </div>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               👤 {user.display_name || user.username}
@@ -419,6 +431,7 @@ function MemberSidebar() {
           )}
           <MemberLogoutButton />
       </div>
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
     </aside>
   )
 }

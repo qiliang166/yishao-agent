@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import AboutDialog from '../components/AboutDialog'
 
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
@@ -14,6 +15,7 @@ export default function MemberLoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -145,6 +147,16 @@ export default function MemberLoginPage() {
           </Link>
         </p>
 
+        <p style={{
+          fontSize: 11, color: 'var(--text-secondary)',
+          marginTop: 8, textAlign: 'center',
+        }}>
+          <span onClick={() => setShowAbout(true)}
+            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>
+            关于软件
+          </span>
+        </p>
+
         {contactInfo && (
           <p style={{
             fontSize: 11, color: 'var(--text-secondary)',
@@ -154,6 +166,8 @@ export default function MemberLoginPage() {
           </p>
         )}
       </div>
+
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
     </div>
   )
 }

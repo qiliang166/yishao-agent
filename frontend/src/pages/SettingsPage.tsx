@@ -101,6 +101,7 @@ function SettingsPage() {
   const [qrWechat, setQrWechat] = useState('')
   const [qrAlipay, setQrAlipay] = useState('')
   const [contactInfo, setContactInfo] = useState('')
+  const [aboutContent, setAboutContent] = useState('')
   // 会员套餐
   const [planName, setPlanName] = useState('标准套餐')
   const [planPrice, setPlanPrice] = useState('29.90')
@@ -157,6 +158,7 @@ function SettingsPage() {
       if (s.payment_qr_wechat) setQrWechat(s.payment_qr_wechat)
       if (s.payment_qr_alipay) setQrAlipay(s.payment_qr_alipay)
       if (s.contact_info) setContactInfo(s.contact_info)
+      if (s.about_content) setAboutContent(s.about_content)
       if (s.member_plan) {
         try {
           const p = JSON.parse(s.member_plan)
@@ -288,6 +290,7 @@ function SettingsPage() {
         admin_phone: adminPhone, app_version: appVersion,
         payment_qr_wechat: qrWechat, payment_qr_alipay: qrAlipay,
         contact_info: contactInfo,
+        about_content: aboutContent,
         admin_password_enabled: adminPasswordEnabled ? '1' : '0',
         member_plan: JSON.stringify({
           quarterly: {
@@ -491,6 +494,13 @@ function SettingsPage() {
               <label>签名/作者</label>
               <input className="form-input" type="text" value={brandingSignature}
                 onChange={e => setBrandingSignature(e.target.value)} placeholder="例如：作者名称" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+            </div>
+            <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+              <label>软件介绍</label>
+              <textarea className="form-textarea" rows={6} value={aboutContent}
+                onChange={e => setAboutContent(e.target.value)}
+                placeholder="展示在「关于软件」弹窗中，登录页和侧边栏均可查看..."
+                style={{ maxWidth: 480, width: '100%', resize: 'vertical' }} disabled={!canSaveGlobal} />
             </div>
           </div>
 

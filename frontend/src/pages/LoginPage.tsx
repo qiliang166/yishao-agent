@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import AboutDialog from '../components/AboutDialog'
 
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
@@ -22,6 +23,7 @@ export default function LoginPage() {
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneError, setPhoneError] = useState('')
   const [phoneVerified, setPhoneVerified] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -202,8 +204,12 @@ export default function LoginPage() {
         }}>
           <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>下载桌面版</a>
           <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>下载服务器版</a>
+          <span onClick={() => setShowAbout(true)}
+            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>关于软件</span>
         </div>
       </div>
+
+      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
 
       {/* Hint Dialog */}
       {showHint && (
