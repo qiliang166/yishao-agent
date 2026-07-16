@@ -1274,6 +1274,7 @@ def _list_project_files(project_id: str):
                 "download_url": "",
                 "audio_url": "",
                 "source_name": s["source_name"] or fname,
+                "material_id": s["id"],
             })
     finally:
         db.close()

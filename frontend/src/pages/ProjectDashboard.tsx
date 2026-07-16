@@ -259,7 +259,11 @@ export default function ProjectDashboard() {
   const deleteFile = async (pid: string, f: any) => {
     const key = fileKey(f)
     try {
-      await api.deleteProjectFile(pid, f.filename)
+      if (f.material_id) {
+        await api.deleteMaterial(pid, f.material_id)
+      } else {
+        await api.deleteProjectFile(pid, f.filename)
+      }
       setProjectFiles(prev => prev.filter(x => fileKey(x) !== key))
       setSelectedFiles(prev => { const s = new Set(prev); s.delete(key); return s })
     } catch (e: any) { modal.toast('删除失败: ' + (e?.message || e), 'error') }
@@ -275,7 +279,11 @@ export default function ProjectDashboard() {
       try {
         const f = projectFiles.find(x => fileKey(x) === key)
         if (f) {
-          await api.deleteProjectFile(expandedProject, f.filename)
+          if (f.material_id) {
+            await api.deleteMaterial(expandedProject, f.material_id)
+          } else {
+            await api.deleteProjectFile(expandedProject, f.filename)
+          }
           deleted++
         }
       } catch {}
