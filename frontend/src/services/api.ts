@@ -1062,6 +1062,12 @@ export const api = {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(data),
     }).then(d => d as {ok: boolean, message: string, count: number}),
+  batchGrantPoints: (data: {user_ids: string[], amount_deci: number, note?: string}) =>
+    request('/api/users/batch-grant-points', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    }).then(d => d as {ok: boolean, message: string, count: number}),
   addUserRole: (userId: string, roleId: string) =>
     request('/api/users/' + userId + '/roles/add', {
       method: 'POST',

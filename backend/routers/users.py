@@ -372,6 +372,68 @@ def batch_delete_users(req: dict, user=require_perm("member.manage")):
         db.close()
 
 
+@router.post("/users/batch-grant-points")
+def batch_grant_points(req: dict, user=require_perm("member.manage")):
+    """Batch grant points to multiple users."""
+    from datetime import datetime
+
+    user_ids = req.get("user_ids", [])
+    amount_deci = int(req.get("amount_deci", 0))
+    note = req.get("note", "批量赠送积分").strip()
+
+    if not user_ids:
+        raise HTTPException(400, "user_ids 不能为空")
+    if amount_deci <= 0:
+        raise HTTPException(400, "积分数必须大于 0")
+
+    db = get_db()
+    try:
+        now = datetime.utcnow().isoformat()
+        count = 0
+        for uid in user_ids:
+            existing = db.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
+            if not existing:
+                continue
+            if uid == user["sub"]:
+                continue
+            if existing["user_type"] == "admin" and existing["username"] == "admin":
+                continue
+
+            # Ensure user_points row exists
+            pts = db.execute(
+                "SELECT balance_deci FROM user_points WHERE user_id=?", (uid,)
+            ).fetchone()
+            if not pts:
+                db.execute(
+                    "INSERT INTO user_points (user_id, balance_deci, expires_at, updated_at) VALUES (?, 0, NULL, ?)",
+                    (uid, now),
+                )
+                old_balance = 0
+            else:
+                old_balance = int(pts["balance_deci"])
+
+            new_balance = old_balance + amount_deci
+            db.execute(
+                "UPDATE user_points SET balance_deci=?, updated_at=? WHERE user_id=?",
+                (new_balance, now, uid),
+            )
+
+            # Record transaction
+            import uuid as _uuid
+            tx_id = str(_uuid.uuid4())
+            db.execute(
+                "INSERT INTO points_transactions (id, user_id, amount_deci, balance_after_deci, type, ref_id, ref_type, note) "
+                "VALUES (?, ?, ?, ?, 'admin_grant', NULL, 'batch', ?)",
+                (tx_id, uid, amount_deci, new_balance, note),
+            )
+            count += 1
+
+        db.commit()
+        return {"ok": True, "message": f"已为 {count} 个用户增加 {amount_deci} 积分", "count": count}
+    finally:
+        db.close()
+
+
 # ── Single-user routes (parameterized, must be AFTER batch routes) ──
 
 @router.get("/users/{user_id}")

@@ -58,6 +58,9 @@ export default function UserManagePage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [showBatchExpiry, setShowBatchExpiry] = useState(false)
   const [batchExpiryDate, setBatchExpiryDate] = useState('')
+  const [showBatchPoints, setShowBatchPoints] = useState(false)
+  const [batchPointsAmount, setBatchPointsAmount] = useState('')
+  const [batchPointsNote, setBatchPointsNote] = useState('')
   const [showBatchDeleteConfirm, setShowBatchDeleteConfirm] = useState(false)
   const [batchLoading, setBatchLoading] = useState(false)
 
@@ -279,6 +282,29 @@ export default function UserManagePage() {
       setBatchExpiryDate('')
       setSelectedIds(new Set())
       loadUsers()
+    } catch (e: any) {
+      showToast(e.message || '批量操作失败')
+    } finally {
+      setBatchLoading(false)
+    }
+  }
+
+  const handleBatchPoints = async () => {
+    const amount = parseInt(batchPointsAmount)
+    if (!amount || amount <= 0) { showToast('请输入有效的积分数'); return }
+    setBatchLoading(true)
+    try {
+      const result = await api.batchGrantPoints({
+        user_ids: Array.from(selectedIds),
+        amount_deci: amount,
+        note: batchPointsNote || undefined,
+      })
+      if (result == null) { showToast('操作失败：服务器未确认'); return }
+      showToast(result.message || `已为 ${result.count} 个用户增加积分`)
+      setShowBatchPoints(false)
+      setBatchPointsAmount('')
+      setBatchPointsNote('')
+      setSelectedIds(new Set())
     } catch (e: any) {
       showToast(e.message || '批量操作失败')
     } finally {
@@ -593,6 +619,13 @@ export default function UserManagePage() {
               批量改到期
             </button>
           )}
+          <button className="btn btn-ghost btn-sm" onClick={() => {
+            setShowBatchPoints(true)
+            setBatchPointsAmount('')
+            setBatchPointsNote('')
+          }}>
+            批量加积分
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={() => handleBatchToggleActive(true)}>
             批量启用
           </button>
@@ -838,6 +871,37 @@ export default function UserManagePage() {
               <button className="btn btn-primary btn-sm" onClick={handleBatchExpiry}
                 disabled={batchLoading || !batchExpiryDate}>
                 {batchLoading ? '处理中...' : '确认修改'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Points Dialog */}
+      {showBatchPoints && (
+        <div className="dialog-overlay" onClick={() => setShowBatchPoints(false)}>
+          <div className="dialog-box" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量增加积分</div>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              将为选中的 {selectedIds.size} 个用户增加积分。
+            </p>
+            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>积分数量</label>
+            <input className="form-input" type="number" min="1"
+              value={batchPointsAmount}
+              onChange={e => setBatchPointsAmount(e.target.value)}
+              placeholder="请输入积分数"
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
+            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 10 }}>备注（可选）</label>
+            <input className="form-input" type="text"
+              value={batchPointsNote}
+              onChange={e => setBatchPointsNote(e.target.value)}
+              placeholder="赠送原因..."
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowBatchPoints(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleBatchPoints}
+                disabled={batchLoading || !batchPointsAmount || parseInt(batchPointsAmount) <= 0}>
+                {batchLoading ? '处理中...' : '确认增加'}
               </button>
             </div>
           </div>
