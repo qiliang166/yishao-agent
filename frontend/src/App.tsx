@@ -17,6 +17,7 @@ import WorkspaceSettingsPage from './pages/WorkspaceSettingsPage'
 import PromptStudioPage from './pages/PromptStudioPage'
 import MemberApprovalPage from './pages/MemberApprovalPage'
 import UserManagePage from './pages/UserManagePage'
+import DownloadStatsPage from './pages/DownloadStatsPage'
 import RoleManagePage from './pages/RoleManagePage'
 import LandingPage from './pages/LandingPage'
 import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
@@ -182,6 +183,13 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
                 className={`sidebar-item ${location.pathname === '/members/pending' ? 'active' : ''}`}
                 onClick={() => navigate('/members/pending')}>
                 <span className="ico">✅</span> 会员审批
+              </button>
+            )}
+            {(canMember || canRole) && (
+              <button
+                className={`sidebar-item ${location.pathname === '/members/stats' ? 'active' : ''}`}
+                onClick={() => navigate('/members/stats')}>
+                <span className="ico">📊</span> 下载统计
               </button>
             )}
           </>
@@ -608,6 +616,7 @@ function AppShell() {
             <Route path="/prompt-studio" element={<PromptStudioPage />} />
             <Route path="/members" element={<UserManagePage />} />
             <Route path="/members/pending" element={<MemberApprovalPage />} />
+            <Route path="/members/stats" element={<DownloadStatsPage />} />
             <Route path="/roles" element={<RoleManagePage />} />
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
             <Route path="/member-center" element={<MemberCenterPage />} />

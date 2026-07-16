@@ -47,7 +47,7 @@ export default function UserManagePage() {
   const canManageRoles = usePermission('role.manage')
   const { user: authUser } = useAuth()
   const isSuperAdmin = authUser?.username === 'admin'
-  const [tab, setTab] = useState<'admin' | 'member' | 'stats'>('admin')
+  const [tab, setTab] = useState<'admin' | 'member'>('admin')
   const [users, setUsers] = useState<UserItem[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -113,12 +113,6 @@ export default function UserManagePage() {
   const [pointsPerYuan, setPointsPerYuan] = useState(1.0)
   const [expiryDate, setExpiryDate] = useState('')
   const [expirySaving, setExpirySaving] = useState(false)
-
-  // Download stats
-  const [statsTab, setStatsTab] = useState<'projects' | 'members'>('projects')
-  const [projectStats, setProjectStats] = useState<any[]>([])
-  const [memberStats, setMemberStats] = useState<any[]>([])
-  const [statsLoading, setStatsLoading] = useState(false)
 
   const pageSize = 20
 
@@ -499,24 +493,6 @@ export default function UserManagePage() {
     }
   }
 
-  const loadStats = async (which: 'projects' | 'members') => {
-    setStatsTab(which)
-    setStatsLoading(true)
-    try {
-      if (which === 'projects') {
-        const d = await api.getDownloadStatsByProject()
-        setProjectStats((d as any)?.projects || [])
-      } else {
-        const d = await api.getDownloadStatsByMember()
-        setMemberStats((d as any)?.members || [])
-      }
-    } catch (e: any) {
-      showToast(e.message || '加载统计失败')
-    } finally {
-      setStatsLoading(false)
-    }
-  }
-
   const expiresInfo = (u: UserItem) => {
     if (!u.expires_at) return <span style={{ color: 'var(--text-secondary)' }}>永久有效</span>
     const now = new Date()
@@ -580,25 +556,12 @@ export default function UserManagePage() {
           >
             会员
           </button>
-          <button
-            onClick={() => { setTab('stats'); loadStats('projects') }}
-            style={{
-              padding: '8px 20px', border: 'none', background: 'none', cursor: 'pointer',
-              fontSize: 11, fontWeight: tab === 'stats' ? 700 : 400,
-              color: tab === 'stats' ? 'var(--primary)' : 'var(--text-secondary)',
-              borderBottom: tab === 'stats' ? '2px solid var(--primary)' : '2px solid transparent',
-            }}
-          >
-            下载统计
-          </button>
         </div>
-        {tab !== 'stats' && (
         <button className="btn btn-primary btn-sm"
           onClick={() => { setShowCreate(true); setCreateUserType(tab); setCreateError('') }}
           style={{ marginRight: 8 }}>
           + 新建用户
         </button>
-        )}
       </div>
 
       {/* Batch action bar */}
@@ -643,90 +606,7 @@ export default function UserManagePage() {
         </div>
       )}
 
-      {tab === 'stats' ? (
-        statsLoading ? (
-          <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
-        ) : (
-          <>
-            <div style={{ display: 'flex', gap: 0, marginBottom: 16, marginTop: 16, borderBottom: '1px solid var(--border)' }}>
-              <button onClick={() => loadStats('projects')} style={{
-                padding: '6px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 11,
-                fontWeight: statsTab === 'projects' ? 700 : 400,
-                color: statsTab === 'projects' ? 'var(--primary)' : 'var(--text-secondary)',
-                borderBottom: statsTab === 'projects' ? '2px solid var(--primary)' : '2px solid transparent',
-              }}>按明细</button>
-              <button onClick={() => loadStats('members')} style={{
-                padding: '6px 16px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 11,
-                fontWeight: statsTab === 'members' ? 700 : 400,
-                color: statsTab === 'members' ? 'var(--primary)' : 'var(--text-secondary)',
-                borderBottom: statsTab === 'members' ? '2px solid var(--primary)' : '2px solid transparent',
-              }}>按会员</button>
-            </div>
-            {statsTab === 'projects' ? (
-              projectStats.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-                  暂无下载记录
-                </div>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
-                      <th style={{ padding: '8px 12px' }}>明细名称</th>
-                      <th style={{ padding: '8px 12px', width: 100 }}>下载次数</th>
-                      <th style={{ padding: '8px 12px', width: 100 }}>可下载</th>
-                      <th style={{ padding: '8px 12px', width: 80 }}>积分</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {projectStats.map((p: any) => (
-                      <tr key={p.project_id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '8px 12px' }}>{p.project_name}</td>
-                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{p.download_count || 0}</td>
-                        <td style={{ padding: '8px 12px', color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
-                          {p.is_downloadable ? '是' : '否'}
-                        </td>
-                        <td style={{ padding: '8px 12px' }}>{(p.point_cost_deci / 10).toFixed(1)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            ) : (
-              memberStats.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-                  暂无下载记录
-                </div>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '2px solid var(--border)', textAlign: 'left' }}>
-                      <th style={{ padding: '8px 12px' }}>会员</th>
-                      <th style={{ padding: '8px 12px', width: 100 }}>下载次数</th>
-                      <th style={{ padding: '8px 12px', width: 100 }}>明细数</th>
-                      <th style={{ padding: '8px 12px', width: 140 }}>最近下载</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {memberStats.map((m: any) => (
-                      <tr key={m.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '8px 12px' }}>
-                          {m.display_name || m.username}
-                          <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>{m.username}</span>
-                        </td>
-                        <td style={{ padding: '8px 12px', fontWeight: 600 }}>{m.total_downloads || 0}</td>
-                        <td style={{ padding: '8px 12px' }}>{m.unique_projects || 0}</td>
-                        <td style={{ padding: '8px 12px' }}>
-                          {m.last_download ? new Date(m.last_download).toLocaleDateString('zh-CN') : '—'}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            )}
-          </>
-        )
-      ) : loading ? (
+      {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
       ) : users.length === 0 ? (
         <div style={{
