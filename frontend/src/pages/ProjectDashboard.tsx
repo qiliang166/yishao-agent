@@ -633,7 +633,7 @@ export default function ProjectDashboard() {
                     <button className="btn btn-ghost btn-sm"
                       onClick={e => { e.stopPropagation(); toggleProjectExpand(p.id) }}
                       style={{ color: 'var(--accent)', fontSize: 11 }}
-                      title="查看输出文件">📦 输出</button>
+                      title="查看和下载输出文件">📥 下载</button>
                   )}
                   {expandedProject === p.id && selectedFiles.size > 0 && canDownload && (
                     <button className="btn btn-ghost btn-sm"
