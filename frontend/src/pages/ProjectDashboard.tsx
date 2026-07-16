@@ -512,27 +512,29 @@ export default function ProjectDashboard() {
                   )}
                   {/* Point cost inline edit */}
                   {editPointProject === p.id ? (
-                    <span style={{ display: 'flex', gap: 2, alignItems: 'center', marginLeft: 4 }}>
+                    <span style={{ display: 'flex', gap: 2, alignItems: 'center', marginLeft: 4 }}
+                      onClick={e => e.stopPropagation()}>
                       <input className="form-input" type="number" step="0.1" min="0"
                         value={editPointValue}
                         onChange={e => setEditPointValue(e.target.value)}
-                        onKeyDown={async e => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault()
-                            e.stopPropagation()
-                            const v = Math.round(parseFloat(editPointValue || '0') * 10)
-                            setEditPointProject('')
-                            if (!isNaN(v) && v >= 0) {
-                              await api.updateProject(p.id, { point_cost_deci: v })
-                              loadProjects(page)
-                            }
-                          }
+                        onKeyDown={e => {
                           if (e.key === 'Escape') { e.stopPropagation(); setEditPointProject('') }
                         }}
-                        onClick={e => e.stopPropagation()}
                         autoFocus
                         style={{ width: 48, fontSize: 11, padding: '2px 4px' }} />
-                      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>积分</span>
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={async () => {
+                          const v = Math.round(parseFloat(editPointValue || '0') * 10)
+                          if (!isNaN(v) && v >= 0) {
+                            setEditPointProject('')
+                            await api.updateProject(p.id, { point_cost_deci: v })
+                            loadProjects(page)
+                          }
+                        }}
+                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--success)' }}>✓</button>
+                      <button className="btn btn-ghost btn-sm"
+                        onClick={() => setEditPointProject('')}
+                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--text-secondary)' }}>✕</button>
                     </span>
                   ) : (
                     <span style={{
