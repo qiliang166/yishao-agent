@@ -1100,8 +1100,10 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         project_code = f"KH{today}-{today_count + 1:04d}"
 
         db.execute(
-            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, user["sub"]))
+            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, user["sub"],
+             req.point_cost_deci if req.point_cost_deci is not None else 5,
+             req.is_downloadable if req.is_downloadable is not None else 0))
         db.commit()
         # Initialize project_items from workspace configs
         _init_project_items_from_factory(pid, req.workspace_id)
@@ -1500,6 +1502,10 @@ def update_project(project_id: str, req: ProjectUpdate, user=require_perm("proje
             db.execute("UPDATE projects SET storage_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (os.path.normpath(req.storage_path) if req.storage_path.strip() else req.storage_path, project_id))
         if req.is_locked is not None:
             db.execute("UPDATE projects SET is_locked = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.is_locked, project_id))
+        if req.point_cost_deci is not None:
+            db.execute("UPDATE projects SET point_cost_deci = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.point_cost_deci, project_id))
+        if req.is_downloadable is not None:
+            db.execute("UPDATE projects SET is_downloadable = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.is_downloadable, project_id))
         db.commit()
         row = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
         return dict(row)

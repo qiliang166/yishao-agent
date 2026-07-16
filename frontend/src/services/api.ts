@@ -126,6 +126,8 @@ export interface Project {
   source_type: string
   storage_path?: string
   is_locked?: number
+  point_cost_deci?: number
+  is_downloadable?: number
   copied_from_project_id?: string
   workspace_id?: string
   created_by?: string
@@ -218,13 +220,13 @@ export const api = {
   },
   getProject: (id: string) => request(`/api/projects/${id}`),
   listProjectVideos: (id: string) => request(`/api/projects/${id}/videos`),
-  createProject: (name: string, workspaceId: string) =>
+  createProject: (name: string, workspaceId: string, opts?: { point_cost_deci?: number; is_downloadable?: number }) =>
     request('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, workspace_id: workspaceId, source_type: 'text' }),
+      body: JSON.stringify({ name, workspace_id: workspaceId, source_type: 'text', ...opts }),
     }),
-  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number}) =>
+  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number; point_cost_deci?: number; is_downloadable?: number}) =>
     request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
   batchDeleteProjects: (ids: string[]) =>

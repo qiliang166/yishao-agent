@@ -211,10 +211,10 @@ export default function MemberCenterPage() {
               fontSize: 11, color: 'var(--primary)', textDecoration: 'none',
               fontWeight: 600,
             }}>
-              续费 →
+              会员+积分 →
             </Link>
             <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-              会员快到期？点击续费，立即生效
+              会员快到期？续费延长有效期并赠送积分
             </span>
           </div>
         )}

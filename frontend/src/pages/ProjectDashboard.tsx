@@ -38,12 +38,16 @@ export default function ProjectDashboard() {
   // Create dialog state
   const [showCreate, setShowCreate] = useState(false)
   // Expand project row to show output files
+  const [editPointProject, setEditPointProject] = useState('')
+  const [editPointValue, setEditPointValue] = useState('')
   const [expandedProject, setExpandedProject] = useState('')
   const [projectFiles, setProjectFiles] = useState<any[]>([])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
   const [loadingFiles, setLoadingFiles] = useState(false)
 
   const [createName, setCreateName] = useState('')
+  const [createPointCost, setCreatePointCost] = useState('0.5')
+  const [createDownloadable, setCreateDownloadable] = useState(false)
   const [createCopy, setCreateCopy] = useState(false)
   const [createSourceQuery, setCreateSourceQuery] = useState('')
   const [createSourceId, setCreateSourceId] = useState('')
@@ -118,7 +122,11 @@ export default function ProjectDashboard() {
     if (!createName.trim() || !wid) return
     setCreating(true)
     try {
-      const project = await api.createProject(createName.trim(), wid)
+      const costDeci = Math.round(parseFloat(createPointCost || '0.5') * 10)
+      const project = await api.createProject(createName.trim(), wid, {
+        point_cost_deci: costDeci,
+        is_downloadable: createDownloadable ? 1 : 0,
+      })
       if (createCopy && createSourceId) {
         try {
           await api.copyProjectItems(project.id, createSourceId)
@@ -502,6 +510,46 @@ export default function ProjectDashboard() {
                       style={{ color: 'var(--accent)', fontSize: 11 }}
                       title="复制明细及其配置">复制</button>
                   )}
+                  {/* Point cost inline edit */}
+                  {editPointProject === p.id ? (
+                    <span style={{ display: 'flex', gap: 2, alignItems: 'center', marginLeft: 4 }}>
+                      <input className="form-input" type="number" step="0.1" min="0"
+                        value={editPointValue}
+                        onChange={e => setEditPointValue(e.target.value)}
+                        onKeyDown={async e => {
+                          if (e.key === 'Enter') {
+                            e.stopPropagation()
+                            const v = Math.round(parseFloat(editPointValue || '0') * 10)
+                            if (!isNaN(v) && v >= 0) {
+                              await api.updateProject(p.id, { point_cost_deci: v })
+                              loadProjects(page)
+                            }
+                            setEditPointProject('')
+                          }
+                          if (e.key === 'Escape') { e.stopPropagation(); setEditPointProject('') }
+                        }}
+                        onClick={e => e.stopPropagation()}
+                        onBlur={() => setEditPointProject('')}
+                        autoFocus
+                        style={{ width: 48, fontSize: 11, padding: '2px 4px' }} />
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>积分</span>
+                    </span>
+                  ) : (
+                    <span style={{
+                      cursor: canEditOwn && isOwner(p.created_by) ? 'pointer' : 'default',
+                      fontSize: 11, marginLeft: 4,
+                      color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)',
+                    }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (!canEditOwn || !isOwner(p.created_by)) return
+                        setEditPointProject(p.id)
+                        setEditPointValue(String((p.point_cost_deci ?? 5) / 10))
+                      }}
+                      title="点击修改下载所需积分">
+                      {(p.point_cost_deci ?? 5) / 10} 积分
+                    </span>
+                  )}
                   {canEditOwn && isOwner(p.created_by) ? (
                     <span style={{
                         cursor: 'pointer', fontSize: 11, marginLeft: 4,
@@ -706,6 +754,25 @@ export default function ProjectDashboard() {
                 onChange={e => setCreateName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter' && createName.trim()) handleCreate() }}
                 placeholder="输入明细名称" autoFocus />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">下载所需积分</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input className="form-input" type="number" step="0.1" min="0"
+                  value={createPointCost}
+                  onChange={e => setCreatePointCost(e.target.value)}
+                  style={{ width: 100, fontSize: 13 }} />
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>积分（0 = 免费）</span>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                <input type="checkbox" checked={createDownloadable}
+                  onChange={e => setCreateDownloadable(e.target.checked)} />
+                允许会员用积分下载
+              </label>
             </div>
 
             <div className="form-group">

@@ -25,6 +25,8 @@ class ProjectCreate(BaseModel):
     source_type: str = "text"
     storage_path: Optional[str] = None
     copied_from_project_id: Optional[str] = None
+    point_cost_deci: Optional[int] = None
+    is_downloadable: Optional[int] = None
 
 
 class ProjectUpdate(BaseModel):
@@ -32,6 +34,8 @@ class ProjectUpdate(BaseModel):
     status: Optional[str] = None
     storage_path: Optional[str] = None
     is_locked: Optional[int] = None
+    point_cost_deci: Optional[int] = None
+    is_downloadable: Optional[int] = None
 
 
 class StepResultSave(BaseModel):

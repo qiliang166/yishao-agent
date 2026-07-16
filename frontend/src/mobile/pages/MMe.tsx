@@ -281,7 +281,7 @@ export default function MMe() {
                 </div>
                 <button className="m-btn-primary" style={{ marginBottom: 16 }}
                   onClick={() => navigate(`/renew?u=${encodeURIComponent(me.username || '')}`)}>
-                  会员续费
+                  会员+积分
                 </button>
 
                 {/* 积分余额 */}

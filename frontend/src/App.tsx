@@ -627,7 +627,7 @@ function RootRoute() {
   }
   if (user) {
     const isExperienceOfficer = user.roles?.includes('开发体验员')
-    if (user.user_type === 'member' && !isExperienceOfficer) return <Navigate to="/app" replace />
+    if (user.user_type === 'member' || isExperienceOfficer) return <Navigate to="/app" replace />
     return <Navigate to="/home" replace />
   }
   return <LandingPage />
