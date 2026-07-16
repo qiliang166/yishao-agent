@@ -922,6 +922,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(d => d as { ok: boolean; expires_before: string; expires_after: string }),
+  updateUserExpiry: (userId: string, expiresAt: string | null) =>
+    request('/api/members/' + userId + '/expiry', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expires_at: expiresAt }),
+    }).then(d => d as { ok: boolean; expires_at: string | null }),
   listPayments: (userId: string, page?: number, pageSize?: number, q?: string) => {
     const params = new URLSearchParams()
     if (page) params.set('page', String(page))

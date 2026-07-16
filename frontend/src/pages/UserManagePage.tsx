@@ -78,16 +78,6 @@ export default function UserManagePage() {
   // Payment history dialog
   const [payHistUser, setPayHistUser] = useState<UserItem | null>(null)
 
-  // Payment dialog
-  const [payUser, setPayUser] = useState<UserItem | null>(null)
-  const [payAmount, setPayAmount] = useState('29.90')
-  const [payPlan, setPayPlan] = useState('月费套餐')
-  const [payDays, setPayDays] = useState(30)
-  const [payMethod, setPayMethod] = useState('微信支付')
-  const [payNote, setPayNote] = useState('')
-  const [payLoading, setPayLoading] = useState(false)
-  const [payError, setPayError] = useState('')
-
   // Role assignment
   const [selectedRoleId, setSelectedRoleId] = useState('')
   const [roleAssignLoading, setRoleAssignLoading] = useState(false)
@@ -108,6 +98,8 @@ export default function UserManagePage() {
   const [giftNote, setGiftNote] = useState('')
   const [giftSaving, setGiftSaving] = useState(false)
   const [pointsPerYuan, setPointsPerYuan] = useState(1.0)
+  const [expiryDate, setExpiryDate] = useState('')
+  const [expirySaving, setExpirySaving] = useState(false)
 
   // Download stats
   const [statsTab, setStatsTab] = useState<'projects' | 'members'>('projects')
@@ -377,16 +369,6 @@ export default function UserManagePage() {
     }
   }
 
-  const openPayment = (u: UserItem) => {
-    setPayUser(u)
-    setPayAmount('29.90')
-    setPayPlan('月费套餐')
-    setPayDays(30)
-    setPayMethod('微信支付')
-    setPayNote('')
-    setPayError('')
-  }
-
   const openPoints = async (u: UserItem) => {
     setPointsUser(u)
     setPointsData(null)
@@ -396,6 +378,7 @@ export default function UserManagePage() {
     setGiftAmount('')
     setGiftNote('')
     setGiftSaving(false)
+    setExpiryDate(u.expires_at ? new Date(u.expires_at).toISOString().slice(0, 16) : '')
     setPointsLoading(true)
     try {
       const [data, settings] = await Promise.all([
@@ -460,6 +443,26 @@ export default function UserManagePage() {
     }
   }
 
+  const handleUpdateExpiry = async () => {
+    if (!pointsUser) return
+    setExpirySaving(true)
+    setPointsError('')
+    try {
+      const result = await api.updateUserExpiry(pointsUser.id, expiryDate || null)
+      if (result != null && result.ok) {
+        showToast(expiryDate ? `到期时间已更新：${new Date(expiryDate).toLocaleDateString('zh-CN')}` : '已设为永久有效')
+        // Refresh user list to show updated expiry
+        loadUsers()
+      } else {
+        setPointsError('更新失败：服务器未确认')
+      }
+    } catch (e: any) {
+      setPointsError(e.message || '更新失败')
+    } finally {
+      setExpirySaving(false)
+    }
+  }
+
   const loadStats = async (which: 'projects' | 'members') => {
     setStatsTab(which)
     setStatsLoading(true)
@@ -475,34 +478,6 @@ export default function UserManagePage() {
       showToast(e.message || '加载统计失败')
     } finally {
       setStatsLoading(false)
-    }
-  }
-
-  const handlePayment = async () => {
-    if (!payUser) return
-    setPayLoading(true)
-    setPayError('')
-    try {
-      const amount = Math.round(parseFloat(payAmount) * 100)
-      if (isNaN(amount) || amount <= 0) {
-        setPayError('金额无效')
-        setPayLoading(false)
-        return
-      }
-      await api.recordPayment(payUser.id, {
-        amount_cents: amount,
-        plan_name: payPlan,
-        duration_days: payDays,
-        payment_method: payMethod,
-        note: payNote,
-      })
-      showToast('付费记录成功')
-      setPayUser(null)
-      loadUsers()
-    } catch (e: any) {
-      setPayError(e.message || '操作失败')
-    } finally {
-      setPayLoading(false)
     }
   }
 
@@ -805,8 +780,6 @@ export default function UserManagePage() {
                       )}
                       {tab === 'member' && canManageMembers && (
                         <>
-                          <button className="btn btn-ghost btn-sm" onClick={() => openPayment(u)}
-                            style={{ color: 'var(--primary)' }}>付费</button>
                           <button className="btn btn-ghost btn-sm" onClick={() => setPayHistUser(u)}>明细</button>
                           <button className="btn btn-ghost btn-sm" onClick={() => openPoints(u)}
                             style={{ color: '#5cb85c' }}>积分</button>
@@ -1020,49 +993,6 @@ export default function UserManagePage() {
       {/* Payment History Dialog */}
       <PaymentHistoryDialog user={payHistUser} onClose={() => setPayHistUser(null)} />
 
-      {/* Payment Dialog */}
-      {payUser && (
-        <div className="dialog-overlay" onClick={() => setPayUser(null)}>
-          <div className="dialog-box" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
-            <div className="dialog-title">记录付费 — {payUser.username}</div>
-            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
-              当前到期：{payUser.expires_at ? new Date(payUser.expires_at).toLocaleString('zh-CN') : '永久'}
-            </p>
-
-            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>金额（元）</label>
-            <input className="form-input" value={payAmount} onChange={e => setPayAmount(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
-
-            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>套餐名</label>
-            <input className="form-input" value={payPlan} onChange={e => setPayPlan(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
-
-            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>续期天数</label>
-            <input className="form-input" type="number" min={1} max={3650} value={payDays}
-              onChange={e => setPayDays(Number(e.target.value))}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
-
-            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>支付方式</label>
-            <input className="form-input" value={payMethod} onChange={e => setPayMethod(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11 }} />
-
-            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4, marginTop: 12 }}>备注（可选）</label>
-            <textarea className="form-input" rows={2} value={payNote} onChange={e => setPayNote(e.target.value)}
-              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, resize: 'vertical' }} />
-
-            {payError && (
-              <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 12, textAlign: 'center' }}>{payError}</div>
-            )}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setPayUser(null)}>取消</button>
-              <button className="btn btn-primary btn-sm" onClick={handlePayment} disabled={payLoading}>
-                {payLoading ? '处理中...' : '确认记录'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Points Dialog */}
       {pointsUser && (
         <div className="dialog-overlay" onClick={() => setPointsUser(null)}>
@@ -1098,6 +1028,25 @@ export default function UserManagePage() {
                     ))}
                   </div>
                 )}
+
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, marginBottom: 12 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>会员到期时间</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input className="form-input" type="datetime-local"
+                      value={expiryDate}
+                      onChange={e => setExpiryDate(e.target.value)}
+                      style={{ flex: 1, fontSize: 12 }} />
+                    <button className="btn btn-primary btn-sm"
+                      onClick={handleUpdateExpiry}
+                      disabled={expirySaving || !isSuperAdmin}
+                      style={{ whiteSpace: 'nowrap' }}>
+                      {expirySaving ? '更新中...' : '更新到期'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+                    清空日期并保存 = 永久有效
+                  </div>
+                </div>
 
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                   <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>修改积分余额</label>

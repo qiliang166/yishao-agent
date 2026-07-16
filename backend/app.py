@@ -7189,6 +7189,31 @@ async def record_payment(user_id: str, body: PaymentRecordReq, request: Request,
         db.close()
 
 
+@app.put("/api/members/{user_id}/expiry")
+def update_member_expiry(user_id: str, body: dict = Body(...), request: Request = None,
+                         user=require_perm("member.manage")):
+    """Update member expiry date directly."""
+    from datetime import datetime as _dt
+    new_expires = body.get("expires_at")
+    ip = _get_client_ip(request) if request else None
+
+    db = get_db()
+    try:
+        m = db.execute("SELECT id, username, expires_at FROM users WHERE id=?", (user_id,)).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+
+        db.execute("UPDATE users SET expires_at=?, updated_at=? WHERE id=?",
+                   (new_expires, _dt.utcnow().isoformat(), user_id))
+        _write_audit(db, user["sub"], "member.expiry", "user", user_id,
+                      json.dumps({"old_expires": m["expires_at"], "new_expires": new_expires}),
+                      ip_address=ip)
+        db.commit()
+        return {"ok": True, "expires_at": new_expires}
+    finally:
+        db.close()
+
+
 @app.get("/api/members/{user_id}/payments")
 def list_payments(user_id: str, page: int = 1, page_size: int = 20, q: str = "",
                   user=require_perm("member.manage")):
