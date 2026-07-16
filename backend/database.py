@@ -1292,6 +1292,14 @@ def init_db():
         except Exception as e:
             print(f"[DB] Warning: could not add points_granted_deci to payment_records: {e}")
 
+        # Migrate: rate on payment_records
+        try:
+            pr_cols2 = [r[1] for r in conn.execute("PRAGMA table_info(payment_records)").fetchall()]
+            if "rate" not in pr_cols2:
+                conn.execute("ALTER TABLE payment_records ADD COLUMN rate REAL DEFAULT NULL")
+        except Exception as e:
+            print(f"[DB] Warning: could not add rate to payment_records: {e}")
+
         conn.commit()
     finally:
         conn.close()
@@ -1574,6 +1582,14 @@ def _migrate_v1_create_tables(conn):
             conn.execute("ALTER TABLE payment_records ADD COLUMN points_granted_deci INTEGER NOT NULL DEFAULT 0")
     except Exception as e:
         print(f"[DB] Warning: could not add points_granted_deci to payment_records: {e}")
+
+    # Migrate: rate on payment_records
+    try:
+        pr_cols2 = [r[1] for r in conn.execute("PRAGMA table_info(payment_records)").fetchall()]
+        if "rate" not in pr_cols2:
+            conn.execute("ALTER TABLE payment_records ADD COLUMN rate REAL DEFAULT NULL")
+    except Exception as e:
+        print(f"[DB] Warning: could not add rate to payment_records: {e}")
 
     # Add created_by to existing tables (NULL = super admin)
     _tables_for_created_by = [

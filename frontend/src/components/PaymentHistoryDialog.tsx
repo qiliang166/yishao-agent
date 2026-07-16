@@ -12,6 +12,7 @@ interface PaymentRecord {
   note: string
   paid_at: string
   points_granted_deci: number
+  rate: number | null
 }
 
 function methodLabel(m: string): string {
@@ -37,26 +38,19 @@ export default function PaymentHistoryDialog({ user, onClose }: {
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
   const [searchDebounce, setSearchDebounce] = useState<any>(null)
-  const [rate, setRate] = useState(1.0)
 
   const load = (p: number, q?: string) => {
     if (!user) return
     setLoading(true)
     setError('')
-    Promise.all([
-      api.listPayments(user.id, p, PAGE_SIZE, q || search),
-      api.getSettings(),
-    ])
-      .then(([data, settings]) => {
+    api.listPayments(user.id, p, PAGE_SIZE, q || search)
+      .then(data => {
         if (data != null && Array.isArray(data.payments)) {
           setPayments(data.payments)
           setTotal(data.total || 0)
         } else {
           setPayments([])
           setTotal(0)
-        }
-        if (settings?.settings?.points_per_yuan) {
-          setRate(parseFloat(settings.settings.points_per_yuan) || 1.0)
         }
       })
       .catch((e: any) => setError(e?.message || '加载付款记录失败'))
@@ -88,10 +82,6 @@ export default function PaymentHistoryDialog({ user, onClose }: {
       <div className="dialog-box" style={{ width: 480, maxHeight: '75vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="dialog-title">付款明细 — {user.display_name} {user.username}</div>
 
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 12 }}>
-          汇率: 1元 = {rate} 积分
-        </div>
-
         <input
           className="form-input"
           type="text"
@@ -112,7 +102,8 @@ export default function PaymentHistoryDialog({ user, onClose }: {
             {payments.map(p => {
               const st = statusLabel(p.status)
               const ptsDisplay = p.points_granted_deci > 0 ? (p.points_granted_deci / 10).toFixed(1) : null
-              const revenueEstimate = ptsDisplay ? (parseFloat(ptsDisplay) / rate).toFixed(2) : null
+              const payRate = p.rate || null
+              const revenueEstimate = ptsDisplay && payRate ? (parseFloat(ptsDisplay) / payRate).toFixed(2) : null
               return (
                 <div key={p.id} style={{
                   border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px',
@@ -135,14 +126,17 @@ export default function PaymentHistoryDialog({ user, onClose }: {
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     {p.paid_at ? new Date(p.paid_at + (p.paid_at.includes('Z') ? '' : 'Z')).toLocaleString('zh-CN') : '—'}
                   </div>
-                  {ptsDisplay && (
+                  {ptsDisplay && payRate && (
+                    <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 2 }}>
+                      汇率: 1元 = {payRate} 积分  获 {ptsDisplay} 积分
+                      {revenueEstimate && (
+                        <span style={{ color: 'var(--text-secondary)' }}> (计入收益: ￥{revenueEstimate})</span>
+                      )}
+                    </div>
+                  )}
+                  {ptsDisplay && !payRate && (
                     <div style={{ fontSize: 11, color: 'var(--primary)', marginTop: 2 }}>
                       获 {ptsDisplay} 积分
-                      {revenueEstimate && (
-                        <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>
-                          (计入收益: ￥{revenueEstimate})
-                        </span>
-                      )}
                     </div>
                   )}
                   {p.note && (

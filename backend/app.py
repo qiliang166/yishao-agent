@@ -6765,8 +6765,8 @@ async def approve_member(user_id: str, body: ApproveMemberReq, request: Request,
                                ref_id=payment["id"], ref_type="payment",
                                note=f"购买 {payment['plan_name']} 获 {points_granted/10:.1f} 积分 (汇率: 1元={points_per_yuan}积分)",
                                expires_at=expires_at)
-                    db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
-                              (points_granted, payment["id"]))
+                    db.execute("UPDATE payment_records SET points_granted_deci=?, rate=? WHERE id=?",
+                              (points_granted, points_per_yuan, payment["id"]))
 
             if bonus_deci > 0 and not existing_pts:
                 _add_points(db, user_id, bonus_deci, "signup_bonus",
@@ -7024,8 +7024,8 @@ async def approve_upgrade(user_id: str, request: Request, user=require_perm("mem
                                ref_id=upgrade_payment["id"], ref_type="payment",
                                note=f"升级 {upgrade_payment['plan_name']} 获 {points_granted/10:.1f} 积分 (汇率: 1元={points_per_yuan}积分)",
                                expires_at=upgrade_expires)
-                    db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
-                              (points_granted, upgrade_payment["id"]))
+                    db.execute("UPDATE payment_records SET points_granted_deci=?, rate=? WHERE id=?",
+                              (points_granted, points_per_yuan, upgrade_payment["id"]))
         except Exception as e:
             print(f"[Points] Warning: failed to grant points on upgrade: {e}")
 
@@ -7173,8 +7173,8 @@ async def record_payment(user_id: str, body: PaymentRecordReq, request: Request,
                            ref_id=pid, ref_type="payment",
                            note=f"管理员录入 {plan_name} 获 {points_granted/10:.1f} 积分",
                            created_by=user["sub"], expires_at=new_expires_str)
-                db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
-                          (points_granted, pid))
+                db.execute("UPDATE payment_records SET points_granted_deci=?, rate=? WHERE id=?",
+                          (points_granted, points_per_yuan, pid))
         except Exception as e:
             print(f"[Points] Warning: failed to grant points on manual payment: {e}")
 
@@ -7321,8 +7321,8 @@ async def approve_renewal(user_id: str, request: Request, user=require_perm("mem
                        ref_id=payment["id"], ref_type="payment",
                        note=f"续费 {payment['plan_name']} 获 {points_granted/10:.1f} 积分 (汇率: 1元={points_per_yuan}积分)",
                        expires_at=new_expires)
-            db.execute("UPDATE payment_records SET points_granted_deci=? WHERE id=?",
-                      (points_granted, payment["id"]))
+            db.execute("UPDATE payment_records SET points_granted_deci=?, rate=? WHERE id=?",
+                      (points_granted, points_per_yuan, payment["id"]))
 
         _write_audit(db, user["sub"], "member.approve_renewal", "user", user_id,
                       json.dumps({"payment_id": payment["id"], "plan": payment["plan_name"],
