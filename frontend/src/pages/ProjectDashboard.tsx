@@ -45,6 +45,7 @@ export default function ProjectDashboard() {
   // Unlock dialog state
   const [unlockData, setUnlockData] = useState<any>(null)
   const [unlockPendingFiles, setUnlockPendingFiles] = useState<any[]>([])
+  const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set())
   const [expandedProject, setExpandedProject] = useState('')
   const [projectFiles, setProjectFiles] = useState<any[]>([])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -85,6 +86,14 @@ export default function ProjectDashboard() {
     if (!wid) return
     api.getWorkspace(wid).then(setWorkspace).catch(() => {})
   }, [wid])
+
+  useEffect(() => {
+    if (!isMember) return
+    api.getMyUnlockedProjects().then(d => {
+      const ids = new Set<string>(((d as any)?.unlocked || []).map((u: any) => u.project_id))
+      setUnlockedIds(ids)
+    }).catch(() => {})
+  }, [isMember])
 
   const loadProjects = (p: number) => {
     if (!wid) return
@@ -438,6 +447,8 @@ export default function ProjectDashboard() {
     try {
       const projectIds = [...new Set(check.need_unlock.map((p: any) => p.project_id))]
       await api.unlockProjects(projectIds as string[])
+      // Refresh unlocked set
+      setUnlockedIds(prev => { const s = new Set(prev); projectIds.forEach(id => s.add(id as string)); return s })
       setUnlockData(null)
       // Proceed with download
       const selected = unlockPendingFiles
@@ -596,6 +607,13 @@ export default function ProjectDashboard() {
                       onClick={e => { e.stopPropagation(); copyProject(p.id, p.name) }}
                       style={{ color: 'var(--accent)', fontSize: 11 }}
                       title="复制明细及其配置">复制</button>
+                  )}
+                  {/* Unlocked badge for members */}
+                  {isMember && unlockedIds.has(p.id) && (
+                    <span style={{
+                      fontSize: 10, color: '#fff', background: 'var(--success)',
+                      padding: '1px 6px', borderRadius: 3, fontWeight: 600, marginLeft: 4,
+                    }}>已解锁</span>
                   )}
                   {/* Downloadable toggle */}
                   {canEditOwn && isOwner(p.created_by) ? (

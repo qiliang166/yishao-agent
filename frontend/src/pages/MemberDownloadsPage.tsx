@@ -24,6 +24,8 @@ interface DlProject {
 export default function MemberDownloadsPage() {
   const [projects, setProjects] = useState<DlProject[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
   const [toast, setToast] = useState('')
 
   const showToast = useCallback((msg: string) => {
@@ -140,9 +142,40 @@ export default function MemberDownloadsPage() {
 
   const pts = (d: number) => (d / 10).toFixed(1)
 
+  const filtered = projects.filter(p => {
+    const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase())
+      || p.files.some(f => f.filename.toLowerCase().includes(search.toLowerCase()))
+    const matchFilter = filter === 'all'
+      || (filter === 'unlocked' && p.unlocked.is_unlocked)
+      || (filter === 'locked' && !p.unlocked.is_unlocked)
+    return matchSearch && matchFilter
+  })
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 24px 0' }}>下载文件</h1>
+
+      {/* Search + Filter */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+        <input className="form-input" type="text" value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="搜索项目或文件..."
+          style={{ flex: 1, fontSize: 12 }} />
+        <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+          {([
+            ['all', '全部'],
+            ['unlocked', '已解锁'],
+            ['locked', '未解锁'],
+          ] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setFilter(k)}
+              style={{
+                padding: '6px 14px', border: 'none', background: filter === k ? 'var(--primary)' : 'transparent',
+                color: filter === k ? '#fff' : 'var(--text-secondary)',
+                fontSize: 11, cursor: 'pointer', fontWeight: filter === k ? 600 : 400,
+              }}>{label}</button>
+          ))}
+        </div>
+      </div>
 
       {toast && (
         <div style={{
@@ -156,13 +189,13 @@ export default function MemberDownloadsPage() {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
-      ) : projects.length === 0 ? (
+      ) : filtered.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
-          <p>暂无可用下载</p>
+          <p>{projects.length === 0 ? '暂无可用下载' : '没有匹配的结果'}</p>
         </div>
       ) : (
-        projects.map(proj => {
+        filtered.map(proj => {
           const grouped = proj.files.reduce((acc: Record<string, typeof proj.files>, f) => {
             const g = f.category || '其他'
             if (!acc[g]) acc[g] = []
