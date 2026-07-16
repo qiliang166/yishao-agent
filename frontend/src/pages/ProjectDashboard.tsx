@@ -355,6 +355,39 @@ export default function ProjectDashboard() {
     }
   }
 
+  const downloadFileWithCheck = async (f: any) => {
+    try {
+      const check = await api.canDownload([{ project_id: expandedProject, filename: f.filename }])
+      if (check == null) { modal.toast('操作失败：服务器未确认', 'error'); return }
+      if (check.is_admin) {
+        const dlName = f.display_name || f.filename
+        if (f.download_url) {
+          await api.downloadWithName(f.download_url, dlName)
+        } else {
+          await api.downloadWithName(
+            `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`, dlName)
+        }
+        return
+      }
+      if (check.need_unlock && check.need_unlock.length > 0) {
+        setUnlockData(check)
+        setUnlockPendingFiles([f])
+        return
+      }
+      if (check.already_unlocked && check.already_unlocked.length > 0) {
+        const dlName = f.display_name || f.filename
+        if (f.download_url) {
+          await api.downloadWithName(f.download_url, dlName)
+        } else {
+          await api.downloadWithName(
+            `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`, dlName)
+        }
+        return
+      }
+      modal.toast('无法下载：请联系管理员', 'error')
+    } catch (e: any) { modal.toast(`下载失败: ${e?.message || e}`, 'error') }
+  }
+
   const downloadSelectedFiles = async () => {
     const selected = projectFiles.filter(f => selectedFiles.has(fileKey(f)))
     if (selected.length === 0) return
@@ -759,19 +792,7 @@ export default function ProjectDashboard() {
                                     })()}
                                     {canDownload && (
                                       <button className="btn btn-ghost btn-sm"
-                                        onClick={async () => {
-                                          try {
-                                            const dlName = f.display_name || f.filename
-                                            if (f.download_url) {
-                                              await api.downloadWithName(f.download_url, dlName)
-                                            } else {
-                                              await api.downloadWithName(
-                                                `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`,
-                                                dlName
-                                              )
-                                            }
-                                          } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
-                                        }}
+                                        onClick={() => downloadFileWithCheck(f)}
                                         style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent)' }}
                                         title="下载">⬇</button>
                                     )}
