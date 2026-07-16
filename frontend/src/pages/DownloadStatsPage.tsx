@@ -1,6 +1,19 @@
 import { useState, useCallback, useEffect } from 'react'
 import { api } from '../services/api'
 
+const PAGE_SIZE = 20
+
+function Pager({ page, totalPages, total, onChange }: { page: number; totalPages: number; total: number; onChange: (p: number) => void }) {
+  if (totalPages <= 1) return null
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '10px 0', fontSize: 11, color: 'var(--text-secondary)' }}>
+      <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => onChange(page - 1)}>上一页</button>
+      <span>第 {page} / {totalPages} 页（共 {total} 条）</span>
+      <button className="btn btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>下一页</button>
+    </div>
+  )
+}
+
 export default function DownloadStatsPage() {
   const [statsTab, setStatsTab] = useState<'projects' | 'members'>('projects')
   const [projectStats, setProjectStats] = useState<any[]>([])
@@ -9,6 +22,8 @@ export default function DownloadStatsPage() {
   const [toast, setToast] = useState('')
   const [catFilter, setCatFilter] = useState('')
   const [authorFilter, setAuthorFilter] = useState('')
+  const [projPage, setProjPage] = useState(1)
+  const [memPage, setMemPage] = useState(1)
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -18,6 +33,8 @@ export default function DownloadStatsPage() {
   const loadStats = async (which: 'projects' | 'members') => {
     setStatsTab(which)
     setLoading(true)
+    setProjPage(1)
+    setMemPage(1)
     try {
       if (which === 'projects') {
         const d = await api.getDownloadStatsByProject()
@@ -51,6 +68,11 @@ export default function DownloadStatsPage() {
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1])
   }
+
+  const projTotalPages = Math.max(1, Math.ceil(filteredStats.length / PAGE_SIZE))
+  const projPageItems = filteredStats.slice((projPage - 1) * PAGE_SIZE, projPage * PAGE_SIZE)
+  const memTotalPages = Math.max(1, Math.ceil(memberStats.length / PAGE_SIZE))
+  const memPageItems = memberStats.slice((memPage - 1) * PAGE_SIZE, memPage * PAGE_SIZE)
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
@@ -96,7 +118,7 @@ export default function DownloadStatsPage() {
               <div style={{ display: 'flex', gap: 8, marginTop: 16, alignItems: 'center' }}>
                 {catOptions.length > 0 && (
                   <select className="form-input" style={{ width: 150, fontSize: 12 }}
-                    value={catFilter} onChange={e => setCatFilter(e.target.value)}>
+                    value={catFilter} onChange={e => { setCatFilter(e.target.value); setProjPage(1) }}>
                     <option value="">全部分类</option>
                     {catOptions.map(c => <option key={c} value={c}>{c}</option>)}
                     <option value="__none__">未分类</option>
@@ -104,7 +126,7 @@ export default function DownloadStatsPage() {
                 )}
                 {authorOptions.length > 0 && (
                   <select className="form-input" style={{ width: 150, fontSize: 12 }}
-                    value={authorFilter} onChange={e => setAuthorFilter(e.target.value)}>
+                    value={authorFilter} onChange={e => { setAuthorFilter(e.target.value); setProjPage(1) }}>
                     <option value="">全部作者</option>
                     {authorOptions.map(a => <option key={a} value={a}>{a}</option>)}
                     <option value="__none__">无署名</option>
@@ -133,9 +155,9 @@ export default function DownloadStatsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStats.map((p: any, i: number) => (
+                  {projPageItems.map((p: any, i: number) => (
                     <tr key={p.project_id}>
-                      <td style={{ color: 'var(--text-secondary)' }}>{i + 1}</td>
+                      <td style={{ color: 'var(--text-secondary)' }}>{(projPage - 1) * PAGE_SIZE + i + 1}</td>
                       <td style={{ fontSize: 11, fontFamily: 'monospace' }}>{p.project_code || '—'}</td>
                       <td>{p.project_name}</td>
                       <td style={{ fontSize: 11 }}>{p.workspace_name || '—'}</td>
@@ -150,6 +172,7 @@ export default function DownloadStatsPage() {
                   ))}
                 </tbody>
               </table>
+              <Pager page={projPage} totalPages={projTotalPages} total={filteredStats.length} onChange={setProjPage} />
             </div>
             {(catOptions.length > 0 || authorOptions.length > 0) && (
               <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
@@ -201,9 +224,9 @@ export default function DownloadStatsPage() {
                 </tr>
               </thead>
               <tbody>
-                {memberStats.map((m: any, i: number) => (
+                {memPageItems.map((m: any, i: number) => (
                   <tr key={m.id}>
-                    <td style={{ color: 'var(--text-secondary)' }}>{i + 1}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>{(memPage - 1) * PAGE_SIZE + i + 1}</td>
                     <td>
                       {m.display_name || m.username}
                       <span style={{ color: 'var(--text-secondary)', marginLeft: 6 }}>{m.username}</span>
@@ -218,6 +241,7 @@ export default function DownloadStatsPage() {
                 ))}
               </tbody>
             </table>
+            <Pager page={memPage} totalPages={memTotalPages} total={memberStats.length} onChange={setMemPage} />
           </div>
         )
       )}

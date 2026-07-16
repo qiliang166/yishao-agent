@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
+const PAGE_SIZE = 20
+
 interface Author {
   id: string
   name: string
@@ -21,6 +23,7 @@ export default function AuthorManagePage() {
   const [formIntro, setFormIntro] = useState('')
   const [formLicense, setFormLicense] = useState('')
   const [saving, setSaving] = useState(false)
+  const [page, setPage] = useState(1)
 
   const load = async () => {
     setLoading(true)
@@ -109,6 +112,7 @@ export default function AuthorManagePage() {
           <table className="output-table">
             <thead>
               <tr>
+                <th style={{ width: 50 }}>序号</th>
                 <th style={{ width: 140 }}>姓名</th>
                 <th>简介</th>
                 <th style={{ width: 200 }}>授权说明</th>
@@ -116,8 +120,9 @@ export default function AuthorManagePage() {
               </tr>
             </thead>
             <tbody>
-              {authors.map(a => (
+              {authors.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((a, i) => (
                 <tr key={a.id}>
+                  <td style={{ color: 'var(--text-secondary)' }}>{(page - 1) * PAGE_SIZE + i + 1}</td>
                   <td style={{ fontWeight: 600 }}>{a.name}</td>
                   <td style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', maxWidth: 300 }}>
                     {(a.intro || '—').length > 80 ? (a.intro || '').slice(0, 80) + '…' : (a.intro || '—')}
@@ -133,6 +138,13 @@ export default function AuthorManagePage() {
               ))}
             </tbody>
           </table>
+          {Math.ceil(authors.length / PAGE_SIZE) > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '10px 0', fontSize: 11, color: 'var(--text-secondary)' }}>
+              <button className="btn btn-ghost btn-sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</button>
+              <span>第 {page} / {Math.ceil(authors.length / PAGE_SIZE)} 页（共 {authors.length} 条）</span>
+              <button className="btn btn-ghost btn-sm" disabled={page >= Math.ceil(authors.length / PAGE_SIZE)} onClick={() => setPage(p => p + 1)}>下一页</button>
+            </div>
+          )}
         </div>
       )}
 
