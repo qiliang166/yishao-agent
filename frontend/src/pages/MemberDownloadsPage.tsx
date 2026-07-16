@@ -32,6 +32,8 @@ export default function MemberDownloadsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 40
   const [toast, setToast] = useState('')
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const [authorDialog, setAuthorDialog] = useState<{ name: string; intro: string; license_text: string } | null>(null)
@@ -189,6 +191,10 @@ export default function MemberDownloadsPage() {
     return matchSearch && matchFilter
   })
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pageItems = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 24px 0' }}>下载文件</h1>
@@ -196,7 +202,7 @@ export default function MemberDownloadsPage() {
       {/* Search + Filter */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
         <input className="form-input" type="text" value={search}
-          onChange={e => setSearch(e.target.value)}
+          onChange={e => { setSearch(e.target.value); setPage(1) }}
           placeholder="搜索项目或文件..."
           style={{ flex: 1, fontSize: 12 }} />
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
@@ -205,7 +211,7 @@ export default function MemberDownloadsPage() {
             ['unlocked', '已解锁'],
             ['locked', '未解锁'],
           ] as const).map(([k, label]) => (
-            <button key={k} onClick={() => setFilter(k)}
+            <button key={k} onClick={() => { setFilter(k); setPage(1) }}
               style={{
                 padding: '6px 14px', border: 'none', background: filter === k ? 'var(--primary)' : 'transparent',
                 color: filter === k ? '#fff' : 'var(--text-secondary)',
@@ -233,7 +239,8 @@ export default function MemberDownloadsPage() {
           <p>{projects.length === 0 ? '暂无可用下载' : '没有匹配的结果'}</p>
         </div>
       ) : (
-        filtered.map(proj => {
+        <>
+          {pageItems.map(proj => {
           const isCollapsed = collapsed.has(proj.id)
           const grouped = proj.files.reduce((acc: Record<string, DlFile[]>, f) => {
             const g = f.category || '其他'
@@ -325,7 +332,15 @@ export default function MemberDownloadsPage() {
               )}
             </div>
           )
-        })
+        })}
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '8px 0 16px', fontSize: 11, color: 'var(--text-secondary)' }}>
+              <button className="btn btn-ghost btn-sm" disabled={safePage <= 1} onClick={() => setPage(safePage - 1)}>上一页</button>
+              <span>第 {safePage} / {totalPages} 页（共 {filtered.length} 条）</span>
+              <button className="btn btn-ghost btn-sm" disabled={safePage >= totalPages} onClick={() => setPage(safePage + 1)}>下一页</button>
+            </div>
+          )}
+        </>
       )}
 
       {unlockCheck && unlockProject && (
