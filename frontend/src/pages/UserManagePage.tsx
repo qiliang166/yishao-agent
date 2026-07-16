@@ -290,7 +290,7 @@ export default function UserManagePage() {
     try {
       const result = await api.batchGrantPoints({
         user_ids: Array.from(selectedIds),
-        amount_deci: amount,
+        amount_deci: amount * 10,
         note: batchPointsNote || undefined,
       })
       if (result == null) { showToast('操作失败：服务器未确认'); return }

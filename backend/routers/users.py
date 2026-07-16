@@ -429,7 +429,7 @@ def batch_grant_points(req: dict, user=require_perm("member.manage")):
             count += 1
 
         db.commit()
-        return {"ok": True, "message": f"已为 {count} 个用户增加 {amount_deci} 积分", "count": count}
+        return {"ok": True, "message": f"已为 {count} 个用户增加 {amount_deci / 10:.1f} 积分", "count": count}
     finally:
         db.close()
 
