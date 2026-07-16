@@ -5526,7 +5526,6 @@ def api_download_server():
 
 # ── File Download ──
 
-@app.get("/api/download/{filename}")
 def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
                            download_type: str = "file", ip: str = "") -> bool:
     """Check if user can download this project. Returns True if download allowed.
@@ -5593,6 +5592,7 @@ def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
     return True
 
 
+@app.get("/api/download/{filename}")
 def download_file(filename: str, request: Request, project_id: str = None, name: str = None):
     download_name = name or filename
     if project_id:
