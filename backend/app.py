@@ -1537,7 +1537,7 @@ def update_project(project_id: str, req: ProjectUpdate, user=require_perm("proje
 # ── Project Categories (per-workspace) ──
 
 @app.get("/api/workspaces/{workspace_id}/categories")
-def list_project_categories(workspace_id: str, request: Request):
+def list_project_categories(workspace_id: str, user=Depends(get_current_user)):
     db = get_db()
     try:
         rows = db.execute(
@@ -1592,7 +1592,8 @@ def update_project_category(workspace_id: str, category_id: str, req: dict, user
 def delete_project_category(workspace_id: str, category_id: str, user=require_perm("config.project")):
     db = get_db()
     try:
-        db.execute("UPDATE projects SET category_id = '' WHERE category_id = ?", (category_id,))
+        db.execute("UPDATE projects SET category_id = '' WHERE category_id = ? AND workspace_id = ?",
+                   (category_id, workspace_id))
         db.execute("DELETE FROM project_categories WHERE id = ? AND workspace_id = ?",
                    (category_id, workspace_id))
         db.commit()
@@ -1614,7 +1615,7 @@ def list_authors(user=require_perm("member.manage")):
 
 
 @app.get("/api/authors/options")
-def list_author_options(request: Request):
+def list_author_options(user=Depends(get_current_user)):
     """Lightweight author list (id + name) for project selectors."""
     db = get_db()
     try:
@@ -1625,7 +1626,7 @@ def list_author_options(request: Request):
 
 
 @app.get("/api/authors/{author_id}/public")
-def get_author_public(author_id: str, request: Request):
+def get_author_public(author_id: str, user=Depends(get_current_user)):
     """Public author profile for member-facing attribution dialog."""
     db = get_db()
     try:
