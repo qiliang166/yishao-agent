@@ -22,45 +22,99 @@ ACTIVATION_SERVER_URL = os.environ.get(
 _machine_id_cache: str | None = None
 
 
+def _run_cmd(cmd: list[str], timeout: int = 8) -> str:
+    try:
+        return subprocess.check_output(
+            cmd, shell=True, timeout=timeout,
+            stderr=subprocess.DEVNULL,
+        ).decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
+
+
+def _valid_hw_value(value: str) -> bool:
+    """Reject empty/placeholder hardware identifiers some boards report."""
+    v = value.strip().strip(".").replace("-", "").replace("_", "").upper()
+    if len(v) < 4:
+        return False
+    if set(v) <= {"F"} or set(v) <= {"0"}:
+        return False
+    if v in ("NONE", "UNKNOWN", "DEFAULTSTRING", "TOBEFILLEDBYOEM", "NA"):
+        return False
+    return True
+
+
+def _wmic_value(args: list[str], header: str) -> str:
+    out = _run_cmd(["wmic"] + args)
+    lines = [l.strip() for l in out.splitlines() if l.strip() and l.strip() != header]
+    return lines[0] if lines else ""
+
+
+def _win_machine_uuid() -> str:
+    v = _wmic_value(["csproduct", "get", "uuid"], "UUID")
+    if not _valid_hw_value(v):
+        v = _run_cmd([
+            "powershell", "-NoProfile", "-Command",
+            "(Get-CimInstance Win32_ComputerSystemProduct).UUID",
+        ]).strip()
+    return v if _valid_hw_value(v) else ""
+
+
+def _win_baseboard_serial() -> str:
+    v = _wmic_value(["baseboard", "get", "serialnumber"], "SerialNumber")
+    if not _valid_hw_value(v):
+        v = _run_cmd([
+            "powershell", "-NoProfile", "-Command",
+            "(Get-CimInstance Win32_BaseBoard).SerialNumber",
+        ]).strip()
+    return v if _valid_hw_value(v) else ""
+
+
+def _read_first_line(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
+            return f.readline().strip()
+    except Exception:
+        return ""
+
+
 def generate_machine_id() -> str:
-    """Generate a stable hardware fingerprint. Cached after first call."""
+    """Generate a stable hardware fingerprint (v2). Cached after first call.
+
+    v2 uses only stable identifiers (board UUID / serial on Windows,
+    machine-id / DMI product UUID on Linux). Volatile parts (MAC, hostname,
+    disk order) caused fingerprint drift in v1 and are excluded.
+    """
     global _machine_id_cache
     if _machine_id_cache is not None:
         return _machine_id_cache
 
-    parts: list[str] = []
+    parts: list[str] = ["fpv2"]
 
-    try:
-        output = subprocess.check_output(
-            ["wmic", "csproduct", "get", "uuid"],
-            shell=True, timeout=5,
-        ).decode("utf-8", errors="ignore")
-        lines = [l.strip() for l in output.splitlines() if l.strip() and l.strip() != "UUID"]
-        if lines:
-            parts.append(lines[0])
-    except Exception:
-        pass
+    if os.name == "nt":
+        u = _win_machine_uuid()
+        if u:
+            parts.append(u)
+        s = _win_baseboard_serial()
+        if s:
+            parts.append(s)
+    else:
+        mid = _read_first_line("/etc/machine-id")
+        if _valid_hw_value(mid):
+            parts.append(mid)
+        puuid = _read_first_line("/sys/class/dmi/id/product_uuid")
+        if _valid_hw_value(puuid):
+            parts.append(puuid)
 
-    try:
-        output = subprocess.check_output(
-            ["wmic", "diskdrive", "get", "serialnumber"],
-            shell=True, timeout=5,
-        ).decode("utf-8", errors="ignore")
-        lines = [l.strip() for l in output.splitlines() if l.strip() and l.strip() != "SerialNumber"]
-        if lines:
-            parts.append(lines[0])
-    except Exception:
-        pass
-
-    try:
-        mac = uuid.getnode()
-        parts.append(f"{mac:012x}")
-    except Exception:
-        pass
-
-    parts.append(platform.node() or "unknown")
-    parts.append(platform.machine() or "unknown")
-    parts.append(platform.processor() or "unknown")
+    if len(parts) == 1:
+        # No stable hardware identifier available — fall back to legacy v1 parts
+        try:
+            parts.append(f"{uuid.getnode():012x}")
+        except Exception:
+            pass
+        parts.append(platform.node() or "unknown")
+        parts.append(platform.machine() or "unknown")
+        parts.append(platform.processor() or "unknown")
 
     fingerprint = "|".join(parts)
     _machine_id_cache = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
@@ -262,9 +316,12 @@ def deactivate() -> bool:
         return False
 
     try:
+        # Use the STORED machine_id so unbinding works even after
+        # fingerprint drift (a freshly computed id may no longer match
+        # the server-side binding, leaving an orphaned activation).
         _api_post("/api/deactivate", {
             "key": existing["license_key"],
-            "machine_id": generate_machine_id(),
+            "machine_id": existing.get("machine_id") or generate_machine_id(),
         }, timeout=10)
     except Exception:
         pass
@@ -286,4 +343,5 @@ def get_license_status() -> dict:
         "serial_number": existing.get("serial_number"),
         "activated_at": existing.get("activated_at"),
         "last_checked_at": existing.get("last_checked_at"),
+        "machine_match": existing.get("machine_id") == generate_machine_id(),
     }

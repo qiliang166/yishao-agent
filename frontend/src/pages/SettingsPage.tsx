@@ -677,6 +677,15 @@ function SettingsPage() {
 
             {licenseStatus?.activated ? (
               <>
+                {licenseStatus.machine_match === false && (
+                  <div style={{
+                    fontSize: 12, color: 'var(--warning)', marginBottom: 12,
+                    background: '#fef3c7', padding: '6px 10px', borderRadius: 6,
+                    display: 'inline-block',
+                  }}>
+                    ⚠ 硬件指纹已变化，生成功能将被拒绝 — 请点击下方「解除激活」后用原激活码重新激活
+                  </div>
+                )}
                 <div style={{ fontSize: 12, lineHeight: 1.8, marginBottom: 12 }}>
                   <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
                     <span>状态：<strong style={{ color: 'var(--success)' }}>已激活</strong></span>
