@@ -1126,6 +1126,14 @@ export const api = {
       .then(d => d as { transactions: any[]; total: number; page: number; page_size: number })
   },
 
+  getDownloadableProjects: () =>
+    request('/api/member/downloadable-projects').then(d => d as {
+      projects: { id: string; name: string; point_cost_deci: number; workspace_id: string;
+        unlocked: { is_unlocked: boolean; unlocked_at: string | null; expires_at: string | null };
+        files: { filename: string; size: number; ext: string; category: string; download_url: string }[];
+      }[]
+    }),
+
   getMyUnlockedProjects: () =>
     request('/api/member/unlocked-projects').then(d => d as { unlocked: any[] }),
 

@@ -18,6 +18,7 @@ import PromptStudioPage from './pages/PromptStudioPage'
 import MemberApprovalPage from './pages/MemberApprovalPage'
 import UserManagePage from './pages/UserManagePage'
 import DownloadStatsPage from './pages/DownloadStatsPage'
+import MemberDownloadsPage from './pages/MemberDownloadsPage'
 import RoleManagePage from './pages/RoleManagePage'
 import LandingPage from './pages/LandingPage'
 import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
@@ -370,6 +371,11 @@ function MemberSidebar() {
           <span className="ico">👤</span> 会员中心
         </button>
         <button
+          className={`sidebar-item ${location.pathname === '/app/downloads' ? 'active' : ''}`}
+          onClick={() => navigate('/app/downloads')}>
+          <span className="ico">📥</span> 下载文件
+        </button>
+        <button
           className={`sidebar-item ${location.pathname === '/app/manual' ? 'active' : ''}`}
           onClick={() => navigate('/app/manual')}>
           <span className="ico">📖</span> 操作说明
@@ -533,6 +539,7 @@ function MemberAppShell() {
             <Route path="/project/:id" element={<ProjectPage />} />
             <Route path="/manual" element={<ManualPage />} />
             <Route path="/center" element={<MemberCenterPage />} />
+            <Route path="/downloads" element={<MemberDownloadsPage />} />
             <Route path="/" element={<MemberHomePage />} />
           </Routes>
         </div>

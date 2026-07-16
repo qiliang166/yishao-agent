@@ -5081,6 +5081,74 @@ def api_my_points_transactions(page: int = 1, page_size: int = 20,
         db.close()
 
 
+@app.get("/api/member/downloadable-projects")
+def api_downloadable_projects(user=Depends(get_current_user)):
+    """Return all downloadable projects with files for the current member."""
+    db = get_db()
+    try:
+        uid = user["sub"]
+        rows = db.execute(
+            """SELECT DISTINCT p.*
+               FROM projects p
+               LEFT JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id AND mw.user_id = ?
+               LEFT JOIN workspace_roles wr ON wr.workspace_id = p.workspace_id
+               LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ?
+               WHERE p.is_downloadable = 1
+                 AND (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)
+               ORDER BY p.updated_at DESC""",
+            (uid, uid),
+        ).fetchall()
+
+        projects = []
+        for row in rows:
+            pid = row["id"]
+            unlocked = db.execute(
+                "SELECT * FROM project_unlocks WHERE user_id = ? AND project_id = ?",
+                (uid, pid),
+            ).fetchone()
+
+            path = resolve_project_storage(pid, auto_create=False)
+            files = []
+            if os.path.isdir(path):
+                for f in sorted(os.listdir(path)):
+                    full = os.path.join(path, f)
+                    if not os.path.isfile(full):
+                        continue
+                    ext = f.rsplit(".", 1)[-1].lower() if "." in f else ""
+                    category = "其他"
+                    if ext in ("txt",):
+                        category = "2. 文档生成"
+                    elif ext in ("pptx", "svg", "html", "png", "jpg"):
+                        category = "3. 课件输出"
+                    elif ext in ("mp3", "wav"):
+                        category = "4. 演讲课件"
+                    files.append({
+                        "filename": f,
+                        "size": os.path.getsize(full),
+                        "ext": ext,
+                        "category": category,
+                        "download_url": f"/api/download/{f}?project_id={pid}",
+                    })
+
+            projects.append({
+                "id": pid,
+                "name": row["name"],
+                "point_cost_deci": row["point_cost_deci"] or 5,
+                "is_downloadable": row["is_downloadable"],
+                "workspace_id": row["workspace_id"],
+                "unlocked": {
+                    "is_unlocked": unlocked is not None,
+                    "unlocked_at": unlocked["unlocked_at"] if unlocked else None,
+                    "expires_at": unlocked["expires_at"] if unlocked else None,
+                },
+                "files": files,
+            })
+
+        return {"projects": projects}
+    finally:
+        db.close()
+
+
 @app.get("/api/member/unlocked-projects")
 def api_my_unlocked_projects(user=Depends(get_current_user)):
     """Get current user's unlocked projects list."""
