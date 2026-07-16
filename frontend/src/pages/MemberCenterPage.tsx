@@ -250,7 +250,7 @@ export default function MemberCenterPage() {
           <div className="ac-sub-item-header">角色升级</div>
           <div style={{ fontSize: 13, padding: '4px 0' }}>
             <p style={{ margin: '0 0 8px 0', color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.6 }}>
-              如果您希望搭建属于自己的智能食谱教案生成系统，可申请升级为"开发体验员"，完整体验内容创建、编辑、AI 生成等全部功能，帮助您了解系统能力与使用方法。确认需求后可联系管理员购买授权码并申请独立部署。升级独立计费，购买天数用完即止。
+              如果您希望搭建属于自己的智能教案生成系统，可申请升级为"开发体验员"，完整体验内容创建、编辑、AI 生成等全部功能，帮助您了解系统能力与使用方法。确认需求后可联系管理员购买授权码并申请独立部署。升级独立计费，购买天数用完即止。
             </p>
             {upgradeSuccess ? (
               <div style={{ color: 'var(--success)', fontSize: 12, fontWeight: 600 }}>{upgradeSuccess}</div>

@@ -527,7 +527,7 @@ function MemberHomePage() {
                   {(w as any).description || '暂无简介'}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                  📄 {(w as any).project_count ?? 0} 个食谱
+                  📄 {(w as any).project_count ?? 0} 个明细
                 </div>
               </div>
             ))}

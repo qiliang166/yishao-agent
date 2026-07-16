@@ -198,7 +198,7 @@ function HomePage() {
                       onClick={() => deleteWorkspace(w.id, w.name)}>删除</button>
                   )}
                   <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)' }}>
-                    📄 {w.project_count ?? 0} 个食谱
+                    📄 {w.project_count ?? 0} 个明细
                   </span>
                 </div>
               </div>

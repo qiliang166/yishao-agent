@@ -144,7 +144,7 @@ export default function DownloadStatsPage() {
                 <thead>
                   <tr>
                     <th style={{ width: 50 }}>序号</th>
-                    <th style={{ width: 90 }}>菜谱编号</th>
+                    <th style={{ width: 90 }}>编号</th>
                     <th>明细名称</th>
                     <th style={{ width: 110 }}>所属项目</th>
                     <th style={{ width: 100 }}>所属分类</th>

@@ -236,10 +236,10 @@ def _load_branding() -> tuple:
             elif r["key"] == "branding_signature" and r["value"]:
                 sig_str = r["value"].strip()
         if not copyright_str and not sig_str:
-            return ("&copy; 2024 美食研究所 &middot; 保密文档", "商务部监制")
+            return ("", "")
         return (copyright_str, sig_str)
     except Exception:
-        return ("&copy; 2024 美食研究所 &middot; 保密文档", "商务部监制")
+        return ("", "")
 
 
 def _load_style_from_template(template_id: str = None) -> str:

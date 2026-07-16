@@ -387,7 +387,7 @@ export default function MMe() {
                 ) : (
                   <>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 10 }}>
-                      如果您希望搭建属于自己的智能食谱教案生成系统，可申请升级为"开发体验员"，
+                      如果您希望搭建属于自己的智能教案生成系统，可申请升级为"开发体验员"，
                       完整体验内容创建、编辑、AI 生成等全部功能。升级独立计费，购买天数用完即止。
                     </div>
                     <button className="m-btn-primary" style={{ marginBottom: 16 }}

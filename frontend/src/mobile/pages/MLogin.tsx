@@ -30,7 +30,7 @@ export default function MLogin() {
   return (
     <div className="m-login-wrap">
       <div className="m-login-card">
-        <div className="m-login-title">智绘食谱教案系统</div>
+        <div className="m-login-title">智绘教案系统</div>
         <div className="m-login-sub">管理员登录 · 手机版</div>
         {error && <div className="m-error">{error}</div>}
         <div className="m-field">

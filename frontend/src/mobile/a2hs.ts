@@ -47,7 +47,7 @@ export async function injectManifest() {
     if (!resp.ok) return
     const data = await resp.json()
     const s = data?.settings || {}
-    const name = s.brand_name || '智绘食谱教案系统'
+    const name = s.brand_name || '智绘教案系统'
     const logo = typeof s.brand_logo === 'string' ? s.brand_logo : ''
 
     const manifest: any = {
