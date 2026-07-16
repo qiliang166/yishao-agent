@@ -27,6 +27,7 @@ from routers.prompts import router as prompts_router
 from routers.users import router as users_router
 from routers.prompt_studio import router as prompt_studio_router
 from routers.scenarios import router as scenarios_router
+from routers.booklets import router as booklets_router
 from permissions import require_perm, check_ownership, verify_project_access
 from services.license_service import (
     validate_license_key, activate as license_activate,
@@ -203,6 +204,7 @@ app.include_router(prompts_router)
 app.include_router(users_router)
 app.include_router(prompt_studio_router)
 app.include_router(scenarios_router)
+app.include_router(booklets_router)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

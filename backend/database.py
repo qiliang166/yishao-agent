@@ -1339,6 +1339,23 @@ def init_db():
         except Exception as e:
             print(f"[DB] Warning: could not add category/author columns to projects: {e}")
 
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS booklets (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                owner_role TEXT NOT NULL,
+                book_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                subtitle TEXT DEFAULT '',
+                author TEXT DEFAULT '',
+                cover_json TEXT DEFAULT '{}',
+                chapters_json TEXT NOT NULL DEFAULT '[]',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_booklets_owner ON booklets(owner_id)")
+
         conn.commit()
     finally:
         conn.close()
