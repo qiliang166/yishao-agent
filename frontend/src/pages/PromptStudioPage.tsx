@@ -746,7 +746,7 @@ export default function PromptStudioPage() {
                   </button>
                 )}
                 <div className="form-hint" style={{ marginTop: 4 }}>
-                  占位符 {'{{'}industry_topic{'}}'} {'{{'}purpose_description{'}}'} {'{{'}ref_summary{'}}'} {'{{'}ref_json{'}}'} 将在生成时自动替换。
+                  占位符 {`{{industry_topic}}`} {`{{purpose_description}}`} {`{{ref_summary}}`} {`{{ref_json}}`} 将在生成时自动替换。
                 </div>
               </div>
             )}

@@ -123,7 +123,7 @@ function mergeRules(typographySpec: string, outlinePrompt: string, cognitivePrin
 
 export default function ProjSettingsPage() {
   const modal = useModal()
-  const canSaveProject = usePermission('config.project')
+  const canSaveProject = usePermission('config.global')
   const [mainTab, setMainTab] = useState<MainTab>('models')
   const [seedSubTab, setSeedSubTab] = useState<SeedSubTab>('columns')
 

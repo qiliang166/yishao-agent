@@ -1160,6 +1160,15 @@ def init_db():
         # Always re-seed roles — idempotent (skips existing), catches new roles added in updates
         _migrate_v1_seed_roles(conn)
 
+        # Grant prompt.manage to existing 内容管理员 and 开发体验员 roles
+        for role_name in ("内容管理员", "开发体验员"):
+            role = conn.execute("SELECT id FROM roles WHERE name=?", (role_name,)).fetchone()
+            if role:
+                conn.execute(
+                    "INSERT OR IGNORE INTO role_permissions (role_id, permission) VALUES (?, 'prompt.manage')",
+                    (role["id"],),
+                )
+
         # Ensure workspace_roles table exists (added post-migration, idempotent)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS workspace_roles (
@@ -1633,6 +1642,7 @@ def _migrate_v1_seed_roles(conn):
         "stage3.view", "stage3.generate",
         "stage4.view", "stage4.generate",
         "stage5.view", "stage5.download",
+        "prompt.manage",
     ]
 
     TRIAL_MEMBER_PERMS = [

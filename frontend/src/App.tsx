@@ -153,6 +153,13 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           onClick={() => navigate('/settings')}>
           <span className="ico">⚙</span> 全局设置
         </button>
+        {user?.roles?.includes('开发体验员') && (
+          <button
+            className={`sidebar-item ${location.pathname === '/member-center' ? 'active' : ''}`}
+            onClick={() => navigate('/member-center')}>
+            <span className="ico">👤</span> 会员中心
+          </button>
+        )}
         {(canMember || canRole) && (
           <>
             <div style={{ borderTop: '1px solid var(--border)', margin: '4px 12px' }} />
@@ -603,6 +610,7 @@ function AppShell() {
             <Route path="/members/pending" element={<MemberApprovalPage />} />
             <Route path="/roles" element={<RoleManagePage />} />
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
+            <Route path="/member-center" element={<MemberCenterPage />} />
             <Route path="/" element={<HomePage />} />
             <Route path="/home" element={<HomePage />} />
           </Routes>

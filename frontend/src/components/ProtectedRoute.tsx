@@ -51,9 +51,12 @@ export default function ProtectedRoute({ children, requiredType }: Props) {
     return <Navigate to={fallback} replace />
   }
 
-  // Allow 开发体验员 to access member interface (for member center, points, etc.)
+  // Redirect 开发体验员 members away from member interface to admin, except member center
   if (requiredType === 'member' && user.roles?.includes('开发体验员')) {
-    return <><DemoBanner />{children}</>
+    if (window.location.pathname.startsWith('/app/center')) {
+      return <><DemoBanner />{children}</>
+    }
+    return <Navigate to="/home" replace />
   }
 
   return (

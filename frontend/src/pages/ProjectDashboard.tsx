@@ -5,6 +5,7 @@ import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
 import HelpButton from '../components/HelpButton'
+import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 
 const PAGE_SIZE = 20
 
@@ -23,7 +24,8 @@ export default function ProjectDashboard() {
     if (user.permissions?.includes('project.edit_all')) return true
     return createdBy === user.user_id
   }
-  const isMember = user?.user_type === 'member'
+  const isExpOfficer = user?.roles?.includes('开发体验员')
+  const isMember = user?.user_type === 'member' && !isExpOfficer
   const projectUrl = (id: string) => isMember ? `/app/project/${id}` : `/project/${id}/workspace`
   const [workspace, setWorkspace] = useState<any>(null)
   const [projects, setProjects] = useState<Project[]>([])
@@ -40,6 +42,9 @@ export default function ProjectDashboard() {
   // Expand project row to show output files
   const [editPointProject, setEditPointProject] = useState('')
   const [editPointValue, setEditPointValue] = useState('')
+  // Unlock dialog state
+  const [unlockData, setUnlockData] = useState<any>(null)
+  const [unlockPendingFiles, setUnlockPendingFiles] = useState<any[]>([])
   const [expandedProject, setExpandedProject] = useState('')
   const [projectFiles, setProjectFiles] = useState<any[]>([])
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
@@ -353,14 +358,63 @@ export default function ProjectDashboard() {
   const downloadSelectedFiles = async () => {
     const selected = projectFiles.filter(f => selectedFiles.has(fileKey(f)))
     if (selected.length === 0) return
+    // Check unlock status first
     try {
-      await api.downloadSelectedFiles(expandedProject, selected.map(f => ({
+      const check = await api.canDownload(selected.map(f => ({
+        project_id: expandedProject,
+        filename: f.filename,
+      })))
+      if (check.is_admin) {
+        // Admin bypass — download directly
+        await api.downloadSelectedFiles(expandedProject, selected.map(f => ({
+          filename: f.filename,
+          download_url: f.download_url || '',
+          display_name: f.display_name || f.filename,
+        })))
+        modal.toast(`已打包下载 ${selected.length} 个文件`, 'success')
+        return
+      }
+      if (check.need_unlock && check.need_unlock.length > 0) {
+        // Show unlock confirmation dialog
+        setUnlockData(check)
+        setUnlockPendingFiles(selected)
+        return
+      }
+      if (check.already_unlocked && check.already_unlocked.length > 0) {
+        // All already unlocked, download directly
+        await api.downloadSelectedFiles(expandedProject, selected.map(f => ({
+          filename: f.filename,
+          download_url: f.download_url || '',
+          display_name: f.display_name || f.filename,
+        })))
+        modal.toast(`已下载 ${selected.length} 个文件`, 'success')
+        return
+      }
+      if (check.not_downloadable && check.not_downloadable.length > 0) {
+        const names = check.not_downloadable.map((p: any) => p.project_name).join('、')
+        modal.toast(`「${names}」未开放积分解锁，请联系管理员`, 'error')
+        return
+      }
+      modal.toast('无法下载：请重试或联系管理员', 'error')
+    } catch (e: any) { modal.toast(`下载失败: ${e?.message || e}`, 'error') }
+  }
+
+  const handleUnlockConfirm = async () => {
+    const check = unlockData
+    if (!check) return
+    try {
+      const projectIds = [...new Set(check.need_unlock.map((p: any) => p.project_id))]
+      await api.unlockProjects(projectIds as string[])
+      setUnlockData(null)
+      // Proceed with download
+      const selected = unlockPendingFiles
+      await api.downloadSelectedFiles(expandedProject, selected.map((f: any) => ({
         filename: f.filename,
         download_url: f.download_url || '',
         display_name: f.display_name || f.filename,
       })))
-      modal.toast(`已打包下载 ${selected.length} 个文件`, 'success')
-    } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
+      modal.toast(`解锁成功，已下载 ${selected.length} 个文件`, 'success')
+    } catch (e: any) { modal.toast(`解锁失败: ${e?.message || e}`, 'error') }
   }
 
   const fileIcon = (f: any) => {
@@ -509,6 +563,25 @@ export default function ProjectDashboard() {
                       onClick={e => { e.stopPropagation(); copyProject(p.id, p.name) }}
                       style={{ color: 'var(--accent)', fontSize: 11 }}
                       title="复制明细及其配置">复制</button>
+                  )}
+                  {/* Downloadable toggle */}
+                  {canEditOwn && isOwner(p.created_by) ? (
+                    <span style={{
+                      cursor: 'pointer', fontSize: 11, marginLeft: 4,
+                      color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)',
+                    }}
+                      onClick={async e => {
+                        e.stopPropagation()
+                        await api.updateProject(p.id, { is_downloadable: p.is_downloadable ? 0 : 1 })
+                        loadProjects(page)
+                      }}
+                      title={p.is_downloadable ? '点击关闭积分下载' : '点击开启积分下载'}>
+                      {p.is_downloadable ? '可下载' : '不可下载'}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, marginLeft: 4, color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
+                      {p.is_downloadable ? '可下载' : '—'}
+                    </span>
                   )}
                   {/* Point cost inline edit */}
                   {editPointProject === p.id ? (
@@ -739,6 +812,19 @@ export default function ProjectDashboard() {
             {filtered.length === 0 ? '没有匹配的明细' : `共 ${total} 条明细`}
           </div>
         </div>
+      )}
+
+      {/* Unlock Confirm Dialog */}
+      {unlockData && (
+        <UnlockConfirmDialog
+          needUnlock={unlockData.need_unlock || []}
+          alreadyUnlocked={unlockData.already_unlocked || []}
+          notDownloadable={unlockData.not_downloadable || []}
+          totalCostDeci={unlockData.total_cost_deci || 0}
+          balanceDeci={unlockData.balance_deci || 0}
+          onConfirm={handleUnlockConfirm}
+          onCancel={() => setUnlockData(null)}
+        />
       )}
 
       {/* Create Detail Dialog */}

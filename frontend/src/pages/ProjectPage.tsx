@@ -639,6 +639,8 @@ export default function ProjectPage() {
   }
 
   const [project, setProject] = useState<Project | null>(null)
+  const [editName, setEditName] = useState(false)
+  const [editNameValue, setEditNameValue] = useState('')
   const styleColorMap = useRef<Record<string, any>>({})
   const workspaceIdRef = useRef<string | undefined>(undefined)
   const [stage, setStage] = useState<StageId>(1)
@@ -2232,7 +2234,51 @@ export default function ProjectPage() {
     <div className="pipeline-area">
       {/* ═══ Project Header ═══ */}
       <div className="proj-header-bar">
-        <span className="proj-header-name">{project?.name || '加载中...'}</span>
+        {editName ? (
+          <span style={{ display: 'flex', gap: 2, alignItems: 'center' }}
+            onClick={e => e.stopPropagation()}>
+            <input className="form-input" type="text"
+              value={editNameValue}
+              onChange={e => setEditNameValue(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') { e.stopPropagation(); setEditName(false) }
+                if (e.key === 'Enter') {
+                  e.stopPropagation()
+                  const v = editNameValue.trim()
+                  setEditName(false)
+                  if (v && id) {
+                    api.updateProject(id, { name: v }).then(() => {
+                      setProject(prev => prev ? { ...prev, name: v } : prev)
+                    })
+                  }
+                }
+              }}
+              autoFocus
+              style={{ width: 180, fontSize: 14, padding: '2px 6px', fontWeight: 600 }} />
+            <button className="btn btn-ghost btn-sm"
+              onClick={async () => {
+                const v = editNameValue.trim()
+                if (!v || !id) { setEditName(false); return }
+                setEditName(false)
+                await api.updateProject(id, { name: v })
+                setProject(prev => prev ? { ...prev, name: v } : prev)
+              }}
+              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--success)' }}>✓</button>
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => setEditName(false)}
+              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--text-secondary)' }}>✕</button>
+          </span>
+        ) : (
+          <span className="proj-header-name"
+            style={{ cursor: 'text' }}
+            onClick={() => {
+              if (!readOnly && project) {
+                setEditName(true)
+                setEditNameValue(project.name)
+              }
+            }}
+            title={readOnly ? '' : '点击编辑名称'}>{project?.name || '加载中...'}</span>
+        )}
         <span className={`pc-status ${project?.status || 'draft'}`}
           style={{ cursor: readOnly ? 'default' : 'pointer' }}
           onClick={async () => {
