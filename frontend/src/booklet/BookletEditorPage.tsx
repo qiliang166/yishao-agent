@@ -6,13 +6,15 @@ import { BookletDraft, BOOK_TYPE_LABEL, normalizeChapters } from './types'
 import StepContent from './components/StepContent'
 import StepArrange from './components/StepArrange'
 import StepCover from './components/StepCover'
+import StepPages from './components/StepPages'
 import StepFinish from './components/StepFinish'
 
 const STEPS = [
   { id: 1, label: '选内容' },
   { id: 2, label: '排序与编辑' },
   { id: 3, label: '封面署名' },
-  { id: 4, label: '预览合成' },
+  { id: 4, label: '页面编排' },
+  { id: 5, label: '预览合成' },
 ]
 
 export default function BookletEditorPage() {
@@ -136,14 +138,15 @@ export default function BookletEditorPage() {
         {step === 1 && <StepContent draft={draft} onChange={onChange} />}
         {step === 2 && <StepArrange draft={draft} onChange={onChange} />}
         {step === 3 && <StepCover draft={draft} onChange={onChange} />}
-        {step === 4 && <StepFinish draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} />}
+        {step === 4 && <StepPages draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} />}
+        {step === 5 && <StepFinish draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} />}
       </div>
 
       {/* 底部：上一步/下一步 */}
       <div style={{ display: 'flex', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--card)' }}>
         <button className="btn btn-ghost btn-sm" disabled={step === 1} onClick={() => setStep(step - 1)}>← 上一步</button>
         <span style={{ flex: 1 }} />
-        <button className="btn btn-primary btn-sm" disabled={step === 4} onClick={() => setStep(step + 1)}>下一步 →</button>
+        <button className="btn btn-primary btn-sm" disabled={step === 5} onClick={() => setStep(step + 1)}>下一步 →</button>
       </div>
     </div>
   )

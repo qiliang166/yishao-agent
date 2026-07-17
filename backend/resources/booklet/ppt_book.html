@@ -120,22 +120,26 @@ body {
   </section>
 
   <!-- ═══ 目录 ═══ -->
+  <!--BK:TOC-->
   <section class="bk-slide bk-toc">
     <div class="bk-toc-title">目 录</div>
     <ul class="bk-toc-list">
       {{TOC_ENTRIES}}
     </ul>
   </section>
+  <!--/BK:TOC-->
 
   <!-- ═══ 章节内容（隔页 + 幻灯片序列） ═══ -->
   {{CHAPTERS}}
 
   <!-- ═══ 封底 ═══ -->
+  <!--BK:BACK-->
   <section class="bk-slide bk-back">
     <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
     <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}<br>全书共 {{PAGE_TOTAL}} 章</div>
     <div class="bk-back-band"></div>
   </section>
+  <!--/BK:BACK-->
 
 </div>
 

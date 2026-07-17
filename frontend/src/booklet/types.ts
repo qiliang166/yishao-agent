@@ -16,6 +16,9 @@ export interface Chapter {
   enabled: boolean
   content_format?: 'md' | 'html'
   bg_color?: string
+  hidden_pages?: number[]
+  page_order?: number[]
+  hide_divider?: boolean
 }
 
 export interface Cover {
@@ -28,6 +31,7 @@ export interface Cover {
   theme_colors?: Record<string, string>
   desk_none?: boolean
   render_mode?: 'paged' | 'flow'
+  hidden_fixed?: string[]
 }
 
 export interface BookletDraft {
@@ -51,6 +55,14 @@ export interface ContentProject {
   id: string
   name: string
   items: ContentItem[]
+}
+
+export interface PageMapChapter {
+  chapter_id: string
+  title: string
+  kind: 'prose' | 'fulldoc' | 'embed'
+  page_count: number
+  docs?: string[]
 }
 
 export interface Theme {

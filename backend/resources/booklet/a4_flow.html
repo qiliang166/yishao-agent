@@ -125,6 +125,7 @@ body {
 </section>
 
 <!-- ═══ 编制说明块 ═══ -->
+<!--BK:FLYLEAF-->
 <section class="bk-sheet bk-flyleaf">
   <div class="bk-sheet-inner">
     <div class="bk-flyleaf-title">{{BOOK_TITLE}}</div>
@@ -138,8 +139,10 @@ body {
     <div class="bk-flyleaf-brand">{{BRAND_COPYRIGHT}}<br>{{BRAND_SIGNATURE}}</div>
   </div>
 </section>
+<!--/BK:FLYLEAF-->
 
 <!-- ═══ 目录 ═══ -->
+<!--BK:TOC-->
 <section class="bk-sheet bk-toc">
   <div class="bk-sheet-inner">
     <div class="bk-toc-title">目 录</div>
@@ -148,11 +151,13 @@ body {
     </ul>
   </div>
 </section>
+<!--/BK:TOC-->
 
 <!-- ═══ 章节正文（连续排布） ═══ -->
 {{CHAPTERS}}
 
 <!-- ═══ 封底 ═══ -->
+<!--BK:BACK-->
 <section class="bk-sheet bk-back">
   <div class="bk-sheet-inner">
     <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
@@ -160,6 +165,7 @@ body {
   </div>
   <div class="bk-back-band"></div>
 </section>
+<!--/BK:BACK-->
 
 </body>
 </html>

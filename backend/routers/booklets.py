@@ -361,8 +361,11 @@ def _srcdoc_escape(doc: str) -> str:
     return doc.replace("&", "&amp;").replace('"', "&quot;")
 
 
-def _build_embed_srcdocs(source_html: str, page_size: tuple) -> list:
-    """把课件 HTML 拆成每页一个自包含 srcdoc（原样式 + 单页节点，iframe 隔离防互染）。"""
+def _build_embed_docs(source_html: str, page_size: tuple) -> list:
+    """把课件 HTML 拆成每页一个自包含 HTML 文档（原样式 + 单页节点，iframe 隔离防互染）。
+
+    分页唯一事实源：page-map 缩略图与 render 装配都从这里取页，保证页数一致。
+    """
     styles = _sanitize_fragment(_extract_head_styles(source_html))
     wrappers = _extract_slide_wrappers(source_html)
     w, h = page_size
@@ -376,25 +379,33 @@ def _build_embed_srcdocs(source_html: str, page_size: tuple) -> list:
             ".slide-wrapper{margin:0 !important;}</style>"
             f"</head><body>{page}</body></html>"
         )
-        docs.append(_srcdoc_escape(doc))
+        docs.append(doc)
     return docs
 
 
-def _build_fulldoc_srcdoc(source_html: str, page_size: tuple) -> str:
-    """导入的整页 HTML（无 slide-wrapper 结构）→ 单页自包含 srcdoc。"""
+def _build_embed_srcdocs(source_html: str, page_size: tuple) -> list:
+    return [_srcdoc_escape(d) for d in _build_embed_docs(source_html, page_size)]
+
+
+def _build_fulldoc_doc(source_html: str, page_size: tuple) -> str:
+    """导入的整页 HTML（无 slide-wrapper 结构）→ 单页自包含 HTML 文档。"""
     styles = _sanitize_fragment(_extract_head_styles(source_html))
     body_match = re.search(r"<body\b[^>]*>(.*?)</body>", source_html, flags=re.S | re.I)
     body = _sanitize_fragment(body_match.group(1) if body_match else source_html)
     if not body.strip():
         return ""
     w, h = page_size
-    doc = (
+    return (
         "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
         f"{styles}"
         f"<style>html,body{{margin:0;padding:0;width:{w}px;min-height:{h}px;overflow-x:hidden;}}</style>"
         f"</head><body>{body}</body></html>"
     )
-    return _srcdoc_escape(doc)
+
+
+def _build_fulldoc_srcdoc(source_html: str, page_size: tuple) -> str:
+    doc = _build_fulldoc_doc(source_html, page_size)
+    return _srcdoc_escape(doc) if doc else ""
 
 
 def _esc(text: str) -> str:
@@ -403,12 +414,34 @@ def _esc(text: str) -> str:
 
 # ── 装配引擎（单函数：全部占位符替换集中于此） ──
 
+# R3 页面编排：固定页（扉页/目录/封底）模板结构标记，隐藏时物理剥除整块
+_BK_FIXED_KEYS = ("flyleaf", "toc", "back")
+_BK_FIXED_RE = {
+    key: re.compile(r"<!--BK:" + key.upper() + r"-->.*?<!--/BK:" + key.upper() + r"-->", re.S)
+    for key in _BK_FIXED_KEYS
+}
+_BK_MARK_RE = re.compile(r"<!--/?BK:[A-Z]+-->")
+
+
+def _visible_page_indices(ch: dict, page_count: int) -> list:
+    """章节内容页的可见序：page_order 须为 0..n-1 的完整排列（否则回退自然序），再过滤 hidden_pages。"""
+    idxs = list(range(page_count))
+    order = ch.get("page_order")
+    if isinstance(order, list):
+        cand = [i for i in order if isinstance(i, int) and 0 <= i < page_count]
+        if len(cand) == page_count and len(set(cand)) == page_count:
+            idxs = cand
+    hidden = {i for i in (ch.get("hidden_pages") or []) if isinstance(i, int)}
+    return [i for i in idxs if i not in hidden]
+
 
 def render_booklet(booklet: dict, theme: dict) -> str:
     """把草稿装配为自包含单文件 HTML 电子书。
 
     booklet: _row_to_full 结构；theme: {id, name, colors} 归一化主题。
-    渲染后断言无 {{PLACEHOLDER}} 残留，残留即抛 500。
+    页面编排（R3）：cover.hidden_fixed 剥除固定页；章节按 page_order/hidden_pages
+    重排与过滤，整章全隐则跳过并按可见章节重新连续编号。
+    渲染后断言无 {{PLACEHOLDER}} 与 <!--BK: 标记残留，残留即抛 500。
     """
     book_type = booklet["book_type"]
     cover = booklet.get("cover") or {}
@@ -419,13 +452,45 @@ def render_booklet(booklet: dict, theme: dict) -> str:
     if not chapters:
         raise HTTPException(400, "册子没有启用的章节，无法合成")
 
+    # 固定页隐藏（不用 display:none — ppt 翻页 JS 按 .bk-slide 计数，残留节点会数错页）
+    hidden_fixed = {s for s in (cover.get("hidden_fixed") or []) if s in _BK_FIXED_KEYS}
+    for key in hidden_fixed:
+        template = _BK_FIXED_RE[key].sub("", template)
+
     brand_copyright, brand_signature = _load_branding_pair()
 
     logo_uri = _logo_data_uri(cover.get("logo_url", ""))
     logo_html = f'<img class="bk-cover-logo" src="{logo_uri}" alt="logo">' if logo_uri else ""
 
+    page_size = (794, 1123) if book_type == "a4" else (1280, 720)
     toc_parts, chapter_parts = [], []
-    for i, ch in enumerate(chapters, start=1):
+    visible_no = 0
+    for ch in chapters:
+        # custom 章节可携带整页 HTML（导入 .html），按嵌入页处理而非 prose
+        is_prose = (
+            ch.get("source_type") in ("step_md", "custom")
+            and not (ch.get("source_type") == "custom" and ch.get("content_format") == "html")
+        )
+
+        # 先取该章内容页并应用编排（prose/fulldoc 单页；embed 按 slide-wrapper 拆页）
+        if is_prose:
+            docs = [""]  # prose 单页占位（正文走 content_html）
+        elif ch.get("source_type") == "custom":
+            sd = _build_fulldoc_srcdoc(ch.get("content") or "", page_size)
+            if not sd:
+                raise HTTPException(400, f"章节「{ch.get('title', '')}」HTML 内容为空或格式不支持")
+            docs = [sd]
+        else:
+            docs = _build_embed_srcdocs(ch.get("content") or "", page_size)
+            if not docs:
+                kind = "课件" if book_type == "a4" else "PPT"
+                raise HTTPException(400, f"章节「{ch.get('title', '')}」{kind}内容为空或格式不支持")
+        vis = _visible_page_indices(ch, len(docs))
+        if not vis:
+            continue  # 整章页面全隐藏：不进目录、不占编号
+
+        visible_no += 1
+        i = visible_no
         anchor = f"bk-ch-{i}"
         title = _esc(ch.get("title") or f"第{i}章")
         src_name = _esc(ch.get("project_name") or "")
@@ -433,12 +498,6 @@ def render_booklet(booklet: dict, theme: dict) -> str:
         # 章节页面背景色（仅 hex 通过校验才注入，防 CSS 注入）
         ch_bg = themes_mod._safe_css_value("bg", ch.get("bg_color") or "", "")
         bg_style = f' style="background:{ch_bg}"' if ch_bg else ""
-
-        # custom 章节可携带整页 HTML（导入 .html），按嵌入页处理而非 prose
-        is_prose = (
-            ch.get("source_type") in ("step_md", "custom")
-            and not (ch.get("source_type") == "custom" and ch.get("content_format") == "html")
-        )
 
         if book_type == "a4":
             toc_parts.append(
@@ -455,57 +514,53 @@ def render_booklet(booklet: dict, theme: dict) -> str:
                     f'<div class="bk-prose">{body}</div></div></section>'
                 )
             elif ch.get("source_type") == "custom":  # 导入的整页 HTML
-                sd = _build_fulldoc_srcdoc(ch.get("content") or "", (794, 1123))
-                if not sd:
-                    raise HTTPException(400, f"章节「{ch.get('title', '')}」HTML 内容为空或格式不支持")
                 chapter_parts.append(
                     f'<section class="bk-sheet bk-embed-sheet bk-chapter" id="{anchor}">'
-                    f'<iframe class="bk-embed-frame" srcdoc="{sd}"></iframe></section>'
+                    f'<iframe class="bk-embed-frame" srcdoc="{docs[0]}"></iframe></section>'
                 )
             else:  # a4_html：课件按页拆分，iframe 隔离
-                srcdocs = _build_embed_srcdocs(ch.get("content") or "", (794, 1123))
-                if not srcdocs:
-                    raise HTTPException(400, f"章节「{ch.get('title', '')}」课件内容为空或格式不支持")
-                for k, sd in enumerate(srcdocs):
+                for k, idx in enumerate(vis):
                     id_attr = f' id="{anchor}"' if k == 0 else ""
                     cls = "bk-sheet bk-embed-sheet" + (" bk-chapter" if k == 0 else "")
                     chapter_parts.append(
                         f'<section class="{cls}"{id_attr}>'
-                        f'<iframe class="bk-embed-frame" srcdoc="{sd}"></iframe></section>'
+                        f'<iframe class="bk-embed-frame" srcdoc="{docs[idx]}"></iframe></section>'
                     )
         else:  # ppt
             toc_parts.append(
                 f'<li><a href="#" data-slide-target="{anchor}"><span class="bk-toc-num">{i:02d}</span>'
                 f'<span class="bk-toc-label">{title}</span><span class="bk-toc-dots"></span></a></li>'
             )
-            chapter_parts.append(
-                f'<section class="bk-slide bk-chapter-divider" id="{anchor}">'
-                f'<div class="bk-chapter-no">CHAPTER {i:02d}</div>'
-                f'<div class="bk-chapter-title">{title}</div>'
-                f'<div class="bk-chapter-src">{src_line}</div></section>'
-            )
+            # 章标题片可隐藏（hide_divider）；隐藏时锚点移到第一张可见内容片，目录跳转不失效
+            show_divider = not ch.get("hide_divider")
+            if show_divider:
+                chapter_parts.append(
+                    f'<section class="bk-slide bk-chapter-divider" id="{anchor}">'
+                    f'<div class="bk-chapter-no">CHAPTER {i:02d}</div>'
+                    f'<div class="bk-chapter-title">{title}</div>'
+                    f'<div class="bk-chapter-src">{src_line}</div></section>'
+                )
+            content_id = "" if show_divider else f' id="{anchor}"'
             if is_prose:
                 body = _sanitize_fragment(ch.get("content_html") or "")
                 chapter_parts.append(
-                    f'<section class="bk-slide bk-prose-slide"{bg_style}><div class="bk-prose">{body}</div></section>'
+                    f'<section class="bk-slide bk-prose-slide"{content_id}{bg_style}><div class="bk-prose">{body}</div></section>'
                 )
             elif ch.get("source_type") == "custom":  # 导入的整页 HTML
-                sd = _build_fulldoc_srcdoc(ch.get("content") or "", (1280, 720))
-                if not sd:
-                    raise HTTPException(400, f"章节「{ch.get('title', '')}」HTML 内容为空或格式不支持")
                 chapter_parts.append(
-                    f'<section class="bk-slide">'
-                    f'<iframe class="bk-embed-frame" srcdoc="{sd}"></iframe></section>'
+                    f'<section class="bk-slide"{content_id}>'
+                    f'<iframe class="bk-embed-frame" srcdoc="{docs[0]}"></iframe></section>'
                 )
             else:  # ppt_html：每片一屏
-                srcdocs = _build_embed_srcdocs(ch.get("content") or "", (1280, 720))
-                if not srcdocs:
-                    raise HTTPException(400, f"章节「{ch.get('title', '')}」PPT 内容为空或格式不支持")
-                for sd in srcdocs:
+                for k, idx in enumerate(vis):
+                    id_attr = content_id if k == 0 else ""
                     chapter_parts.append(
-                        f'<section class="bk-slide">'
-                        f'<iframe class="bk-embed-frame" srcdoc="{sd}"></iframe></section>'
+                        f'<section class="bk-slide"{id_attr}>'
+                        f'<iframe class="bk-embed-frame" srcdoc="{docs[idx]}"></iframe></section>'
                     )
+
+    if visible_no == 0:
+        raise HTTPException(400, "所有章节页面均被隐藏，无法合成")
 
     values = {
         "BOOK_TITLE": _esc(booklet.get("title")),
@@ -520,17 +575,20 @@ def render_booklet(booklet: dict, theme: dict) -> str:
         "BOOK_LOGO": logo_html,
         "TOC_ENTRIES": "\n".join(toc_parts),
         "CHAPTERS": "\n".join(chapter_parts),
-        "PAGE_TOTAL": str(len(chapters)),
+        "PAGE_TOTAL": str(visible_no),
         "THEME_CSS_VARS": themes_mod.theme_css_vars(theme.get("colors") or {}),
     }
 
     out = template
     for name in PLACEHOLDERS:
         out = out.replace("{{" + name + "}}", values[name])
+    out = _BK_MARK_RE.sub("", out)
 
     residue = [name for name in PLACEHOLDERS if ("{{" + name + "}}") in out]
     if residue:
         raise HTTPException(500, f"模板占位符残留未替换: {residue}")
+    if "<!--BK:" in out or "<!--/BK:" in out:
+        raise HTTPException(500, "模板结构标记残留未清除: <!--BK:")
     return out
 
 
@@ -942,6 +1000,45 @@ def render_booklet_api(booklet_id: str, request: Request):
             "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}",
         },
     )
+
+
+# ── API #11 页面清单（Step④ 页面编排用；分页唯一事实源 = _build_embed_docs） ──
+
+
+@router.get("/{booklet_id}/page-map")
+def booklet_page_map(booklet_id: str, request: Request):
+    user = _require_user(request)
+    db = get_db()
+    try:
+        row = _get_booklet_or_403(db, booklet_id, user)
+        booklet = _row_to_full(row)
+    finally:
+        db.close()
+
+    book_type = booklet["book_type"]
+    page_size = (794, 1123) if book_type == "a4" else (1280, 720)
+    chapters_out = []
+    for ch in booklet.get("chapters") or []:
+        if not ch.get("enabled", True):
+            continue
+        is_prose = (
+            ch.get("source_type") in ("step_md", "custom")
+            and not (ch.get("source_type") == "custom" and ch.get("content_format") == "html")
+        )
+        entry = {"chapter_id": ch.get("id"), "title": ch.get("title") or ""}
+        if is_prose:
+            entry.update({"kind": "prose", "page_count": 1})
+        elif ch.get("source_type") == "custom":
+            doc = _build_fulldoc_doc(ch.get("content") or "", page_size)
+            entry.update({"kind": "fulldoc", "page_count": 1 if doc else 0,
+                          "docs": [doc] if doc else []})
+        else:
+            docs = _build_embed_docs(ch.get("content") or "", page_size)
+            entry.update({"kind": "embed", "page_count": len(docs), "docs": docs})
+        chapters_out.append(entry)
+
+    fixed = ["flyleaf", "toc", "back"] if book_type == "a4" else ["toc", "back"]
+    return {"book_type": book_type, "fixed": fixed, "chapters": chapters_out}
 
 
 # ── API #3 草稿详情 ──

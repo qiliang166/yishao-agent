@@ -1251,6 +1251,11 @@ export const api = {
     }
     return res.text()
   },
+  bookletPageMap: (id: string) =>
+    request(`/api/booklets/${id}/page-map`).then(d => d as {
+      book_type: string; fixed: string[]
+      chapters: { chapter_id: string; title: string; kind: 'prose' | 'fulldoc' | 'embed'; page_count: number; docs?: string[] }[]
+    }),
   bookletImportFile: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
