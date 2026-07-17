@@ -127,6 +127,7 @@ body {
 
 <script>
 /* ═══ 长正文自动拆页（模板内置资产）：超出固定页高的 .bk-prose 按块级子元素填充分页，表格按行拆，续页不带锚点 ═══ */
+window.__BK_RDY = 0;
 (function () {
   function contentBottom(box) {
     var r = box.getBoundingClientRect();
@@ -189,7 +190,10 @@ body {
   };
 })();
 
-(function () {
+(function defer() {
+  if (window.__BK_RDY !== 0) return;
+  if (!document.documentElement.clientHeight || !document.documentElement.clientWidth)
+    return requestAnimationFrame(defer);
   window.bkSplitProse({
     sections: document.querySelectorAll('.bk-slide.bk-prose-slide'),
     makeCont: function (s) {
@@ -201,13 +205,16 @@ body {
       return { section: cont, prose: prose };
     },
   });
+  window.__BK_RDY = 1;
 })();
 </script>
 
 <script>
 /* ═══ R6 页面编排：拆页后应用正文逐页隐藏/排序（配置由装配引擎注入，仅锚点键与 int 列表） ═══ */
 window.__BK_PROSE_ARRANGE = {{PROSE_ARRANGE}};
-(function () {
+(function defer() {
+  if (window.__BK_RDY > 1) return;
+  if (window.__BK_RDY < 1) return requestAnimationFrame(defer);
   var cfg = window.__BK_PROSE_ARRANGE || {};
   Object.keys(cfg).forEach(function (anchor) {
     /* 本章拆页序列 = 原始正文页 + 续页（makeCont cloneNode 复制 data-bk-prose，DOM 序即页序） */
@@ -240,11 +247,14 @@ window.__BK_PROSE_ARRANGE = {{PROSE_ARRANGE}};
       keep[0].id = anchor;
     }
   });
+  window.__BK_RDY = 2;
 })();
 </script>
 
 <script>
-(function () {
+(function defer() {
+  if (window.__BK_RDY > 2) return;
+  if (window.__BK_RDY < 2) return requestAnimationFrame(defer);
   // 窄屏适配：按可视宽度整体缩放页面，并补偿缩放后的空隙（在拆页之后采集）
   var slides = Array.prototype.slice.call(document.querySelectorAll('.bk-slide'));
 
