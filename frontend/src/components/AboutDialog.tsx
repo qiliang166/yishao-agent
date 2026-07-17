@@ -35,8 +35,10 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }} onClick={onClose}>
       <div style={{
-        background: 'var(--bg-primary, #fff)', borderRadius: 12, padding: 28, width: 420,
-        maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        background: 'var(--bg-primary, #fff)', borderRadius: 12, padding: 28, width: 520,
+        minHeight: 460, maxHeight: '85vh', overflowY: 'auto',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
       }} onClick={e => e.stopPropagation()}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)', fontSize: 12 }}>加载中...</div>
@@ -63,9 +65,9 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
               </div>
             )}
             <div style={{
-              fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: 'var(--text, #333)',
+              fontSize: 11, lineHeight: 1.8, whiteSpace: 'pre-wrap', color: 'var(--text, #333)',
               background: 'var(--bg-secondary, #f5f5f5)', padding: '12px 14px', borderRadius: 6,
-              marginBottom: 14,
+              marginBottom: 14, flex: 1,
             }}>
               {aboutContent || '暂无介绍'}
             </div>

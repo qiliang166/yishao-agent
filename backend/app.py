@@ -1362,9 +1362,12 @@ def _list_project_files(project_id: str):
 
 
 @app.get("/api/projects/{project_id}/download-all")
-def api_download_all(project_id: str, request: Request, user=require_perm("stage5.download")):
+def api_download_all(project_id: str, request: Request):
     """Download all files in a project folder as a zip archive."""
     import zipfile, io
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
     verify_project_access(project_id, user)
     path = resolve_project_storage(project_id, auto_create=False)
     if not os.path.exists(path):
@@ -1373,10 +1376,11 @@ def api_download_all(project_id: str, request: Request, user=require_perm("stage
     if not files:
         raise HTTPException(status_code=404, detail="项目文件夹为空")
 
-    # Points unlock check + download logging
+    # 授权统一交给 _check_unlock_and_log：可下载明细验解锁，不可下载明细验 stage5.download
     db = get_db()
     try:
-        _check_unlock_and_log(db, user, project_id, "", "zip_all", _get_client_ip(request))
+        if not _check_unlock_and_log(db, user, project_id, "", "zip_all", _get_client_ip(request)):
+            raise HTTPException(status_code=403, detail="缺少权限: stage5.download")
         db.commit()
     except HTTPException:
         db.close()
@@ -1403,15 +1407,19 @@ def api_download_all(project_id: str, request: Request, user=require_perm("stage
 
 
 @app.post("/api/projects/{project_id}/download-selected")
-async def api_download_selected(project_id: str, request: Request, user=require_perm("stage5.download")):
+async def api_download_selected(project_id: str, request: Request):
     """Download selected files as a zip archive."""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
     verify_project_access(project_id, user)
     body = await request.json()
 
-    # Points unlock check + download logging
+    # 授权统一交给 _check_unlock_and_log：可下载明细验解锁，不可下载明细验 stage5.download
     db = get_db()
     try:
-        _check_unlock_and_log(db, user, project_id, "", "zip_selected", _get_client_ip(request))
+        if not _check_unlock_and_log(db, user, project_id, "", "zip_selected", _get_client_ip(request)):
+            raise HTTPException(status_code=403, detail="缺少权限: stage5.download")
         db.commit()
     except HTTPException:
         db.close()
@@ -5830,17 +5838,15 @@ def download_file(filename: str, request: Request, project_id: str = None, name:
                     pass
         if user is None:
             raise HTTPException(status_code=401, detail="请先登录")
-        perms = set(user.get("permissions", []))
-        if user.get("user_type") == "admin":
-            perms.add("project.view_all")
-        if "stage5.download" not in perms:
-            raise HTTPException(status_code=403, detail="缺少权限: stage5.download")
         verify_project_access(project_id, user)
 
-        # Points unlock check + download logging
+        # 授权统一交给 _check_unlock_and_log：可下载明细验解锁（无需 stage5.download），
+        # 不可下载明细验 stage5.download — 此前这里无条件要求 stage5.download，
+        # 导致试用会员扣积分解锁成功后下载被 403
         db = get_db()
         try:
-            _check_unlock_and_log(db, user, project_id, filename, "file", _get_client_ip(request))
+            if not _check_unlock_and_log(db, user, project_id, filename, "file", _get_client_ip(request)):
+                raise HTTPException(status_code=403, detail="缺少权限: stage5.download")
             db.commit()
         except HTTPException:
             db.close()
