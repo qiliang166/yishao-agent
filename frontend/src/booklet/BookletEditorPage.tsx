@@ -146,7 +146,9 @@ export default function BookletEditorPage() {
       <div style={{ display: 'flex', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--card)' }}>
         <button className="btn btn-ghost btn-sm" disabled={step === 1} onClick={() => setStep(step - 1)}>← 上一步</button>
         <span style={{ flex: 1 }} />
-        <button className="btn btn-primary btn-sm" disabled={step === 5} onClick={() => setStep(step + 1)}>下一步 →</button>
+        {step < STEPS.length && (
+          <button className="btn btn-primary btn-sm" onClick={() => setStep(step + 1)}>下一步 →</button>
+        )}
       </div>
     </div>
   )
