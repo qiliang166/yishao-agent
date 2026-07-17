@@ -72,7 +72,9 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
     }
   }
 
-  const scale = zoom / 100
+  // 翻页式产物自带窗口自适应，缩放无意义（会被产物内部 fit 抵消）→ 固定 100%；滚动型限 25–100%
+  const effZoom = renderMode === 'paged' ? 100 : Math.min(zoom, 100)
+  const scale = effZoom / 100
 
   return (
     <div className="panel-grid">
@@ -140,19 +142,21 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
           <div className="card-title" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
             <span>📖 整书预览</span>
             <span style={{ flex: 1 }} />
-            {previewHtml && (
+            {previewHtml && (renderMode === 'paged' ? (
+              <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-secondary)' }}>翻页式自动适配窗口，无需缩放</span>
+            ) : (
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 400, fontSize: 11 }}>
                 显示比例
-                <input type="range" min={25} max={150} step={5} value={zoom}
+                <input type="range" min={25} max={100} step={5} value={effZoom}
                   onChange={e => setZoom(Number(e.target.value))} style={{ width: 140 }} />
-                <span style={{ width: 38, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{zoom}%</span>
+                <span style={{ width: 38, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{effZoom}%</span>
               </label>
-            )}
+            ))}
           </div>
           {previewHtml ? (
-            <div style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }}>
+            <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }}>
               <div style={{
-                width: `${10000 / zoom}%`, height: `${10000 / zoom}%`,
+                width: `${10000 / effZoom}%`, height: `${10000 / effZoom}%`,
                 transform: `scale(${scale})`, transformOrigin: 'top left',
               }}>
                 <iframe srcDoc={previewHtml} title="booklet-preview" sandbox="allow-scripts"
