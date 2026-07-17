@@ -6725,11 +6725,28 @@ def member_register(req: dict, request: Request):
             audit_detail["payment_ref"] = payment_ref
             audit_detail["amount_cents"] = amount_cents
         else:
-            # Trial: assign trial role, no expiry needed (can be set later by admin)
-            role = db.execute("SELECT id FROM roles WHERE name='试用会员' AND is_system=1").fetchone()
-            if role:
+            # Trial: assign trial role — get-or-create，杜绝角色缺失时静默跳过导致新用户无角色
+            try:
+                role = db.execute("SELECT id FROM roles WHERE name='试用会员'").fetchone()
+                if role:
+                    role_id = role["id"]
+                else:
+                    role_id = str(_uuid.uuid4())
+                    db.execute(
+                        """INSERT INTO roles (id, name, description, user_type, is_system)
+                           VALUES (?, '试用会员', '系统预置试用会员角色', 'member', 1)""",
+                        (role_id,),
+                    )
+                    for p in ("stage1.view", "stage2.view", "stage3.view", "stage4.view", "stage5.view"):
+                        db.execute(
+                            "INSERT OR IGNORE INTO role_permissions (role_id, permission) VALUES (?, ?)",
+                            (role_id, p),
+                        )
                 db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
-                           (user_id, role["id"]))
+                           (user_id, role_id))
+            except Exception as e:
+                print(f"[Register] Warning: assign trial role failed for {username}: {e}")
+                # 赋角色失败不阻断注册，但必须留痕（此前静默跳过导致线上新用户无角色）
 
         # ── 新人礼包：注册成功即发放（trial/paid 均发）。审批端点的 existing_pts
         # 守卫会看到已有 user_points 行而跳过，不会重复发 ──
