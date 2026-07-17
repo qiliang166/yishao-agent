@@ -9,7 +9,7 @@
 :root { {{THEME_CSS_VARS}} }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { background: var(--book-desk); }
+html { background: var(--book-desk); overflow-x: hidden; }
 body {
   font-family: var(--book-font);
   color: var(--book-text);
@@ -214,10 +214,14 @@ body {
     slides.forEach(function (s) {
       if (scale >= 1) {
         s.style.transform = '';
+        s.style.transformOrigin = '';
         s.style.marginBottom = '';
         return;
       }
-      s.style.transform = 'scale(' + scale + ')';
+      /* origin 改 top left + 平移到视口中心：origin top center 会把视觉中心钉在版面中心 1280/2 处，窄窗口下左侧留白右侧溢出 */
+      var tx = (window.innerWidth - 1280 * scale) / 2 - s.offsetLeft;
+      s.style.transformOrigin = 'top left';
+      s.style.transform = 'translateX(' + tx + 'px) scale(' + scale + ')';
       var gap = s.offsetHeight * (1 - scale);
       s.style.marginBottom = (28 - gap) + 'px';
     });

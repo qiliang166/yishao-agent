@@ -9,7 +9,7 @@
 :root { {{THEME_CSS_VARS}} }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { background: var(--book-desk); }
+html { background: var(--book-desk); overflow-x: hidden; }
 body {
   font-family: var(--book-font);
   color: var(--book-text);
@@ -102,7 +102,7 @@ body {
 }
 @media print {
   html { background: none; }
-  .bk-sheet { width: 100%; height: auto; max-height: 297mm; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+  .bk-sheet { width: 100%; height: auto; max-height: 297mm; margin: 0 !important; box-shadow: none; transform: none !important; page-break-after: always; break-after: page; }
   .bk-sheet:last-child { page-break-after: auto; break-after: auto; }
   .bk-embed-frame { width: 794px; height: 1123px; }
 }
@@ -252,6 +252,35 @@ body {
       return { section: cont, prose: prose };
     },
   });
+})();
+</script>
+
+<script>
+(function () {
+  // 窄屏适配：按可视宽度整体缩放纸页并平移到视口中心，杜绝横向滚动（在拆页之后采集）
+  var sheets = Array.prototype.slice.call(document.querySelectorAll('.bk-sheet'));
+  if (!sheets.length) return;
+  var SHEET_W = sheets[0].offsetWidth; /* 210mm 的实际 px 宽度 */
+
+  function fit() {
+    var scale = Math.min(1, (window.innerWidth - 16) / SHEET_W);
+    sheets.forEach(function (s) {
+      if (scale >= 1) {
+        s.style.transform = '';
+        s.style.transformOrigin = '';
+        s.style.marginBottom = '';
+        return;
+      }
+      var tx = (window.innerWidth - SHEET_W * scale) / 2 - s.offsetLeft;
+      s.style.transformOrigin = 'top left';
+      s.style.transform = 'translateX(' + tx + 'px) scale(' + scale + ')';
+      var gap = s.offsetHeight * (1 - scale);
+      s.style.marginBottom = (24 - gap) + 'px';
+    });
+  }
+
+  window.addEventListener('resize', fit);
+  fit();
 })();
 </script>
 

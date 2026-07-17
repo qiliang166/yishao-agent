@@ -150,7 +150,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
             )}
           </div>
           {previewHtml ? (
-            <div style={{ flex: 1, minHeight: 0, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }}>
+            <div style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 6, background: '#fff' }}>
               <div style={{
                 width: `${10000 / zoom}%`, height: `${10000 / zoom}%`,
                 transform: `scale(${scale})`, transformOrigin: 'top left',
