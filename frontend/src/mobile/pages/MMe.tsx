@@ -213,7 +213,6 @@ export default function MMe() {
   const isMember = me?.user_type === 'member' || user?.user_type === 'member'
   const isPaid = !!me?.permissions?.includes('stage5.download')
   const isUpgraded = !!me?.roles?.includes('开发体验员')
-  const isExpired = !!me?.expires_at && new Date(me.expires_at).getTime() < Date.now()
   const upgradeQr = upgradeMethod === 'wechat' ? qrWechat : qrAlipay
 
   return (
@@ -266,22 +265,18 @@ export default function MMe() {
 
             {isMember && (
               <>
-                <div className="m-section-title">会员有效期</div>
-                <div className="m-kv-group">
-                  <div className="m-kv">
-                    <span className="m-kv-label">会员到期</span>
-                    <span className="m-kv-value"><ExpiresInfo expiresAt={me.expires_at} /></span>
-                  </div>
-                  {me.upgrade_expires_at && (
+                <div className="m-section-title">积分充值</div>
+                {me.upgrade_expires_at && (
+                  <div className="m-kv-group">
                     <div className="m-kv">
                       <span className="m-kv-label">体验员到期</span>
                       <span className="m-kv-value"><ExpiresInfo expiresAt={me.upgrade_expires_at} /></span>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
                 <button className="m-btn-primary" style={{ marginBottom: 16 }}
                   onClick={() => navigate(`/renew?u=${encodeURIComponent(me.username || '')}`)}>
-                  会员+积分
+                  积分充值
                 </button>
 
                 {/* 积分余额 */}
@@ -377,7 +372,7 @@ export default function MMe() {
                   升级独立计费，到期后需重新购买，与会员有效期无关。
                 </div>
               </>
-            ) : (isPaid && !isExpired && upgradePlan != null) ? (
+            ) : (isPaid && upgradePlan != null) ? (
               <>
                 <div className="m-section-title">角色升级</div>
                 {upgradeSuccess ? (

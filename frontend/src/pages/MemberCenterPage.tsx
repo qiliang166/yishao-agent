@@ -124,23 +124,6 @@ export default function MemberCenterPage() {
     }
   }
 
-  const expiresInfo = () => {
-    if (!profile?.expires_at) {
-      return <span style={{ color: 'var(--text-secondary)' }}>永久有效</span>
-    }
-    const now = new Date()
-    const exp = new Date(profile.expires_at)
-    const diff = exp.getTime() - now.getTime()
-    const days = Math.floor(diff / (86400 * 1000))
-    if (diff < 0) {
-      return <span style={{ color: 'var(--warning)', fontWeight: 600 }}>已过期 ({new Date(profile.expires_at).toLocaleDateString('zh-CN')})</span>
-    }
-    if (days <= 7) {
-      return <span style={{ color: '#f0ad4e', fontWeight: 600 }}>{days} 天后到期 ({new Date(profile.expires_at).toLocaleDateString('zh-CN')})</span>
-    }
-    return <span style={{ color: 'var(--success)' }}>{new Date(profile.expires_at).toLocaleDateString('zh-CN')}（剩余 {days} 天）</span>
-  }
-
   const upgradeExpiresInfo = () => {
     if (!profile?.upgrade_expires_at) return null
     const now = new Date()
@@ -155,10 +138,6 @@ export default function MemberCenterPage() {
 
   const isPaid = profile?.permissions?.includes('stage5.download')
   const isUpgraded = profile?.roles?.includes('开发体验员')
-  const isExpired = (() => {
-    if (!profile?.expires_at) return false
-    return new Date(profile.expires_at).getTime() < Date.now()
-  })()
 
   if (loading) {
     return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)' }}>加载中...</div>
@@ -199,25 +178,20 @@ export default function MemberCenterPage() {
         </div>
       </div>
 
-      {/* Expiration */}
+      {/* Points Recharge */}
       <div className="ac-sub-item" style={{ marginBottom: 16 }}>
-        <div className="ac-sub-item-header">会员有效期</div>
-        <div style={{ fontSize: 13, padding: '4px 0' }}>
-          {expiresInfo()}
+        <div className="ac-sub-item-header">积分充值</div>
+        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Link to={`/member/renew?username=${profile?.username || ''}`} style={{
+            fontSize: 11, color: 'var(--primary)', textDecoration: 'none',
+            fontWeight: 600,
+          }}>
+            积分充值 →
+          </Link>
+          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+            充值积分用于解锁项目下载
+          </span>
         </div>
-        {!isExpired && (
-          <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center' }}>
-            <Link to={`/member/renew?username=${profile?.username || ''}`} style={{
-              fontSize: 11, color: 'var(--primary)', textDecoration: 'none',
-              fontWeight: 600,
-            }}>
-              会员+积分 →
-            </Link>
-            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-              会员快到期？续费延长有效期并赠送积分
-            </span>
-          </div>
-        )}
       </div>
 
       {/* Points Balance */}
@@ -245,7 +219,7 @@ export default function MemberCenterPage() {
       )}
 
       {/* Upgrade Section */}
-      {isPaid && !isUpgraded && !isExpired && upgradePlan && (
+      {isPaid && !isUpgraded && upgradePlan && (
         <div className="ac-sub-item" style={{ marginBottom: 16 }}>
           <div className="ac-sub-item-header">角色升级</div>
           <div style={{ fontSize: 13, padding: '4px 0' }}>

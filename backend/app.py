@@ -6607,14 +6607,6 @@ def member_login(req: dict, request: Request):
         if not _verify_password(password, user["password_hash"]):
             _check_login_lockout(user)
             raise HTTPException(status_code=403, detail="用户名或密码错误")
-        # Check expiry
-        if user["expires_at"]:
-            try:
-                expires = datetime.fromisoformat(user["expires_at"])
-                if expires < datetime.utcnow():
-                    raise HTTPException(status_code=403, detail="会员已到期，请联系管理员续费")
-            except (ValueError, TypeError):
-                pass
         # Block rejected registrations (is_approved=2)
         if user["is_approved"] == 2:
             raise HTTPException(status_code=403, detail="注册申请已被拒绝，请联系管理员")
@@ -6864,13 +6856,6 @@ def member_upgrade(req: dict, request: Request):
 
         from datetime import datetime as _dt
         now = _dt.utcnow()
-        if m["expires_at"]:
-            try:
-                exp = _dt.fromisoformat(m["expires_at"])
-                if exp <= now:
-                    raise HTTPException(status_code=403, detail="会员已到期，请先续费后再申请升级")
-            except (ValueError, TypeError):
-                pass
 
         existing = db.execute(
                 "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
@@ -7265,13 +7250,6 @@ async def approve_upgrade(user_id: str, request: Request, user=require_perm("mem
 
         from datetime import datetime as _dt
         now = _dt.utcnow()
-        if m["expires_at"]:
-            try:
-                exp = _dt.fromisoformat(m["expires_at"])
-                if exp <= now:
-                    raise HTTPException(400, "会员已到期，无法升级，请先续费")
-            except (ValueError, TypeError):
-                pass
 
         existing = db.execute(
                 "SELECT 1 FROM user_roles ur JOIN roles r ON ur.role_id=r.id "
