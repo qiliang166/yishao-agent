@@ -1104,7 +1104,7 @@ function SettingsPage() {
                 value={parseFloat(newUserPointsDeci) / 10}
                 onChange={e => setNewUserPointsDeci(String(Math.round(parseFloat(e.target.value || '0') * 10)))}
                 disabled={!canSaveGlobal} style={{ maxWidth: 100 }} />
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>新用户首次审批通过时赠送，0 表示不赠送</span>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>新用户注册成功即赠送，0 表示不赠送</span>
             </div>
           </div>
         </>)}

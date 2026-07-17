@@ -196,10 +196,11 @@ export interface StyleItem {
 
 export const api = {
   // Workspaces
-  listWorkspaces: (page?: number, pageSize?: number) => {
+  listWorkspaces: (page?: number, pageSize?: number, opts?: { mine?: boolean }) => {
     const params = new URLSearchParams()
     if (page) params.set('page', String(page))
     if (pageSize) params.set('page_size', String(pageSize))
+    if (opts?.mine) params.set('mine', '1')
     const qs = params.toString()
     return request(`/api/workspaces${qs ? '?' + qs : ''}`).then(d => d as { workspaces: Workspace[]; total: number; page: number; page_size: number })
   },

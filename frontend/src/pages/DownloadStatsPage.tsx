@@ -22,6 +22,7 @@ export default function DownloadStatsPage() {
   const [toast, setToast] = useState('')
   const [catFilter, setCatFilter] = useState('')
   const [authorFilter, setAuthorFilter] = useState('')
+  const [creatorFilter, setCreatorFilter] = useState('')
   const [projPage, setProjPage] = useState(1)
   const [memPage, setMemPage] = useState(1)
 
@@ -54,10 +55,12 @@ export default function DownloadStatsPage() {
 
   const catOptions = [...new Set(projectStats.map((p: any) => p.category_name).filter(Boolean))] as string[]
   const authorOptions = [...new Set(projectStats.map((p: any) => p.author_name).filter(Boolean))] as string[]
+  const creatorOptions = [...new Set(projectStats.map((p: any) => p.creator_name).filter(Boolean))] as string[]
 
   const filteredStats = projectStats.filter((p: any) =>
     (!catFilter || (catFilter === '__none__' ? !p.category_name : p.category_name === catFilter)) &&
-    (!authorFilter || (authorFilter === '__none__' ? !p.author_name : p.author_name === authorFilter))
+    (!authorFilter || (authorFilter === '__none__' ? !p.author_name : p.author_name === authorFilter)) &&
+    (!creatorFilter || p.creator_name === creatorFilter)
   )
 
   const sumBy = (key: string) => {
@@ -67,6 +70,19 @@ export default function DownloadStatsPage() {
       m.set(k, (m.get(k) || 0) + (p.download_count || 0))
     }
     return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }
+
+  // 按创建者汇总：下载次数 + 积分总额（project_unlocks 真实扣分流水），按下载次数降序
+  const sumByCreator = () => {
+    const m = new Map<string, { downloads: number; pointsDeci: number }>()
+    for (const p of filteredStats) {
+      const k = p.creator_name || '超级管理员'
+      const cur = m.get(k) || { downloads: 0, pointsDeci: 0 }
+      cur.downloads += p.download_count || 0
+      cur.pointsDeci += p.points_earned_deci || 0
+      m.set(k, cur)
+    }
+    return [...m.entries()].sort((a, b) => b[1].downloads - a[1].downloads)
   }
 
   const projTotalPages = Math.max(1, Math.ceil(filteredStats.length / PAGE_SIZE))
@@ -114,7 +130,7 @@ export default function DownloadStatsPage() {
           </div>
         ) : (
           <>
-            {(catOptions.length > 0 || authorOptions.length > 0) && (
+            {(catOptions.length > 0 || authorOptions.length > 0 || creatorOptions.length > 0) && (
               <div style={{ display: 'flex', gap: 8, marginTop: 16, alignItems: 'center' }}>
                 {catOptions.length > 0 && (
                   <select className="form-input" style={{ width: 150, fontSize: 12 }}
@@ -132,7 +148,14 @@ export default function DownloadStatsPage() {
                     <option value="__none__">无署名</option>
                   </select>
                 )}
-                {(catFilter || authorFilter) && (
+                {creatorOptions.length > 0 && (
+                  <select className="form-input" style={{ width: 150, fontSize: 12 }}
+                    value={creatorFilter} onChange={e => { setCreatorFilter(e.target.value); setProjPage(1) }}>
+                    <option value="">全部创建者</option>
+                    {creatorOptions.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                )}
+                {(catFilter || authorFilter || creatorFilter) && (
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     共 {filteredStats.length} 条，下载合计 {filteredStats.reduce((s: number, p: any) => s + (p.download_count || 0), 0)} 次
                   </span>
@@ -149,6 +172,7 @@ export default function DownloadStatsPage() {
                     <th style={{ width: 110 }}>所属项目</th>
                     <th style={{ width: 100 }}>所属分类</th>
                     <th style={{ width: 100 }}>作者</th>
+                    <th style={{ width: 100 }}>创建者</th>
                     <th style={{ width: 80 }}>下载次数</th>
                     <th style={{ width: 60 }}>可下载</th>
                     <th style={{ width: 60 }}>积分</th>
@@ -163,6 +187,7 @@ export default function DownloadStatsPage() {
                       <td style={{ fontSize: 11 }}>{p.workspace_name || '—'}</td>
                       <td style={{ fontSize: 11 }}>{p.category_name || '—'}</td>
                       <td style={{ fontSize: 11 }}>{p.author_name || '—'}</td>
+                      <td style={{ fontSize: 11 }}>{p.creator_name || '超级管理员'}</td>
                       <td style={{ fontWeight: 600 }}>{p.download_count || 0}</td>
                       <td style={{ color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
                         {p.is_downloadable ? '是' : '否'}
@@ -174,30 +199,29 @@ export default function DownloadStatsPage() {
               </table>
               <Pager page={projPage} totalPages={projTotalPages} total={filteredStats.length} onChange={setProjPage} />
             </div>
-            {(catOptions.length > 0 || authorOptions.length > 0) && (
+            {filteredStats.length > 0 && (
               <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
-                {catOptions.length > 0 && (
-                  <div className="card" style={{ flex: 1, minWidth: 280, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>按分类汇总</div>
-                    {sumBy('category_name').map(([name, count]) => (
-                      <div key={name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                        <span>{name}</span>
-                        <span style={{ fontWeight: 600 }}>{count} 次</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {authorOptions.length > 0 && (
-                  <div className="card" style={{ flex: 1, minWidth: 280, padding: '12px 16px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>按作者汇总</div>
-                    {sumBy('author_name').map(([name, count]) => (
-                      <div key={name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
-                        <span>{name}</span>
-                        <span style={{ fontWeight: 600 }}>{count} 次</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="card" style={{ flex: 1, minWidth: 280, padding: '12px 16px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>按工作区汇总</div>
+                  {sumBy('workspace_name').map(([name, count]) => (
+                    <div key={name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span>{name}</span>
+                      <span style={{ fontWeight: 600 }}>{count} 次</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="card" style={{ flex: 1, minWidth: 280, padding: '12px 16px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>按创建者汇总</div>
+                  {sumByCreator().map(([name, agg]) => (
+                    <div key={name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
+                      <span>{name}</span>
+                      <span>
+                        <span style={{ fontWeight: 600 }}>{agg.downloads} 次</span>
+                        <span style={{ color: 'var(--warning)', marginLeft: 10 }}>{(agg.pointsDeci / 10).toFixed(1)} 积分</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </>

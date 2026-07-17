@@ -664,7 +664,7 @@ def health():
 # ── Workspaces ──
 
 @app.get("/api/workspaces")
-def list_workspaces(page: int = 1, page_size: int = 20, request: Request = None):
+def list_workspaces(page: int = 1, page_size: int = 20, mine: int = 0, request: Request = None):
     db = get_db()
     try:
         user = getattr(request.state, "user", None) if request else None
@@ -688,11 +688,15 @@ def list_workspaces(page: int = 1, page_size: int = 20, request: Request = None)
                 ORDER BY w.updated_at DESC LIMIT ? OFFSET ?
             """, (uid, uid, page_size, offset)).fetchall()
         else:
-            total = db.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
+            # mine=1：普通管理员只看自己创建的工作区；超管（admin）不受限
+            where, params = "", ()
+            if mine and user and user.get("username") != "admin":
+                where, params = " WHERE created_by = ?", (user.get("sub", ""),)
+            total = db.execute(f"SELECT COUNT(*) FROM workspaces{where}", params).fetchone()[0]
             offset = (page - 1) * page_size
             rows = db.execute(
-                "SELECT * FROM workspaces ORDER BY updated_at DESC LIMIT ? OFFSET ?",
-                (page_size, offset)
+                f"SELECT * FROM workspaces{where} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                params + (page_size, offset)
             ).fetchall()
         result = [dict(r) for r in rows]
         cnt_map = {r["workspace_id"]: r["c"] for r in db.execute(
@@ -5638,10 +5642,14 @@ def api_download_stats_projects(user=require_perm("member.manage")):
                       p.download_count, p.point_cost_deci, p.is_downloadable,
                       p.category_id, p.author_id,
                       pc.name as category_name, au.name as author_name,
+                      COALESCE(creator.display_name, creator.username, '超级管理员') as creator_name,
+                      (SELECT COALESCE(SUM(pu.points_spent_deci), 0)
+                       FROM project_unlocks pu WHERE pu.project_id = p.id) as points_earned_deci,
                       COUNT(dl.id) as total_logs
                FROM projects p
                LEFT JOIN download_logs dl ON dl.project_id = p.id
                LEFT JOIN workspaces w ON w.id = p.workspace_id
+               LEFT JOIN users creator ON creator.id = w.created_by
                LEFT JOIN project_categories pc ON pc.id = p.category_id
                LEFT JOIN authors au ON au.id = p.author_id
                WHERE p.is_downloadable = 1
@@ -6722,6 +6730,17 @@ def member_register(req: dict, request: Request):
             if role:
                 db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
                            (user_id, role["id"]))
+
+        # ── 新人礼包：注册成功即发放（trial/paid 均发）。审批端点的 existing_pts
+        # 守卫会看到已有 user_points 行而跳过，不会重复发 ──
+        try:
+            bonus_deci = _new_user_bonus_deci()
+            if bonus_deci > 0:
+                _add_points(db, user_id, bonus_deci, "signup_bonus",
+                            note=f"新人礼包 {bonus_deci/10:.1f} 积分")
+        except Exception as e:
+            print(f"[Points] Warning: signup bonus on register failed: {e}")
+            # 礼包失败不阻断注册
 
         _write_audit(db, user_id, "member.register", "user", user_id,
                       json.dumps(audit_detail), ip)

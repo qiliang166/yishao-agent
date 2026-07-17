@@ -13,7 +13,7 @@ import json
 import os
 import uuid
 from typing import Optional
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from database import get_db
 from services.llm_service import generate
@@ -551,20 +551,26 @@ def _new_id() -> str:
 
 
 @router.post("/apply")
-def apply_prompts(req: ApplyRequest):
+def apply_prompts(req: ApplyRequest, request: Request):
     """Apply generated configs to a target workspace.
 
     原子替换：先校验整套配置满足结构契约，再在同一事务内清空该工作区的
     4 张配置表并写入新配置。id 一律由服务端生成（LLM 提供的固定 id 曾因
     单列主键在跨工作区应用时被 INSERT OR IGNORE 静默丢弃）。
+    普通管理员只能应用到自己创建的工作区（created_by 为空归超管）。
     """
     _validate_configs(req.configs)
 
     db = get_db()
     try:
-        ws = db.execute("SELECT id FROM workspaces WHERE id = ?", (req.workspace_id,)).fetchone()
+        ws = db.execute(
+            "SELECT id, created_by FROM workspaces WHERE id = ?", (req.workspace_id,)).fetchone()
         if not ws:
             raise HTTPException(404, "工作区不存在")
+
+        user = getattr(request.state, "user", None) or {}
+        if user.get("username") != "admin" and (ws["created_by"] or "") != user.get("sub", ""):
+            raise HTTPException(403, "只能应用到自己创建的工作区")
 
         wid = req.workspace_id
         for table in CONFIG_TABLES:

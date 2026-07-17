@@ -153,7 +153,7 @@ export default function PromptStudioPage() {
       }
     }).catch(() => {})
 
-    api.listWorkspaces(1, 100).then(d => setWorkspaces(d.workspaces || [])).catch(() => {})
+    api.listWorkspaces(1, 100, { mine: true }).then(d => setWorkspaces(d.workspaces || [])).catch(() => {})
   }, [])
 
   // ── Save draft to localStorage (debounced 1s) ──
