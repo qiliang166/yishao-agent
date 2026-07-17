@@ -1255,6 +1255,7 @@ export const api = {
   bookletPageMap: (id: string) =>
     request(`/api/booklets/${id}/page-map`).then(d => d as {
       book_type: string; fixed: string[]
+      fixed_docs?: Record<string, string>
       chapters: { chapter_id: string; title: string; kind: 'prose' | 'fulldoc' | 'embed'; page_count: number; docs?: string[] }[]
     }),
   bookletImportFile: async (file: File) => {

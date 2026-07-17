@@ -288,6 +288,45 @@ body {
 </script>
 
 <script>
+/* ═══ R6 页面编排：拆页后应用正文逐页隐藏/排序（配置由装配引擎注入，仅锚点键与 int 列表） ═══ */
+window.__BK_PROSE_ARRANGE = {{PROSE_ARRANGE}};
+(function () {
+  var cfg = window.__BK_PROSE_ARRANGE || {};
+  Object.keys(cfg).forEach(function (anchor) {
+    /* 本章拆页序列 = 原始正文页 + 续页（makeCont cloneNode 复制 data-bk-prose，DOM 序即页序） */
+    var pages = Array.prototype.slice.call(document.querySelectorAll('[data-bk-prose="' + anchor + '"]'));
+    if (!pages.length) return;
+    var c = cfg[anchor] || {};
+    var idxs = [], i;
+    for (i = 0; i < pages.length; i++) idxs.push(i);
+    var order = c.order;
+    if (Object.prototype.toString.call(order) === '[object Array]' && order.length === pages.length) {
+      var seen = {}, ok = true;
+      for (i = 0; i < order.length; i++) {
+        var v = order[i];
+        if (typeof v !== 'number' || v < 0 || v >= pages.length || seen[v]) { ok = false; break; }
+        seen[v] = 1;
+      }
+      if (ok) idxs = order; /* 非 0..n-1 完整排列 → 回退自然序（与后端 _visible_page_indices 同规则） */
+    }
+    var hidden = {};
+    (c.hidden || []).forEach(function (v) { hidden[v] = 1; });
+    var keep = [];
+    for (i = 0; i < idxs.length; i++) { if (!hidden[idxs[i]]) keep.push(pages[idxs[i]]); }
+    var parent = pages[0].parentNode;
+    var tail = pages[pages.length - 1].nextSibling;
+    pages.forEach(function (p) { parent.removeChild(p); });
+    keep.forEach(function (p) { parent.insertBefore(p, tail); });
+    /* 锚点跟随第一张保留页，目录跳转不失效 */
+    if (keep.length && keep[0].id !== anchor) {
+      pages.forEach(function (p) { if (p.id === anchor) p.removeAttribute('id'); });
+      keep[0].id = anchor;
+    }
+  });
+})();
+</script>
+
+<script>
 (function () {
   var slides = Array.prototype.slice.call(document.querySelectorAll('.bk-sheet'));
   var idx = 0;

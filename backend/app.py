@@ -6138,8 +6138,14 @@ def serve_audio(filename: str, request: Request, project_id: str = None, name: s
 # ── Logo Upload ──
 
 @app.post("/api/upload/logo")
-async def upload_logo(file: UploadFile = File(...), user=require_perm("config.global")):
-    """Upload a logo image file. Returns the filename for later retrieval."""
+async def upload_logo(request: Request, file: UploadFile = File(...)):
+    """Upload a logo image file. Returns the filename for later retrieval.
+
+    登录即可（成册署名页会员也要传 LOGO）；把 LOGO 应用到品牌/工作区的保存端点各有权限门。
+    """
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
     import uuid as _uuid
     ext = os.path.splitext(file.filename or "logo.png")[1] or ".png"
     if ext.lower() not in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico"):

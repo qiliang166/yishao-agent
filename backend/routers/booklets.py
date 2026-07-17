@@ -43,6 +43,7 @@ PLACEHOLDERS = [
     "BOOK_TITLE", "BOOK_SUBTITLE", "BOOK_AUTHOR", "BOOK_ORG", "BOOK_DATE",
     "FLYLEAF_TEXT", "BACK_COVER_TEXT", "BRAND_COPYRIGHT", "BRAND_SIGNATURE",
     "BOOK_LOGO", "TOC_ENTRIES", "CHAPTERS", "PAGE_TOTAL", "THEME_CSS_VARS",
+    "PROSE_ARRANGE",
 ]
 
 # step_md 内容项：step_name → 默认标签（col2 标签优先读工作区 column_configs）
@@ -436,6 +437,19 @@ def _visible_page_indices(ch: dict, page_count: int) -> list:
     return [i for i in idxs if i not in hidden]
 
 
+def _prose_arrange_of(ch: dict) -> dict:
+    """正文章节拆页编排（R6）：bkSplitProse 浏览器拆页后由模板 JS 应用；此处只做类型清洗。
+
+    与章节级 hidden_pages/page_order（正文语义=整章）互不相干，存量草稿零迁移。
+    """
+    hidden = [i for i in (ch.get("prose_hidden_pages") or []) if isinstance(i, int) and i >= 0]
+    order = ch.get("prose_page_order")
+    order = [i for i in order if isinstance(i, int) and i >= 0] if isinstance(order, list) else []
+    if not hidden and not order:
+        return {}
+    return {"hidden": hidden, "order": order}
+
+
 def render_booklet(booklet: dict, theme: dict) -> str:
     """把草稿装配为自包含单文件 HTML 电子书。
 
@@ -467,6 +481,7 @@ def render_booklet(booklet: dict, theme: dict) -> str:
 
     page_size = (794, 1123) if book_type == "a4" else (1280, 720)
     toc_parts, chapter_parts = [], []
+    prose_arrange = {}
     visible_no = 0
     for ch in chapters:
         # custom 章节可携带整页 HTML（导入 .html），按嵌入页处理而非 prose
@@ -509,8 +524,11 @@ def render_booklet(booklet: dict, theme: dict) -> str:
             )
             if is_prose:
                 body = _sanitize_fragment(ch.get("content_html") or "")
+                arrange = _prose_arrange_of(ch)
+                if arrange:
+                    prose_arrange[anchor] = arrange
                 chapter_parts.append(
-                    f'<section class="bk-sheet bk-chapter" id="{anchor}"{bg_style}><div class="bk-sheet-inner">'
+                    f'<section class="bk-sheet bk-chapter" id="{anchor}" data-bk-prose="{anchor}"{bg_style}><div class="bk-sheet-inner">'
                     f'<div class="bk-chapter-head"><div class="bk-chapter-no">第 {i} 章</div>'
                     f'<div class="bk-chapter-title">{title}</div>'
                     f'<div class="bk-chapter-src">{src_line}</div></div>'
@@ -546,8 +564,11 @@ def render_booklet(booklet: dict, theme: dict) -> str:
             content_id = "" if show_divider else f' id="{anchor}"'
             if is_prose:
                 body = _sanitize_fragment(ch.get("content_html") or "")
+                arrange = _prose_arrange_of(ch)
+                if arrange:
+                    prose_arrange[anchor] = arrange
                 chapter_parts.append(
-                    f'<section class="bk-slide bk-prose-slide"{content_id}{bg_style}><div class="bk-prose">{body}</div></section>'
+                    f'<section class="bk-slide bk-prose-slide" data-bk-prose="{anchor}"{content_id}{bg_style}><div class="bk-prose">{body}</div></section>'
                 )
             elif ch.get("source_type") == "custom":  # 导入的整页 HTML
                 chapter_parts.append(
@@ -580,6 +601,8 @@ def render_booklet(booklet: dict, theme: dict) -> str:
         "CHAPTERS": "\n".join(chapter_parts),
         "PAGE_TOTAL": str(visible_no),
         "THEME_CSS_VARS": themes_mod.theme_css_vars(theme.get("colors") or {}),
+        # 仅含服务端生成的锚点键与 int 列表，无用户字符串，可安全内嵌 <script>
+        "PROSE_ARRANGE": json.dumps(prose_arrange, separators=(",", ":")),
     }
 
     out = template
@@ -593,6 +616,55 @@ def render_booklet(booklet: dict, theme: dict) -> str:
     if "<!--BK:" in out or "<!--/BK:" in out:
         raise HTTPException(500, "模板结构标记残留未清除: <!--BK:")
     return out
+
+
+def _resolve_theme(booklet: dict) -> dict:
+    """草稿封面配置 → 归一化主题（render 与 page-map 共用）。"""
+    cover = booklet.get("cover") or {}
+    theme_id = cover.get("theme_id") or ""
+    theme_colors = cover.get("theme_colors") or {}
+    theme = None
+    if theme_id:
+        theme = next((t for t in _all_themes() if t["id"] == theme_id), None)
+    if theme is None:
+        theme = {"id": "custom", "name": "自定义", "colors": theme_colors}
+    elif theme_colors:
+        theme = {**theme, "colors": {**theme["colors"], **theme_colors}}
+    if cover.get("desk_none"):
+        theme = {**theme, "colors": {**(theme.get("colors") or {}), "desk": "#ffffff"}}
+    return theme
+
+
+_BK_FIXED_DOC_CLASSES = {"cover": "bk-cover", "flyleaf": "bk-flyleaf", "toc": "bk-toc", "back": "bk-back"}
+
+
+def _build_fixed_docs(booklet: dict, theme: dict) -> dict:
+    """固定页缩略图文档：从装配引擎成品中提取固定页 section（单一事实源，主题/目录编号与产物一致）。"""
+    bl = dict(booklet)
+    cov = dict(bl.get("cover") or {})
+    cov["hidden_fixed"] = []  # 已隐藏的固定页也要出缩略图，恢复显示前可预览
+    bl["cover"] = cov
+    try:
+        full = render_booklet(bl, theme)
+    except Exception:
+        return {}  # 章节为空等装配失败 → 前端回退图标，不阻断页面清单
+    styles = _extract_head_styles(full)
+    w, h = (794, 1123) if booklet.get("book_type") == "a4" else (1280, 720)
+    docs = {}
+    for key, cls in _BK_FIXED_DOC_CLASSES.items():
+        m = re.search(r'<section class="[^"]*\b' + cls + r'\b[^"]*"[^>]*>.*?</section>', full, re.S)
+        if not m:
+            continue
+        docs[key] = (
+            "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+            f"{styles}"
+            f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;}}"
+            # 翻页式模板非 active 页 display:none/position:absolute，缩略图 iframe 无 JS 须强制显示
+            ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
+            "position:static !important;margin:0 !important;}</style>"
+            f"</head><body>{m.group(0)}</body></html>"
+        )
+    return docs
 
 
 # ── Pydantic models ──
@@ -979,18 +1051,7 @@ def render_booklet_api(booklet_id: str, request: Request):
     finally:
         db.close()
 
-    cover = booklet.get("cover") or {}
-    theme_id = cover.get("theme_id") or ""
-    theme_colors = cover.get("theme_colors") or {}
-    theme = None
-    if theme_id:
-        theme = next((t for t in _all_themes() if t["id"] == theme_id), None)
-    if theme is None:
-        theme = {"id": "custom", "name": "自定义", "colors": theme_colors}
-    elif theme_colors:
-        theme = {**theme, "colors": {**theme["colors"], **theme_colors}}
-    if cover.get("desk_none"):
-        theme = {**theme, "colors": {**(theme.get("colors") or {}), "desk": "#ffffff"}}
+    theme = _resolve_theme(booklet)
 
     html_out = render_booklet(booklet, theme)
 
@@ -1041,7 +1102,8 @@ def booklet_page_map(booklet_id: str, request: Request):
         chapters_out.append(entry)
 
     fixed = ["flyleaf", "toc", "back"] if book_type == "a4" else ["toc", "back"]
-    return {"book_type": book_type, "fixed": fixed, "chapters": chapters_out}
+    fixed_docs = _build_fixed_docs(booklet, _resolve_theme(booklet))
+    return {"book_type": book_type, "fixed": fixed, "chapters": chapters_out, "fixed_docs": fixed_docs}
 
 
 # ── API #3 草稿详情 ──

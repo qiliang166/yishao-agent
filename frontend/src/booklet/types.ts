@@ -19,6 +19,9 @@ export interface Chapter {
   hidden_pages?: number[]
   page_order?: number[]
   hide_divider?: boolean
+  /** 正文拆页级隐藏/排序（R6，翻页式/标准页生效）；与 hidden_pages=[0]（整章隐藏）语义独立 */
+  prose_hidden_pages?: number[]
+  prose_page_order?: number[]
 }
 
 export interface Cover {
