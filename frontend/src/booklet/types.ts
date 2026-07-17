@@ -30,7 +30,7 @@ export interface Cover {
   theme_id?: string
   theme_colors?: Record<string, string>
   desk_none?: boolean
-  render_mode?: 'paged' | 'flow'
+  render_mode?: 'paged' | 'flow' | 'standard'
   hidden_fixed?: string[]
 }
 

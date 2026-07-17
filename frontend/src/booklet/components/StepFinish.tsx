@@ -20,8 +20,14 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
   const enabledCount = draft.chapters.filter(c => c.enabled).length
   const renderMode = draft.cover.render_mode || 'paged'
 
-  const setRenderMode = (mode: 'paged' | 'flow') =>
+  const setRenderMode = (mode: 'paged' | 'flow' | 'standard') =>
     onChange(d => ({ ...d, cover: { ...d.cover, render_mode: mode } }))
+
+  const MODE_OPTIONS: { mode: 'paged' | 'flow' | 'standard'; label: string; descA4: string; descPpt: string }[] = [
+    { mode: 'paged', label: '翻页式', descA4: '电子书形态：一次一页居中显示，按钮/方向键翻页', descPpt: '幻灯片形态：一次一屏，按钮/方向键翻页' },
+    { mode: 'flow', label: '网页式', descA4: '连续长页不分页，从头滚到尾；打印时由浏览器自然分页', descPpt: '全部页面纵向连续滚动浏览' },
+    { mode: 'standard', label: '标准页（PDF 型）', descA4: 'A4 纸页一页接一页瀑布式排布，像 PDF 阅读器；打印即得一页一张 A4', descPpt: '16:9 标准页瀑布式排布，像 PDF 阅读器；打印每页一屏' },
+  ]
 
   const ensureSavedAndRender = async (): Promise<string | null> => {
     const ok = await onSave()
@@ -89,35 +95,29 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
 
         <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">🧩 合成方式</div>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: 8 }}>
-            <input type="radio" name="bk-render-mode" checked={renderMode === 'paged'}
-              onChange={() => setRenderMode('paged')} style={{ marginTop: 2 }} />
-            <span>
-              <strong>分页式</strong>
-              <span style={{ display: 'block', fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                {draft.book_type === 'a4' ? '一页一张 A4 纸的书册形态，打印即得纸质书排版' : '一页一屏的幻灯片形态，方向键翻页'}
+          {MODE_OPTIONS.map((opt, i) => (
+            <label key={opt.mode} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, cursor: 'pointer', marginBottom: i < MODE_OPTIONS.length - 1 ? 8 : 0 }}>
+              <input type="radio" name="bk-render-mode" checked={renderMode === opt.mode}
+                onChange={() => setRenderMode(opt.mode)} style={{ marginTop: 2 }} />
+              <span>
+                <strong>{opt.label}</strong>
+                <span style={{ display: 'block', fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  {draft.book_type === 'a4' ? opt.descA4 : opt.descPpt}
+                </span>
               </span>
-            </span>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, cursor: 'pointer' }}>
-            <input type="radio" name="bk-render-mode" checked={renderMode === 'flow'}
-              onChange={() => setRenderMode('flow')} style={{ marginTop: 2 }} />
-            <span>
-              <strong>网页式</strong>
-              <span style={{ display: 'block', fontSize: 10, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                连续长页不分页，从头滚到尾；打印/另存 PDF 时由浏览器自然分页
-              </span>
-            </span>
-          </label>
+            </label>
+          ))}
         </div>
 
         <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">📥 合成下载</div>
           <div className="card-hint">
             产物是一个自包含 HTML 文件：双击用浏览器打开即可翻阅；
-            {draft.book_type === 'a4'
-              ? '浏览器里 Ctrl+P 打印即得 A4 排版的纸质书/PDF。'
-              : renderMode === 'paged' ? '打开后用 ←/→ 方向键或底部按钮翻页。' : '打开后上下滚动浏览全部页面。'}
+            {renderMode === 'paged'
+              ? '打开后用 ←/→ 方向键或底部按钮翻页。'
+              : renderMode === 'standard'
+                ? '打开后逐页向下滚动，Ctrl+P 打印即得逐页排版的 PDF。'
+                : '打开后上下滚动浏览全部内容。'}
           </div>
           <button className="btn btn-primary" style={{ width: '100%', padding: '10px 0', fontSize: 14 }}
             disabled={downloading || enabledCount === 0} onClick={handleDownload}>

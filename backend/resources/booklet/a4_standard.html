@@ -9,25 +9,26 @@
 :root { {{THEME_CSS_VARS}} }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; background: var(--book-desk); }
+html { background: var(--book-desk); }
 body {
   font-family: var(--book-font);
   color: var(--book-text);
-  overflow: hidden;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
 
-/* ═══ 翻页式：单页舞台居中，等比缩放（同 ppt 翻页交互） ═══ */
-.bk-stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+/* ═══ 标准页（PDF 型）：固定 A4 页尺寸，一页接一页瀑布式排布 ═══ */
 .bk-sheet {
   width: 210mm;
   height: 297mm;
+  margin: 24px auto;
   background: var(--book-bg);
-  position: absolute; display: none; overflow: hidden;
-  transform-origin: center center;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.bk-sheet.bk-active { display: flex; flex-direction: column; }
 .bk-sheet-inner { flex: 1; padding: 22mm 20mm 26mm; display: flex; flex-direction: column; overflow: hidden; }
 
 /* ═══ 封面 ═══ */
@@ -53,7 +54,7 @@ body {
 .bk-toc-list li { margin-bottom: 6mm; }
 .bk-toc-list a {
   display: flex; align-items: baseline; text-decoration: none; color: var(--book-text);
-  font-size: 12.5pt; line-height: 1.7; cursor: pointer;
+  font-size: 12.5pt; line-height: 1.7;
 }
 .bk-toc-num {
   flex-shrink: 0; width: 14mm; font-weight: 700; color: var(--book-accent); font-variant-numeric: tabular-nums;
@@ -93,109 +94,80 @@ body {
 .bk-back-text { font-size: 12pt; line-height: 2.4; max-width: 125mm; white-space: pre-wrap; }
 .bk-back-brand { margin-top: 22mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
 
-/* ═══ 控制条 ═══ */
-.bk-nav {
-  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 12px; align-items: center; z-index: 10;
-  background: rgba(0,0,0,0.55); color: #fff; padding: 8px 18px; border-radius: 20px;
-  font-size: 14px; font-family: sans-serif; user-select: none;
-}
-.bk-nav button {
-  background: none; border: 1px solid rgba(255,255,255,0.5); color: #fff;
-  border-radius: 14px; padding: 3px 14px; cursor: pointer; font-size: 14px;
-}
-.bk-nav button:hover { background: rgba(255,255,255,0.2); }
-
-/* ═══ 打印：A4 分页（全页输出，不受翻页状态影响） ═══ */
+/* ═══ 打印：每页一张 A4 ═══ */
 @page {
   size: A4;
   margin: 0;
   @bottom-center { content: counter(page) " / " counter(pages); font-size: 8.5pt; color: #888; }
 }
 @media print {
-  html, body { background: none; overflow: visible; height: auto; }
-  .bk-stage { position: static; display: block; }
-  .bk-sheet {
-    display: flex !important; flex-direction: column; position: relative;
-    transform: none !important; width: 100%; height: auto; max-height: 297mm;
-    margin: 0; page-break-after: always; break-after: page;
-  }
-  .bk-sheet:last-of-type { page-break-after: auto; break-after: auto; }
+  html { background: none; }
+  .bk-sheet { width: 100%; height: auto; max-height: 297mm; margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+  .bk-sheet:last-child { page-break-after: auto; break-after: auto; }
   .bk-embed-frame { width: 794px; height: 1123px; }
-  .bk-nav { display: none; }
 }
 </style>
 </head>
 <body>
 
-<div class="bk-stage" id="bkStage">
-
-  <!-- ═══ 封面 ═══ -->
-  <section class="bk-sheet bk-cover bk-active">
-    <div class="bk-cover-band"></div>
-    <div class="bk-sheet-inner">
-      {{BOOK_LOGO}}
-      <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
-      <div class="bk-cover-subtitle">{{BOOK_SUBTITLE}}</div>
-      <div class="bk-cover-rule"></div>
-      <div class="bk-cover-meta">
-        <div class="bk-cover-author">{{BOOK_AUTHOR}}</div>
-        <div>{{BOOK_ORG}}</div>
-        <div>{{BOOK_DATE}}</div>
-      </div>
+<!-- ═══ 封面 ═══ -->
+<section class="bk-sheet bk-cover">
+  <div class="bk-cover-band"></div>
+  <div class="bk-sheet-inner">
+    {{BOOK_LOGO}}
+    <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
+    <div class="bk-cover-subtitle">{{BOOK_SUBTITLE}}</div>
+    <div class="bk-cover-rule"></div>
+    <div class="bk-cover-meta">
+      <div class="bk-cover-author">{{BOOK_AUTHOR}}</div>
+      <div>{{BOOK_ORG}}</div>
+      <div>{{BOOK_DATE}}</div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- ═══ 扉页（封面背面/版权编制说明） ═══ -->
-  <!--BK:FLYLEAF-->
-  <section class="bk-sheet bk-flyleaf">
-    <div class="bk-sheet-inner">
-      <div class="bk-flyleaf-title">{{BOOK_TITLE}}</div>
-      <div class="bk-flyleaf-text">{{FLYLEAF_TEXT}}</div>
-      <div class="bk-flyleaf-info">
-        编著：{{BOOK_AUTHOR}}<br>
-        单位：{{BOOK_ORG}}<br>
-        日期：{{BOOK_DATE}}<br>
-        全书共 {{PAGE_TOTAL}} 章
-      </div>
-      <div class="bk-flyleaf-brand">{{BRAND_COPYRIGHT}}<br>{{BRAND_SIGNATURE}}</div>
+<!-- ═══ 扉页（封面背面/版权编制说明） ═══ -->
+<!--BK:FLYLEAF-->
+<section class="bk-sheet bk-flyleaf">
+  <div class="bk-sheet-inner">
+    <div class="bk-flyleaf-title">{{BOOK_TITLE}}</div>
+    <div class="bk-flyleaf-text">{{FLYLEAF_TEXT}}</div>
+    <div class="bk-flyleaf-info">
+      编著：{{BOOK_AUTHOR}}<br>
+      单位：{{BOOK_ORG}}<br>
+      日期：{{BOOK_DATE}}<br>
+      全书共 {{PAGE_TOTAL}} 章
     </div>
-  </section>
-  <!--/BK:FLYLEAF-->
+    <div class="bk-flyleaf-brand">{{BRAND_COPYRIGHT}}<br>{{BRAND_SIGNATURE}}</div>
+  </div>
+</section>
+<!--/BK:FLYLEAF-->
 
-  <!-- ═══ 目录 ═══ -->
-  <!--BK:TOC-->
-  <section class="bk-sheet bk-toc">
-    <div class="bk-sheet-inner">
-      <div class="bk-toc-title">目 录</div>
-      <ul class="bk-toc-list">
-        {{TOC_ENTRIES}}
-      </ul>
-    </div>
-  </section>
-  <!--/BK:TOC-->
+<!-- ═══ 目录 ═══ -->
+<!--BK:TOC-->
+<section class="bk-sheet bk-toc">
+  <div class="bk-sheet-inner">
+    <div class="bk-toc-title">目 录</div>
+    <ul class="bk-toc-list">
+      {{TOC_ENTRIES}}
+    </ul>
+  </div>
+</section>
+<!--/BK:TOC-->
 
-  <!-- ═══ 章节正文 ═══ -->
-  {{CHAPTERS}}
+<!-- ═══ 章节正文 ═══ -->
+{{CHAPTERS}}
 
-  <!-- ═══ 封底 ═══ -->
-  <!--BK:BACK-->
-  <section class="bk-sheet bk-back">
-    <div class="bk-sheet-inner">
-      <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
-      <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}</div>
-    </div>
-    <div class="bk-back-band"></div>
-  </section>
-  <!--/BK:BACK-->
-
-</div>
-
-<div class="bk-nav">
-  <button id="bkPrev" type="button">← 上一页</button>
-  <span id="bkCounter">1 / 1</span>
-  <button id="bkNext" type="button">下一页 →</button>
-</div>
+<!-- ═══ 封底 ═══ -->
+<!--BK:BACK-->
+<section class="bk-sheet bk-back">
+  <div class="bk-sheet-inner">
+    <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
+    <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}</div>
+  </div>
+  <div class="bk-back-band"></div>
+</section>
+<!--/BK:BACK-->
 
 <script>
 /* ═══ 长正文自动拆页（模板内置资产）：超出固定页高的 .bk-prose 按块级子元素填充分页，表格按行拆，续页不带章头 ═══ */
@@ -262,7 +234,6 @@ body {
 })();
 
 (function () {
-  /* 翻页式下非激活页 display:none 无法测量 → 拆页时临时显隐（visibility:hidden 不闪屏） */
   var proseSheets = [];
   Array.prototype.slice.call(document.querySelectorAll('.bk-sheet.bk-chapter')).forEach(function (s) {
     if (s.querySelector(':scope > .bk-sheet-inner > .bk-prose')) proseSheets.push(s);
@@ -270,13 +241,10 @@ body {
   window.bkSplitProse({
     sections: proseSheets,
     box: function (s) { return s.querySelector('.bk-sheet-inner'); },
-    prepare: function (s) { s.style.display = 'flex'; s.style.visibility = 'hidden'; },
-    restore: function (s) { s.style.display = ''; s.style.visibility = ''; },
     makeCont: function (s) {
       var cont = s.cloneNode(false);
       cont.removeAttribute('id');
       cont.classList.remove('bk-chapter');
-      cont.style.display = 'flex'; cont.style.visibility = 'hidden'; /* 供本轮继续测量，restore 时清除 */
       var inner = document.createElement('div'); inner.className = 'bk-sheet-inner';
       var prose = document.createElement('div'); prose.className = 'bk-prose';
       inner.appendChild(prose); cont.appendChild(inner);
@@ -284,52 +252,6 @@ body {
       return { section: cont, prose: prose };
     },
   });
-})();
-</script>
-
-<script>
-(function () {
-  var slides = Array.prototype.slice.call(document.querySelectorAll('.bk-sheet'));
-  var idx = 0;
-  var counter = document.getElementById('bkCounter');
-  var PAGE_W = 794, PAGE_H = 1123; /* A4 @96dpi 固定几何（210mm×297mm），非主题值 */
-
-  function fit() {
-    var scale = Math.min(window.innerWidth / PAGE_W, (window.innerHeight - 70) / PAGE_H);
-    slides.forEach(function (s) { s.style.transform = 'scale(' + scale + ')'; });
-  }
-
-  function show(i) {
-    if (i < 0) i = 0;
-    if (i > slides.length - 1) i = slides.length - 1;
-    idx = i;
-    slides.forEach(function (s, k) { s.classList.toggle('bk-active', k === idx); });
-    counter.textContent = (idx + 1) + ' / ' + slides.length;
-  }
-
-  document.getElementById('bkPrev').addEventListener('click', function () { show(idx - 1); });
-  document.getElementById('bkNext').addEventListener('click', function () { show(idx + 1); });
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { show(idx + 1); e.preventDefault(); }
-    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(idx - 1); e.preventDefault(); }
-    if (e.key === 'Home') { show(0); }
-    if (e.key === 'End') { show(slides.length - 1); }
-  });
-
-  // 目录点击跳转：a4 目录用 href="#bk-ch-N" 锚点 → 定位所在纸页
-  document.querySelectorAll('.bk-toc-list a[href^="#"]').forEach(function (a) {
-    a.addEventListener('click', function (e) {
-      e.preventDefault();
-      var target = document.getElementById(a.getAttribute('href').slice(1));
-      if (!target) return;
-      var sheet = target.closest ? target.closest('.bk-sheet') : null;
-      if (sheet) show(slides.indexOf(sheet));
-    });
-  });
-
-  window.addEventListener('resize', fit);
-  fit();
-  show(0);
 })();
 </script>
 

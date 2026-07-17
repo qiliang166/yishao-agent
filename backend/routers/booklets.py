@@ -233,8 +233,9 @@ def _workspace_labels(db, workspace_id: str) -> dict:
 
 
 def _load_book_template(book_type: str, render_mode: str = "paged") -> str:
-    """paged=分页式(a4_book/ppt_book)；flow=网页式连续长页(a4_flow/ppt_flow)。占位符契约相同。"""
-    suffix = "flow" if render_mode == "flow" else "book"
+    """paged=翻页式(a4_book/ppt_book)；flow=网页式连续长页(a4_flow/ppt_flow)；
+    standard=标准页 PDF 型瀑布排布(a4_standard/ppt_standard)。占位符契约相同。"""
+    suffix = {"flow": "flow", "standard": "standard"}.get(render_mode, "book")
     path = os.path.join(_BOOKLET_RES_DIR, f"{book_type}_{suffix}.html")
     if not os.path.isfile(path):
         raise HTTPException(500, f"模板文件不存在: resources/booklet/{book_type}_{suffix}.html")
@@ -445,7 +446,9 @@ def render_booklet(booklet: dict, theme: dict) -> str:
     """
     book_type = booklet["book_type"]
     cover = booklet.get("cover") or {}
-    render_mode = "flow" if cover.get("render_mode") == "flow" else "paged"
+    render_mode = cover.get("render_mode")
+    if render_mode not in ("flow", "standard"):
+        render_mode = "paged"
     template = _load_book_template(book_type, render_mode)
     themes_mod = _load_themes_module()
     chapters = [c for c in (booklet.get("chapters") or []) if c.get("enabled", True)]
