@@ -149,10 +149,10 @@ export default function StepCover({ draft, onChange }: Props) {
               <div style={{ width: '100%', height: 6, background: colors.accent, flexShrink: 0 }} />
               {draft.cover.logo_url && (
                 <img src={draft.cover.logo_url} alt="logo"
-                  style={{ maxHeight: 40, maxWidth: 110, objectFit: 'contain', marginTop: draft.book_type === 'ppt' ? 18 : 44 }} />
+                  style={{ maxHeight: 40, maxWidth: 110, objectFit: 'contain', marginTop: draft.book_type === 'ppt' ? 18 : 113 }} />
               )}
               <div style={{
-                marginTop: draft.cover.logo_url ? 16 : (draft.book_type === 'ppt' ? 46 : 96),
+                marginTop: draft.cover.logo_url ? (draft.book_type === 'ppt' ? 16 : 36) : (draft.book_type === 'ppt' ? 46 : 107),
                 fontSize: draft.book_type === 'ppt' ? 22 : 24, fontWeight: 700, color: colors.primary,
                 padding: '0 24px', lineHeight: 1.4, letterSpacing: '0.08em',
               }}>
