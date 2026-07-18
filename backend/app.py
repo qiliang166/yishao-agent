@@ -5294,7 +5294,7 @@ def api_downloadable_projects(user=Depends(get_current_user)):
 
         if is_admin:
             rows = db.execute(
-                "SELECT * FROM projects WHERE is_downloadable = 1 ORDER BY download_count DESC"
+                "SELECT * FROM projects ORDER BY download_count DESC"
             ).fetchall()
             member_ws = db.execute(
                 "SELECT id, name FROM workspaces ORDER BY name"
@@ -5306,8 +5306,7 @@ def api_downloadable_projects(user=Depends(get_current_user)):
                    LEFT JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id AND mw.user_id = ?
                    LEFT JOIN workspace_roles wr ON wr.workspace_id = p.workspace_id
                    LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ?
-                   WHERE p.is_downloadable = 1
-                     AND (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)
+                   WHERE (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)
                    ORDER BY p.download_count DESC""",
                 (uid, uid),
             ).fetchall()
