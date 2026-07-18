@@ -40,8 +40,26 @@
 4. playwright UI 冒烟 11 项：左栏计数/行数、选中→右侧默认全勾、取消勾选计数联动、全选 9项目24文件、批量按钮可用性、搜索过滤、分类下拉 3 选项、清空归零、无 JS 错误 ✅
 5. DOM 几何断言：左栏 300px、右栏 x=548 紧随（16px gap）、无横向滚动、左列表可滚 ✅
 
+## 第二轮追加：文件预览（同日）
+
+**需求**：每个文件「⬇ 下载」按钮**前**加「👁 预览」，弹框预览内容。**产品决策（用户拍板）：未解锁也能预览**（试看促解锁，下载仍走解锁门）。
+
+**实现**：
+
+- 后端 `GET /api/member/preview-file?project_id&filename&token`：内联输出（`_file_response` 不带 attachment，text 类自动 charset=utf-8）；auth 走 request.state.user 或 ?token=（照 /api/download 同款，iframe/img/audio 带不了请求头）；`verify_project_access` 后**不做解锁校验、不写 download_logs/download_count**（预览≠下载）；`realpath` 前缀containment 防路径穿越
+- api.ts `previewFileUrl(projectId, file)`：download_url 为 /api/exports/ 前缀 → 直连公开导出路径（保相对资源）；否则走 preview-file 带 token
+- 页面：每文件行「👁 预览」→ 弹框（90vw×88vh，z-index 1100）按 ext 分流：html/txt/md/json/csv/pdf→iframe、图片→img、mp3 等→audio、mp4/webm→video、其余→"暂不支持在线预览"提示；头部=文件名+项目 chip+大小+「⬇ 下载」+「关闭」；Esc/点遮罩可关
+
+**验证**：
+
+- 端点：未解锁会员预览 txt 200 且无 Content-Disposition（inline）✅；无 token 401 ✅；`../../yishao.db` 穿越 400 ✅；不存在 404 ✅；download_logs 零新增 ✅；raw 头 `text/plain; charset=utf-8` ✅
+- playwright：预览按钮出现在下载前、html 课件 iframe 完整渲染（990 DOM 节点、title=鲍鱼一品煲）、txt iframe 显文本、mp3 audio readyState=4 可播放、关闭按钮/Esc 均可关、零 JS 错误 ✅
+- `npm run build` 零错误 ✅
+
 ## 经验
 
 - canDownload/UnlockConfirmDialog 当初就按多项目数组设计，本次跨项目批量零改动直接复用——接口按集合建模的前瞻性红利
 - zip 批量端点"先校验全落日志、打包成功才 commit"：HTTPException 也走 rollback，保证 402 场景零脏数据
 - 测试脚本删数据前先查流水佐证是否真实数据（isolation 规则），本次核实为空删
+- iframe/img/audio 无法带 Authorization 头 → 预览端点必须支持 ?token=，照 /api/download 既有模式抄，不发明新机制
+- urllib `dict(r.headers)` 取不到标准头是测试脚本假象，判定响应头一律 curl -D 看 raw

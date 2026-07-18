@@ -5419,6 +5419,43 @@ async def api_member_download_batch(request: Request, user=Depends(get_current_u
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_dl}"})
 
 
+@app.get("/api/member/preview-file")
+def api_member_preview_file(project_id: str, filename: str, request: Request):
+    """会员下载页文件预览：内联输出（无 attachment），不做解锁校验（未解锁可试看促解锁，
+    下载仍走解锁门），不写 download_logs/download_count。iframe/img/audio 无法带请求头，
+    支持 ?token= 认证（与 /api/download 同款）。"""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        token = request.query_params.get("token")
+        if token:
+            try:
+                user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                if "token_version" in user and "sub" in user:
+                    db = get_db()
+                    try:
+                        urow = db.execute(
+                            "SELECT token_version FROM users WHERE id=? AND is_active=1",
+                            (user["sub"],),
+                        ).fetchone()
+                        if not urow or urow["token_version"] != user["token_version"]:
+                            user = None
+                    finally:
+                        db.close()
+            except JWTError:
+                pass
+    if user is None:
+        raise HTTPException(status_code=401, detail="请先登录")
+    verify_project_access(project_id, user)
+
+    proj_dir = resolve_project_storage(project_id, auto_create=False)
+    filepath = os.path.realpath(os.path.join(proj_dir, filename))
+    if not filepath.startswith(os.path.realpath(proj_dir) + os.sep):
+        raise HTTPException(status_code=400, detail="非法文件路径")
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return _file_response(filepath)
+
+
 @app.get("/api/member/unlocked-projects")
 def api_my_unlocked_projects(user=Depends(get_current_user)):
     """Get current user's unlocked projects list."""

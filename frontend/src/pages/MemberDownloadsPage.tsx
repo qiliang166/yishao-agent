@@ -34,6 +34,11 @@ interface DlItem {
 
 const fileKey = (pid: string, filename: string) => `${pid}|${filename}`
 
+const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
+const AUDIO_EXTS = ['mp3', 'wav', 'm4a', 'ogg', 'flac']
+const VIDEO_EXTS = ['mp4', 'webm']
+const FRAME_EXTS = ['html', 'htm', 'txt', 'md', 'json', 'csv', 'log', 'pdf']
+
 export default function MemberDownloadsPage() {
   const [projects, setProjects] = useState<DlProject[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +49,7 @@ export default function MemberDownloadsPage() {
   const [fileSel, setFileSel] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
+  const [preview, setPreview] = useState<{ project: DlProject; file: DlFile } | null>(null)
   const [authorDialog, setAuthorDialog] = useState<{ name: string; intro: string; license_text: string } | null>(null)
   const [authorLoading, setAuthorLoading] = useState(false)
 
@@ -75,6 +81,14 @@ export default function MemberDownloadsPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  // 预览弹框 Esc 关闭
+  useEffect(() => {
+    if (!preview) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPreview(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [preview])
 
   // ── 左栏：项目选中（联动右侧文件默认全勾） ──
 
@@ -267,6 +281,9 @@ export default function MemberDownloadsPage() {
   const shownProjects = projects.filter(p => selected.has(p.id))
   const checkedCount = fileSel.size
 
+  const previewExt = preview ? (preview.file.ext || '').toLowerCase() : ''
+  const previewUrl = preview ? api.previewFileUrl(preview.project.id, preview.file) : ''
+
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 0px)', boxSizing: 'border-box' }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 16px 0' }}>下载文件</h1>
@@ -457,6 +474,10 @@ export default function MemberDownloadsPage() {
                                   {formatSize(f.size)}
                                 </span>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, flexShrink: 0 }}
+                                  onClick={() => setPreview({ project: proj, file: f })}>
+                                  👁 预览
+                                </button>
+                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, flexShrink: 0 }}
                                   disabled={busy}
                                   onClick={() => downloadSingle(proj, f)}>
                                   ⬇ 下载
@@ -471,6 +492,61 @@ export default function MemberDownloadsPage() {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* 预览弹框 */}
+      {preview && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setPreview(null)}>
+          <div style={{
+            background: 'var(--bg-primary, #fff)', borderRadius: 12, width: '90vw', height: '88vh',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+              borderBottom: '1px solid var(--border)', flexShrink: 0,
+            }}>
+              <span style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {preview.file.display_name || preview.file.filename}
+              </span>
+              <span style={{
+                fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
+                padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap', flexShrink: 0,
+              }}>{preview.project.name}</span>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0 }}>{formatSize(preview.file.size)}</span>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexShrink: 0 }}>
+                <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={busy}
+                  onClick={() => downloadSingle(preview.project, preview.file)}>
+                  ⬇ 下载
+                </button>
+                <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }}
+                  onClick={() => setPreview(null)}>关闭</button>
+              </div>
+            </div>
+            <div style={{ flex: 1, minHeight: 0, background: 'var(--bg-secondary, #f5f5f5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {FRAME_EXTS.includes(previewExt) ? (
+                <iframe src={previewUrl} title="文件预览"
+                  style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }} />
+              ) : IMAGE_EXTS.includes(previewExt) ? (
+                <img src={previewUrl} alt={preview.file.display_name || preview.file.filename}
+                  style={{ maxWidth: '96%', maxHeight: '96%', objectFit: 'contain' }} />
+              ) : AUDIO_EXTS.includes(previewExt) ? (
+                <audio src={previewUrl} controls style={{ width: '70%' }} />
+              ) : VIDEO_EXTS.includes(previewExt) ? (
+                <video src={previewUrl} controls style={{ maxWidth: '96%', maxHeight: '96%' }} />
+              ) : (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
+                  <p>该文件类型（.{previewExt || '未知'}）暂不支持在线预览</p>
+                  <p style={{ fontSize: 11 }}>请下载后在本地查看</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

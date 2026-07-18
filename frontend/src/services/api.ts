@@ -594,6 +594,15 @@ export const api = {
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
     URL.revokeObjectURL(objUrl)
   },
+  /** 会员下载页预览地址：PPT 导出走公开 exports 路径，项目文件走带 token 的内联预览端点 */
+  previewFileUrl: (projectId: string, file: { filename: string; download_url?: string }) => {
+    if (file.download_url && file.download_url.startsWith('/api/exports/')) {
+      return `${BASE}${file.download_url}`
+    }
+    const token = localStorage.getItem('auth_token')
+    const q = `project_id=${encodeURIComponent(projectId)}&filename=${encodeURIComponent(file.filename)}`
+    return `${BASE}/api/member/preview-file?${q}${token ? `&token=${encodeURIComponent(token)}` : ''}`
+  },
 
   // PPT
   generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, projectId?: string) =>
