@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../services/api'
 import { useModal } from './ModalProvider'
+import { applyEditableDoc, clearEditableDoc } from '../utils/editableDoc'
+import { usePermission } from '../hooks/usePermission'
 
 interface Props {
   open: boolean
@@ -49,6 +51,9 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
   const savedRangeRef = useRef<Range | null>(null)
 
   const modal = useModal()
+  // 与后端 PUT /api/ppt/slide-source 的 require_perm 同码：无权限则不显示编辑入口，
+  // 会员也无法借编辑模式绕过产物防复制
+  const canEditSlides = usePermission('stage3.generate')
 
   useEffect(() => {
     if (open) {
@@ -79,9 +84,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
     if (!contentEditable) return
     const iframe = iframeRef.current
     if (!iframe?.contentDocument) return
-    const doc = iframe.contentDocument
-    doc.body.setAttribute('contenteditable', 'true')
-    doc.body.style.cursor = 'text'
+    applyEditableDoc(iframe.contentDocument)
   }, [iframeKey, contentEditable])
 
   const refreshPreview = () => setIframeKey(k => k + 1)
@@ -111,23 +114,25 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       const iframe = iframeRef.current
       if (iframe?.contentDocument) {
         const doc = iframe.contentDocument
-        doc.body.removeAttribute('contenteditable')
-        doc.body.style.cursor = ''
+        // 序列化前剥离编辑态（contenteditable/注入样式/事件拦停），避免写进保存的 HTML
+        clearEditableDoc(doc)
         const html = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
         api.editSlideSource(runId, html).then(r => {
           if (r.ok) {
             refreshPreview()
+          } else {
+            modal.toast('保存失败，请重试', 'error')
           }
-        }).catch(() => {})
+        }).catch((e: any) => {
+          modal.toast(`保存失败: ${e?.message || e}`, 'error')
+        })
       }
       setContentEditable(false)
     } else {
       setContentEditable(true)
       const iframe = iframeRef.current
       if (iframe?.contentDocument) {
-        const doc = iframe.contentDocument
-        doc.body.setAttribute('contenteditable', 'true')
-        doc.body.style.cursor = 'text'
+        applyEditableDoc(iframe.contentDocument)
       }
     }
   }
@@ -436,8 +441,12 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       if (result.ok) {
         refreshPreview()
         setActiveTab('preview')
+      } else {
+        modal.toast('应用修改失败，请重试', 'error')
       }
-    } catch (_) { /* ignore */ }
+    } catch (e: any) {
+      modal.toast(`应用修改失败: ${e?.message || e}`, 'error')
+    }
     finally {
       setSourceSaving(false)
     }
@@ -540,17 +549,19 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
           </div>
           <div style={{ flex: 1 }} />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={handleToggleEdit}
-              className="btn btn-ghost btn-sm"
-              style={{
-                fontSize: 12,
-                background: contentEditable ? 'var(--primary)' : undefined,
-                color: contentEditable ? '#fff' : undefined,
-              }}
-            >
-              {contentEditable ? '完成编辑' : '编辑文字'}
-            </button>
+            {canEditSlides && (
+              <button
+                onClick={handleToggleEdit}
+                className="btn btn-ghost btn-sm"
+                style={{
+                  fontSize: 12,
+                  background: contentEditable ? 'var(--primary)' : undefined,
+                  color: contentEditable ? '#fff' : undefined,
+                }}
+              >
+                {contentEditable ? '完成编辑' : '编辑文字'}
+              </button>
+            )}
             {contentEditable && (
               <div style={{
                 display: 'flex', gap: 2, alignItems: 'center',
@@ -706,9 +717,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
               src={previewUrl + (previewUrl.includes('?') ? '&' : '?') + '_t=' + iframeKey}
               onLoad={() => {
                 if (contentEditable && iframeRef.current?.contentDocument) {
-                  const doc = iframeRef.current.contentDocument
-                  doc.body.setAttribute('contenteditable', 'true')
-                  doc.body.style.cursor = 'text'
+                  applyEditableDoc(iframeRef.current.contentDocument)
                 }
               }}
               style={{

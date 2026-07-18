@@ -4,6 +4,7 @@ import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Theme, mdToHtml, isProseChapter, resolveDraftTheme } from '../types'
 import { themeVars } from '../proseSplit'
+import { applyEditableDoc, clearEditableDoc } from '../../utils/editableDoc'
 import MdToolbar from './MdToolbar'
 
 interface Props {
@@ -205,18 +206,15 @@ ${PROSE_CSS}
   const applyContentEditable = (enable: boolean) => {
     const doc = iframeRef.current?.contentDocument
     if (!doc) return
-    if (enable) {
-      doc.body.setAttribute('contenteditable', 'true')
-      doc.body.style.cursor = 'text'
-    } else {
-      doc.body.removeAttribute('contenteditable')
-      doc.body.style.cursor = ''
-    }
+    if (enable) applyEditableDoc(doc)
+    else clearEditableDoc(doc)
   }
 
   const extractIframeHtml = (): string | null => {
     const doc = iframeRef.current?.contentDocument
     if (!doc || !selected) return null
+    // 存前剥离编辑态属性与注入样式，避免写进章节 HTML
+    clearEditableDoc(doc)
     return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
   }
 
