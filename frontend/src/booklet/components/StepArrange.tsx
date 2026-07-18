@@ -43,9 +43,13 @@ export default function StepArrange({ draft, onChange }: Props) {
   const [textColor, setTextColor] = useState('#ffffff')
   const [iframeKey, setIframeKey] = useState(0)
 
+  const [fitScale, setFitScale] = useState(1)
+  const [iframeNatH, setIframeNatH] = useState(300)
+
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const sourceTaRef = useRef<HTMLTextAreaElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
+  const previewBoxRef = useRef<HTMLDivElement>(null)
 
   const selected = draft.chapters.find(c => c.id === selectedId) || null
   const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0] || null
@@ -66,6 +70,18 @@ export default function StepArrange({ draft, onChange }: Props) {
     setHtmlDirty(false)
     setIframeKey(k => k + 1)
   }, [selectedId])
+
+  // Auto-scale iframe for HTML chapters to fit preview box width
+  useEffect(() => {
+    const el = previewBoxRef.current
+    if (!el || isProse) { setFitScale(1); return }
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width
+      if (w && w > 0) setFitScale(Math.min(1, (w - 4) / 1280))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [isProse, iframeKey])
 
   // Content HTML for the iframe — memoized to prevent spurious reloads
   const displayHtml = useMemo(() => {
@@ -501,20 +517,25 @@ ${PROSE_CSS}
                 onChange={e => handleSourceChange(e.target.value)}
                 style={{ flex: 1, minHeight: 120, resize: 'none', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }} />
             ) : (
-              <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+              <div ref={previewBoxRef} style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
                 <iframe
                   ref={iframeRef}
                   key={iframeKey}
                   srcDoc={displayHtml}
                   title="chapter-preview"
                   onLoad={() => {
-                    if (editorMode === 'edit') {
-                      applyContentEditable(true)
+                    if (editorMode === 'edit') applyContentEditable(true)
+                    if (!isProse && iframeRef.current?.contentDocument) {
+                      const h = iframeRef.current.contentDocument.documentElement.scrollHeight
+                      if (h > 0) setIframeNatH(h)
                     }
                   }}
                   style={{
-                    width: '100%',
-                    minHeight: 300,
+                    width: isProse ? '100%' : 1280,
+                    minHeight: isProse ? 300 : iframeNatH * fitScale,
+                    transform: isProse ? undefined : `scale(${fitScale})`,
+                    transformOrigin: 'top left',
+                    marginBottom: isProse ? undefined : -(1 - fitScale) * iframeNatH,
                     border: '1px solid var(--border)',
                     borderRadius: 5,
                     background: '#fff',
