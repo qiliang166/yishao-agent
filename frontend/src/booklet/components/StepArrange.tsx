@@ -517,7 +517,7 @@ ${PROSE_CSS}
                 onChange={e => handleSourceChange(e.target.value)}
                 style={{ flex: 1, minHeight: 120, resize: 'none', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }} />
             ) : (
-              <div ref={previewBoxRef} style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div ref={previewBoxRef} style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
                 <iframe
                   ref={iframeRef}
                   key={iframeKey}
