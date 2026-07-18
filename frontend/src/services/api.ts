@@ -603,6 +603,21 @@ export const api = {
     const q = `project_id=${encodeURIComponent(projectId)}&filename=${encodeURIComponent(file.filename)}`
     return `${BASE}/api/member/preview-file?${q}${token ? `&token=${encodeURIComponent(token)}` : ''}`
   },
+  /** 预览文本内容：项目文件带 Authorization 头取（token 不进 URL），exports 直取 */
+  previewFileText: async (projectId: string, file: { filename: string; download_url?: string }) => {
+    if (file.download_url && file.download_url.startsWith('/api/exports/')) {
+      const res = await fetch(`${BASE}${file.download_url}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.text()
+    }
+    const token = localStorage.getItem('auth_token')
+    const q = `project_id=${encodeURIComponent(projectId)}&filename=${encodeURIComponent(file.filename)}`
+    const res = await fetch(`${BASE}/api/member/preview-file?${q}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.text()
+  },
 
   // PPT
   generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, projectId?: string) =>

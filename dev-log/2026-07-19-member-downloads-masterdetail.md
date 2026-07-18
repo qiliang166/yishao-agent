@@ -56,6 +56,27 @@
 - playwright：预览按钮出现在下载前、html 课件 iframe 完整渲染（990 DOM 节点、title=鲍鱼一品煲）、txt iframe 显文本、mp3 audio readyState=4 可播放、关闭按钮/Esc 均可关、零 JS 错误 ✅
 - `npm run build` 零错误 ✅
 
+## 第三轮追加：预览安全强化 + md 人读渲染 + 项目筛选 + 侧栏收敛（同日）
+
+**需求**（用户四连）：①预览文档要人读格式而不是 MARKDOWN 源码；②预览限制复制；③筛选加"筛选项目"、明细列要能区分多项目（显示项目名）；④会员页面隐藏左侧「项目管理」栏目。另安全审查发现预览 iframe 无 sandbox。
+
+**实现**：
+
+- **后端 preview-file 强化**：响应统一带 `Content-Security-Policy: sandbox allow-scripts`；`.html/.htm` 读文件后在 `</head>` 前注入防复制 guard（`user-select:none` + selectstart/copy/contextmenu/dragstart 四事件 preventDefault）——老产物/手上传 HTML 可能没带防复制，预览是未解锁可看的试看场景必须补上；无 `</head>` 则前置拼接
+- **api.ts `previewFileText(projectId, file)`**：文本类预览改 fetch 取文（/api/exports/ 直连；否则 preview-file 走 **Authorization 头**，token 不进 URL），供前端渲染
+- **MemberDownloadsPage.tsx**：
+  - 预览分流重构：`FRAME_EXTS=[html,htm,pdf]` 保持 iframe（加 `sandbox="allow-scripts"`，不给 allow-same-origin → 不透明源，脚本可跑但摸不到父窗口 localStorage/DOM）；`txt/md` → `DOMPurify.sanitize(marked.parse(text,{breaks:true}))` 渲染人读排版；`json/csv/log` → `<pre>` 原文
+  - 复制限制：文本渲染容器 `userSelect:none` + onCopy/onCut/onContextMenu/onDragStart 全 preventDefault；img 禁右键禁拖拽；audio/video `controlsList="nodownload"`（video 另禁右键）
+  - 筛选栏加**项目下拉**（全部项目 + 逐项目名，与搜索/分类/解锁状态四条件叠加）
+  - 左栏项目名 **2 行 line-clamp**（原单行 ellipsis 长名同前缀无法区分）；**多项目选中时**右侧每文件行加项目名 chip、category 分组头追加"— 项目名"
+- **App.tsx**：会员侧栏移除「项目管理」按钮；`/app` 落地由 MemberHomePage 改为 `Navigate → /app/center`（否则登录落在无侧栏入口的页面）；MemberHomePage 保留在 `/app/home-legacy` 供深链回访，workspace/project 路由不动
+
+**验证（全部通过）**：
+
+1. `py_compile` ✅；端点实测：HTML 预览 guard 注入且位于 `</head>` 前 ✅、CSP 头 + charset + 无 attachment ✅、TXT 原样不含 guard ✅、预览后 download_logs 增量 0 ✅
+2. `npm run build` 零错误 ✅
+3. playwright：/app 落地 URL=/app/center ✅；侧栏 4 项无「项目管理」✅；项目下拉 10 选项、选定后左栏收敛"共 1 个项目" ✅；左栏项目名 inline `-webkit-line-clamp:2` 生效 ✅；勾选 2 项目后 3/3 文件行带项目 chip ✅;txt 预览渲染出 `<p>`（非源码）且容器 userSelect=none ✅；html 预览 iframe sandbox=allow-scripts 且课件照常渲染（992 节点）、注入 guard 在 DOM 中 ✅；全程零 JS 错误 ✅
+
 ## 经验
 
 - canDownload/UnlockConfirmDialog 当初就按多项目数组设计，本次跨项目批量零改动直接复用——接口按集合建模的前瞻性红利
@@ -63,3 +84,5 @@
 - 测试脚本删数据前先查流水佐证是否真实数据（isolation 规则），本次核实为空删
 - iframe/img/audio 无法带 Authorization 头 → 预览端点必须支持 ?token=，照 /api/download 既有模式抄，不发明新机制
 - urllib `dict(r.headers)` 取不到标准头是测试脚本假象，判定响应头一律 curl -D 看 raw
+- playwright `querySelector('div > div')` 不以行元素为锚（选择器不自带 :scope），命中的是 flex 包裹层导致 clamp 误报 none——DOM 断言用 children 索引精确定位，别用无锚组合选择器
+- iframe `sandbox="allow-scripts"`（无 allow-same-origin）下自包含单文件课件照常渲染（992 节点），防复制注入与课件脚本共存无冲突；隐藏导航入口时必须同步改登录落地路由，否则用户落在"无入口页"

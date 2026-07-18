@@ -5453,7 +5453,25 @@ def api_member_preview_file(project_id: str, filename: str, request: Request):
         raise HTTPException(status_code=400, detail="非法文件路径")
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="文件不存在")
-    return _file_response(filepath)
+    # CSP sandbox：直接打开预览 URL 时 HTML 也在不透明源里执行，脚本摸不到应用 localStorage
+    csp_headers = {"Content-Security-Policy": "sandbox allow-scripts"}
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in (".html", ".htm"):
+        # 预览是试看场景（未解锁也可看）：注入与课件产物同款防复制——老产物/手上传的 HTML 可能没带
+        try:
+            with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                html = f.read()
+        except OSError:
+            raise HTTPException(status_code=500, detail="文件读取失败")
+        guard = ("<style>*{-webkit-user-select:none!important;user-select:none!important}</style>"
+                 "<script>['selectstart','copy','contextmenu','dragstart']"
+                 ".forEach(function(t){document.addEventListener(t,function(e){e.preventDefault()})})</script>")
+        if re.search(r"</head>", html, re.IGNORECASE):
+            html = re.sub(r"</head>", guard + "</head>", html, count=1, flags=re.IGNORECASE)
+        else:
+            html = guard + html
+        return Response(content=html, media_type="text/html; charset=utf-8", headers=csp_headers)
+    return _file_response(filepath, headers=csp_headers)
 
 
 @app.get("/api/member/unlocked-projects")

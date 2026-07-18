@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { api } from '../services/api'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 
@@ -37,7 +39,12 @@ const fileKey = (pid: string, filename: string) => `${pid}|${filename}`
 const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']
 const AUDIO_EXTS = ['mp3', 'wav', 'm4a', 'ogg', 'flac']
 const VIDEO_EXTS = ['mp4', 'webm']
-const FRAME_EXTS = ['html', 'htm', 'txt', 'md', 'json', 'csv', 'log', 'pdf']
+// html/pdf 走 iframe（html 由预览端点注入防复制）；文本类走 fetch + markdown 人读渲染
+const FRAME_EXTS = ['html', 'htm', 'pdf']
+const TEXT_MD_EXTS = ['txt', 'md']
+const TEXT_RAW_EXTS = ['json', 'csv', 'log']
+
+const blockEvent = (e: React.SyntheticEvent) => { e.preventDefault() }
 
 export default function MemberDownloadsPage() {
   const [projects, setProjects] = useState<DlProject[]>([])
@@ -45,11 +52,14 @@ export default function MemberDownloadsPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
   const [catFilter, setCatFilter] = useState('')
+  const [projFilter, setProjFilter] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fileSel, setFileSel] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState('')
   const [preview, setPreview] = useState<{ project: DlProject; file: DlFile } | null>(null)
+  const [previewText, setPreviewText] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [authorDialog, setAuthorDialog] = useState<{ name: string; intro: string; license_text: string } | null>(null)
   const [authorLoading, setAuthorLoading] = useState(false)
 
@@ -89,6 +99,26 @@ export default function MemberDownloadsPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [preview])
+
+  // 文本类预览：拉取内容（md/txt 渲染人读格式，json/csv/log 原文显示）
+  useEffect(() => {
+    setPreviewText(null)
+    if (!preview) return
+    const ext = (preview.file.ext || '').toLowerCase()
+    if (!TEXT_MD_EXTS.includes(ext) && !TEXT_RAW_EXTS.includes(ext)) return
+    let cancelled = false
+    setPreviewLoading(true)
+    api.previewFileText(preview.project.id, preview.file)
+      .then(t => { if (!cancelled && t != null) setPreviewText(t) })
+      .catch((e: any) => {
+        if (!cancelled) {
+          setPreviewText('')
+          showToast(`预览加载失败: ${e?.message || e}`)
+        }
+      })
+      .finally(() => { if (!cancelled) setPreviewLoading(false) })
+    return () => { cancelled = true }
+  }, [preview, showToast])
 
   // ── 左栏：项目选中（联动右侧文件默认全勾） ──
 
@@ -262,7 +292,7 @@ export default function MemberDownloadsPage() {
 
   const pts = (d: number) => (d / 10).toFixed(1)
 
-  // ── 全量过滤：搜索(项目名+文件名) × 解锁状态 × 分类，作用于全部已加载数据 ──
+  // ── 全量过滤：搜索(项目名+文件名) × 解锁状态 × 分类 × 项目，作用于全部已加载数据 ──
 
   const categories = [...new Set(projects.map(p => p.category_name).filter(Boolean))]
 
@@ -275,14 +305,17 @@ export default function MemberDownloadsPage() {
       || (filter === 'unlocked' && p.unlocked.is_unlocked)
       || (filter === 'locked' && !p.unlocked.is_unlocked)
     const matchCat = !catFilter || p.category_name === catFilter
-    return matchSearch && matchFilter && matchCat
+    const matchProj = !projFilter || p.id === projFilter
+    return matchSearch && matchFilter && matchCat && matchProj
   })
 
   const shownProjects = projects.filter(p => selected.has(p.id))
+  const multiProj = shownProjects.length > 1
   const checkedCount = fileSel.size
 
   const previewExt = preview ? (preview.file.ext || '').toLowerCase() : ''
   const previewUrl = preview ? api.previewFileUrl(preview.project.id, preview.file) : ''
+  const previewIsText = TEXT_MD_EXTS.includes(previewExt) || TEXT_RAW_EXTS.includes(previewExt)
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 0px)', boxSizing: 'border-box' }}>
@@ -299,6 +332,12 @@ export default function MemberDownloadsPage() {
           style={{ width: 130, fontSize: 12, padding: '6px 8px' }}>
           <option value="">全部分类</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select className="form-input" value={projFilter}
+          onChange={e => setProjFilter(e.target.value)}
+          style={{ width: 170, fontSize: 12, padding: '6px 8px' }}>
+          <option value="">全部项目</option>
+          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
           {([
@@ -342,7 +381,7 @@ export default function MemberDownloadsPage() {
         </div>
       ) : (
         <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0, paddingBottom: 16 }}>
-          {/* 左栏：项目清单（滚动，不分页） */}
+          {/* 左栏：项目清单（滚动，不分页；项目名最多两行完整展示） */}
           <div className="card" style={{ width: 300, flexShrink: 0, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -365,24 +404,25 @@ export default function MemberDownloadsPage() {
                   <div key={proj.id}
                     onClick={() => toggleProject(proj)}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                      display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px',
                       borderBottom: '1px solid var(--border)', cursor: 'pointer',
                       background: isSel ? 'var(--primary-light, rgba(59,130,246,0.08))' : 'transparent',
                     }}>
-                    <input type="checkbox" checked={isSel} readOnly style={{ cursor: 'pointer', flexShrink: 0 }} />
+                    <input type="checkbox" checked={isSel} readOnly style={{ cursor: 'pointer', flexShrink: 0, marginTop: 2 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
-                        fontSize: 12, fontWeight: isSel ? 600 : 400,
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        fontSize: 12, fontWeight: isSel ? 600 : 400, lineHeight: 1.4,
+                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden', wordBreak: 'break-all',
                       }} title={proj.name}>{proj.name}</div>
                       <div style={{ fontSize: 10, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {proj.category_name ? `${proj.category_name} · ` : ''}{proj.files.length} 个文件
                       </div>
                     </div>
                     {proj.unlocked.is_unlocked ? (
-                      <span style={{ fontSize: 10, color: 'var(--success)', fontWeight: 600, flexShrink: 0 }}>已解锁</span>
+                      <span style={{ fontSize: 10, color: 'var(--success)', fontWeight: 600, flexShrink: 0, marginTop: 2 }}>已解锁</span>
                     ) : (
-                      <span style={{ fontSize: 10, color: 'var(--warning)', flexShrink: 0 }}>{pts(proj.point_cost_deci)} 积分</span>
+                      <span style={{ fontSize: 10, color: 'var(--warning)', flexShrink: 0, marginTop: 2 }}>{pts(proj.point_cost_deci)} 积分</span>
                     )}
                   </div>
                 )
@@ -390,7 +430,7 @@ export default function MemberDownloadsPage() {
             </div>
           </div>
 
-          {/* 右栏：选中项目的文件明细（预览 + 勾选） */}
+          {/* 右栏：选中项目的文件明细（预览 + 勾选；多项目时每行带项目名便于区分） */}
           <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
             {shownProjects.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
@@ -455,7 +495,7 @@ export default function MemberDownloadsPage() {
                             padding: '4px 16px', fontSize: 10, fontWeight: 600,
                             color: 'var(--text-secondary)', textTransform: 'uppercase',
                           }}>
-                            {fileIcon(cat)} {cat}
+                            {fileIcon(cat)} {cat}{multiProj ? ` — ${proj.name}` : ''}
                           </div>
                           {files.map(f => {
                             const k = fileKey(proj.id, f.filename)
@@ -470,6 +510,13 @@ export default function MemberDownloadsPage() {
                                 <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.display_name || f.filename}>
                                   {f.display_name || f.filename}
                                 </span>
+                                {multiProj && (
+                                  <span title={proj.name} style={{
+                                    fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
+                                    padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap',
+                                    overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140, flexShrink: 0,
+                                  }}>{proj.name}</span>
+                                )}
                                 <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0 }}>
                                   {formatSize(f.size)}
                                 </span>
@@ -496,7 +543,7 @@ export default function MemberDownloadsPage() {
         </div>
       )}
 
-      {/* 预览弹框 */}
+      {/* 预览弹框（试看场景：文本区禁选禁复制，HTML 由预览端点注入防复制） */}
       {preview && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1100,
@@ -529,16 +576,38 @@ export default function MemberDownloadsPage() {
               </div>
             </div>
             <div style={{ flex: 1, minHeight: 0, background: 'var(--bg-secondary, #f5f5f5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {FRAME_EXTS.includes(previewExt) ? (
-                <iframe src={previewUrl} title="文件预览"
+              {previewIsText ? (
+                <div
+                  onCopy={blockEvent} onCut={blockEvent} onContextMenu={blockEvent} onDragStart={blockEvent}
+                  style={{
+                    width: '100%', height: '100%', overflowY: 'auto', background: '#fff',
+                    userSelect: 'none', WebkitUserSelect: 'none',
+                  }}>
+                  {previewLoading ? (
+                    <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)', fontSize: 12 }}>加载中...</div>
+                  ) : TEXT_MD_EXTS.includes(previewExt) ? (
+                    <div
+                      style={{ maxWidth: 860, margin: '0 auto', padding: '28px 36px', fontSize: 13, lineHeight: 1.9 }}
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(previewText || '', { breaks: true, async: false }) as string) }} />
+                  ) : (
+                    <pre style={{
+                      maxWidth: 960, margin: '0 auto', padding: '24px 32px', fontSize: 12,
+                      lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    }}>{previewText}</pre>
+                  )}
+                </div>
+              ) : FRAME_EXTS.includes(previewExt) ? (
+                <iframe src={previewUrl} title="文件预览" sandbox="allow-scripts"
                   style={{ width: '100%', height: '100%', border: 'none', background: '#fff' }} />
               ) : IMAGE_EXTS.includes(previewExt) ? (
                 <img src={previewUrl} alt={preview.file.display_name || preview.file.filename}
+                  onContextMenu={blockEvent} onDragStart={blockEvent}
                   style={{ maxWidth: '96%', maxHeight: '96%', objectFit: 'contain' }} />
               ) : AUDIO_EXTS.includes(previewExt) ? (
-                <audio src={previewUrl} controls style={{ width: '70%' }} />
+                <audio src={previewUrl} controls controlsList="nodownload" style={{ width: '70%' }} />
               ) : VIDEO_EXTS.includes(previewExt) ? (
-                <video src={previewUrl} controls style={{ maxWidth: '96%', maxHeight: '96%' }} />
+                <video src={previewUrl} controls controlsList="nodownload" onContextMenu={blockEvent}
+                  style={{ maxWidth: '96%', maxHeight: '96%' }} />
               ) : (
                 <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
                   <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>

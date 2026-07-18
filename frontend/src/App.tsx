@@ -384,11 +384,6 @@ function MemberSidebar() {
       </div>
       <nav className="sidebar-nav">
         <button
-          className={`sidebar-item ${location.pathname === '/app' || isWorkspace ? 'active' : ''}`}
-          onClick={() => navigate('/app')}>
-          <span className="ico">📋</span> 项目管理
-        </button>
-        <button
           className={`sidebar-item ${location.pathname === '/app/center' ? 'active' : ''}`}
           onClick={() => navigate('/app/center')}>
           <span className="ico">👤</span> 会员中心
@@ -448,7 +443,7 @@ function MemberSidebar() {
   )
 }
 
-// ── Member workspace list (home page for members) ──
+// ── Member workspace list (kept for deep links; no longer the member landing) ──
 
 function MemberHomePage() {
   const navigate = useNavigate()
@@ -585,7 +580,8 @@ function MemberAppShell() {
             <Route path="/downloads" element={<MemberDownloadsPage />} />
             <Route path="/booklets" element={<BookletListPage />} />
             <Route path="/booklets/:id" element={<BookletEditorPage />} />
-            <Route path="/" element={<MemberHomePage />} />
+            <Route path="/home-legacy" element={<MemberHomePage />} />
+            <Route path="/" element={<Navigate to="/app/center" replace />} />
           </Routes>
         </div>
       </div>
