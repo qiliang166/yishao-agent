@@ -89,42 +89,24 @@ export function isProseChapter(c: Chapter): boolean {
   return c.source_type === 'custom' && c.content_format !== 'html'
 }
 
+/** VI 版式判定：第一个启用章节是 HTML 课件 → A4 固定页走 VI A4 版式（与后端 _first_chapter_is_html 同规则） */
+export function isHtmlFirstChapter(chapters: Chapter[]): boolean {
+  const first = chapters.find(c => c.enabled)
+  return !!first && !isProseChapter(first)
+}
+
 /** 保存前统一从 md 原文重算渲染快照，不信任存量（旧草稿保存一次即自愈） */
 export function normalizeChapters(chapters: Chapter[]): Chapter[] {
   return chapters.map(c => (isProseChapter(c) ? { ...c, content_html: mdToHtml(c.content) } : c))
 }
 
-/** 草稿主题解析：theme_id 空且带 theme_colors → 内容同款自定义配色（与后端 _resolve_theme custom 分支同规则） */
+/** 草稿主题解析；custom 分支兼容历史上 theme_id 为空但存有 theme_colors 的草稿（与后端 _resolve_theme 同规则） */
 export function resolveDraftTheme(draft: BookletDraft, themes: Theme[]): Theme | null {
   const custom = draft.cover.theme_colors || {}
   if (!draft.cover.theme_id && Object.keys(custom).length > 0) {
-    return { id: 'custom', name: '内容同款配色', source: 'builtin', colors: custom as Theme['colors'] }
+    return { id: 'custom', name: '自定义配色', source: 'builtin', colors: custom as Theme['colors'] }
   }
   return themes.find(t => t.id === draft.cover.theme_id) || themes[0] || null
-}
-
-/* :root 变量名 → 主题色 key（与后端 THEME_VAR_KEYS 语义一致） */
-const PALETTE_VAR_MAP: Record<string, string> = {
-  '--primary': 'primary', '--secondary': 'secondary', '--accent': 'accent',
-  '--background': 'bg', '--text': 'text', '--card-bg': 'card_bg',
-  '--chart-0': 'chart-0', '--chart-1': 'chart-1', '--chart-2': 'chart-2', '--chart-3': 'chart-3',
-  '--chart-4': 'chart-4', '--chart-5': 'chart-5', '--chart-6': 'chart-6', '--chart-7': 'chart-7',
-}
-
-/** 从第一个启用的 HTML 章节的 :root 块提取配色（仅收合法 hex；无 primary 视为不可用） */
-export function extractContentPalette(chapters: Chapter[]): Record<string, string> | null {
-  const ch = chapters.find(c => c.enabled && !isProseChapter(c) && (c.content || '').includes(':root'))
-  if (!ch) return null
-  const m = (ch.content || '').match(/:root\s*\{([^}]*)\}/)
-  if (!m) return null
-  const out: Record<string, string> = {}
-  const re = /(--[a-z0-9-]+)\s*:\s*(#[0-9a-fA-F]{3,8})\b/g
-  let mm: RegExpExecArray | null
-  while ((mm = re.exec(m[1])) !== null) {
-    const key = PALETTE_VAR_MAP[mm[1]]
-    if (key && !out[key]) out[key] = mm[2]
-  }
-  return out.primary ? out : null
 }
 
 export function newChapterId(): string {

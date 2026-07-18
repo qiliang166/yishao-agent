@@ -88,6 +88,31 @@ body {
 .bk-back-text { font-size: 12pt; line-height: 2.4; max-width: 125mm; white-space: pre-wrap; }
 .bk-back-brand { margin-top: 22mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
 
+/* ═══ VI A4 版式（第一章为 HTML 课件时 body 注入 bk-vi；规则源自 VI 手册 A4：封面/封底 var(--primary) 纯色禁渐变，深底白字 #ffffff 为唯一硬编码例外） ═══ */
+.bk-vi-pagehead, .bk-vi-tocline, .bk-vi-rule, .bk-vi-decor { display: none; }
+.bk-vi .bk-cover { background: var(--primary); }
+.bk-vi .bk-cover-band { height: 10px; }
+.bk-vi .bk-cover-title { color: #ffffff; }
+.bk-vi .bk-cover-subtitle { color: #ffffff; order: 2; }
+.bk-vi .bk-cover-rule { width: 48px; height: 4px; order: 1; margin: 10mm auto 0; }
+.bk-vi .bk-cover-meta { color: rgba(255, 255, 255, 0.6); order: 3; }
+.bk-vi .bk-cover-author { color: #ffffff; }
+.bk-vi .bk-cover .bk-vi-decor { display: block; position: absolute; left: -30mm; bottom: -30mm; width: 90mm; height: 90mm; }
+.bk-vi .bk-vi-pagehead {
+  display: flex; position: absolute; top: 0; left: 20mm; right: 20mm; height: 45px;
+  align-items: center; justify-content: space-between;
+  font-size: 12px; color: rgba(var(--text-rgb), 0.45);
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.08);
+}
+.bk-vi .bk-toc .bk-vi-tocline { display: block; width: 100%; height: 4px; background: var(--accent); margin-bottom: 8mm; flex-shrink: 0; }
+.bk-vi .bk-toc-title { text-align: left; font-size: 21pt; color: var(--primary); letter-spacing: 0.08em; }
+.bk-vi .bk-back { background: var(--primary); }
+.bk-vi .bk-back-band { order: -1; margin-top: 0; height: 10px; background: var(--accent); }
+.bk-vi .bk-back-text { color: #ffffff; font-size: 16pt; font-weight: 600; line-height: 2; }
+.bk-vi .bk-back .bk-vi-rule { display: block; width: 48px; height: 4px; background: var(--accent); margin: 10mm auto 0; }
+.bk-vi .bk-back-brand { color: #ffffff; }
+.bk-vi .bk-back .bk-vi-decor { display: block; position: absolute; right: -30mm; top: -30mm; width: 90mm; height: 90mm; }
+
 /* ═══ 控制条 ═══ */
 .bk-nav {
   position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
@@ -121,13 +146,17 @@ body {
 }
 </style>
 </head>
-<body>
+<body class="{{BOOK_BODY_CLASS}}">
 
 <div class="bk-stage" id="bkStage">
 
   <!-- ═══ 封面 ═══ -->
   <section class="bk-sheet bk-cover bk-active">
     <div class="bk-cover-band"></div>
+    <svg class="bk-vi-decor" viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="78" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+      <circle cx="100" cy="100" r="52" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.18"/>
+    </svg>
     <div class="bk-sheet-inner">
       {{BOOK_LOGO}}
       <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
@@ -144,6 +173,7 @@ body {
   <!-- ═══ 扉页（封面背面/版权编制说明） ═══ -->
   <!--BK:FLYLEAF-->
   <section class="bk-sheet bk-flyleaf">
+    <div class="bk-vi-pagehead"><span>{{BOOK_TITLE}}</span><span>{{BOOK_DATE}}</span></div>
     <div class="bk-sheet-inner">
       <div class="bk-flyleaf-title">{{BOOK_TITLE}}</div>
       <div class="bk-flyleaf-text">{{FLYLEAF_TEXT}}</div>
@@ -162,7 +192,9 @@ body {
       <!-- ═══ 目录 ═══ -->
     <!--BK:TOC-->
     <section class="bk-sheet bk-toc">
+      <div class="bk-vi-pagehead"><span>{{BOOK_TITLE}}</span><span>{{BOOK_DATE}}</span></div>
       <div class="bk-sheet-inner">
+        <div class="bk-vi-tocline"></div>
         <div class="bk-toc-title">目 录</div>
         <table class="bk-toc-table">
           {{TOC_ENTRIES}}
@@ -177,8 +209,13 @@ body {
   <!-- ═══ 封底 ═══ -->
   <!--BK:BACK-->
   <section class="bk-sheet bk-back">
+    <svg class="bk-vi-decor" viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="78" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+      <circle cx="100" cy="100" r="52" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.18"/>
+    </svg>
     <div class="bk-sheet-inner">
       <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
+      <div class="bk-vi-rule"></div>
       <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}</div>
     </div>
     <div class="bk-back-band"></div>

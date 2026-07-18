@@ -37,13 +37,13 @@ VALID_BOOK_TYPES = {"a4", "ppt"}
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _BOOKLET_RES_DIR = os.path.join(_BASE_DIR, "resources", "booklet")
 
-# ── 占位符契约（代码即契约：模板占位符与本表一一对应） ──
+# ── 占位符契约（代码即契约：模板占位符与本表一一对应；部分占位符仅存在于部分模板，replace 缺位为无操作） ──
 
 PLACEHOLDERS = [
     "BOOK_TITLE", "BOOK_SUBTITLE", "BOOK_AUTHOR", "BOOK_ORG", "BOOK_DATE",
     "FLYLEAF_TEXT", "BACK_COVER_TEXT", "BRAND_COPYRIGHT", "BRAND_SIGNATURE",
     "BOOK_LOGO", "TOC_ENTRIES", "CHAPTERS", "PAGE_TOTAL", "THEME_CSS_VARS",
-    "PROSE_ARRANGE",
+    "PROSE_ARRANGE", "BOOK_BODY_CLASS",
 ]
 
 # step_md 内容项：step_name → 默认标签（col2 标签优先读工作区 column_configs）
@@ -454,12 +454,25 @@ def _prose_arrange_of(ch: dict) -> dict:
     return {"hidden": hidden, "order": order}
 
 
+def _first_chapter_is_html(chapters: list) -> bool:
+    """VI 版式判定：第一个启用章节是 HTML 课件 → A4 固定页走 VI A4 版式（与前端 isHtmlFirstChapter 同规则）。"""
+    first = next((c for c in (chapters or []) if c.get("enabled", True)), None)
+    if first is None:
+        return False
+    is_prose = (
+        first.get("source_type") in ("step_md", "custom")
+        and not (first.get("source_type") == "custom" and first.get("content_format") == "html")
+    )
+    return not is_prose
+
+
 def render_booklet(booklet: dict, theme: dict) -> str:
     """把草稿装配为自包含单文件 HTML 电子书。
 
     booklet: _row_to_full 结构；theme: {id, name, colors} 归一化主题。
     页面编排（R3）：cover.hidden_fixed 剥除固定页；章节按 page_order/hidden_pages
     重排与过滤，整章全隐则跳过并按可见章节重新连续编号。
+    VI 版式：a4 且第一启用章节为 HTML 课件 → body 注入 bk-vi（固定页走 VI A4 版式）。
     渲染后断言无 {{PLACEHOLDER}} 与 <!--BK: 标记残留，残留即抛 500。
     """
     book_type = booklet["book_type"]
@@ -472,6 +485,8 @@ def render_booklet(booklet: dict, theme: dict) -> str:
     chapters = [c for c in (booklet.get("chapters") or []) if c.get("enabled", True)]
     if not chapters:
         raise HTTPException(400, "册子没有启用的章节，无法合成")
+
+    vi_mode = book_type == "a4" and _first_chapter_is_html(chapters)
 
     # 固定页隐藏（不用 display:none — ppt 翻页 JS 按 .bk-slide 计数，残留节点会数错页）
     hidden_fixed = {s for s in (cover.get("hidden_fixed") or []) if s in _BK_FIXED_KEYS}
@@ -610,6 +625,7 @@ def render_booklet(booklet: dict, theme: dict) -> str:
         "THEME_CSS_VARS": themes_mod.theme_css_vars(theme.get("colors") or {}),
         # 仅含服务端生成的锚点键与 int 列表，无用户字符串，可安全内嵌 <script>
         "PROSE_ARRANGE": json.dumps(prose_arrange, separators=(",", ":")),
+        "BOOK_BODY_CLASS": "bk-vi" if vi_mode else "",
     }
 
     out = template
@@ -650,6 +666,9 @@ def _build_fixed_docs(booklet: dict, theme: dict) -> dict:
     bl = dict(booklet)
     cov = dict(bl.get("cover") or {})
     cov["hidden_fixed"] = []  # 已隐藏的固定页也要出缩略图，恢复显示前可预览
+    # 缩略图 iframe 是固定 794×1123（A4）几何；flow 模板固定页为自适应高度横幅，
+    # 塞进去会宽 96vw、高度塌缩显示为"被截断"→ 与 cover-preview 同规则恒用标准页模板出图
+    cov["render_mode"] = "standard"
     bl["cover"] = cov
     try:
         full = render_booklet(bl, theme)
@@ -657,6 +676,9 @@ def _build_fixed_docs(booklet: dict, theme: dict) -> dict:
         return {}  # 章节为空等装配失败 → 前端回退图标，不阻断页面清单
     styles = _extract_head_styles(full)
     w, h = (794, 1123) if booklet.get("book_type") == "a4" else (1280, 720)
+    # VI 版式随成品 body class 走：wrapper body 不带 bk-vi 则缩略图丢 VI 固定页样式
+    vi_mode = booklet.get("book_type") == "a4" and _first_chapter_is_html(bl.get("chapters"))
+    body_cls = ' class="bk-vi"' if vi_mode else ""
     docs = {}
     for key, cls in _BK_FIXED_DOC_CLASSES.items():
         m = re.search(r'<section class="[^"]*\b' + cls + r'\b[^"]*"[^>]*>.*?</section>', full, re.S)
@@ -669,7 +691,7 @@ def _build_fixed_docs(booklet: dict, theme: dict) -> dict:
             # 翻页式模板非 active 页 display:none/position:absolute，缩略图 iframe 无 JS 须强制显示
             ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
             "position:relative !important;margin:0 !important;}</style>"
-            f"</head><body>{m.group(0)}</body></html>"
+            f"</head><body{body_cls}>{m.group(0)}</body></html>"
         )
     return docs
 
@@ -825,6 +847,7 @@ class CoverPreviewReq(BaseModel):
     theme_id: str = ""
     theme_colors: dict = {}
     desk_none: bool = False
+    vi_mode: bool = False  # a4 且第一章为 HTML 课件（本端点拿不到章节，由前端算好传入）
 
 
 @router.post("/cover-preview")
@@ -877,13 +900,15 @@ def cover_preview(data: CoverPreviewReq, request: Request):
     if not m:
         return {"doc": ""}
 
+    # dummy 章节恒为 prose → 成品 body 不带 bk-vi，预览 wrapper 按前端传入的 vi_mode 补上
+    body_cls = ' class="bk-vi"' if (data.vi_mode and data.book_type == "a4") else ""
     doc = (
         "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
         f"{styles}"
         f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;background:var(--background) !important;}}"
         ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
         "position:relative !important;margin:0 !important;box-shadow:none !important;}</style>"
-        f"</head><body>{m.group(0)}</body></html>"
+        f"</head><body{body_cls}>{m.group(0)}</body></html>"
     )
     return {"doc": doc}
 

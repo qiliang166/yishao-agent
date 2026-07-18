@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
-import { BookletDraft, Theme, extractContentPalette } from '../types'
+import { BookletDraft, Theme, isHtmlFirstChapter } from '../types'
 
 interface Props {
   draft: BookletDraft
@@ -31,10 +31,6 @@ export default function StepCover({ draft, onChange }: Props) {
   const [previewW, setPreviewW] = useState(0)
   const [previewH, setPreviewH] = useState(0)
 
-  /* 内容同款配色：取自第一个启用的 HTML 章节的 :root 变量；选中后 theme_id 置空走后端 custom 分支 */
-  const contentPalette = useMemo(() => extractContentPalette(draft.chapters), [draft.chapters])
-  const contentPaletteActive = !draft.cover.theme_id && Object.keys(draft.cover.theme_colors || {}).length > 0
-
   useEffect(() => {
     api.bookletThemes()
       .then(list => { if (list != null) setThemes(list) })
@@ -52,8 +48,6 @@ export default function StepCover({ draft, onChange }: Props) {
   }, [])
 
   const fetchCover = useCallback(() => {
-    const custom = draft.cover.theme_colors || {}
-    const useCustom = !draft.cover.theme_id && Object.keys(custom).length > 0
     const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0]
     setCoverError('')
     api.bookletCoverPreview({
@@ -66,9 +60,10 @@ export default function StepCover({ draft, onChange }: Props) {
       flyleaf_text: draft.cover.flyleaf_text || '',
       back_cover_text: draft.cover.back_cover_text || '',
       logo_url: draft.cover.logo_url || '',
-      theme_id: useCustom ? '' : (draft.cover.theme_id || ''),
-      theme_colors: useCustom ? custom : ((theme?.colors || {}) as Record<string, string>),
+      theme_id: draft.cover.theme_id || '',
+      theme_colors: (theme?.colors || {}) as Record<string, string>,
       desk_none: !!draft.cover.desk_none,
+      vi_mode: draft.book_type === 'a4' && isHtmlFirstChapter(draft.chapters),
     }).then(doc => { if (doc) { setCoverDoc(doc); setCoverError('') } })
       .catch((e: any) => {
         console.warn('封面预览加载失败:', e)
@@ -76,7 +71,7 @@ export default function StepCover({ draft, onChange }: Props) {
       })
   }, [draft.book_type, draft.title, draft.subtitle, draft.author,
       draft.cover.org, draft.cover.date_text, draft.cover.flyleaf_text, draft.cover.back_cover_text,
-      draft.cover.logo_url, draft.cover.theme_id, draft.cover.theme_colors, draft.cover.desk_none, themes])
+      draft.cover.logo_url, draft.cover.theme_id, draft.cover.desk_none, draft.chapters, themes])
 
   useEffect(() => {
     if (!themes.length) return
@@ -177,26 +172,11 @@ export default function StepCover({ draft, onChange }: Props) {
         <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">🎨 主题配色</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
-            {contentPalette && (
-              <div onClick={() => setCover({ theme_id: '', theme_colors: contentPalette })}
-                style={{
-                  padding: '6px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11,
-                  border: `2px solid ${contentPaletteActive ? 'var(--primary)' : 'var(--border)'}`,
-                }}>
-                <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
-                  {[contentPalette.primary, contentPalette.accent || contentPalette.primary, contentPalette.bg || '#ffffff'].map((c, i) => (
-                    <span key={i} style={{ width: 14, height: 14, borderRadius: 3, background: c, border: '1px solid var(--border)' }} />
-                  ))}
-                </div>
-                <div>📎 内容同款配色</div>
-                <div style={{ fontSize: 9, color: 'var(--text-secondary)' }}>取自第一个页面章节</div>
-              </div>
-            )}
             {themes.map(t => (
               <div key={t.id} onClick={() => setCover({ theme_id: t.id, theme_colors: {} })}
                 style={{
                   padding: '6px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11,
-                  border: `2px solid ${!contentPaletteActive && draft.cover.theme_id === t.id ? 'var(--primary)' : 'var(--border)'}`,
+                  border: `2px solid ${draft.cover.theme_id === t.id ? 'var(--primary)' : 'var(--border)'}`,
                 }}>
                 <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
                   {[t.colors.primary, t.colors.accent, t.colors.bg].map((c, i) => (
