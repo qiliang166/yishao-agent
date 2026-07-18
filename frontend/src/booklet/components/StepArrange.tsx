@@ -523,6 +523,7 @@ ${PROSE_CSS}
                   key={iframeKey}
                   srcDoc={displayHtml}
                   title="chapter-preview"
+                  scrolling="no"
                   onLoad={() => {
                     if (editorMode === 'edit') applyContentEditable(true)
                     if (!isProse && iframeRef.current?.contentDocument) {
