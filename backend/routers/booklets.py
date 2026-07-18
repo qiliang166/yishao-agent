@@ -866,10 +866,10 @@ def cover_preview(data: CoverPreviewReq, request: Request):
     theme = _resolve_theme(booklet)
     try:
         full = render_booklet(booklet, theme)
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
-        return {"doc": "", "error": str(e)}
+        return {"doc": "", "error": "preview generation failed"}
 
     styles = _extract_head_styles(full)
     w, h = (794, 1123) if data.book_type == "a4" else (1280, 720)
