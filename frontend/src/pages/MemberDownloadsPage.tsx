@@ -50,6 +50,7 @@ const blockEvent = (e: React.SyntheticEvent) => { e.preventDefault() }
 
 export default function MemberDownloadsPage() {
   const [projects, setProjects] = useState<DlProject[]>([])
+  const [memberWorkspaces, setMemberWorkspaces] = useState<{id:string; name:string}[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
@@ -89,6 +90,7 @@ export default function MemberDownloadsPage() {
       .then(d => {
         const list: DlProject[] = (d as any)?.projects || []
         setProjects(list)
+        setMemberWorkspaces((d as any)?.workspaces || [])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -300,7 +302,9 @@ export default function MemberDownloadsPage() {
   const sorted = [...projects].sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
 
   const categories = [...new Set(sorted.map(p => p.category_name).filter(Boolean))]
-  const workspaces = [...new Map(sorted.filter(p => p.workspace_id).map(p => [p.workspace_id, { id: p.workspace_id, name: p.workspace_name || p.workspace_id }])).values()]
+  const workspaces = memberWorkspaces.length > 0
+    ? memberWorkspaces
+    : [...new Map(sorted.filter(p => p.workspace_id).map(p => [p.workspace_id, { id: p.workspace_id, name: p.workspace_name || p.workspace_id }])).values()]
 
   const filtered = sorted.filter(p => {
     const q = search.toLowerCase()
@@ -410,26 +414,22 @@ export default function MemberDownloadsPage() {
                   <div key={proj.id}
                     onClick={() => toggleProject(proj)}
                     style={{
-                      display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 12px',
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
                       borderBottom: '1px solid var(--border)', cursor: 'pointer',
                       background: isSel ? 'var(--primary-light, rgba(59,130,246,0.08))' : 'transparent',
                     }}>
-                    <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0, width: 18, textAlign: 'right', marginTop: 2, userSelect: 'none' }}>{idx + 1}</span>
-                    <input type="checkbox" checked={isSel} readOnly style={{ cursor: 'pointer', flexShrink: 0, marginTop: 2 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: 12, fontWeight: isSel ? 600 : 400, lineHeight: 1.4,
-                        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden', wordBreak: 'break-all',
-                      }} title={proj.name}>{proj.name}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0, width: 18, textAlign: 'right', userSelect: 'none' }}>{idx + 1}</span>
+                    <input type="checkbox" checked={isSel} readOnly style={{ cursor: 'pointer', flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 12, fontWeight: isSel ? 600 : 400 }} title={proj.name}>{proj.name}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 6 }}>
                         {proj.category_name ? `${proj.category_name} · ` : ''}{proj.files.length} 个文件
-                      </div>
+                      </span>
                     </div>
                     {proj.unlocked.is_unlocked ? (
-                      <span style={{ fontSize: 10, color: 'var(--success)', fontWeight: 600, flexShrink: 0, marginTop: 2 }}>已解锁</span>
+                      <span style={{ fontSize: 10, color: 'var(--success)', fontWeight: 600, flexShrink: 0 }}>已解锁</span>
                     ) : (
-                      <span style={{ fontSize: 10, color: 'var(--warning)', flexShrink: 0, marginTop: 2 }}>{pts(proj.point_cost_deci)} 积分</span>
+                      <span style={{ fontSize: 10, color: 'var(--warning)', flexShrink: 0 }}>{pts(proj.point_cost_deci)} 积分</span>
                     )}
                   </div>
                 )
@@ -587,12 +587,12 @@ export default function MemberDownloadsPage() {
                     <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)', fontSize: 12 }}>加载中...</div>
                   ) : TEXT_MD_EXTS.includes(previewExt) ? (
                     <div
-                      style={{ maxWidth: 860, margin: '0 auto', padding: '28px 36px', fontSize: 13, lineHeight: 1.9 }}
+                      style={{ padding: '28px 48px', fontSize: 13, lineHeight: 1.9 }}
                       dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(previewText || '', { breaks: true, async: false }) as string) }} />
                   ) : (
                     <pre style={{
-                      maxWidth: 960, margin: '0 auto', padding: '24px 32px', fontSize: 12,
-                      lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      padding: '24px 48px', fontSize: 12, lineHeight: 1.7,
+                      whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                     }}>{previewText}</pre>
                   )}
                 </div>
