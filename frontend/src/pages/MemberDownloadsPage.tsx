@@ -17,6 +17,7 @@ interface DlProject {
   id: string
   name: string
   point_cost_deci: number
+  download_count: number
   workspace_id: string
   category_name: string
   author_id: string
@@ -294,9 +295,12 @@ export default function MemberDownloadsPage() {
 
   // ── 全量过滤：搜索(项目名+文件名) × 解锁状态 × 分类 × 项目，作用于全部已加载数据 ──
 
-  const categories = [...new Set(projects.map(p => p.category_name).filter(Boolean))]
+  // 按下载量从高到低排序
+  const sorted = [...projects].sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
 
-  const filtered = projects.filter(p => {
+  const categories = [...new Set(sorted.map(p => p.category_name).filter(Boolean))]
+
+  const filtered = sorted.filter(p => {
     const q = search.toLowerCase()
     const matchSearch = !search || p.name.toLowerCase().includes(q)
       || p.files.some(f => f.filename.toLowerCase().includes(q)
@@ -309,7 +313,7 @@ export default function MemberDownloadsPage() {
     return matchSearch && matchFilter && matchCat && matchProj
   })
 
-  const shownProjects = projects.filter(p => selected.has(p.id))
+  const shownProjects = sorted.filter(p => selected.has(p.id))
   const multiProj = shownProjects.length > 1
   const checkedCount = fileSel.size
 
@@ -337,7 +341,7 @@ export default function MemberDownloadsPage() {
           onChange={e => setProjFilter(e.target.value)}
           style={{ width: 170, fontSize: 12, padding: '6px 8px' }}>
           <option value="">全部项目</option>
-          {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {sorted.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
           {([
@@ -398,7 +402,7 @@ export default function MemberDownloadsPage() {
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {filtered.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-secondary)', fontSize: 12 }}>没有匹配的结果</div>
-              ) : filtered.map(proj => {
+              ) : filtered.map((proj, idx) => {
                 const isSel = selected.has(proj.id)
                 return (
                   <div key={proj.id}
@@ -408,6 +412,7 @@ export default function MemberDownloadsPage() {
                       borderBottom: '1px solid var(--border)', cursor: 'pointer',
                       background: isSel ? 'var(--primary-light, rgba(59,130,246,0.08))' : 'transparent',
                     }}>
+                    <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0, width: 18, textAlign: 'right', marginTop: 2, userSelect: 'none' }}>{idx + 1}</span>
                     <input type="checkbox" checked={isSel} readOnly style={{ cursor: 'pointer', flexShrink: 0, marginTop: 2 }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{
@@ -430,7 +435,7 @@ export default function MemberDownloadsPage() {
             </div>
           </div>
 
-          {/* 右栏：选中项目的文件明细（预览 + 勾选；多项目时每行带项目名便于区分） */}
+          {/* 右栏：选中项目的文件明细（预览 + 勾选；多项目时分组头带项目名便于区分） */}
           <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
             {shownProjects.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
@@ -510,13 +515,6 @@ export default function MemberDownloadsPage() {
                                 <span style={{ flex: 1, fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.display_name || f.filename}>
                                   {f.display_name || f.filename}
                                 </span>
-                                {multiProj && (
-                                  <span title={proj.name} style={{
-                                    fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
-                                    padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap',
-                                    overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140, flexShrink: 0,
-                                  }}>{proj.name}</span>
-                                )}
                                 <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0 }}>
                                   {formatSize(f.size)}
                                 </span>

@@ -5296,7 +5296,7 @@ def api_downloadable_projects(user=Depends(get_current_user)):
                LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ?
                WHERE p.is_downloadable = 1
                  AND (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)
-               ORDER BY p.updated_at DESC""",
+               ORDER BY p.download_count DESC""",
             (uid, uid),
         ).fetchall()
 
@@ -5329,6 +5329,7 @@ def api_downloadable_projects(user=Depends(get_current_user)):
                 "id": pid,
                 "name": row["name"],
                 "point_cost_deci": row["point_cost_deci"] or 5,
+                "download_count": row["download_count"] or 0,
                 "is_downloadable": row["is_downloadable"],
                 "workspace_id": row["workspace_id"],
                 "category_name": cat_map.get(row["category_id"] or "", ""),
