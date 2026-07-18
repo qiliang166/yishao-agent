@@ -42,11 +42,15 @@ if (Test-Path $lastBuildFile) {
     $lastCommit = (Get-Content $lastBuildFile -Raw).Trim()
 }
 if ($lastCommit -and $commit) {
+    # git emits UTF-8; default console codepage (GBK) would mangle Chinese commit subjects
+    $prevEnc = [Console]::OutputEncoding
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     $newLog = git log "${lastCommit}..${commit}" --format="- %s" 2>$null
+    [Console]::OutputEncoding = $prevEnc
     if ($newLog) {
         $dateHeader = (Get-Date).ToString("yyyy-MM-dd")
-        $entry = "`n## $dateHeader`n`n$newLog`n"
-        $existing = if (Test-Path "$root\CHANGELOG.md") { [System.IO.File]::ReadAllText("$root\CHANGELOG.md", [System.Text.Encoding]::UTF8) } else { "# 更新日志`n" }
+        $entry = "`n## $dateHeader`n`n" + ($newLog -join "`n") + "`n"
+        $existing = if (Test-Path "$root\CHANGELOG.md") { [System.IO.File]::ReadAllText("$root\CHANGELOG.md", [System.Text.Encoding]::UTF8) } else { "# Changelog`n" }
         # Insert after the title line
         $lines = $existing -split "`n"
         $newContent = $lines[0] + "`n" + $entry + ($lines[1..$lines.Length] -join "`n")
