@@ -28,30 +28,45 @@ body {
   transform-origin: top center;
 }
 
-/* ═══ 封面页 ═══ */
-.bk-cover { align-items: center; justify-content: center; text-align: center; }
-.bk-cover-band { position: absolute; top: 0; left: 0; right: 0; height: 10px; background: var(--book-accent); }
-.bk-cover-logo { max-height: 110px; max-width: 300px; object-fit: contain; margin-bottom: 36px; }
-.bk-cover-title { font-size: 58px; font-weight: 700; color: var(--book-primary); letter-spacing: 0.06em; line-height: 1.3; max-width: 1080px; }
-.bk-cover-subtitle { margin-top: 22px; font-size: 24px; opacity: 0.75; letter-spacing: 0.2em; }
-.bk-cover-rule { width: 140px; height: 3px; background: var(--book-accent); margin: 34px auto 0; }
-.bk-cover-meta { margin-top: 40px; font-size: 19px; line-height: 1.9; }
-.bk-cover-author { font-size: 23px; font-weight: 600; color: var(--book-primary); }
+/* ═══ 封面页：渐变主视觉，匹配内容片 hero 暗色渐变风格 ═══ */
+.bk-cover { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--book-primary) 0%, var(--book-secondary, var(--book-primary)) 100%); }
+.bk-cover-band { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--book-accent), var(--book-chart-3, var(--book-accent)), var(--book-accent)); }
+.bk-cover-logo { max-height: 110px; max-width: 300px; object-fit: contain; margin-bottom: 36px; position: relative; z-index: 1; }
+.bk-cover-title { font-size: 58px; font-weight: 700; color: var(--book-bg); letter-spacing: 0.06em; line-height: 1.3; max-width: 1080px; position: relative; z-index: 1; }
+.bk-cover-subtitle { margin-top: 22px; font-size: 24px; color: var(--book-bg); opacity: 0.8; letter-spacing: 0.2em; position: relative; z-index: 1; }
+.bk-cover-rule { width: 140px; height: 3px; background: var(--book-accent); margin: 34px auto 0; position: relative; z-index: 1; }
+.bk-cover-meta { margin-top: 40px; font-size: 19px; line-height: 1.9; color: var(--book-bg); opacity: 0.75; position: relative; z-index: 1; }
+.bk-cover-author { font-size: 23px; font-weight: 600; color: var(--book-bg); }
+/* 右下角旋转菱形装饰 */
+.bk-cover::after { content: ''; position: absolute; bottom: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--book-accent); opacity: 0.15; transform: rotate(45deg); border-radius: 6px; }
 
-/* ═══ 目录页 ═══ */
-.bk-toc { padding: 70px 120px; }
-.bk-toc-title { font-size: 40px; font-weight: 700; color: var(--book-primary); letter-spacing: 0.3em; margin-bottom: 44px; }
+/* ═══ 目录页：顶部颜色洗纹 + 图表色编号循环 ═══ */
+.bk-toc { padding: 70px 120px; background: linear-gradient(180deg, rgba(var(--book-primary-r,0), var(--book-primary-g,0), var(--book-primary-b,0), 0.04) 0%, transparent 30%); }
+.bk-toc-title { font-size: 40px; font-weight: 700; color: var(--book-primary); letter-spacing: 0.3em; margin-bottom: 0; }
+.bk-toc-title::after { content: ''; display: block; width: 80px; height: 3px; margin: 12px 0 44px; background: linear-gradient(90deg, var(--book-accent), var(--book-chart-0, var(--book-accent))); }
 .bk-toc-list { list-style: none; overflow-y: auto; }
 .bk-toc-list li { margin-bottom: 20px; }
 .bk-toc-list a { display: flex; align-items: baseline; text-decoration: none; color: var(--book-text); font-size: 22px; cursor: pointer; }
-.bk-toc-num { flex-shrink: 0; width: 64px; font-weight: 700; color: var(--book-accent); font-variant-numeric: tabular-nums; }
+.bk-toc-num { flex-shrink: 0; width: 64px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.bk-toc-list li:nth-child(8n+1) .bk-toc-num { color: var(--book-chart-0, var(--book-accent)); }
+.bk-toc-list li:nth-child(8n+2) .bk-toc-num { color: var(--book-chart-1, var(--book-accent)); }
+.bk-toc-list li:nth-child(8n+3) .bk-toc-num { color: var(--book-chart-2, var(--book-accent)); }
+.bk-toc-list li:nth-child(8n+4) .bk-toc-num { color: var(--book-chart-3, var(--book-accent)); }
+.bk-toc-list li:nth-child(8n+5) .bk-toc-num { color: var(--book-chart-4, var(--book-accent)); }
+.bk-toc-list li:nth-child(8n+6) .bk-toc-num { color: var(--book-chart-5, var(--book-accent)); }
+.bk-toc-list li:nth-child(8n+7) .bk-toc-num { color: var(--book-chart-6, var(--book-accent)); }
+.bk-toc-list li:nth-child(8n+0) .bk-toc-num { color: var(--book-chart-7, var(--book-accent)); }
 .bk-toc-dots { flex: 1; margin: 0 14px; border-bottom: 2px dotted var(--book-text); opacity: 0.35; transform: translateY(-5px); }
 
-/* ═══ 章节隔页 ═══ */
-.bk-chapter-divider { align-items: center; justify-content: center; text-align: center; background: var(--book-primary); }
-.bk-chapter-divider .bk-chapter-no { font-size: 22px; color: var(--book-accent); letter-spacing: 0.35em; font-weight: 600; }
-.bk-chapter-divider .bk-chapter-title { margin-top: 26px; font-size: 46px; font-weight: 700; color: var(--book-bg); max-width: 1000px; line-height: 1.4; }
-.bk-chapter-divider .bk-chapter-src { margin-top: 20px; font-size: 17px; color: var(--book-bg); opacity: 0.6; }
+/* ═══ 章节隔页：渐变背景 + 大菱形水印 + 底部点缀线 ═══ */
+.bk-chapter-divider { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--book-primary) 0%, var(--book-secondary, var(--book-primary)) 100%); }
+/* 中央大菱形水印 */
+.bk-chapter-divider::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(45deg); width: 320px; height: 320px; border: 2px solid var(--book-accent); opacity: 0.07; border-radius: 8px; }
+/* 底部 accent 短划线 */
+.bk-chapter-divider::after { content: ''; position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 100px; height: 3px; background: var(--book-accent); opacity: 0.5; }
+.bk-chapter-divider .bk-chapter-no { font-size: 22px; color: var(--book-chart-0, var(--book-accent)); letter-spacing: 0.35em; font-weight: 600; position: relative; z-index: 1; }
+.bk-chapter-divider .bk-chapter-title { margin-top: 26px; font-size: 46px; font-weight: 700; color: var(--book-bg); max-width: 1000px; line-height: 1.4; position: relative; z-index: 1; }
+.bk-chapter-divider .bk-chapter-src { margin-top: 20px; font-size: 17px; color: var(--book-bg); opacity: 0.6; position: relative; z-index: 1; }
 
 /* ═══ 嵌入幻灯片（iframe 隔离，不同 PPT 源样式互不污染） ═══ */
 .bk-embed-frame { border: none; width: 1280px; height: 720px; display: block; }
@@ -69,11 +84,12 @@ body {
 .bk-prose blockquote { border-left: 4px solid var(--book-accent); background: var(--book-card-bg); padding: 12px 18px; margin: 14px 0; }
 .bk-prose img { max-width: 100%; }
 
-/* ═══ 封底页 ═══ */
-.bk-back { align-items: center; justify-content: center; text-align: center; }
-.bk-back-band { position: absolute; bottom: 0; left: 0; right: 0; height: 10px; background: var(--book-primary); }
-.bk-back-text { font-size: 22px; line-height: 2.2; max-width: 900px; white-space: pre-wrap; }
-.bk-back-brand { margin-top: 60px; font-size: 16px; opacity: 0.6; line-height: 1.9; }
+/* ═══ 封底页：镜面渐变 + 渐变点缀条 ═══ */
+.bk-back { align-items: center; justify-content: center; text-align: center; background: linear-gradient(225deg, var(--book-primary) 0%, var(--book-secondary, var(--book-primary)) 100%); }
+.bk-back::after { content: ''; position: absolute; top: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--book-accent); opacity: 0.12; transform: rotate(45deg); border-radius: 6px; }
+.bk-back-band { position: absolute; bottom: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--book-accent), var(--book-primary), var(--book-accent)); }
+.bk-back-text { font-size: 22px; line-height: 2.2; max-width: 900px; white-space: pre-wrap; color: var(--book-bg); opacity: 0.85; position: relative; z-index: 1; }
+.bk-back-brand { margin-top: 60px; font-size: 16px; color: var(--book-bg); opacity: 0.55; line-height: 1.9; position: relative; z-index: 1; }
 
 /* ═══ 打印：横版每页一屏 ═══ */
 @page { size: 1280px 720px; margin: 0; }

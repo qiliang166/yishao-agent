@@ -92,15 +92,19 @@ def _all_themes() -> list:
                 c = s.get("colors") or {}
                 if not c.get("primary"):
                     continue
+                chart = c.get("chart_colors") or []
                 themes.append({
                     "id": f"style-{s['id']}",
                     "name": s.get("name") or s["id"],
                     "source": "style_tmpl",
                     "colors": {
                         "primary": c.get("primary", ""),
+                        "secondary": c.get("secondary", ""),
                         "accent": c.get("accent", ""),
                         "bg": c.get("background", ""),
                         "text": c.get("text", ""),
+                        "card_bg": c.get("card_bg", ""),
+                        **{f"chart-{i}": (chart[i] if i < len(chart) else "") for i in range(8)},
                     },
                 })
     except Exception:
@@ -661,7 +665,7 @@ def _build_fixed_docs(booklet: dict, theme: dict) -> dict:
             f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;}}"
             # 翻页式模板非 active 页 display:none/position:absolute，缩略图 iframe 无 JS 须强制显示
             ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
-            "position:static !important;margin:0 !important;}</style>"
+            "position:relative !important;margin:0 !important;}</style>"
             f"</head><body>{m.group(0)}</body></html>"
         )
     return docs

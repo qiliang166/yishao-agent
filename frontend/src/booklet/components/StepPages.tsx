@@ -40,11 +40,13 @@ function chapterDividerDoc(chapterNo: number, title: string, src: string, theme:
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
 body{font-family:var(--book-font);color:var(--book-text)}
-.bk-slide{width:1280px;height:720px;display:flex;flex-direction:column;overflow:hidden}
-.bk-chapter-divider{align-items:center;justify-content:center;text-align:center;background:var(--book-primary)}
-.bk-chapter-no{font-size:22px;color:var(--book-accent);letter-spacing:0.35em;font-weight:600}
-.bk-chapter-title{margin-top:26px;font-size:46px;font-weight:700;color:var(--book-bg);max-width:1000px;line-height:1.4}
-.bk-chapter-src{margin-top:20px;font-size:17px;color:var(--book-bg);opacity:0.6}
+.bk-slide{width:1280px;height:720px;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.bk-chapter-divider{align-items:center;justify-content:center;text-align:center;background:linear-gradient(135deg,var(--book-primary) 0%,var(--book-secondary,var(--book-primary)) 100%)}
+.bk-chapter-divider::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);width:320px;height:320px;border:2px solid var(--book-accent);opacity:0.07;border-radius:8px}
+.bk-chapter-divider::after{content:'';position:absolute;bottom:60px;left:50%;transform:translateX(-50%);width:100px;height:3px;background:var(--book-accent);opacity:0.5}
+.bk-chapter-no{font-size:22px;color:var(--book-chart-0,var(--book-accent));letter-spacing:0.35em;font-weight:600;position:relative;z-index:1}
+.bk-chapter-title{margin-top:26px;font-size:46px;font-weight:700;color:var(--book-bg);max-width:1000px;line-height:1.4;position:relative;z-index:1}
+.bk-chapter-src{margin-top:20px;font-size:17px;color:var(--book-bg);opacity:0.6;position:relative;z-index:1}
 </style></head>
 <body style="${varCss};font-family:var(--book-font);color:var(--book-text)">
 <section class="bk-slide bk-chapter-divider">

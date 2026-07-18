@@ -72,7 +72,7 @@ export interface Theme {
   id: string
   name: string
   source: 'builtin' | 'style_tmpl'
-  colors: { primary: string; accent: string; bg: string; text: string; card_bg?: string; desk?: string; font?: string }
+  colors: { primary: string; accent: string; bg: string; text: string; card_bg?: string; desk?: string; font?: string; secondary?: string; [k: string]: string | undefined }
 }
 
 export function mdToHtml(md: string): string {

@@ -60,7 +60,7 @@ class StyleLoader:
                 continue
             style_id = entry["id"].replace("style-", "")
             yaml_path = os.path.join(self._styles_dir, f"{style_id}.yaml")
-            colors = {"primary": "", "accent": "", "background": "", "text": ""}
+            colors = {"primary": "", "secondary": "", "accent": "", "background": "", "text": "", "card_bg": "", "chart_colors": []}
             mood = ""
             if os.path.exists(yaml_path):
                 try:
@@ -69,9 +69,12 @@ class StyleLoader:
                     cs = data.get("color_scheme", {})
                     colors = {
                         "primary": cs.get("primary", ""),
+                        "secondary": cs.get("secondary", ""),
                         "accent": cs.get("accent", ""),
                         "background": cs.get("background", ""),
                         "text": cs.get("text", ""),
+                        "card_bg": cs.get("card_bg", ""),
+                        "chart_colors": cs.get("chart_colors") or [],
                     }
                     mood = data.get("mood", "")
                 except Exception:

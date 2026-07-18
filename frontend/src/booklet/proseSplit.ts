@@ -11,8 +11,18 @@ import { Theme } from './types'
  */
 
 const FALLBACK = {
-  primary: '#18181b', accent: '#3b82f6', bg: '#ffffff', text: '#27272a',
+  primary: '#18181b', secondary: '#3f3f46', accent: '#3b82f6', bg: '#ffffff', text: '#27272a',
   card_bg: '#f4f4f5', font: "'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif",
+  'chart-0': '#3b82f6', 'chart-1': '#ef4444', 'chart-2': '#10b981', 'chart-3': '#f59e0b',
+  'chart-4': '#8b5cf6', 'chart-5': '#06b6d4', 'chart-6': '#ec4899', 'chart-7': '#84cc16',
+}
+
+function hexToRgbChannels(hex: string): [number, number, number] {
+  const h = hex.replace('#', '')
+  if (h.length >= 6) {
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
+  }
+  return [0, 0, 0]
 }
 
 /** 模板版式镜像（选择器统一挂在 .bkr-host 下，避免污染应用样式） */
@@ -59,13 +69,28 @@ export function proseSplitCss(bookType: 'a4' | 'ppt'): string {
 
 export function themeVars(theme?: Theme | null): Record<string, string> {
   const c = { ...FALLBACK, ...(theme?.colors || {}) }
+  const [pr, pg, pb] = hexToRgbChannels(c.primary)
+  const [ar, ag, ab] = hexToRgbChannels(c.accent)
+  const [br, bgChan, bb] = hexToRgbChannels(c.bg)
   return {
     '--book-primary': c.primary,
+    '--book-primary-r': String(pr), '--book-primary-g': String(pg), '--book-primary-b': String(pb),
+    '--book-secondary': c.secondary || c.primary,
     '--book-accent': c.accent,
+    '--book-accent-r': String(ar), '--book-accent-g': String(ag), '--book-accent-b': String(ab),
     '--book-bg': c.bg,
+    '--book-bg-r': String(br), '--book-bg-g': String(bgChan), '--book-bg-b': String(bb),
     '--book-text': c.text,
     '--book-card-bg': c.card_bg || FALLBACK.card_bg,
     '--book-font': c.font || FALLBACK.font,
+    '--book-chart-0': c['chart-0'] || c.accent,
+    '--book-chart-1': c['chart-1'] || c.accent,
+    '--book-chart-2': c['chart-2'] || c.accent,
+    '--book-chart-3': c['chart-3'] || c.accent,
+    '--book-chart-4': c['chart-4'] || c.accent,
+    '--book-chart-5': c['chart-5'] || c.accent,
+    '--book-chart-6': c['chart-6'] || c.accent,
+    '--book-chart-7': c['chart-7'] || c.accent,
   }
 }
 
