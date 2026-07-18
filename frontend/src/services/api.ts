@@ -1243,6 +1243,17 @@ export const api = {
       id: string; name: string; source: 'builtin' | 'style_tmpl'
       colors: { primary: string; accent: string; bg: string; text: string; card_bg?: string; font?: string }
     }[]),
+  bookletCoverPreview: (body: {
+    book_type: string; title: string; subtitle: string; author: string;
+    org: string; date_text: string; flyleaf_text: string; back_cover_text: string;
+    logo_url: string; theme_id: string; theme_colors: Record<string, string>;
+    desk_none: boolean;
+  }) =>
+    request('/api/booklets/cover-preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(d => (d as { doc: string }).doc),
   renderBooklet: async (id: string) => {
     const res = await fetch(`/api/booklets/${id}/render`, { method: 'POST', headers: getAuthHeaders() })
     if (!res.ok) {

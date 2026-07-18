@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Theme } from '../types'
@@ -8,17 +8,57 @@ interface Props {
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
 }
 
+function Thumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; pageH: number; thumbW: number }) {
+  if (!doc) return null
+  const scale = thumbW / pageW
+  return (
+    <div style={{ width: thumbW, height: Math.round(pageH * scale), overflow: 'hidden', background: '#fff', flexShrink: 0 }}>
+      <iframe srcDoc={doc} sandbox="" scrolling="no" title="封面预览"
+        style={{ width: pageW, height: pageH, border: 'none', transform: `scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none' }} />
+    </div>
+  )
+}
+
 export default function StepCover({ draft, onChange }: Props) {
   const { toast } = useModal()
   const [themes, setThemes] = useState<Theme[]>([])
   const [uploading, setUploading] = useState(false)
+  const [coverDoc, setCoverDoc] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+  const fetchTimer = useRef<ReturnType<typeof setTimeout>>()
 
   useEffect(() => {
     api.bookletThemes()
       .then(list => { if (list != null) setThemes(list) })
       .catch((e: any) => toast(`加载主题失败: ${e?.message || e}`, 'error'))
   }, [])
+
+  const fetchCover = useCallback(() => {
+    const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0]
+    api.bookletCoverPreview({
+      book_type: draft.book_type,
+      title: draft.title,
+      subtitle: draft.subtitle,
+      author: draft.author,
+      org: draft.cover.org || '',
+      date_text: draft.cover.date_text || '',
+      flyleaf_text: draft.cover.flyleaf_text || '',
+      back_cover_text: draft.cover.back_cover_text || '',
+      logo_url: draft.cover.logo_url || '',
+      theme_id: draft.cover.theme_id || '',
+      theme_colors: (theme?.colors || {}) as Record<string, string>,
+      desk_none: !!draft.cover.desk_none,
+    }).then(doc => { if (doc) setCoverDoc(doc) }).catch(() => { /* 静默忽略 */ })
+  }, [draft.book_type, draft.title, draft.subtitle, draft.author,
+      draft.cover.org, draft.cover.date_text, draft.cover.flyleaf_text, draft.cover.back_cover_text,
+      draft.cover.logo_url, draft.cover.theme_id, draft.cover.desk_none, themes])
+
+  useEffect(() => {
+    if (!themes.length) return
+    clearTimeout(fetchTimer.current)
+    fetchTimer.current = setTimeout(fetchCover, 250)
+    return () => clearTimeout(fetchTimer.current)
+  }, [fetchCover, themes])
 
   const setCover = (patch: Record<string, any>) =>
     onChange(d => ({ ...d, cover: { ...d.cover, ...patch } }))
@@ -39,7 +79,6 @@ export default function StepCover({ draft, onChange }: Props) {
   }
 
   const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0]
-  const colors = theme?.colors || { primary: 'var(--primary)', accent: 'var(--primary)', bg: 'var(--card)', text: 'var(--text)' }
 
   return (
     <div className="panel-grid">
@@ -138,36 +177,10 @@ export default function StepCover({ draft, onChange }: Props) {
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div className="card-title">👁 封面实时预览</div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16 }}>
-            <div style={{
-              width: draft.book_type === 'ppt' ? 480 : 340,
-              height: draft.book_type === 'ppt' ? 270 : 480,
-              background: colors.bg, color: colors.text,
-              boxShadow: '0 4px 18px rgba(0,0,0,0.25)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-              position: 'relative', overflow: 'hidden', flexShrink: 0,
-            }}>
-              <div style={{ width: '100%', height: 6, background: colors.accent, flexShrink: 0 }} />
-              {draft.cover.logo_url && (
-                <img src={draft.cover.logo_url} alt="logo"
-                  style={{ maxHeight: 40, maxWidth: 110, objectFit: 'contain', marginTop: draft.book_type === 'ppt' ? 18 : 113 }} />
-              )}
-              <div style={{
-                marginTop: draft.cover.logo_url ? (draft.book_type === 'ppt' ? 16 : 36) : (draft.book_type === 'ppt' ? 46 : 107),
-                fontSize: draft.book_type === 'ppt' ? 22 : 24, fontWeight: 700, color: colors.primary,
-                padding: '0 24px', lineHeight: 1.4, letterSpacing: '0.08em',
-              }}>
-                {draft.title || '（书名）'}
-              </div>
-              {draft.subtitle && (
-                <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75, letterSpacing: '0.2em' }}>{draft.subtitle}</div>
-              )}
-              <div style={{ width: 60, height: 2, background: colors.accent, marginTop: 18 }} />
-              <div style={{ marginTop: 'auto', paddingBottom: 18, fontSize: 11, lineHeight: 1.9 }}>
-                <div style={{ fontWeight: 600, color: colors.primary, fontSize: 12 }}>{draft.author || ''}</div>
-                <div>{draft.cover.org || ''}</div>
-                <div>{draft.cover.date_text || ''}</div>
-              </div>
-            </div>
+            <Thumb doc={coverDoc}
+              pageW={draft.book_type === 'ppt' ? 1280 : 794}
+              pageH={draft.book_type === 'ppt' ? 720 : 1123}
+              thumbW={draft.book_type === 'ppt' ? 480 : 340} />
           </div>
         </div>
       </div>

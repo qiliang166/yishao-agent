@@ -809,6 +809,80 @@ def list_themes(request: Request):
     return {"themes": _all_themes()}
 
 
+class CoverPreviewReq(BaseModel):
+    book_type: str = "ppt"
+    title: str = ""
+    subtitle: str = ""
+    author: str = ""
+    org: str = ""
+    date_text: str = ""
+    flyleaf_text: str = ""
+    back_cover_text: str = ""
+    logo_url: str = ""
+    theme_id: str = ""
+    theme_colors: dict = {}
+    desk_none: bool = False
+
+
+@router.post("/cover-preview")
+def cover_preview(data: CoverPreviewReq, request: Request):
+    """返回仅封面 section 的自包含 HTML 文档（iframe 实时预览用，与合成产物同一渲染管线）。"""
+    _require_user(request)
+    if data.book_type not in VALID_BOOK_TYPES:
+        raise HTTPException(400, "book_type 必须为 a4 或 ppt")
+
+    booklet = {
+        "book_type": data.book_type,
+        "title": data.title,
+        "subtitle": data.subtitle,
+        "author": data.author,
+        "cover": {
+            "org": data.org,
+            "date_text": data.date_text,
+            "flyleaf_text": data.flyleaf_text,
+            "back_cover_text": data.back_cover_text,
+            "logo_url": data.logo_url,
+            "theme_id": data.theme_id,
+            "theme_colors": data.theme_colors,
+            "desk_none": data.desk_none,
+            "render_mode": "standard",
+        },
+        "chapters": [{
+            "id": "_cover_preview_dummy",
+            "title": "",
+            "source_type": "step_md",
+            "project_id": "",
+            "project_name": "",
+            "source_key": "",
+            "content": "",
+            "content_html": "",
+            "enabled": True,
+            "content_format": "md",
+        }],
+    }
+    theme = _resolve_theme(booklet)
+    try:
+        full = render_booklet(booklet, theme)
+    except Exception:
+        return {"doc": ""}
+
+    styles = _extract_head_styles(full)
+    w, h = (794, 1123) if data.book_type == "a4" else (1280, 720)
+    m = re.search(r'<section class="[^"]*\bbk-cover\b[^"]*"[^>]*>.*?</section>', full, re.S)
+    if not m:
+        return {"doc": ""}
+
+    doc = (
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+        f"{styles}"
+        f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;}}"
+        ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
+        "position:relative !important;margin:0 !important;}</style>"
+        f"</head><body>{m.group(0)}</body></html>"
+    )
+    return {"doc": doc}
+
+
 # ── API #10 文件导入（docx/xlsx → Markdown） ──
 
 _IMPORT_MAX_BYTES = 15 * 1024 * 1024
