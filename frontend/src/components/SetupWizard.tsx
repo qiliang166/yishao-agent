@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { getRoleManual } from '../config/roleManuals'
 import { api } from '../services/api'
 
 const WIZARD_DONE_KEY = 'setup_wizard_done'
@@ -19,6 +21,18 @@ const STEPS: { key: WizardStep; label: string }[] = [
   { key: 'stage3', label: '生成课件' },
   { key: 'stage4', label: '演讲配音' },
   { key: 'done', label: '完成' },
+]
+
+// ── 会员角色引导步骤 ──
+type MemberGuideStep = 'guide-browse' | 'guide-view' | 'guide-download' | 'guide-booklet' | 'guide-center' | 'guide-done'
+
+const MEMBER_STEPS: { key: MemberGuideStep; label: string }[] = [
+  { key: 'guide-browse', label: '浏览项目' },
+  { key: 'guide-view', label: '查看内容' },
+  { key: 'guide-download', label: '下载文件' },
+  { key: 'guide-booklet', label: '电子成册' },
+  { key: 'guide-center', label: '会员中心' },
+  { key: 'guide-done', label: '完成' },
 ]
 
 function appendModel(current: string, model: string): string {
@@ -72,7 +86,15 @@ const SAMPLE_TEXT = `餐饮服务培训是新员工入职的必修课程。所�
 
 export default function SetupWizard({ embedded, onDone }: WizardProps) {
   const navigate = useNavigate()
+  const { user } = useAuth()
+
+  const manual = user ? getRoleManual(user) : null
+  // 会员角色（试用/付费）走简化引导；超管/内容管理员/开发体验员走完整向导
+  const isMemberRole = !!(user && (user.roles.includes('试用会员') || user.roles.includes('付费会员') ||
+    (user.user_type === 'member' && !user.roles.includes('开发体验员') && !user.roles.includes('内容管理员'))))
+
   const [step, setStep] = useState<WizardStep>('check')
+  const [memberStep, setMemberStep] = useState<MemberGuideStep>('guide-browse')
   const [loading, setLoading] = useState(false)
   const [dismissed, setDismissed] = useState(false)
 
@@ -117,7 +139,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
   useEffect(() => { if (!dismissed) document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = '' } }, [dismissed])
 
-  // ── Step: System Check ──
+  // ── Step: System Check (admin only) ──
   useEffect(() => {
     if (step !== 'check') return
     let cancelled = false
@@ -320,6 +342,254 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
 
   if (dismissed) return null
 
+  // ═══════════════════════════════════════════════════════════
+  // 会员角色引导（试用会员 / 付费会员）
+  // ═══════════════════════════════════════════════════════════
+  if (isMemberRole) {
+    const isPaid = user?.permissions.includes('stage5.download')
+    const mi = MEMBER_STEPS.findIndex(s => s.key === memberStep)
+
+    return (
+      <div className="dialog-overlay" style={{ zIndex: 9999 }}>
+        <div style={{
+          background: 'var(--bg)', borderRadius: 12, width: 680, maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          boxShadow: '0 4px 32px rgba(0,0,0,0.15)',
+        }}>
+          {/* Header */}
+          <div style={{
+            padding: '20px 28px', borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>快速上手</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                {isPaid ? '付费会员使用指南' : '试用会员使用指南'}
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm" onClick={handleClose} style={{ fontSize: 20, padding: '2px 8px' }}>x</button>
+          </div>
+
+          {/* Step indicators */}
+          <div style={{
+            display: 'flex', gap: 0, padding: '12px 28px',
+            borderBottom: '1px solid var(--border)', overflowX: 'auto',
+          }}>
+            {MEMBER_STEPS.filter(s => s.key !== 'guide-download' || isPaid).map((s, i) => {
+              const idx = MEMBER_STEPS.findIndex(x => x.key === s.key)
+              const current = MEMBER_STEPS.findIndex(x => x.key === memberStep)
+              const done = idx < current
+              const active = idx === current
+              return (
+                <div key={s.key}
+                  title={s.label}
+                  style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 11, whiteSpace: 'nowrap',
+                  color: active ? 'var(--primary)' : done ? 'var(--success)' : 'var(--text-secondary)',
+                  fontWeight: active ? 600 : 400, cursor: 'default', userSelect: 'none',
+                }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: active ? 'var(--primary)' : done ? 'var(--success)' : 'var(--border)',
+                    color: active || done ? '#fff' : 'var(--text-secondary)',
+                    fontSize: 11, fontWeight: 700,
+                  }}>
+                    {done ? '✓' : idx + 1}
+                  </span>
+                  {s.label}
+                  {i < MEMBER_STEPS.filter(s => s.key !== 'guide-download' || isPaid).length - 1 && (
+                    <span style={{ margin: '0 4px', color: 'var(--border)' }}>→</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Content area */}
+          <div style={{ flex: 1, overflow: 'auto', padding: 28 }}>
+            {memberStep === 'guide-browse' && (
+              <div>
+                <h3 style={{ margin: '0 0 12px 0' }}>浏览您的项目</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  登录后，您可以在「项目管理」页面看到所有已授权工作区中的项目。
+                  每个项目包含 AI 生成的完整内容：素材整理、文档、课件、演讲稿。
+                </p>
+                <div style={{ fontSize: 11, color: 'var(--primary)', margin: '8px 0 16px', cursor: 'pointer', textDecoration: 'underline' }}
+                   onClick={() => { handleClose(); navigate('/') }}>
+                  → 前往项目管理页面查看
+                </div>
+                <div style={{ padding: 16, background: 'var(--card-bg)', borderRadius: 8, fontSize: 12, lineHeight: 2 }}>
+                  <strong>操作要点：</strong>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
+                    <li>左侧工作区列表展示您有权限访问的全部工作区</li>
+                    <li>点击工作区进入，可看到该工作区下的所有项目卡片</li>
+                    <li>项目卡片显示项目名称、分类、状态等信息</li>
+                  </ul>
+                </div>
+                <div style={{ textAlign: 'right', marginTop: 20 }}>
+                  <button className="btn btn-primary" onClick={() => setMemberStep('guide-view')}>
+                    下一步：查看内容 →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {memberStep === 'guide-view' && (
+              <div>
+                <h3 style={{ margin: '0 0 12px 0' }}>查看项目内容</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  点击项目可进入详情页，按五阶段查看 AI 生成的内容。您可以在左侧阶段导航中切换不同阶段的产出：
+                </p>
+                <div style={{ padding: 16, background: 'var(--card-bg)', borderRadius: 8, fontSize: 12, lineHeight: 2 }}>
+                  <strong>五阶段流水线：</strong>
+                  <ol style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
+                    <li><strong>文案提取</strong> — AI 从视频/文字/文件中提取结构化素材</li>
+                    <li><strong>教学文档</strong> — 生成 SOP 标准文档、分析文档、综合文档</li>
+                    <li><strong>输出课件</strong> — HTML/SVG 幻灯片，支持预览</li>
+                    <li><strong>语音课件</strong> — 演讲稿 + TTS 配音</li>
+                    <li><strong>输出列表</strong> — 所有产物的统一清单</li>
+                  </ol>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'space-between' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setMemberStep('guide-browse')}>← 上一步</button>
+                  <button className="btn btn-primary" onClick={() => setMemberStep(isPaid ? 'guide-download' : 'guide-booklet')}>
+                    下一步：{isPaid ? '下载文件' : '电子成册'} →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {memberStep === 'guide-download' && isPaid && (
+              <div>
+                <h3 style={{ margin: '0 0 12px 0' }}>下载文件</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  付费会员可以将项目中的课件、文档、音频等文件下载到本地。
+                </p>
+                <div style={{ fontSize: 11, color: 'var(--primary)', margin: '8px 0 16px', cursor: 'pointer', textDecoration: 'underline' }}
+                   onClick={() => { handleClose(); navigate('/app/downloads') }}>
+                  → 前往下载文件页面
+                </div>
+                <div style={{ padding: 16, background: 'var(--card-bg)', borderRadius: 8, fontSize: 12, lineHeight: 2 }}>
+                  <strong>下载方式：</strong>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
+                    <li><strong>左侧勾选项目</strong> — 选择要下载的项目（可多选）</li>
+                    <li><strong>右侧勾选文件</strong> — 每个项目下的文件可逐个勾选</li>
+                    <li><strong>单文件下载</strong> — 点击文件旁的「⬇ 下载」按钮</li>
+                    <li><strong>批量下载</strong> — 勾选多个文件后点击「📦 批量下载」，打包为一个 zip</li>
+                    <li><strong>预览文件</strong> — 点击「👁 预览」可在下载前查看文件内容</li>
+                    <li>未解锁项目需先消耗积分解锁后才能下载</li>
+                  </ul>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'space-between' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setMemberStep('guide-view')}>← 上一步</button>
+                  <button className="btn btn-primary" onClick={() => setMemberStep('guide-booklet')}>
+                    下一步：电子成册 →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {memberStep === 'guide-booklet' && (
+              <div>
+                <h3 style={{ margin: '0 0 12px 0' }}>电子成册</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  电子成册功能可以将多个项目的内容编排成一本完整的电子书，支持自定义页面排列、封面设计和导出。
+                </p>
+                <div style={{ fontSize: 11, color: 'var(--primary)', margin: '8px 0 16px', cursor: 'pointer', textDecoration: 'underline' }}
+                   onClick={() => { handleClose(); navigate('/app/booklets') }}>
+                  → 前往我的册子页面
+                </div>
+                <div style={{ padding: 16, background: 'var(--card-bg)', borderRadius: 8, fontSize: 12, lineHeight: 2 }}>
+                  <strong>操作流程：</strong>
+                  <ol style={{ margin: '8px 0 0 0', paddingLeft: 20 }}>
+                    <li>点击「新建成册」创建一本新册子</li>
+                    <li>从已授权的项目中添加页面内容</li>
+                    <li>拖拽调整页面顺序</li>
+                    <li>选择封面模板和配色方案</li>
+                    <li>预览并导出为 PDF 或 HTML</li>
+                  </ol>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'space-between' }}>
+                  <button className="btn btn-ghost btn-sm"
+                    onClick={() => setMemberStep(isPaid ? 'guide-download' : 'guide-view')}>← 上一步</button>
+                  <button className="btn btn-primary" onClick={() => setMemberStep('guide-center')}>
+                    下一步：会员中心 →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {memberStep === 'guide-center' && (
+              <div>
+                <h3 style={{ margin: '0 0 12px 0' }}>会员中心</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  会员中心展示您的账户信息、积分余额、会员有效期和积分流水记录。
+                </p>
+                <div style={{ fontSize: 11, color: 'var(--primary)', margin: '8px 0 16px', cursor: 'pointer', textDecoration: 'underline' }}
+                   onClick={() => { handleClose(); navigate('/app/center') }}>
+                  → 前往会员中心
+                </div>
+                <div style={{ padding: 16, background: 'var(--card-bg)', borderRadius: 8, fontSize: 12, lineHeight: 2 }}>
+                  <strong>会员中心功能：</strong>
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
+                    <li><strong>积分余额</strong> — 查看当前可用积分，用于解锁项目下载</li>
+                    <li><strong>会员有效期</strong> — {isPaid ? '付费会员享永久有效' : '试用会员查看剩余试用天数'}</li>
+                    <li><strong>积分充值</strong> — 点击「积分充值」获取更多积分</li>
+                    <li><strong>积分明细</strong> — 查看积分获取和消费的完整记录</li>
+                  </ul>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'space-between' }}>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setMemberStep('guide-booklet')}>← 上一步</button>
+                  <button className="btn btn-primary" onClick={() => setMemberStep('guide-done')}>
+                    完成 →
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {memberStep === 'guide-done' && (
+              <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+                <h3 style={{ margin: '0 0 8px 0' }}>新手引导完成！</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 8 }}>
+                  您已了解会员的核心功能操作流程。<br/>
+                  如需查看详细操作说明，可随时点击左侧「操作说明」。
+                </p>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12,
+                  marginBottom: 28, textAlign: 'center',
+                }}>
+                  {[
+                    { icon: '📋', label: '浏览项目', desc: '查看内容' },
+                    { icon: '👁', label: '查看文件', desc: '预览产物' },
+                    ...(isPaid ? [{ icon: '⬇', label: '下载文件', desc: '保存到本地' }] : []),
+                    { icon: '📖', label: '电子成册', desc: '编排导出' },
+                  ].slice(0, 4).map(item => (
+                    <div key={item.label} style={{
+                      padding: 16, borderRadius: 8, background: '#e8f5e9',
+                      border: '1px solid #a5d6a7',
+                    }}>
+                      <div style={{ fontSize: 28 }}>{item.icon}</div>
+                      <div style={{ fontSize: 11, marginTop: 4 }}>{item.label}</div>
+                      <div style={{ fontSize: 10, color: 'var(--success)' }}>{item.desc}</div>
+                    </div>
+                  ))}
+                </div>
+                <button className="btn btn-primary" onClick={handleClose}>开始使用</button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // 管理端完整向导（超管 / 内容管理员 / 开发体验员）
+  // ═══════════════════════════════════════════════════════════
+
   // ── Quick LLM form ──
   if (step === 'quick-llm') {
     return (
@@ -376,7 +646,9 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
     )
   }
 
-  // ── Main wizard ──
+  // ── Main wizard (admin) ──
+  const isSuperAdmin = user?.roles.includes('超级管理员')
+
   return (
     <div className="dialog-overlay" style={{ zIndex: 9999 }}>
       <div style={{
@@ -392,7 +664,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
           <div>
             <div style={{ fontSize: 18, fontWeight: 700 }}>快速上手</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-              跟随向导完成第一个培训项目
+              {isSuperAdmin ? '跟随向导完成系统初始化和第一个培训项目' : '跟随向导完成第一个培训项目'}
             </div>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={handleClose} style={{ fontSize: 20, padding: '2px 8px' }}>x</button>
@@ -496,27 +768,29 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                   </div>
 
                   {/* TTS Provider */}
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 16px', background: 'var(--card-bg)', borderRadius: 8, marginBottom: 8,
-                  }}>
-                    <div>
-                      <strong>TTS 提供商</strong>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>语音合成引擎，用于生成课件配音</div>
-                      <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
-                           onClick={() => { handleClose(); navigate('/proj-settings') }}>
-                        → 侧边栏「全局配置」→ 模型设置
+                  {isSuperAdmin && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '12px 16px', background: 'var(--card-bg)', borderRadius: 8, marginBottom: 8,
+                    }}>
+                      <div>
+                        <strong>TTS 提供商</strong>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>语音合成引擎，用于生成课件配音</div>
+                        <div style={{ fontSize: 10, color: 'var(--primary)', marginTop: 2, cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+                             onClick={() => { handleClose(); navigate('/proj-settings') }}>
+                          → 侧边栏「全局配置」→ 模型设置
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ color: hasTtsProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
+                          {hasTtsProviders ? '✓ 已配置' : '✗ 未配置'}
+                        </span>
+                        {!hasTtsProviders && (
+                          <button className="btn btn-primary btn-sm" onClick={() => setStep('quick-tts')}>去配置</button>
+                        )}
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ color: hasTtsProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
-                        {hasTtsProviders ? '✓ 已配置' : '✗ 未配置'}
-                      </span>
-                      {!hasTtsProviders && (
-                        <button className="btn btn-primary btn-sm" onClick={() => setStep('quick-tts')}>去配置</button>
-                      )}
-                    </div>
-                  </div>
+                  )}
 
                   {/* Seed prompts */}
                   <div style={{

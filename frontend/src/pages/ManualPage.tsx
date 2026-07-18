@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useAuth } from '../contexts/AuthContext'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { getRoleManual } from '../config/roleManuals'
 
 interface HelpSection {
   location: string
@@ -9,25 +11,18 @@ interface HelpSection {
 }
 
 const LOCATION_ORDER = [
-  'home',
-  'dashboard',
-  'project-stage-1a', 'project-stage-1b', 'project-stage-1c',
-  'project-stage-2a', 'project-stage-2b', 'project-stage-2c',
-  'project-stage-3a', 'project-stage-3b', 'project-stage-3c',
-  'project-stage-4a', 'project-stage-4b',
-  'project-stage-5',
-  'settings', 'proj-settings', 'templates', 'appendix',
-]
-
-/** 前台操作说明：仅使用者可见的章节 */
-const FRONT_LOCATIONS = new Set([
   'home', 'dashboard',
   'project-stage-1a', 'project-stage-1b', 'project-stage-1c',
   'project-stage-2a', 'project-stage-2b', 'project-stage-2c',
   'project-stage-3a', 'project-stage-3b', 'project-stage-3c',
   'project-stage-4a', 'project-stage-4b',
   'project-stage-5',
-])
+  'downloads', 'booklets', 'member-center',
+  'templates', 'prompt-studio',
+  'settings', 'proj-settings',
+  'roles', 'members', 'approval', 'stats', 'authors',
+  'appendix',
+]
 
 function renderMarkdown(md: string): string {
   return DOMPurify.sanitize(marked.parse(md) as string)
@@ -66,18 +61,18 @@ const PRINT_STYLE = `
   @page { margin: 2cm; }
 `
 
-const COVER_FRONT = `
-# 智绘教案系统 Yishao Agent — 操作说明书 V1.0.0
-
-> **前台操作说明（使用者）**
-
-本手册面向内容制作者，覆盖产品概述、工作区管理、项目明细管理以及五阶段流水线（素材输入 → 文档生成 → 课件输出 → 演讲课件 → 输出列表）的完整操作指南。
-`
-
 export default function ManualPage() {
+  const { user } = useAuth()
   const [sections, setSections] = useState<HelpSection[]>([])
   const [loading, setLoading] = useState(true)
   const [activeSection, setActiveSection] = useState('')
+
+  const manual = useMemo(() => {
+    if (!user) return null
+    return getRoleManual(user)
+  }, [user])
+
+  const chapterSet = useMemo(() => new Set(manual?.chapters || []), [manual])
 
   useEffect(() => {
     fetch('/api/help-manual/sections')
@@ -88,27 +83,31 @@ export default function ManualPage() {
             LOCATION_ORDER.indexOf(a.location) - LOCATION_ORDER.indexOf(b.location)
         )
         setSections(secs)
-        if (secs.length > 0) setActiveSection(secs[0].location)
+        const visible = secs.filter(s => chapterSet.has(s.location))
+        if (visible.length > 0) setActiveSection(visible[0].location)
       })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [chapterSet])
 
-  /** 仅展示前台操作说明，后台管理内容在「全局设置 → 操作说明」tab 中查看 */
-  const frontSections = useMemo(
-    () => sections.filter(s => FRONT_LOCATIONS.has(s.location)),
-    [sections]
+  const visibleSections = useMemo(
+    () => sections.filter(s => chapterSet.has(s.location)),
+    [sections, chapterSet]
   )
 
+  const coverMd = manual
+    ? `# 智绘教案系统 Yishao Agent — ${manual.cover} V1.0\n\n> **${manual.subtitle}**`
+    : ''
+
   const handleDownload = () => {
-    if (frontSections.length === 0) return
-    const fullMd = COVER_FRONT + '\n\n---\n\n' + frontSections.map(s => s.content).join('\n\n---\n\n')
+    if (visibleSections.length === 0) return
+    const fullMd = coverMd + '\n\n---\n\n' + visibleSections.map(s => s.content).join('\n\n---\n\n')
     const fullHtml = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Yishao Agent 前台操作说明书</title>
+<title>Yishao Agent ${manual?.cover || '操作说明书'}</title>
 <style>${BASE_STYLE}</style>
 </head>
 <body>
@@ -119,17 +118,17 @@ ${renderMarkdown(fullMd)}
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'YishaoAgent_前台操作说明书.html'
+    a.download = `YishaoAgent_${manual?.cover || '操作说明书'}.html`
     a.click()
     URL.revokeObjectURL(url)
   }
 
   const handlePrint = () => {
-    if (frontSections.length === 0) return
-    const fullMd = COVER_FRONT + '\n\n---\n\n' + frontSections.map(s => s.content).join('\n\n---\n\n')
+    if (visibleSections.length === 0) return
+    const fullMd = coverMd + '\n\n---\n\n' + visibleSections.map(s => s.content).join('\n\n---\n\n')
     const html = `<!DOCTYPE html>
 <html lang="zh-CN">
-<head><meta charset="UTF-8"><title>Yishao Agent 前台操作说明书</title>
+<head><meta charset="UTF-8"><title>Yishao Agent ${manual?.cover || '操作说明书'}</title>
 <style>${PRINT_STYLE}</style></head>
 <body>${renderMarkdown(fullMd)}</body>
 </html>`
@@ -141,7 +140,7 @@ ${renderMarkdown(fullMd)}
     }
   }
 
-  const active = frontSections.find(s => s.location === activeSection)
+  const active = visibleSections.find(s => s.location === activeSection)
 
   if (loading) {
     return (
@@ -151,7 +150,7 @@ ${renderMarkdown(fullMd)}
     )
   }
 
-  if (frontSections.length === 0) {
+  if (visibleSections.length === 0) {
     return (
       <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
         暂无操作说明内容。请前往「全局设置」→「操作说明」编辑。
@@ -178,30 +177,30 @@ ${renderMarkdown(fullMd)}
             className="btn btn-primary btn-sm"
             style={{ flex: 1 }}
             onClick={handleDownload}
-            disabled={frontSections.length === 0}
+            disabled={visibleSections.length === 0}
           >
             下载说明书
           </button>
           <button
             className="btn btn-ghost btn-sm"
             onClick={handlePrint}
-            disabled={frontSections.length === 0}
+            disabled={visibleSections.length === 0}
           >
             打印
           </button>
         </div>
 
-        {/* 前台操作说明标签 */}
+        {/* Role badge */}
         <div style={{
           padding: '6px 12px', borderBottom: '1px solid var(--border)',
           fontSize: 10, color: 'var(--text-secondary)',
           letterSpacing: 1, flexShrink: 0,
         }}>
-          前台操作说明（使用者）
+          {manual?.cover || '操作说明'}
         </div>
 
         {/* Section list */}
-        {frontSections.map(s => (
+        {visibleSections.map(s => (
           <button
             key={s.location}
             onClick={() => setActiveSection(s.location)}
