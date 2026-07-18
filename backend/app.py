@@ -695,7 +695,7 @@ def list_workspaces(page: int = 1, page_size: int = 20, mine: int = 0, request: 
             total = db.execute(f"SELECT COUNT(*) FROM workspaces{where}", params).fetchone()[0]
             offset = (page - 1) * page_size
             rows = db.execute(
-                f"SELECT * FROM workspaces{where} ORDER BY download_count DESC, updated_at DESC LIMIT ? OFFSET ?",
+                f"SELECT * FROM workspaces{where} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                 params + (page_size, offset)
             ).fetchall()
         result = [dict(r) for r in rows]
