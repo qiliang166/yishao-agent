@@ -880,9 +880,9 @@ def cover_preview(data: CoverPreviewReq, request: Request):
     doc = (
         "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
         f"{styles}"
-        f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;}}"
+        f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;background:var(--background) !important;}}"
         ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
-        "position:relative !important;margin:0 !important;}</style>"
+        "position:relative !important;margin:0 !important;box-shadow:none !important;}</style>"
         f"</head><body>{m.group(0)}</body></html>"
     )
     return {"doc": doc}

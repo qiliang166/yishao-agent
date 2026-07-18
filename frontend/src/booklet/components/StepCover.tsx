@@ -191,7 +191,7 @@ export default function StepCover({ draft, onChange }: Props) {
               <Thumb doc={coverDoc}
                 pageW={draft.book_type === 'ppt' ? 1280 : 794}
                 pageH={draft.book_type === 'ppt' ? 720 : 1123}
-                thumbW={draft.book_type === 'ppt' ? 480 : 340} />
+                thumbW={draft.book_type === 'ppt' ? 640 : 480} />
             )}
           </div>
         </div>
