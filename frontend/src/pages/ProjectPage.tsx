@@ -1486,8 +1486,6 @@ export default function ProjectPage() {
   ]
 
   const executeBatchGenerate = async (resolvedModels: Record<string, string>) => {
-    const stage2Source = STAGE2_CONFIGS.reduce((acc, c) => acc || steps[c.stepKey] || '', '')
-
     // 严格按当前上下文取该源右侧整理后的内容（step1_xxx），不回退 raw，不跨源
     const dsMapS1: Record<string, string> = { '1a': 'video', '1b': 'text', '1c': 'file' }
     const effectiveDs = stage === 1 ? (dsMapS1[sub] || 'video') : (s2DataSources['sop'] || 'video')
@@ -1495,7 +1493,12 @@ export default function ProjectPage() {
       : effectiveDs === 'text' ? (steps.step1_text || '')
       : effectiveDs === 'file' ? (steps.step1_file || '')
       : ''
-    const source = stage2Source || stage1Source
+
+    // Stage 1 触发：严格只用当前 TAB 整理内容；Stage 2 触发：可用已有 Stage 2 输出回退
+    const source = stage === 1 ? stage1Source : (STAGE2_CONFIGS.reduce((acc, c) => acc || steps[c.stepKey] || '', '') || stage1Source)
+
+    // DEBUG: 诊断数据源选择
+    console.log('[executeBatchGenerate]', { stage, sub, effectiveDs, stage1Source_preview: stage1Source?.substring(0, 80), source_preview: source?.substring(0, 80), has_step1_file: !!steps.step1_file, has_step1_video: !!steps.step1_video, has_raw_video: !!steps.raw_video })
 
     if (!source) {
       const tabLabel = effectiveDs === 'video' ? '视频提取' : effectiveDs === 'text' ? '文字输入' : '文件提取'
@@ -2806,7 +2809,7 @@ export default function ProjectPage() {
                       }}>📥 保存到项目</button>
                     <CanEdit perm={canGenerate2}>
                     <button className="btn btn-outline btn-sm"
-                      disabled={!!Object.values(step2Generating).some(Boolean) || (!steps.raw_video && !steps.raw_text && !steps.raw_file && !steps.step1_video && !steps.step1_text && !steps.step1_file && !steps.step2_sop && !steps.step2_daoshuyi && !steps.step2_yanxi)}
+                      disabled={!!Object.values(step2Generating).some(Boolean) || !steps[step1Key()]}
                       onClick={doBatchGenerate}>
                       {Object.values(step2Generating).some(Boolean) ? '⏳ 生成中...' : '⚡ 生成所有文案'}
                     </button>
