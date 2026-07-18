@@ -373,7 +373,7 @@ ${PROSE_CSS}
       </div>
 
       {/* ── Unified editor: right panel ── */}
-      <div className="panel-right">
+      <div className="panel-right" style={{ overflow: 'hidden' }}>
         {!selected ? (
           <div className="card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
             左侧选择一个章节进行编辑

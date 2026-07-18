@@ -202,11 +202,11 @@ export default function StepCover({ draft, onChange }: Props) {
         </div>
       </div>
 
-      <div className="panel-right">
-        <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <div className="panel-right" style={{ overflow: 'hidden' }}>
+        <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
           <div className="card-title">👁 封面实时预览</div>
           <div ref={previewRef}
-            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16 }}>
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16, minHeight: 0 }}>
             {coverError && !coverDoc ? (
               <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20 }}>
                 <div style={{ marginBottom: 8 }}>⚠️</div>
