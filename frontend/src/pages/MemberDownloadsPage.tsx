@@ -19,6 +19,7 @@ interface DlProject {
   point_cost_deci: number
   download_count: number
   workspace_id: string
+  workspace_name: string
   category_name: string
   author_id: string
   author_name: string
@@ -53,7 +54,7 @@ export default function MemberDownloadsPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'unlocked' | 'locked'>('all')
   const [catFilter, setCatFilter] = useState('')
-  const [projFilter, setProjFilter] = useState('')
+  const [wsFilter, setWsFilter] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fileSel, setFileSel] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
@@ -299,6 +300,7 @@ export default function MemberDownloadsPage() {
   const sorted = [...projects].sort((a, b) => (b.download_count || 0) - (a.download_count || 0))
 
   const categories = [...new Set(sorted.map(p => p.category_name).filter(Boolean))]
+  const workspaces = [...new Map(sorted.filter(p => p.workspace_id).map(p => [p.workspace_id, { id: p.workspace_id, name: p.workspace_name || p.workspace_id }])).values()]
 
   const filtered = sorted.filter(p => {
     const q = search.toLowerCase()
@@ -309,8 +311,8 @@ export default function MemberDownloadsPage() {
       || (filter === 'unlocked' && p.unlocked.is_unlocked)
       || (filter === 'locked' && !p.unlocked.is_unlocked)
     const matchCat = !catFilter || p.category_name === catFilter
-    const matchProj = !projFilter || p.id === projFilter
-    return matchSearch && matchFilter && matchCat && matchProj
+    const matchWs = !wsFilter || p.workspace_id === wsFilter
+    return matchSearch && matchFilter && matchCat && matchWs
   })
 
   const shownProjects = sorted.filter(p => selected.has(p.id))
@@ -337,11 +339,11 @@ export default function MemberDownloadsPage() {
           <option value="">全部分类</option>
           {categories.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select className="form-input" value={projFilter}
-          onChange={e => setProjFilter(e.target.value)}
+        <select className="form-input" value={wsFilter}
+          onChange={e => setWsFilter(e.target.value)}
           style={{ width: 170, fontSize: 12, padding: '6px 8px' }}>
-          <option value="">全部项目</option>
-          {sorted.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          <option value="">全部工作区</option>
+          {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
         <div style={{ display: 'flex', gap: 0, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
           {([

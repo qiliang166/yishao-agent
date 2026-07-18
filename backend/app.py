@@ -695,7 +695,7 @@ def list_workspaces(page: int = 1, page_size: int = 20, mine: int = 0, request: 
             total = db.execute(f"SELECT COUNT(*) FROM workspaces{where}", params).fetchone()[0]
             offset = (page - 1) * page_size
             rows = db.execute(
-                f"SELECT * FROM workspaces{where} ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                f"SELECT * FROM workspaces{where} ORDER BY download_count DESC, updated_at DESC LIMIT ? OFFSET ?",
                 params + (page_size, offset)
             ).fetchall()
         result = [dict(r) for r in rows]
@@ -954,7 +954,7 @@ def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", re
                 offset = (page - 1) * page_size
                 rows = db.execute(
                     "SELECT DISTINCT p.* " + base_from + " " + access_clause + " AND p.workspace_id = ?" +
-                    " ORDER BY p.updated_at DESC LIMIT ? OFFSET ?",
+                    " ORDER BY p.download_count DESC, p.updated_at DESC LIMIT ? OFFSET ?",
                     (uid, uid, workspace_id, page_size, offset)
                 ).fetchall()
             else:
@@ -965,7 +965,7 @@ def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", re
                 offset = (page - 1) * page_size
                 rows = db.execute(
                     "SELECT DISTINCT p.* " + base_from + " " + access_clause +
-                    " ORDER BY p.updated_at DESC LIMIT ? OFFSET ?",
+                    " ORDER BY p.download_count DESC, p.updated_at DESC LIMIT ? OFFSET ?",
                     (uid, uid, page_size, offset)
                 ).fetchall()
         else:
@@ -973,22 +973,24 @@ def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", re
                 total = db.execute("SELECT COUNT(*) FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
                 offset = (page - 1) * page_size
                 rows = db.execute(
-                    "SELECT * FROM projects WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM projects WHERE workspace_id = ? ORDER BY download_count DESC, updated_at DESC LIMIT ? OFFSET ?",
                     (workspace_id, page_size, offset)
                 ).fetchall()
             else:
                 total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
                 offset = (page - 1) * page_size
                 rows = db.execute(
-                    "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM projects ORDER BY download_count DESC, updated_at DESC LIMIT ? OFFSET ?",
                     (page_size, offset)
                 ).fetchall()
         projects = [dict(r) for r in rows]
         cat_map = {c["id"]: c["name"] for c in db.execute("SELECT id, name FROM project_categories").fetchall()}
         auth_map = {a["id"]: a["name"] for a in db.execute("SELECT id, name FROM authors").fetchall()}
+        ws_map = {w["id"]: w["name"] for w in db.execute("SELECT id, name FROM workspaces").fetchall()}
         for p in projects:
             p["category_name"] = cat_map.get(p.get("category_id") or "", "")
             p["author_name"] = auth_map.get(p.get("author_id") or "", "")
+            p["workspace_name"] = ws_map.get(p.get("workspace_id") or "", "")
         return {"projects": projects, "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
@@ -5303,6 +5305,7 @@ def api_downloadable_projects(user=Depends(get_current_user)):
         projects = []
         cat_map = {c["id"]: c["name"] for c in db.execute("SELECT id, name FROM project_categories").fetchall()}
         auth_map = {a["id"]: a["name"] for a in db.execute("SELECT id, name FROM authors").fetchall()}
+        ws_map = {w["id"]: w["name"] for w in db.execute("SELECT id, name FROM workspaces").fetchall()}
         for row in rows:
             pid = row["id"]
             unlocked = db.execute(
@@ -5332,6 +5335,7 @@ def api_downloadable_projects(user=Depends(get_current_user)):
                 "download_count": row["download_count"] or 0,
                 "is_downloadable": row["is_downloadable"],
                 "workspace_id": row["workspace_id"],
+                "workspace_name": ws_map.get(row["workspace_id"] or "", ""),
                 "category_name": cat_map.get(row["category_id"] or "", ""),
                 "author_id": row["author_id"] or "",
                 "author_name": auth_map.get(row["author_id"] or "", ""),
