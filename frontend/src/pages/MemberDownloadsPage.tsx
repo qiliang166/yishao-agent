@@ -388,7 +388,7 @@ export default function MemberDownloadsPage() {
       ) : (
         <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0, paddingBottom: 16 }}>
           {/* 左栏：项目清单（滚动，不分页；项目名最多两行完整展示） */}
-          <div className="card" style={{ width: 300, flexShrink: 0, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div className="card" style={{ width: 400, flexShrink: 0, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               padding: '8px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0,
