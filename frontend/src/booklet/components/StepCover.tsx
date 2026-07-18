@@ -9,7 +9,7 @@ interface Props {
 }
 
 function Thumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; pageH: number; thumbW: number }) {
-  if (!doc) return null
+  if (!doc || thumbW <= 0) return null
   const scale = thumbW / pageW
   return (
     <div style={{ width: thumbW, height: Math.round(pageH * scale), overflow: 'hidden', background: '#fff', flexShrink: 0 }}>
@@ -27,11 +27,24 @@ export default function StepCover({ draft, onChange }: Props) {
   const [coverError, setCoverError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const fetchTimer = useRef<ReturnType<typeof setTimeout>>()
+  const previewRef = useRef<HTMLDivElement>(null)
+  const [previewW, setPreviewW] = useState(0)
+  const [previewH, setPreviewH] = useState(0)
 
   useEffect(() => {
     api.bookletThemes()
       .then(list => { if (list != null) setThemes(list) })
       .catch((e: any) => toast(`加载主题失败: ${e?.message || e}`, 'error'))
+  }, [])
+
+  useEffect(() => {
+    const el = previewRef.current
+    if (!el) return
+    const update = () => { setPreviewW(el.clientWidth); setPreviewH(el.clientHeight) }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [])
 
   const fetchCover = useCallback(() => {
@@ -85,6 +98,17 @@ export default function StepCover({ draft, onChange }: Props) {
   }
 
   const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0]
+
+  const pad = 32
+  const maxW = Math.max(0, previewW - pad)
+  const maxH = Math.max(0, previewH - pad)
+  const pageW = draft.book_type === 'ppt' ? 1280 : 794
+  const pageH = draft.book_type === 'ppt' ? 720 : 1123
+  const aspect = pageW / pageH
+  let thumbW = maxW || 480
+  if (maxW > 0 && maxH > 0 && maxW / aspect > maxH) {
+    thumbW = Math.round(maxH * aspect)
+  }
 
   return (
     <div className="panel-grid">
@@ -181,17 +205,15 @@ export default function StepCover({ draft, onChange }: Props) {
       <div className="panel-right">
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div className="card-title">👁 封面实时预览</div>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16 }}>
+          <div ref={previewRef}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16 }}>
             {coverError && !coverDoc ? (
               <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20 }}>
                 <div style={{ marginBottom: 8 }}>⚠️</div>
                 <div>{coverError}</div>
               </div>
             ) : (
-              <Thumb doc={coverDoc}
-                pageW={draft.book_type === 'ppt' ? 1280 : 794}
-                pageH={draft.book_type === 'ppt' ? 720 : 1123}
-                thumbW={draft.book_type === 'ppt' ? 640 : 480} />
+              <Thumb doc={coverDoc} pageW={pageW} pageH={pageH} thumbW={thumbW} />
             )}
           </div>
         </div>
