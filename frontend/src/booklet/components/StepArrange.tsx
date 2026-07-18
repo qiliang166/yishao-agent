@@ -2,7 +2,8 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
-import { BookletDraft, Theme, mdToHtml, isProseChapter } from '../types'
+import { BookletDraft, Theme, mdToHtml, isProseChapter, resolveDraftTheme } from '../types'
+import { themeVars } from '../proseSplit'
 import MdToolbar from './MdToolbar'
 
 interface Props {
@@ -10,21 +11,16 @@ interface Props {
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
 }
 
-const FALLBACK = {
-  primary: '#18181b', accent: '#3b82f6', bg: '#ffffff', text: '#27272a',
-  card_bg: '#f4f4f5', font: "'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif",
-}
-
 const PROSE_CSS = `
 .bkp-prose { font-size: 13px; line-height: 1.95; }
-.bkp-prose h1, .bkp-prose h2, .bkp-prose h3, .bkp-prose h4 { color: var(--primary); margin: 14px 0 7px; line-height: 1.5; }
+.bkp-prose h1, .bkp-prose h2, .bkp-prose h3, .bkp-prose h4 { color: var(--ink); margin: 14px 0 7px; line-height: 1.5; }
 .bkp-prose h1 { font-size: 19px; } .bkp-prose h2 { font-size: 17px; } .bkp-prose h3 { font-size: 15px; } .bkp-prose h4 { font-size: 14px; }
 .bkp-prose p { margin: 6px 0; }
 .bkp-prose ul, .bkp-prose ol { margin: 6px 0 6px 18px; }
 .bkp-prose li { margin: 3px 0; }
 .bkp-prose table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; }
 .bkp-prose th, .bkp-prose td { border: 1px solid var(--text); padding: 4px 7px; }
-.bkp-prose th { background: var(--card-bg); color: var(--primary); }
+.bkp-prose th { background: var(--card-bg); color: var(--ink); }
 .bkp-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 6px 10px; margin: 8px 0; }
 .bkp-prose code { background: var(--card-bg); padding: 1px 4px; border-radius: 2px; font-size: 12px; }
 .bkp-prose pre { background: var(--card-bg); padding: 8px; overflow-x: auto; margin: 8px 0; }
@@ -52,7 +48,10 @@ export default function StepArrange({ draft, onChange }: Props) {
   const previewBoxRef = useRef<HTMLDivElement>(null)
 
   const selected = draft.chapters.find(c => c.id === selectedId) || null
-  const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0] || null
+  const theme = useMemo(
+    () => resolveDraftTheme(draft, themes),
+    [themes, draft.cover.theme_id, draft.cover.theme_colors],
+  )
   const isProse = selected ? isProseChapter(selected) : false
 
   useEffect(() => {
@@ -68,16 +67,29 @@ export default function StepArrange({ draft, onChange }: Props) {
   useEffect(() => {
     setEditorMode('view')
     setHtmlDirty(false)
+    setIframeNatH(300)
     setIframeKey(k => k + 1)
   }, [selectedId])
 
-  // Auto-scale iframe for HTML chapters to fit preview box width
+  /* prose：iframe 高度=内容自然高（body.scrollHeight 不受视口钳制，宽度变化后重测不棘轮）
+     非 prose：按预览框宽度整体缩放 1280 宽的 HTML 页面 */
+  const measureProseHeight = () => {
+    const doc = iframeRef.current?.contentDocument
+    const h = doc?.body?.scrollHeight
+    if (h && h > 0) setIframeNatH(h)
+  }
+
   useEffect(() => {
     const el = previewBoxRef.current
-    if (!el || isProse) { setFitScale(1); return }
+    if (!el) { setFitScale(1); return }
     const ro = new ResizeObserver(entries => {
       const w = entries[0]?.contentRect.width
-      if (w && w > 0) setFitScale(Math.min(1, (w - 4) / 1280))
+      if (!w || w <= 0) return
+      if (isProse) {
+        requestAnimationFrame(measureProseHeight)
+      } else {
+        setFitScale(Math.min(1, (w - 4) / 1280))
+      }
     })
     ro.observe(el)
     return () => ro.disconnect()
@@ -87,11 +99,12 @@ export default function StepArrange({ draft, onChange }: Props) {
   const displayHtml = useMemo(() => {
     if (!selected) return ''
     if (isProse) {
-      const c = { ...FALLBACK, ...(theme?.colors || {}) }
-      const bg = selected.bg_color || '#ffffff'
+      const vars = themeVars(theme)
+      const varCss = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';')
+      const bg = selected.bg_color || 'var(--background)'
       return DOMPurify.sanitize(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
-  :root { --primary:${c.primary}; --accent:${c.accent}; --background:${c.bg}; --text:${c.text}; --card-bg:${c.card_bg}; --font:${c.font}; }
+  :root { ${varCss}; }
   body { margin:0; padding:14px 18px; font-family:var(--font); background:${bg}; color:var(--text); }
 ${PROSE_CSS}
 </style></head>
@@ -526,13 +539,14 @@ ${PROSE_CSS}
                   scrolling="no"
                   onLoad={() => {
                     if (editorMode === 'edit') applyContentEditable(true)
-                    if (!isProse && iframeRef.current?.contentDocument) {
-                      const h = iframeRef.current.contentDocument.documentElement.scrollHeight
-                      if (h > 0) setIframeNatH(h)
-                    }
+                    const doc = iframeRef.current?.contentDocument
+                    if (!doc) return
+                    const h = isProse ? doc.body?.scrollHeight : doc.documentElement.scrollHeight
+                    if (h && h > 0) setIframeNatH(h)
                   }}
                   style={{
                     width: isProse ? '100%' : 1280,
+                    height: isProse ? iframeNatH : undefined,
                     minHeight: isProse ? 300 : iframeNatH * fitScale,
                     transform: isProse ? undefined : `scale(${fitScale})`,
                     transformOrigin: 'top left',

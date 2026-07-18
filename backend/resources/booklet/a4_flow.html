@@ -35,42 +35,43 @@ body {
 .bk-cover .bk-sheet-inner { align-items: center; text-align: center; padding: 64px 48px; }
 .bk-cover-band { width: 100%; height: 8px; background: var(--accent); flex-shrink: 0; }
 .bk-cover-logo { max-height: 90px; max-width: 240px; object-fit: contain; margin-bottom: 28px; }
-.bk-cover-title { font-size: 38px; font-weight: 700; color: var(--primary); line-height: 1.35; letter-spacing: 0.08em; }
+.bk-cover-title { font-size: 38px; font-weight: 700; color: var(--ink); line-height: 1.35; letter-spacing: 0.08em; }
 .bk-cover-subtitle { margin-top: 16px; font-size: 18px; color: var(--text); opacity: 0.75; letter-spacing: 0.2em; }
 .bk-cover-rule { width: 130px; height: 2px; background: var(--accent); margin: 26px auto 0; }
 .bk-cover-meta { margin-top: 30px; font-size: 15px; line-height: 2; color: var(--text); }
-.bk-cover-author { font-size: 17px; font-weight: 600; color: var(--primary); }
+.bk-cover-author { font-size: 17px; font-weight: 600; color: var(--ink); }
 
 /* ═══ 扉页说明块 ═══ */
 .bk-flyleaf .bk-sheet-inner { align-items: center; text-align: center; }
-.bk-flyleaf-title { font-size: 22px; font-weight: 600; color: var(--primary); letter-spacing: 0.15em; }
+.bk-flyleaf-title { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: 0.15em; }
 .bk-flyleaf-text { margin-top: 18px; font-size: 15px; line-height: 2.1; max-width: 640px; white-space: pre-wrap; }
 .bk-flyleaf-info { margin-top: 22px; font-size: 13px; line-height: 2.1; color: var(--text); opacity: 0.8; }
 .bk-flyleaf-brand { margin-top: 16px; font-size: 12px; opacity: 0.6; line-height: 1.9; }
 
 /* ═══ 目录 ═══ */
-.bk-toc-title { font-size: 24px; font-weight: 700; color: var(--primary); text-align: center; letter-spacing: 0.3em; margin-bottom: 26px; }
+.bk-toc-title { font-size: 24px; font-weight: 700; color: var(--ink); text-align: center; letter-spacing: 0.3em; margin-bottom: 26px; }
 .bk-toc-table { width: 100%; border-collapse: collapse; font-size: 15px; }
 .bk-toc-table td { padding: 7px 0; vertical-align: top; }
-.bk-toc-num { width: 44px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+.bk-toc-table a { color: inherit; text-decoration: none; }
+.bk-toc-num { width: 44px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); }
 .bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 40px; font-size: 13px; }
 
 /* ═══ 章节正文 ═══ */
 .bk-chapter-head { border-left: 5px solid var(--accent); padding: 6px 0 6px 16px; margin-bottom: 22px; }
 .bk-chapter-no { font-size: 13px; color: var(--accent); font-weight: 600; letter-spacing: 0.2em; }
-.bk-chapter-title { font-size: 23px; font-weight: 700; color: var(--primary); margin-top: 4px; line-height: 1.4; }
+.bk-chapter-title { font-size: 23px; font-weight: 700; color: var(--ink); margin-top: 4px; line-height: 1.4; }
 .bk-chapter-src { font-size: 11px; opacity: 0.55; margin-top: 4px; }
 
 .bk-prose { font-size: 15px; line-height: 1.95; }
-.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--primary); margin: 20px 0 10px; line-height: 1.5; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--ink); margin: 20px 0 10px; line-height: 1.5; }
 .bk-prose h1 { font-size: 21px; } .bk-prose h2 { font-size: 19px; } .bk-prose h3 { font-size: 17px; } .bk-prose h4 { font-size: 16px; }
 .bk-prose p { margin: 8px 0; }
 .bk-prose ul, .bk-prose ol { margin: 8px 0 8px 22px; }
 .bk-prose li { margin: 4px 0; }
 .bk-prose table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
 .bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 6px 9px; }
-.bk-prose th { background: var(--card-bg); color: var(--primary); }
+.bk-prose th { background: var(--card-bg); color: var(--ink); }
 .bk-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 8px 14px; margin: 12px 0; }
 .bk-prose code { background: var(--card-bg); padding: 1px 5px; border-radius: 2px; font-size: 13px; }
 .bk-prose pre { background: var(--card-bg); padding: 12px; overflow-x: auto; margin: 12px 0; }

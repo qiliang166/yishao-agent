@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { api } from '../../services/api'
-import { BookletDraft, Chapter, PageMapChapter, Theme, mdToHtml } from '../types'
+import { BookletDraft, Chapter, PageMapChapter, Theme, mdToHtml, resolveDraftTheme } from '../types'
 import ProsePreview from './ProsePreview'
 import { splitProsePages, proseSplitCss, themeVars } from '../proseSplit'
 
@@ -45,8 +45,8 @@ body{font-family:var(--font);color:var(--text)}
 .bk-chapter-divider::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);width:320px;height:320px;border:2px solid var(--accent);opacity:0.07;border-radius:8px}
 .bk-chapter-divider::after{content:'';position:absolute;bottom:60px;left:50%;transform:translateX(-50%);width:100px;height:3px;background:var(--accent);opacity:0.5}
 .bk-chapter-no{font-size:22px;color:var(--chart-0,var(--accent));letter-spacing:0.35em;font-weight:600;position:relative;z-index:1}
-.bk-chapter-title{margin-top:26px;font-size:46px;font-weight:700;color:var(--background);max-width:1000px;line-height:1.4;position:relative;z-index:1}
-.bk-chapter-src{margin-top:20px;font-size:17px;color:var(--background);opacity:0.6;position:relative;z-index:1}
+.bk-chapter-title{margin-top:26px;font-size:46px;font-weight:700;color:var(--on-primary);max-width:1000px;line-height:1.4;position:relative;z-index:1}
+.bk-chapter-src{margin-top:20px;font-size:17px;color:var(--on-primary);opacity:0.6;position:relative;z-index:1}
 </style></head>
 <body style="${varCss};font-family:var(--font);color:var(--text)">
 <section class="bk-slide bk-chapter-divider">
@@ -93,7 +93,10 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
   const pageH = isA4 ? 1123 : 720
   const thumbW = isA4 ? 118 : 170
   const thumbH = Math.round(pageH * (thumbW / pageW))
-  const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0] || null
+  const theme = useMemo(
+    () => resolveDraftTheme(draft, themes),
+    [themes, draft.cover.theme_id, draft.cover.theme_colors],
+  )
 
   useEffect(() => {
     api.bookletThemes()

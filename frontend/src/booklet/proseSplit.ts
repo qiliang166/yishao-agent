@@ -8,6 +8,7 @@ import { Theme } from './types'
  *   backend/resources/booklet/{a4_book,ppt_book,a4_standard,ppt_standard}.html
  * 模板的 bkSplitProse 或 .bk-prose/.bk-chapter-head 版式改动时必须同步本文件，
  * 否则编排页的页数/分界与合成产物不一致。
+ * 派生变量 --ink/--on-primary 的推导公式同步自 backend/resources/booklet/themes.py。
  */
 
 const FALLBACK = {
@@ -25,23 +26,42 @@ function hexToRgbChannels(hex: string): [number, number, number] {
   return [0, 0, 0]
 }
 
+/** WCAG 2.x 相对亮度（与 themes.py _rel_luminance 同公式） */
+function relLuminance(hex: string): number {
+  const f = (v: number) => {
+    const c = v / 255
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  }
+  const [r, g, b] = hexToRgbChannels(hex)
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+}
+
+/** WCAG 对比度 1~21（与 themes.py _contrast 同公式） */
+function contrast(a: string, b: string): number {
+  const la = relLuminance(a)
+  const lb = relLuminance(b)
+  const hi = Math.max(la, lb)
+  const lo = Math.min(la, lb)
+  return (hi + 0.05) / (lo + 0.05)
+}
+
 /** 模板版式镜像（选择器统一挂在 .bkr-host 下，避免污染应用样式） */
 const A4_CSS = `
 .bkr-host .bk-sheet { width: 210mm; height: 297mm; background: var(--background); display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .bkr-host .bk-sheet-inner { flex: 1; padding: 22mm 20mm 26mm; display: flex; flex-direction: column; overflow: hidden; }
 .bkr-host .bk-chapter-head { border-left: 5px solid var(--accent); padding: 2mm 0 2mm 6mm; margin-bottom: 8mm; }
 .bkr-host .bk-chapter-no { font-size: 10.5pt; color: var(--accent); font-weight: 600; letter-spacing: 0.2em; }
-.bkr-host .bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--primary); margin-top: 1.5mm; line-height: 1.4; }
+.bkr-host .bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--ink); margin-top: 1.5mm; line-height: 1.4; }
 .bkr-host .bk-chapter-src { font-size: 9pt; opacity: 0.55; margin-top: 1.5mm; }
 .bkr-host .bk-prose { font-size: 11.5pt; line-height: 1.95; }
-.bkr-host .bk-prose h1, .bkr-host .bk-prose h2, .bkr-host .bk-prose h3, .bkr-host .bk-prose h4 { color: var(--primary); margin: 7mm 0 3.5mm; line-height: 1.5; }
+.bkr-host .bk-prose h1, .bkr-host .bk-prose h2, .bkr-host .bk-prose h3, .bkr-host .bk-prose h4 { color: var(--ink); margin: 7mm 0 3.5mm; line-height: 1.5; }
 .bkr-host .bk-prose h1 { font-size: 16pt; } .bkr-host .bk-prose h2 { font-size: 14.5pt; } .bkr-host .bk-prose h3 { font-size: 13pt; } .bkr-host .bk-prose h4 { font-size: 12pt; }
 .bkr-host .bk-prose p { margin: 3mm 0; }
 .bkr-host .bk-prose ul, .bkr-host .bk-prose ol { margin: 3mm 0 3mm 7mm; }
 .bkr-host .bk-prose li { margin: 1.5mm 0; }
 .bkr-host .bk-prose table { border-collapse: collapse; width: 100%; margin: 4mm 0; font-size: 10.5pt; }
 .bkr-host .bk-prose th, .bkr-host .bk-prose td { border: 1px solid var(--text); padding: 2mm 3mm; }
-.bkr-host .bk-prose th { background: var(--card-bg); color: var(--primary); }
+.bkr-host .bk-prose th { background: var(--card-bg); color: var(--ink); }
 .bkr-host .bk-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 3mm 5mm; margin: 4mm 0; }
 .bkr-host .bk-prose code { background: var(--card-bg); padding: 0.5mm 1.5mm; border-radius: 2px; font-size: 10pt; }
 .bkr-host .bk-prose pre { background: var(--card-bg); padding: 4mm; overflow-x: auto; margin: 4mm 0; }
@@ -53,13 +73,13 @@ const PPT_CSS = `
 .bkr-host .bk-slide { width: 1280px; height: 720px; background: var(--background); display: flex; flex-direction: column; overflow: hidden; position: relative; }
 .bkr-host .bk-prose-slide { padding: 60px 110px; }
 .bkr-host .bk-prose { font-size: 20px; line-height: 1.9; overflow-y: auto; }
-.bkr-host .bk-prose h1, .bkr-host .bk-prose h2, .bkr-host .bk-prose h3 { color: var(--primary); margin: 22px 0 12px; }
+.bkr-host .bk-prose h1, .bkr-host .bk-prose h2, .bkr-host .bk-prose h3 { color: var(--ink); margin: 22px 0 12px; }
 .bkr-host .bk-prose h1 { font-size: 32px; } .bkr-host .bk-prose h2 { font-size: 27px; } .bkr-host .bk-prose h3 { font-size: 23px; }
 .bkr-host .bk-prose p { margin: 10px 0; }
 .bkr-host .bk-prose ul, .bkr-host .bk-prose ol { margin: 10px 0 10px 26px; }
 .bkr-host .bk-prose table { border-collapse: collapse; width: 100%; margin: 14px 0; }
 .bkr-host .bk-prose th, .bkr-host .bk-prose td { border: 1px solid var(--text); padding: 8px 12px; }
-.bkr-host .bk-prose th { background: var(--card-bg); color: var(--primary); }
+.bkr-host .bk-prose th { background: var(--card-bg); color: var(--ink); }
 .bkr-host .bk-prose blockquote { border-left: 4px solid var(--accent); background: var(--card-bg); padding: 12px 18px; margin: 14px 0; }
 `
 
@@ -73,6 +93,16 @@ export function themeVars(theme?: Theme | null): Record<string, string> {
   const [ar, ag, ab] = hexToRgbChannels(c.accent)
   const [br, bgChan, bb] = hexToRgbChannels(c.bg)
   const [tr, tg, tb] = hexToRgbChannels(c.text)
+  /* 对比度派生（与 themes.py theme_css_vars 同规则）：
+     --ink = 纸面标题色；--on-primary = primary 渐变底上的文字色 */
+  const ink = contrast(c.primary, c.bg) >= 4.5 ? c.primary : c.text
+  let onPrimary: string
+  if (contrast(c.bg, c.primary) >= 4.5) {
+    onPrimary = c.bg
+  } else {
+    onPrimary = [c.bg, '#ffffff', c.text].reduce((best, cur) =>
+      contrast(cur, c.primary) > contrast(best, c.primary) ? cur : best)
+  }
   return {
     '--primary': c.primary,
     '--primary-rgb': `${pr}, ${pg}, ${pb}`,
@@ -85,6 +115,8 @@ export function themeVars(theme?: Theme | null): Record<string, string> {
     '--text-rgb': `${tr}, ${tg}, ${tb}`,
     '--card-bg': c.card_bg || FALLBACK.card_bg,
     '--font': c.font || FALLBACK.font,
+    '--ink': ink,
+    '--on-primary': onPrimary,
     '--chart-0': c['chart-0'] || c.accent,
     '--chart-1': c['chart-1'] || c.accent,
     '--chart-2': c['chart-2'] || c.accent,

@@ -35,24 +35,25 @@ body {
 .bk-cover .bk-sheet-inner { align-items: center; text-align: center; padding-top: 44mm; }
 .bk-cover-band { width: 100%; height: 8px; background: var(--accent); flex-shrink: 0; }
 .bk-cover-logo { margin-top: 26mm; max-height: 30mm; max-width: 70mm; object-fit: contain; }
-.bk-cover-title { margin-top: 22mm; font-size: 34pt; font-weight: 700; color: var(--primary); line-height: 1.35; letter-spacing: 0.08em; }
+.bk-cover-title { margin-top: 22mm; font-size: 34pt; font-weight: 700; color: var(--ink); line-height: 1.35; letter-spacing: 0.08em; }
 .bk-cover-subtitle { margin-top: 10mm; font-size: 15pt; color: var(--text); opacity: 0.75; letter-spacing: 0.2em; }
 .bk-cover-rule { width: 42mm; height: 2px; background: var(--accent); margin: 14mm auto 0; }
 .bk-cover-meta { margin-top: auto; padding-bottom: 8mm; font-size: 12pt; line-height: 2.1; color: var(--text); }
-.bk-cover-author { font-size: 14pt; font-weight: 600; color: var(--primary); }
+.bk-cover-author { font-size: 14pt; font-weight: 600; color: var(--ink); }
 
 /* ═══ 扉页 ═══ */
 .bk-flyleaf .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
-.bk-flyleaf-title { font-size: 20pt; font-weight: 600; color: var(--primary); letter-spacing: 0.15em; }
+.bk-flyleaf-title { font-size: 20pt; font-weight: 600; color: var(--ink); letter-spacing: 0.15em; }
 .bk-flyleaf-text { margin-top: 14mm; font-size: 12pt; line-height: 2.2; max-width: 130mm; white-space: pre-wrap; }
 .bk-flyleaf-info { margin-top: 20mm; font-size: 10.5pt; line-height: 2.2; color: var(--text); opacity: 0.8; }
 .bk-flyleaf-brand { margin-top: 12mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
 
 /* ═══ 目录 ═══ */
-.bk-toc-title { font-size: 22pt; font-weight: 700; color: var(--primary); text-align: center; letter-spacing: 0.3em; margin-bottom: 14mm; }
+.bk-toc-title { font-size: 22pt; font-weight: 700; color: var(--ink); text-align: center; letter-spacing: 0.3em; margin-bottom: 14mm; }
 .bk-toc-table { width: 100%; border-collapse: collapse; font-size: 12.5pt; }
 .bk-toc-table td { padding: 3mm 0; vertical-align: top; }
-.bk-toc-num { width: 14mm; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+.bk-toc-table a { color: inherit; text-decoration: none; }
+.bk-toc-num { width: 14mm; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
 .bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); }
 .bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 12mm; font-size: 11pt; }
 
@@ -60,18 +61,18 @@ body {
 .bk-chapter { page-break-before: always; break-before: page; }
 .bk-chapter-head { border-left: 5px solid var(--accent); padding: 2mm 0 2mm 6mm; margin-bottom: 8mm; }
 .bk-chapter-no { font-size: 10.5pt; color: var(--accent); font-weight: 600; letter-spacing: 0.2em; }
-.bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--primary); margin-top: 1.5mm; line-height: 1.4; }
+.bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--ink); margin-top: 1.5mm; line-height: 1.4; }
 .bk-chapter-src { font-size: 9pt; opacity: 0.55; margin-top: 1.5mm; }
 
 .bk-prose { font-size: 11.5pt; line-height: 1.95; }
-.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--primary); margin: 7mm 0 3.5mm; line-height: 1.5; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--ink); margin: 7mm 0 3.5mm; line-height: 1.5; }
 .bk-prose h1 { font-size: 16pt; } .bk-prose h2 { font-size: 14.5pt; } .bk-prose h3 { font-size: 13pt; } .bk-prose h4 { font-size: 12pt; }
 .bk-prose p { margin: 3mm 0; }
 .bk-prose ul, .bk-prose ol { margin: 3mm 0 3mm 7mm; }
 .bk-prose li { margin: 1.5mm 0; }
 .bk-prose table { border-collapse: collapse; width: 100%; margin: 4mm 0; font-size: 10.5pt; }
 .bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 2mm 3mm; }
-.bk-prose th { background: var(--card-bg); color: var(--primary); }
+.bk-prose th { background: var(--card-bg); color: var(--ink); }
 .bk-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 3mm 5mm; margin: 4mm 0; }
 .bk-prose code { background: var(--card-bg); padding: 0.5mm 1.5mm; border-radius: 2px; font-size: 10pt; }
 .bk-prose pre { background: var(--card-bg); padding: 4mm; overflow-x: auto; margin: 4mm 0; }

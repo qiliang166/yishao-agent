@@ -1,5 +1,40 @@
 ﻿# 更新日志
 
+## 2026-07-19
+
+- feat: 电子成册「内容同款配色」— 第③步一键取用 HTML 章节 :root 配色作封面主题（后端 custom 分支复用，零新增端点）
+- feat: 主题对比度派生变量 --ink/--on-primary（WCAG ≥4.5）— 六套合成模板+前端三处预览统一换色位，深色配色下标题与渐变底文字自动保持可读
+- fix: A4 目录条目 <a> 锚链接去默认蓝色下划线（3 个 A4 模板补 .bk-toc-table a 重置，第④步缩略图与合成产物同步生效）
+- fix: 第②步文档章节预览只显示一半 — iframe 高度按 body 实测内容高设置并随宽度变化重测（外层单滚动条看全文）
+
+## 2026-07-18
+
+- fix: 预览区 overflowX:hidden + overflowY:auto — 去左右保留上下滚动
+
+## 2026-07-18
+
+- fix: 排序编辑预览 overflowY:auto → hidden，内容自适应无滚动条
+
+## 2026-07-18
+
+- fix: 排序编辑预览消除三层滚动条 — 外层overflow:hidden + iframe scrolling=no
+
+## 2026-07-18
+
+- fix: BookletEditorPage 容器缺少 overflow:hidden 导致外层滚动条
+
+## 2026-07-18
+
+- fix: .panel-right overflow-y:auto → hidden 根除双层滚动条
+
+## 2026-07-18
+
+- fix: 第2/3步右侧预览框消除双层滚动条 — panel-right 覆盖 overflow:hidden
+
+## 2026-07-18
+
+- fix: 修复翻页式预览第2页TOC显示为近正方形 — .bk-toc 的 position:relative 覆盖了 .bk-slide 的 position:absolute
+
 ## 2026-07-18
 
 - fix: themes.py/proseSplit.ts 琛ヤ笂 --text-rgb 鍙橀噺鐢熸垚锛屼慨澶?TOC 鐐圭姸杈规/椤电爜棰滆壊涓嶆樉绀?

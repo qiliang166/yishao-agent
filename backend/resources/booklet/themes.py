@@ -84,6 +84,22 @@ def _hex_to_rgb_channels(hex_color: str):
     return (0, 0, 0)
 
 
+def _rel_luminance(hex_color: str) -> float:
+    """WCAG 2.x 相对亮度。"""
+    def f(c):
+        c = c / 255.0
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+    r, g, b = _hex_to_rgb_channels(hex_color)
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+
+
+def _contrast(hex_a: str, hex_b: str) -> float:
+    """WCAG 对比度（1~21）。"""
+    la, lb = _rel_luminance(hex_a), _rel_luminance(hex_b)
+    hi, lo = (la, lb) if la >= lb else (lb, la)
+    return (hi + 0.05) / (lo + 0.05)
+
+
 def _safe_css_value(key: str, val: str, fallback: str) -> str:
     """CSS 注入防护：色键仅接受 hex，font 键拒绝危险片段，否则回退默认。"""
     val = (val or "").strip()
@@ -104,15 +120,24 @@ _KEY_TO_CSS_VAR = {
 def theme_css_vars(colors: dict) -> str:
     """把主题色归一化为 VI 规范 CSS 变量声明串（缺失/非法值回退到第一套内置主题）。"""
     fallback = BUILTIN_THEMES[0]["colors"]
+    norm = {}
     parts = []
     for key in THEME_VAR_KEYS:
         val = _safe_css_value(key, (colors or {}).get(key, ""), fallback[key])
+        norm[key] = val
         css_name = _KEY_TO_CSS_VAR.get(key, key.replace("_", "-"))
         parts.append(f"--{css_name}: {val};")
     # RGB 分量变量（供 rgba(var(--primary-rgb), ...) 使用，VI 规范格式）
     for rgb_key in ("primary", "accent", "bg", "text"):
-        hex_val = (colors or {}).get(rgb_key, "") or fallback[rgb_key]
-        r, g, b = _hex_to_rgb_channels(hex_val)
+        r, g, b = _hex_to_rgb_channels(norm[rgb_key])
         css_name = _KEY_TO_CSS_VAR.get(rgb_key, rgb_key)
         parts.append(f"--{css_name}-rgb: {r}, {g}, {b};")
+    # 对比度派生变量（深色配色下固定页文字仍可读；text-on-bg 是配色自身保证的兜底）
+    ink = norm["primary"] if _contrast(norm["primary"], norm["bg"]) >= 4.5 else norm["text"]
+    if _contrast(norm["bg"], norm["primary"]) >= 4.5:
+        on_primary = norm["bg"]
+    else:
+        on_primary = max((norm["bg"], "#ffffff", norm["text"]), key=lambda c: _contrast(c, norm["primary"]))
+    parts.append(f"--ink: {ink};")
+    parts.append(f"--on-primary: {on_primary};")
     return " ".join(parts)
