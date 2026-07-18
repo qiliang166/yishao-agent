@@ -1,39 +1,89 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import DOMPurify from 'dompurify'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Theme, mdToHtml, isProseChapter } from '../types'
 import MdToolbar from './MdToolbar'
-import ProsePreview from './ProsePreview'
 
 interface Props {
   draft: BookletDraft
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
 }
 
+const FALLBACK = {
+  primary: '#18181b', accent: '#3b82f6', bg: '#ffffff', text: '#27272a',
+  card_bg: '#f4f4f5', font: "'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif",
+}
+
+const PROSE_CSS = `
+.bkp-prose { font-size: 13px; line-height: 1.95; }
+.bkp-prose h1, .bkp-prose h2, .bkp-prose h3, .bkp-prose h4 { color: var(--book-primary); margin: 14px 0 7px; line-height: 1.5; }
+.bkp-prose h1 { font-size: 19px; } .bkp-prose h2 { font-size: 17px; } .bkp-prose h3 { font-size: 15px; } .bkp-prose h4 { font-size: 14px; }
+.bkp-prose p { margin: 6px 0; }
+.bkp-prose ul, .bkp-prose ol { margin: 6px 0 6px 18px; }
+.bkp-prose li { margin: 3px 0; }
+.bkp-prose table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; }
+.bkp-prose th, .bkp-prose td { border: 1px solid var(--book-text); padding: 4px 7px; }
+.bkp-prose th { background: var(--book-card-bg); color: var(--book-primary); }
+.bkp-prose blockquote { border-left: 3px solid var(--book-accent); background: var(--book-card-bg); padding: 6px 10px; margin: 8px 0; }
+.bkp-prose code { background: var(--book-card-bg); padding: 1px 4px; border-radius: 2px; font-size: 12px; }
+.bkp-prose pre { background: var(--book-card-bg); padding: 8px; overflow-x: auto; margin: 8px 0; }
+.bkp-prose img { max-width: 100%; }
+.bkp-prose hr { border: none; border-top: 1px solid var(--book-text); opacity: 0.25; margin: 12px 0; }
+`
+
 export default function StepArrange({ draft, onChange }: Props) {
   const { confirm, prompt, toast } = useModal()
   const [selectedId, setSelectedId] = useState('')
   const [refreshingId, setRefreshingId] = useState('')
-  const [htmlDirty, setHtmlDirty] = useState(false)
   const [themes, setThemes] = useState<Theme[]>([])
+
+  const [editorMode, setEditorMode] = useState<'view' | 'edit' | 'source'>('view')
+  const [htmlDirty, setHtmlDirty] = useState(false)
+  const [textColor, setTextColor] = useState('#ffffff')
+  const [iframeKey, setIframeKey] = useState(0)
+
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const mdTaRef = useRef<HTMLTextAreaElement>(null)
+  const sourceTaRef = useRef<HTMLTextAreaElement>(null)
+  const savedRangeRef = useRef<Range | null>(null)
 
   const selected = draft.chapters.find(c => c.id === selectedId) || null
   const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0] || null
+  const isProse = selected ? isProseChapter(selected) : false
 
   useEffect(() => {
     api.bookletThemes()
       .then(list => { if (list != null) setThemes(list) })
-      .catch(() => { /* 主题加载失败时预览用默认配色，不阻断编辑 */ })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
     if (!selectedId && draft.chapters.length > 0) setSelectedId(draft.chapters[0].id)
   }, [draft.chapters.length])
 
-  useEffect(() => { setHtmlDirty(false) }, [selectedId])
+  useEffect(() => {
+    setEditorMode('view')
+    setHtmlDirty(false)
+    setIframeKey(k => k + 1)
+  }, [selectedId])
+
+  // Content HTML for the iframe — memoized to prevent spurious reloads
+  const displayHtml = useMemo(() => {
+    if (!selected) return ''
+    if (isProse) {
+      const c = { ...FALLBACK, ...(theme?.colors || {}) }
+      const bg = selected.bg_color || '#ffffff'
+      return DOMPurify.sanitize(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>
+  :root { --book-primary:${c.primary}; --book-accent:${c.accent}; --book-bg:${c.bg}; --book-text:${c.text}; --book-card-bg:${c.card_bg}; --book-font:${c.font}; }
+  body { margin:0; padding:14px 18px; font-family:var(--book-font); background:${bg}; color:var(--book-text); }
+${PROSE_CSS}
+</style></head>
+<body><div class="bkp-prose">${mdToHtml(selected.content)}</div></body></html>`, { WHOLE_DOCUMENT: true })
+    }
+    const html = selected.content_html || selected.content || ''
+    return DOMPurify.sanitize(html, { WHOLE_DOCUMENT: true })
+  }, [selected, isProse, theme])
 
   const move = (idx: number, dir: -1 | 1) => {
     onChange(d => {
@@ -83,40 +133,174 @@ export default function StepArrange({ draft, onChange }: Props) {
     }
   }
 
-  const handleEditText = (id: string, text: string) => {
+  const setChapterBg = (id: string, bg: string) => {
+    onChange(d => ({ ...d, chapters: d.chapters.map(c => c.id === id ? { ...c, bg_color: bg } : c) }))
+    setIframeKey(k => k + 1)
+  }
+
+  // ── Unified editor handlers ──
+
+  const saveIframeSelection = () => {
+    const iframe = iframeRef.current
+    if (!iframe?.contentDocument) return
+    const win = iframe.contentWindow
+    if (!win) return
+    const sel = win.getSelection()
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange()
+    }
+  }
+
+  const restoreIframeSelection = (): Range | null => {
+    const range = savedRangeRef.current
+    if (!range) return null
+    const iframe = iframeRef.current
+    if (!iframe?.contentDocument) return null
+    const win = iframe.contentWindow
+    if (!win) return null
+    const sel = win.getSelection()
+    if (sel) {
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+    return range
+  }
+
+  const execCmd = (command: string, value?: string) => {
+    const iframe = iframeRef.current
+    if (!iframe?.contentDocument) return
+    iframe.contentWindow?.focus()
+    try { iframe.contentDocument.execCommand(command, false, value) } catch {}
+  }
+
+  const applyContentEditable = (enable: boolean) => {
+    const doc = iframeRef.current?.contentDocument
+    if (!doc) return
+    if (enable) {
+      doc.body.setAttribute('contenteditable', 'true')
+      doc.body.style.cursor = 'text'
+    } else {
+      doc.body.removeAttribute('contenteditable')
+      doc.body.style.cursor = ''
+    }
+  }
+
+  const extractIframeHtml = (): string | null => {
+    const doc = iframeRef.current?.contentDocument
+    if (!doc || !selected) return null
+    return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
+  }
+
+  const toggleEdit = () => {
+    if (editorMode === 'edit') {
+      // Finish editing: extract HTML, update draft
+      const html = extractIframeHtml()
+      if (html) {
+        onChange(d => ({
+          ...d,
+          chapters: d.chapters.map(c => {
+            if (c.id !== selected!.id) return c
+            const upd: any = { ...c, content_html: html }
+            if (!isProseChapter(c)) upd.content = html
+            return upd
+          }),
+        }))
+        setHtmlDirty(true)
+      }
+      applyContentEditable(false)
+      setEditorMode('view')
+    } else {
+      setEditorMode('edit')
+      applyContentEditable(true)
+    }
+  }
+
+  const toggleSource = () => {
+    if (editorMode === 'source') {
+      setEditorMode('view')
+      setIframeKey(k => k + 1)
+    } else {
+      if (editorMode === 'edit') {
+        const html = extractIframeHtml()
+        if (html) {
+          onChange(d => ({
+            ...d,
+            chapters: d.chapters.map(c => {
+              if (c.id !== selected!.id) return c
+              const upd: any = { ...c, content_html: html }
+              if (!isProseChapter(c)) upd.content = html
+              return upd
+            }),
+          }))
+          setHtmlDirty(true)
+        }
+        applyContentEditable(false)
+      }
+      setEditorMode('source')
+    }
+  }
+
+  const handleSourceChange = (text: string) => {
+    if (!selected) return
     onChange(d => ({
       ...d,
-      chapters: d.chapters.map(c => c.id === id
+      chapters: d.chapters.map(c => c.id === selected.id
         ? { ...c, content: text, content_html: mdToHtml(text) }
         : c),
     }))
   }
 
-  const setChapterBg = (id: string, bg: string) => {
-    onChange(d => ({ ...d, chapters: d.chapters.map(c => c.id === id ? { ...c, bg_color: bg } : c) }))
+  const handleSave = () => {
+    if (!selected) return
+    if (editorMode === 'edit') {
+      const html = extractIframeHtml()
+      if (html) {
+        onChange(d => ({
+          ...d,
+          chapters: d.chapters.map(c => {
+            if (c.id !== selected.id) return c
+            const upd: any = { ...c, content_html: html }
+            if (!isProseChapter(c)) upd.content = html
+            return upd
+          }),
+        }))
+      }
+      applyContentEditable(false)
+      setEditorMode('view')
+    }
+    setHtmlDirty(false)
+    toast('修改已存入本章（原明细不变）', 'success')
   }
 
-  const handleSaveHtmlEdit = () => {
-    const doc = iframeRef.current?.contentDocument
-    if (!doc || !selected) return
-    try {
-      const htmlOut = '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
-      onChange(d => ({
-        ...d,
-        chapters: d.chapters.map(c => c.id === selected.id
-          ? { ...c, content: htmlOut, content_html: htmlOut }
-          : c),
-      }))
-      setHtmlDirty(false)
-      toast('页面文字修改已存入本章（原明细不变）', 'success')
-    } catch (e: any) {
-      toast(`保存修改失败: ${e?.message || e}`, 'error')
+  const applyColorToSelection = (type: 'foreground' | 'background', color: string) => {
+    const range = restoreIframeSelection()
+    if (!range || range.collapsed) {
+      const iframe = iframeRef.current
+      if (iframe?.contentDocument) {
+        iframe.contentWindow?.focus()
+        try {
+          iframe.contentDocument.execCommand(
+            type === 'foreground' ? 'foreColor' : 'backColor', false, color
+          )
+        } catch {}
+      }
+      return
     }
+    const styleProp = type === 'foreground' ? 'color' : 'background-color'
+    const span = document.createElement('span')
+    span.style.setProperty(styleProp, color)
+    try {
+      range.surroundContents(span)
+    } catch {
+      const fragment = range.extractContents()
+      span.appendChild(fragment)
+      range.insertNode(span)
+    }
+    savedRangeRef.current = null
   }
 
   return (
     <div className="panel-grid">
-      {/* overflow hidden 覆盖全局 .panel-left 滚动，让章节列表在卡片内滚动 */}
       <div className="panel-left" style={{ overflow: 'hidden' }}>
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div className="card-title" style={{ flexShrink: 0 }}>🗂 章节顺序</div>
@@ -172,18 +356,132 @@ export default function StepArrange({ draft, onChange }: Props) {
         </div>
       </div>
 
-      <div className="panel-right" style={{ overflow: 'hidden' }}>
+      {/* ── Unified editor: right panel ── */}
+      <div className="panel-right">
         {!selected ? (
           <div className="card" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
             左侧选择一个章节进行编辑
           </div>
-        ) : isProseChapter(selected) ? (
-          <>
-            <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <div className="card-title" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                <span>✏️ 编辑「{selected.title}」</span>
-                <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-secondary)' }}>（编辑册子里的副本，不影响原明细）</span>
-                <span style={{ flex: 1 }} />
+        ) : (
+          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+            {/* Toolbar */}
+            <div className="card-title" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              <span>✏️ 编辑「{selected.title}」</span>
+              <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-secondary)' }}>
+                （编辑册子里的副本，不影响原明细）
+              </span>
+              <span style={{ flex: 1 }} />
+
+              {htmlDirty && (
+                <span style={{ fontSize: 10, color: 'var(--warning, #d97706)', marginRight: 4 }}>有未保存的修改</span>
+              )}
+
+              {/* WYSIWYG toggle — only for non-prose (HTML) chapters */}
+              {!isProse && (
+                <button
+                  onClick={toggleEdit}
+                  className="btn btn-ghost btn-sm"
+                  style={{
+                    fontSize: 11,
+                    background: editorMode === 'edit' ? 'var(--primary)' : undefined,
+                    color: editorMode === 'edit' ? '#fff' : undefined,
+                  }}
+                >
+                  {editorMode === 'edit' ? '完成编辑' : '编辑文字'}
+                </button>
+              )}
+
+              {/* Source toggle */}
+              <button
+                onClick={toggleSource}
+                className="btn btn-ghost btn-sm"
+                style={{
+                  fontSize: 11,
+                  background: editorMode === 'source' ? 'var(--primary)' : undefined,
+                  color: editorMode === 'source' ? '#fff' : undefined,
+                }}
+              >
+                {editorMode === 'source' ? '预览' : '源码'}
+              </button>
+
+              {/* Save */}
+              <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={handleSave}>
+                💾 保存修改
+              </button>
+            </div>
+
+            {/* Formatting toolbar — visible only in edit mode */}
+            {editorMode === 'edit' && (
+              <div style={{
+                display: 'flex', gap: 2, alignItems: 'center', flexShrink: 0,
+                padding: '4px 8px', marginBottom: 8,
+                background: 'var(--bg-secondary, #f1f5f9)', borderRadius: 6,
+              }}>
+                <button onClick={() => execCmd('bold')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, fontWeight: 700, minWidth: 28 }} title="加粗">B</button>
+                <button onClick={() => execCmd('italic')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, fontStyle: 'italic', minWidth: 28 }} title="斜体">I</button>
+                <button onClick={() => execCmd('underline')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, textDecoration: 'underline', minWidth: 28 }} title="下划线">U</button>
+                <button onClick={() => execCmd('strikeThrough')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, textDecoration: 'line-through', minWidth: 28 }} title="删除线">S</button>
+                <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
+                <button onClick={() => execCmd('undo')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, minWidth: 28 }} title="撤销">↶</button>
+                <button onClick={() => execCmd('redo')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 13, minWidth: 28 }} title="重做">↷</button>
+                <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
+                <button onClick={() => execCmd('decreaseFontSize')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, minWidth: 22 }} title="缩小字号">A-</button>
+                <button onClick={() => execCmd('increaseFontSize')}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, minWidth: 22 }} title="增大字号">A+</button>
+                <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
+                {/* Text color */}
+                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  <input type="color" value={textColor}
+                    onPointerDown={(e) => { e.preventDefault(); saveIframeSelection() }}
+                    onChange={e => { setTextColor(e.target.value); applyColorToSelection('foreground', e.target.value) }}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                    title="字体颜色" />
+                  <span className="btn btn-ghost btn-sm" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, pointerEvents: 'none' }}>
+                    <span style={{
+                      display: 'inline-block', width: 13, height: 13, borderRadius: 2,
+                      background: textColor, border: '1px solid rgba(0,0,0,0.15)',
+                    }} />A</span>
+                </div>
+                {/* Background color */}
+                <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                  <input type="color" value="#ffff00"
+                    onPointerDown={(e) => { e.preventDefault(); saveIframeSelection() }}
+                    onChange={e => applyColorToSelection('background', e.target.value)}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                    title="背景色" />
+                  <span className="btn btn-ghost btn-sm" style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3, pointerEvents: 'none' }}>
+                    <span style={{
+                      display: 'inline-block', width: 13, height: 13, borderRadius: 2,
+                      background: '#ffff00', border: '1px solid rgba(0,0,0,0.15)',
+                    }} />A</span>
+                </div>
+              </div>
+            )}
+
+            {/* MD toolbar — visible only in source mode for prose chapters */}
+            {editorMode === 'source' && isProse && (
+              <MdToolbar textareaRef={sourceTaRef} value={selected.content}
+                onChange={handleSourceChange} />
+            )}
+
+            {/* Page background color — always visible for prose chapters */}
+            {isProse && (
+              <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <label style={{ fontWeight: 400, fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                   页面底色
                   <input type="color" value={selected.bg_color || '#ffffff'}
@@ -195,44 +493,42 @@ export default function StepArrange({ draft, onChange }: Props) {
                     onClick={() => setChapterBg(selected.id, '')}>还原默认底色</button>
                 )}
               </div>
-              <MdToolbar textareaRef={mdTaRef} value={selected.content}
-                onChange={text => handleEditText(selected.id, text)} />
-              <textarea ref={mdTaRef} className="form-input" value={selected.content}
-                onChange={e => handleEditText(selected.id, e.target.value)}
+            )}
+
+            {/* Content area */}
+            {editorMode === 'source' ? (
+              <textarea ref={sourceTaRef} className="form-input" value={selected.content}
+                onChange={e => handleSourceChange(e.target.value)}
                 style={{ flex: 1, minHeight: 120, resize: 'none', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }} />
-            </div>
-            <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <div className="card-title" style={{ flexShrink: 0 }}>
-                👁 预览
-                <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-secondary)' }}>
-                  （与成书同款排版{theme ? ` · 主题「${theme.name}」` : ''}，第③步换主题这里同步变）
-                </span>
+            ) : (
+              <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+                <iframe
+                  ref={iframeRef}
+                  key={iframeKey}
+                  srcDoc={displayHtml}
+                  title="chapter-preview"
+                  onLoad={() => {
+                    if (editorMode === 'edit') {
+                      applyContentEditable(true)
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    minHeight: 300,
+                    border: '1px solid var(--border)',
+                    borderRadius: 5,
+                    background: '#fff',
+                    display: 'block',
+                  }}
+                />
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                <ProsePreview html={mdToHtml(selected.content)} theme={theme} bgColor={selected.bg_color || undefined} />
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-            <div className="card-title" style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-              <span style={{ flex: 1 }}>🖥 页面章节「{selected.title}」— 可直接点击页面内文字修改</span>
-              {htmlDirty && <span style={{ fontSize: 10, color: 'var(--warning, #d97706)', marginRight: 8 }}>有未保存的修改</span>}
-              <button className="btn btn-primary btn-sm" onClick={handleSaveHtmlEdit}>💾 保存文字修改</button>
-            </div>
-            <iframe ref={iframeRef} srcDoc={DOMPurify.sanitize(selected.content, { WHOLE_DOCUMENT: true })} title="chapter-edit"
-              style={{ flex: 1, border: '1px solid var(--border)', borderRadius: 5, background: '#fff', minHeight: 300 }}
-              onLoad={() => {
-                const doc = iframeRef.current?.contentDocument
-                if (doc) {
-                  try {
-                    doc.designMode = 'on'
-                    doc.addEventListener('input', () => setHtmlDirty(true))
-                  } catch { /* 只读环境忽略 */ }
-                }
-              }} />
+            )}
+
             <div className="card-hint" style={{ marginTop: 6, marginBottom: 0, flexShrink: 0 }}>
-              仅支持文字级修改；改动只存入本册子的副本{selected.source_type !== 'custom' ? '，「⟳ 从源刷新」可还原为明细最新内容' : ''}。
+              {isProse
+                ? '默认显示排版预览；点击「源码」可编辑 Markdown 原文，点击「💾 保存修改」存入草稿。'
+                : `点击「编辑文字」可对页面内文字进行修改；点击「源码」可编辑原始 HTML。改动只存入本册子的副本${selected.source_type !== 'custom' ? '，「⟳ 从源刷新」可还原为明细最新内容' : ''}。`
+              }
             </div>
           </div>
         )}
