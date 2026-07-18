@@ -1406,6 +1406,28 @@ def api_download_all(project_id: str, request: Request):
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_dl}"})
 
 
+def _resolve_selected_filepath(project_path: str, filename: str, download_url: str):
+    """定位前端文件清单项的磁盘路径：/api/exports/ 的 PPT 导出文件走 run 目录，否则回退项目文件夹。"""
+    if download_url and download_url.startswith("/api/exports/"):
+        parts = download_url.replace("/api/exports/", "").split("/", 1)
+        if len(parts) == 2:
+            run_id, rf = parts
+            run_dir = _run_dirs.get(run_id)
+            if not run_dir:
+                candidate = os.path.join(EXPORT_DIR, run_id)
+                if os.path.isdir(candidate):
+                    run_dir = candidate
+            if run_dir:
+                candidate = os.path.join(run_dir, rf)
+                if os.path.isfile(candidate):
+                    return candidate
+    if project_path and os.path.exists(project_path):
+        candidate = os.path.join(project_path, filename)
+        if filename and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 @app.post("/api/projects/{project_id}/download-selected")
 async def api_download_selected(project_id: str, request: Request):
     """Download selected files as a zip archive."""
@@ -1445,27 +1467,7 @@ async def api_download_selected(project_id: str, request: Request):
             display_name = fd.get("display_name", filename)
             arcname = display_name or filename
 
-            # Try to resolve the actual file path
-            filepath = None
-            if download_url and download_url.startswith("/api/exports/"):
-                # PPT export file: parse run_id and filename from URL
-                parts = download_url.replace("/api/exports/", "").split("/", 1)
-                if len(parts) == 2:
-                    run_id, rf = parts
-                    run_dir = _run_dirs.get(run_id)
-                    if not run_dir:
-                        candidate = os.path.join(EXPORT_DIR, run_id)
-                        if os.path.isdir(candidate):
-                            run_dir = candidate
-                    if run_dir:
-                        candidate = os.path.join(run_dir, rf)
-                        if os.path.isfile(candidate):
-                            filepath = candidate
-
-            if not filepath and os.path.exists(path):
-                candidate = os.path.join(path, filename)
-                if os.path.isfile(candidate):
-                    filepath = candidate
+            filepath = _resolve_selected_filepath(path, filename, download_url)
 
             if filepath:
                 # Ensure unique archive names
@@ -5343,6 +5345,78 @@ def api_downloadable_projects(user=Depends(get_current_user)):
         return {"projects": projects}
     finally:
         db.close()
+
+
+@app.post("/api/member/download-batch")
+async def api_member_download_batch(request: Request, user=Depends(get_current_user)):
+    """跨项目批量下载：勾选的文件打进一个 zip，按项目名分文件夹。
+
+    先全量校验（逐项目访问权 + 逐文件解锁校验并记 download_logs），任一失败整单拒绝
+    且 rollback 不落日志；zip 打包成功后才 commit。
+    """
+    body = await request.json()
+    groups = body.get("projects", [])
+    if not groups:
+        raise HTTPException(status_code=400, detail="请提供要下载的项目")
+    total_files = sum(len(g.get("files", [])) for g in groups)
+    if total_files == 0:
+        raise HTTPException(status_code=400, detail="请提供要下载的文件")
+    if total_files > 500:
+        raise HTTPException(status_code=400, detail=f"单次最多打包 500 个文件（当前 {total_files} 个），请分批下载")
+
+    ip = _get_client_ip(request)
+    import zipfile, io
+    buf = io.BytesIO()
+    added = set()
+    db = get_db()
+    try:
+        for g in groups:
+            pid = g.get("project_id", "")
+            verify_project_access(pid, user)
+            for fd in g.get("files", []):
+                if not _check_unlock_and_log(db, user, pid, fd.get("filename", ""), "zip_batch", ip):
+                    raise HTTPException(status_code=403, detail="缺少权限: stage5.download")
+
+        used_folders = {}
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for g in groups:
+                pid = g.get("project_id", "")
+                proj = _get_project(pid)
+                folder = "".join(c for c in (proj["name"] if proj else pid) if c.isalnum() or c in "._- ()（）").strip() or pid[:8]
+                if used_folders.get(folder, pid) != pid:
+                    folder = f"{folder}_{pid[:6]}"
+                used_folders[folder] = pid
+                path = resolve_project_storage(pid, auto_create=False)
+                for fd in g.get("files", []):
+                    filename = fd.get("filename", "")
+                    filepath = _resolve_selected_filepath(path, filename, fd.get("download_url", ""))
+                    if not filepath:
+                        continue
+                    arcname = f"{folder}/{fd.get('display_name') or filename}"
+                    if arcname in added:
+                        base, ext = os.path.splitext(arcname)
+                        i = 1
+                        while f"{base}_{i}{ext}" in added:
+                            i += 1
+                        arcname = f"{base}_{i}{ext}"
+                    added.add(arcname)
+                    zf.write(filepath, arcname)
+
+        if len(added) == 0:
+            raise HTTPException(status_code=404, detail="没有找到可下载的文件")
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+    buf.seek(0)
+    from urllib.parse import quote
+    from datetime import datetime
+    safe_dl = quote(f"批量下载_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip", safe="")
+    return Response(content=buf.getvalue(), media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_dl}"})
 
 
 @app.get("/api/member/unlocked-projects")

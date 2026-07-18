@@ -566,6 +566,34 @@ export const api = {
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
     URL.revokeObjectURL(objUrl)
   },
+  /** 跨项目批量下载：勾选文件打进一个 zip，按项目名分文件夹（会员下载页用） */
+  downloadBatch: async (projects: { project_id: string; files: { filename: string; download_url?: string; display_name?: string }[] }[]) => {
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+    const res = await fetch(`${BASE}/api/member/download-batch`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ projects }),
+    })
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`
+      try {
+        const err = await res.json()
+        if (err?.detail) msg = err.detail
+      } catch { /* 非 JSON 错误体，保留 HTTP 状态码 */ }
+      throw new Error(msg)
+    }
+    let filename = 'download.zip'
+    const cd = res.headers.get('Content-Disposition')
+    if (cd) {
+      const match = cd.match(/filename\*=UTF-8''([^;]+)/) || cd.match(/filename="?([^";]+)"?/)
+      if (match) filename = decodeURIComponent(match[1])
+    }
+    const blob = await res.blob()
+    const objUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = objUrl; a.download = filename
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(objUrl)
+  },
 
   // PPT
   generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, projectId?: string) =>
