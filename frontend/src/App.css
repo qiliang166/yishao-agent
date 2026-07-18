@@ -316,7 +316,7 @@
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 /* ═══ Cards ═══ */
