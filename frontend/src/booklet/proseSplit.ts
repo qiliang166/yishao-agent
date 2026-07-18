@@ -72,6 +72,7 @@ export function themeVars(theme?: Theme | null): Record<string, string> {
   const [pr, pg, pb] = hexToRgbChannels(c.primary)
   const [ar, ag, ab] = hexToRgbChannels(c.accent)
   const [br, bgChan, bb] = hexToRgbChannels(c.bg)
+  const [tr, tg, tb] = hexToRgbChannels(c.text)
   return {
     '--primary': c.primary,
     '--primary-rgb': `${pr}, ${pg}, ${pb}`,
@@ -81,6 +82,7 @@ export function themeVars(theme?: Theme | null): Record<string, string> {
     '--background': c.bg,
     '--background-rgb': `${br}, ${bgChan}, ${bb}`,
     '--text': c.text,
+    '--text-rgb': `${tr}, ${tg}, ${tb}`,
     '--card-bg': c.card_bg || FALLBACK.card_bg,
     '--font': c.font || FALLBACK.font,
     '--chart-0': c['chart-0'] || c.accent,

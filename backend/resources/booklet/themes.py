@@ -110,7 +110,7 @@ def theme_css_vars(colors: dict) -> str:
         css_name = _KEY_TO_CSS_VAR.get(key, key.replace("_", "-"))
         parts.append(f"--{css_name}: {val};")
     # RGB 分量变量（供 rgba(var(--primary-rgb), ...) 使用，VI 规范格式）
-    for rgb_key in ("primary", "accent", "bg"):
+    for rgb_key in ("primary", "accent", "bg", "text"):
         hex_val = (colors or {}).get(rgb_key, "") or fallback[rgb_key]
         r, g, b = _hex_to_rgb_channels(hex_val)
         css_name = _KEY_TO_CSS_VAR.get(rgb_key, rgb_key)
