@@ -9,10 +9,10 @@
 :root { {{THEME_CSS_VARS}} }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html, body { height: 100%; background: var(--book-desk); }
+html, body { height: 100%; background: var(--desk); }
 body {
-  font-family: var(--book-font);
-  color: var(--book-text);
+  font-family: var(--font);
+  color: var(--text);
   overflow: hidden;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
@@ -23,7 +23,7 @@ body {
 .bk-sheet {
   width: 210mm;
   height: 297mm;
-  background: var(--book-bg);
+  background: var(--background);
   position: absolute; display: none; overflow: hidden;
   transform-origin: center center;
 }
@@ -32,56 +32,50 @@ body {
 
 /* ═══ 封面 ═══ */
 .bk-cover .bk-sheet-inner { align-items: center; text-align: center; padding-top: 44mm; }
-.bk-cover-band { width: 100%; height: 8px; background: var(--book-accent); flex-shrink: 0; }
+.bk-cover-band { width: 100%; height: 8px; background: var(--accent); flex-shrink: 0; }
 .bk-cover-logo { margin-top: 26mm; max-height: 30mm; max-width: 70mm; object-fit: contain; }
-.bk-cover-title { margin-top: 22mm; font-size: 34pt; font-weight: 700; color: var(--book-primary); line-height: 1.35; letter-spacing: 0.08em; }
-.bk-cover-subtitle { margin-top: 10mm; font-size: 15pt; color: var(--book-text); opacity: 0.75; letter-spacing: 0.2em; }
-.bk-cover-rule { width: 42mm; height: 2px; background: var(--book-accent); margin: 14mm auto 0; }
-.bk-cover-meta { margin-top: auto; padding-bottom: 8mm; font-size: 12pt; line-height: 2.1; color: var(--book-text); }
-.bk-cover-author { font-size: 14pt; font-weight: 600; color: var(--book-primary); }
+.bk-cover-title { margin-top: 22mm; font-size: 34pt; font-weight: 700; color: var(--primary); line-height: 1.35; letter-spacing: 0.08em; }
+.bk-cover-subtitle { margin-top: 10mm; font-size: 15pt; color: var(--text); opacity: 0.75; letter-spacing: 0.2em; }
+.bk-cover-rule { width: 42mm; height: 2px; background: var(--accent); margin: 14mm auto 0; }
+.bk-cover-meta { margin-top: auto; padding-bottom: 8mm; font-size: 12pt; line-height: 2.1; color: var(--text); }
+.bk-cover-author { font-size: 14pt; font-weight: 600; color: var(--primary); }
 
 /* ═══ 扉页 ═══ */
 .bk-flyleaf .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
-.bk-flyleaf-title { font-size: 20pt; font-weight: 600; color: var(--book-primary); letter-spacing: 0.15em; }
+.bk-flyleaf-title { font-size: 20pt; font-weight: 600; color: var(--primary); letter-spacing: 0.15em; }
 .bk-flyleaf-text { margin-top: 14mm; font-size: 12pt; line-height: 2.2; max-width: 130mm; white-space: pre-wrap; }
-.bk-flyleaf-info { margin-top: 20mm; font-size: 10.5pt; line-height: 2.2; color: var(--book-text); opacity: 0.8; }
+.bk-flyleaf-info { margin-top: 20mm; font-size: 10.5pt; line-height: 2.2; color: var(--text); opacity: 0.8; }
 .bk-flyleaf-brand { margin-top: 12mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
 
 /* ═══ 目录 ═══ */
-.bk-toc-title { font-size: 22pt; font-weight: 700; color: var(--book-primary); text-align: center; letter-spacing: 0.3em; margin-bottom: 14mm; }
-.bk-toc-list { list-style: none; }
-.bk-toc-list li { margin-bottom: 6mm; }
-.bk-toc-list a {
-  display: flex; align-items: baseline; text-decoration: none; color: var(--book-text);
-  font-size: 12.5pt; line-height: 1.7; cursor: pointer;
-}
-.bk-toc-num {
-  flex-shrink: 0; width: 14mm; font-weight: 700; color: var(--book-accent); font-variant-numeric: tabular-nums;
-}
-.bk-toc-label { flex-shrink: 1; }
-.bk-toc-dots { flex: 1; margin: 0 3mm; border-bottom: 1.5px dotted var(--book-text); opacity: 0.35; transform: translateY(-3px); }
+.bk-toc-title { font-size: 22pt; font-weight: 700; color: var(--primary); text-align: center; letter-spacing: 0.3em; margin-bottom: 14mm; }
+.bk-toc-table { width: 100%; border-collapse: collapse; font-size: 12.5pt; }
+.bk-toc-table td { padding: 3mm 0; vertical-align: top; }
+.bk-toc-num { width: 14mm; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+.bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); }
+.bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 12mm; font-size: 11pt; }
 
 /* ═══ 章节正文 ═══ */
 .bk-chapter { page-break-before: always; break-before: page; }
-.bk-chapter-head { border-left: 5px solid var(--book-accent); padding: 2mm 0 2mm 6mm; margin-bottom: 8mm; }
-.bk-chapter-no { font-size: 10.5pt; color: var(--book-accent); font-weight: 600; letter-spacing: 0.2em; }
-.bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--book-primary); margin-top: 1.5mm; line-height: 1.4; }
+.bk-chapter-head { border-left: 5px solid var(--accent); padding: 2mm 0 2mm 6mm; margin-bottom: 8mm; }
+.bk-chapter-no { font-size: 10.5pt; color: var(--accent); font-weight: 600; letter-spacing: 0.2em; }
+.bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--primary); margin-top: 1.5mm; line-height: 1.4; }
 .bk-chapter-src { font-size: 9pt; opacity: 0.55; margin-top: 1.5mm; }
 
 .bk-prose { font-size: 11.5pt; line-height: 1.95; }
-.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--book-primary); margin: 7mm 0 3.5mm; line-height: 1.5; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--primary); margin: 7mm 0 3.5mm; line-height: 1.5; }
 .bk-prose h1 { font-size: 16pt; } .bk-prose h2 { font-size: 14.5pt; } .bk-prose h3 { font-size: 13pt; } .bk-prose h4 { font-size: 12pt; }
 .bk-prose p { margin: 3mm 0; }
 .bk-prose ul, .bk-prose ol { margin: 3mm 0 3mm 7mm; }
 .bk-prose li { margin: 1.5mm 0; }
 .bk-prose table { border-collapse: collapse; width: 100%; margin: 4mm 0; font-size: 10.5pt; }
-.bk-prose th, .bk-prose td { border: 1px solid var(--book-text); padding: 2mm 3mm; }
-.bk-prose th { background: var(--book-card-bg); color: var(--book-primary); }
-.bk-prose blockquote { border-left: 3px solid var(--book-accent); background: var(--book-card-bg); padding: 3mm 5mm; margin: 4mm 0; }
-.bk-prose code { background: var(--book-card-bg); padding: 0.5mm 1.5mm; border-radius: 2px; font-size: 10pt; }
-.bk-prose pre { background: var(--book-card-bg); padding: 4mm; overflow-x: auto; margin: 4mm 0; }
+.bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 2mm 3mm; }
+.bk-prose th { background: var(--card-bg); color: var(--primary); }
+.bk-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 3mm 5mm; margin: 4mm 0; }
+.bk-prose code { background: var(--card-bg); padding: 0.5mm 1.5mm; border-radius: 2px; font-size: 10pt; }
+.bk-prose pre { background: var(--card-bg); padding: 4mm; overflow-x: auto; margin: 4mm 0; }
 .bk-prose img { max-width: 100%; }
-.bk-prose hr { border: none; border-top: 1px solid var(--book-text); opacity: 0.25; margin: 6mm 0; }
+.bk-prose hr { border: none; border-top: 1px solid var(--text); opacity: 0.25; margin: 6mm 0; }
 
 /* ═══ 课件嵌入页（iframe 隔离，避免样式互染） ═══ */
 .bk-embed-sheet { padding: 0; align-items: center; justify-content: center; }
@@ -89,7 +83,7 @@ body {
 
 /* ═══ 封底 ═══ */
 .bk-back .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
-.bk-back-band { width: 100%; height: 8px; background: var(--book-primary); flex-shrink: 0; margin-top: auto; }
+.bk-back-band { width: 100%; height: 8px; background: var(--primary); flex-shrink: 0; margin-top: auto; }
 .bk-back-text { font-size: 12pt; line-height: 2.4; max-width: 125mm; white-space: pre-wrap; }
 .bk-back-brand { margin-top: 22mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
 
@@ -164,16 +158,17 @@ body {
   <!--/BK:FLYLEAF-->
 
   <!-- ═══ 目录 ═══ -->
-  <!--BK:TOC-->
-  <section class="bk-sheet bk-toc">
-    <div class="bk-sheet-inner">
-      <div class="bk-toc-title">目 录</div>
-      <ul class="bk-toc-list">
-        {{TOC_ENTRIES}}
-      </ul>
-    </div>
-  </section>
-  <!--/BK:TOC-->
+      <!-- ═══ 目录 ═══ -->
+    <!--BK:TOC-->
+    <section class="bk-sheet bk-toc">
+      <div class="bk-sheet-inner">
+        <div class="bk-toc-title">目 录</div>
+        <table class="bk-toc-table">
+          {{TOC_ENTRIES}}
+        </table>
+      </div>
+    </section>
+    <!--/BK:TOC-->
 
   <!-- ═══ 章节正文 ═══ -->
   {{CHAPTERS}}
@@ -366,7 +361,7 @@ window.__BK_PROSE_ARRANGE = {{PROSE_ARRANGE}};
   });
 
   // 目录点击跳转：a4 目录用 href="#bk-ch-N" 锚点 → 定位所在纸页
-  document.querySelectorAll('.bk-toc-list a[href^="#"]').forEach(function (a) {
+  document.querySelectorAll('.bk-toc-table a[href^="#"]').forEach(function (a) {
     a.addEventListener('click', function (e) {
       e.preventDefault();
       var target = document.getElementById(a.getAttribute('href').slice(1));

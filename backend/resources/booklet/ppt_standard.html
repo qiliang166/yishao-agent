@@ -9,10 +9,10 @@
 :root { {{THEME_CSS_VARS}} }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { background: var(--book-desk); overflow-x: hidden; }
+html { background: var(--desk); overflow-x: hidden; }
 body {
-  font-family: var(--book-font);
-  color: var(--book-text);
+  font-family: var(--font);
+  color: var(--text);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
   padding: 28px 0;
@@ -20,7 +20,7 @@ body {
 
 /* ═══ 标准页（PDF 型）：固定 16:9 页尺寸，一页接一页瀑布式排布 ═══ */
 .bk-slide {
-  width: 1280px; height: 720px; background: var(--book-bg);
+  width: 1280px; height: 720px; background: var(--background);
   position: relative; display: flex; flex-direction: column;
   margin: 0 auto 28px;
   box-shadow: 0 4px 24px rgba(0,0,0,0.35);
@@ -29,44 +29,42 @@ body {
 }
 
 /* ═══ 封面页：渐变主视觉，匹配内容片 hero 暗色渐变风格 ═══ */
-.bk-cover { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--book-primary) 0%, var(--book-secondary, var(--book-primary)) 100%); }
-.bk-cover-band { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--book-accent), var(--book-chart-3, var(--book-accent)), var(--book-accent)); }
+.bk-cover { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary, var(--primary)) 100%); }
+.bk-cover-band { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--accent), var(--chart-3, var(--accent)), var(--accent)); }
 .bk-cover-logo { max-height: 110px; max-width: 300px; object-fit: contain; margin-bottom: 36px; position: relative; z-index: 1; }
-.bk-cover-title { font-size: 58px; font-weight: 700; color: var(--book-bg); letter-spacing: 0.06em; line-height: 1.3; max-width: 1080px; position: relative; z-index: 1; }
-.bk-cover-subtitle { margin-top: 22px; font-size: 24px; color: var(--book-bg); opacity: 0.8; letter-spacing: 0.2em; position: relative; z-index: 1; }
-.bk-cover-rule { width: 140px; height: 3px; background: var(--book-accent); margin: 34px auto 0; position: relative; z-index: 1; }
-.bk-cover-meta { margin-top: 40px; font-size: 19px; line-height: 1.9; color: var(--book-bg); opacity: 0.75; position: relative; z-index: 1; }
-.bk-cover-author { font-size: 23px; font-weight: 600; color: var(--book-bg); }
+.bk-cover-title { font-size: 58px; font-weight: 700; color: var(--background); letter-spacing: 0.06em; line-height: 1.3; max-width: 1080px; position: relative; z-index: 1; }
+.bk-cover-subtitle { margin-top: 22px; font-size: 24px; color: var(--background); opacity: 0.8; letter-spacing: 0.2em; position: relative; z-index: 1; }
+.bk-cover-rule { width: 140px; height: 3px; background: var(--accent); margin: 34px auto 0; position: relative; z-index: 1; }
+.bk-cover-meta { margin-top: 40px; font-size: 19px; line-height: 1.9; color: var(--background); opacity: 0.75; position: relative; z-index: 1; }
+.bk-cover-author { font-size: 23px; font-weight: 600; color: var(--background); }
 /* 右下角旋转菱形装饰 */
-.bk-cover::after { content: ''; position: absolute; bottom: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--book-accent); opacity: 0.15; transform: rotate(45deg); border-radius: 6px; }
+.bk-cover::after { content: ''; position: absolute; bottom: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--accent); opacity: 0.15; transform: rotate(45deg); border-radius: 6px; }
 
-/* ═══ 目录页：顶部颜色洗纹 + 图表色编号循环 ═══ */
-.bk-toc { padding: 70px 120px; background: linear-gradient(180deg, rgba(var(--book-primary-r,0), var(--book-primary-g,0), var(--book-primary-b,0), 0.04) 0%, var(--book-bg) 30%); }
-.bk-toc-title { font-size: 40px; font-weight: 700; color: var(--book-primary); letter-spacing: 0.3em; margin-bottom: 0; }
-.bk-toc-title::after { content: ''; display: block; width: 80px; height: 3px; margin: 12px 0 44px; background: linear-gradient(90deg, var(--book-accent), var(--book-chart-0, var(--book-accent))); }
-.bk-toc-list { list-style: none; overflow-y: auto; }
-.bk-toc-list li { margin-bottom: 20px; }
-.bk-toc-list a { display: flex; align-items: baseline; text-decoration: none; color: var(--book-text); font-size: 22px; cursor: pointer; }
-.bk-toc-num { flex-shrink: 0; width: 64px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.bk-toc-list li:nth-child(8n+1) .bk-toc-num { color: var(--book-chart-0, var(--book-accent)); }
-.bk-toc-list li:nth-child(8n+2) .bk-toc-num { color: var(--book-chart-1, var(--book-accent)); }
-.bk-toc-list li:nth-child(8n+3) .bk-toc-num { color: var(--book-chart-2, var(--book-accent)); }
-.bk-toc-list li:nth-child(8n+4) .bk-toc-num { color: var(--book-chart-3, var(--book-accent)); }
-.bk-toc-list li:nth-child(8n+5) .bk-toc-num { color: var(--book-chart-4, var(--book-accent)); }
-.bk-toc-list li:nth-child(8n+6) .bk-toc-num { color: var(--book-chart-5, var(--book-accent)); }
-.bk-toc-list li:nth-child(8n+7) .bk-toc-num { color: var(--book-chart-6, var(--book-accent)); }
-.bk-toc-list li:nth-child(8n+0) .bk-toc-num { color: var(--book-chart-7, var(--book-accent)); }
-.bk-toc-dots { flex: 1; margin: 0 14px; border-bottom: 2px dotted var(--book-text); opacity: 0.35; transform: translateY(-5px); }
+/* ═══ 目录页：VI 规范 table 布局 + SVG 装饰 ═══ */
+.bk-toc { padding: 80px 80px 60px; position: relative; }
+.bk-toc-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.bk-toc-accent-bar { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--accent); z-index: 1; }
+.bk-toc-heading { font-size: 40px; font-weight: 700; color: var(--primary); letter-spacing: -1px; margin-bottom: 12px; position: relative; z-index: 1; }
+.bk-toc-heading::after { content: ''; display: block; width: 60px; height: 4px; margin: 8px 0 44px; background: var(--accent); border-radius: 2px; }
+.bk-toc-table { width: 100%; border-collapse: collapse; font-size: 16px; position: relative; z-index: 1; }
+.bk-toc-table td { padding: 12px 0; vertical-align: middle; }
+.bk-toc-num { width: 48px; }
+.bk-toc-num div { width: 32px; height: 32px; border-radius: 50%; color: #ffffff; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); font-weight: 600; }
+.bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 40px; font-size: 13px; }
+.bk-toc-footer { position: absolute; bottom: 40px; right: 60px; z-index: 1; display: flex; align-items: center; gap: 8px; }
+.bk-toc-footer-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.bk-toc-footer-text { font-size: 14px; color: rgba(var(--text-rgb), 0.45); }
 
 /* ═══ 章节隔页：渐变背景 + 大菱形水印 + 底部点缀线 ═══ */
-.bk-chapter-divider { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--book-primary) 0%, var(--book-secondary, var(--book-primary)) 100%); }
+.bk-chapter-divider { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary, var(--primary)) 100%); }
 /* 中央大菱形水印 */
-.bk-chapter-divider::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(45deg); width: 320px; height: 320px; border: 2px solid var(--book-accent); opacity: 0.07; border-radius: 8px; }
+.bk-chapter-divider::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(45deg); width: 320px; height: 320px; border: 2px solid var(--accent); opacity: 0.07; border-radius: 8px; }
 /* 底部 accent 短划线 */
-.bk-chapter-divider::after { content: ''; position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 100px; height: 3px; background: var(--book-accent); opacity: 0.5; }
-.bk-chapter-divider .bk-chapter-no { font-size: 22px; color: var(--book-chart-0, var(--book-accent)); letter-spacing: 0.35em; font-weight: 600; position: relative; z-index: 1; }
-.bk-chapter-divider .bk-chapter-title { margin-top: 26px; font-size: 46px; font-weight: 700; color: var(--book-bg); max-width: 1000px; line-height: 1.4; position: relative; z-index: 1; }
-.bk-chapter-divider .bk-chapter-src { margin-top: 20px; font-size: 17px; color: var(--book-bg); opacity: 0.6; position: relative; z-index: 1; }
+.bk-chapter-divider::after { content: ''; position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 100px; height: 3px; background: var(--accent); opacity: 0.5; }
+.bk-chapter-divider .bk-chapter-no { font-size: 22px; color: var(--chart-0, var(--accent)); letter-spacing: 0.35em; font-weight: 600; position: relative; z-index: 1; }
+.bk-chapter-divider .bk-chapter-title { margin-top: 26px; font-size: 46px; font-weight: 700; color: var(--background); max-width: 1000px; line-height: 1.4; position: relative; z-index: 1; }
+.bk-chapter-divider .bk-chapter-src { margin-top: 20px; font-size: 17px; color: var(--background); opacity: 0.6; position: relative; z-index: 1; }
 
 /* ═══ 嵌入幻灯片（iframe 隔离，不同 PPT 源样式互不污染） ═══ */
 .bk-embed-frame { border: none; width: 1280px; height: 720px; display: block; }
@@ -74,22 +72,22 @@ body {
 /* ═══ 文字内容页（custom/md 章节）：固定页高，长文由拆页 JS 分片 ═══ */
 .bk-prose-slide { padding: 60px 110px; }
 .bk-prose { font-size: 20px; line-height: 1.9; }
-.bk-prose h1, .bk-prose h2, .bk-prose h3 { color: var(--book-primary); margin: 22px 0 12px; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3 { color: var(--primary); margin: 22px 0 12px; }
 .bk-prose h1 { font-size: 32px; } .bk-prose h2 { font-size: 27px; } .bk-prose h3 { font-size: 23px; }
 .bk-prose p { margin: 10px 0; }
 .bk-prose ul, .bk-prose ol { margin: 10px 0 10px 26px; }
 .bk-prose table { border-collapse: collapse; width: 100%; margin: 14px 0; }
-.bk-prose th, .bk-prose td { border: 1px solid var(--book-text); padding: 8px 12px; }
-.bk-prose th { background: var(--book-card-bg); color: var(--book-primary); }
-.bk-prose blockquote { border-left: 4px solid var(--book-accent); background: var(--book-card-bg); padding: 12px 18px; margin: 14px 0; }
+.bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 8px 12px; }
+.bk-prose th { background: var(--card-bg); color: var(--primary); }
+.bk-prose blockquote { border-left: 4px solid var(--accent); background: var(--card-bg); padding: 12px 18px; margin: 14px 0; }
 .bk-prose img { max-width: 100%; }
 
 /* ═══ 封底页：镜面渐变 + 渐变点缀条 ═══ */
-.bk-back { align-items: center; justify-content: center; text-align: center; background: linear-gradient(225deg, var(--book-primary) 0%, var(--book-secondary, var(--book-primary)) 100%); }
-.bk-back::after { content: ''; position: absolute; top: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--book-accent); opacity: 0.12; transform: rotate(45deg); border-radius: 6px; }
-.bk-back-band { position: absolute; bottom: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--book-accent), var(--book-primary), var(--book-accent)); }
-.bk-back-text { font-size: 22px; line-height: 2.2; max-width: 900px; white-space: pre-wrap; color: var(--book-bg); opacity: 0.85; position: relative; z-index: 1; }
-.bk-back-brand { margin-top: 60px; font-size: 16px; color: var(--book-bg); opacity: 0.55; line-height: 1.9; position: relative; z-index: 1; }
+.bk-back { align-items: center; justify-content: center; text-align: center; background: linear-gradient(225deg, var(--primary) 0%, var(--secondary, var(--primary)) 100%); }
+.bk-back::after { content: ''; position: absolute; top: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--accent); opacity: 0.12; transform: rotate(45deg); border-radius: 6px; }
+.bk-back-band { position: absolute; bottom: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--accent), var(--primary), var(--accent)); }
+.bk-back-text { font-size: 22px; line-height: 2.2; max-width: 900px; white-space: pre-wrap; color: var(--background); opacity: 0.85; position: relative; z-index: 1; }
+.bk-back-brand { margin-top: 60px; font-size: 16px; color: var(--background); opacity: 0.55; line-height: 1.9; position: relative; z-index: 1; }
 
 /* ═══ 打印：横版每页一屏 ═══ */
 @page { size: 1280px 720px; margin: 0; }
@@ -120,14 +118,34 @@ body {
 </section>
 
 <!-- ═══ 目录 ═══ -->
-<!--BK:TOC-->
-<section class="bk-slide bk-toc">
-  <div class="bk-toc-title">目 录</div>
-  <ul class="bk-toc-list">
-    {{TOC_ENTRIES}}
-  </ul>
-</section>
-<!--/BK:TOC-->
+  <!-- ═══ 目录 ═══ -->
+  <!--BK:TOC-->
+  <section class="bk-slide bk-toc">
+    <svg class="bk-toc-svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="bkGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(var(--text-rgb),0.03)" stroke-width="0.5"/>
+        </pattern>
+        <radialGradient id="bkGlow" cx="85%" cy="20%" r="45%">
+          <stop offset="0%" stop-color="rgba(var(--primary-rgb),0.06)"/>
+          <stop offset="100%" stop-color="rgba(var(--primary-rgb),0)"/>
+        </radialGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#bkGrid)"/>
+      <circle cx="1080" cy="150" r="260" fill="url(#bkGlow)"/>
+      <circle cx="1120" cy="580" r="90" fill="none" stroke="rgba(var(--primary-rgb),0.06)" stroke-width="1.5"/>
+    </svg>
+    <div class="bk-toc-accent-bar"></div>
+    <h2 class="bk-toc-heading">目 录</h2>
+    <table class="bk-toc-table">
+      {{TOC_ENTRIES}}
+    </table>
+    <div class="bk-toc-footer">
+      <div class="bk-toc-footer-dot"></div>
+      <span class="bk-toc-footer-text">{{PAGE_TOTAL}} 章</span>
+    </div>
+  </section>
+  <!--/BK:TOC-->
 
 <!-- ═══ 章节内容（隔页 + 幻灯片序列，纵向连续） ═══ -->
 {{CHAPTERS}}
@@ -293,10 +311,10 @@ window.__BK_PROSE_ARRANGE = {{PROSE_ARRANGE}};
   }
 
   // 目录点击滚动到对应章节隔页
-  document.querySelectorAll('.bk-toc-list a[data-slide-target]').forEach(function (a) {
-    a.addEventListener('click', function (e) {
-      e.preventDefault();
-      var target = document.getElementById(a.getAttribute('data-slide-target'));
+  document.querySelectorAll('.bk-toc-table tr[data-slide-target]').forEach(function (tr) {
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', function () {
+      var target = document.getElementById(tr.getAttribute('data-slide-target'));
       if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   });

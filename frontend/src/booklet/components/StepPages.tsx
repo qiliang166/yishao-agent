@@ -39,16 +39,16 @@ function chapterDividerDoc(chapterNo: number, title: string, src: string, theme:
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-body{font-family:var(--book-font);color:var(--book-text)}
+body{font-family:var(--font);color:var(--text)}
 .bk-slide{width:1280px;height:720px;display:flex;flex-direction:column;overflow:hidden;position:relative}
-.bk-chapter-divider{align-items:center;justify-content:center;text-align:center;background:linear-gradient(135deg,var(--book-primary) 0%,var(--book-secondary,var(--book-primary)) 100%)}
-.bk-chapter-divider::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);width:320px;height:320px;border:2px solid var(--book-accent);opacity:0.07;border-radius:8px}
-.bk-chapter-divider::after{content:'';position:absolute;bottom:60px;left:50%;transform:translateX(-50%);width:100px;height:3px;background:var(--book-accent);opacity:0.5}
-.bk-chapter-no{font-size:22px;color:var(--book-chart-0,var(--book-accent));letter-spacing:0.35em;font-weight:600;position:relative;z-index:1}
-.bk-chapter-title{margin-top:26px;font-size:46px;font-weight:700;color:var(--book-bg);max-width:1000px;line-height:1.4;position:relative;z-index:1}
-.bk-chapter-src{margin-top:20px;font-size:17px;color:var(--book-bg);opacity:0.6;position:relative;z-index:1}
+.bk-chapter-divider{align-items:center;justify-content:center;text-align:center;background:linear-gradient(135deg,var(--primary) 0%,var(--secondary,var(--primary)) 100%)}
+.bk-chapter-divider::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(45deg);width:320px;height:320px;border:2px solid var(--accent);opacity:0.07;border-radius:8px}
+.bk-chapter-divider::after{content:'';position:absolute;bottom:60px;left:50%;transform:translateX(-50%);width:100px;height:3px;background:var(--accent);opacity:0.5}
+.bk-chapter-no{font-size:22px;color:var(--chart-0,var(--accent));letter-spacing:0.35em;font-weight:600;position:relative;z-index:1}
+.bk-chapter-title{margin-top:26px;font-size:46px;font-weight:700;color:var(--background);max-width:1000px;line-height:1.4;position:relative;z-index:1}
+.bk-chapter-src{margin-top:20px;font-size:17px;color:var(--background);opacity:0.6;position:relative;z-index:1}
 </style></head>
-<body style="${varCss};font-family:var(--book-font);color:var(--book-text)">
+<body style="${varCss};font-family:var(--font);color:var(--text)">
 <section class="bk-slide bk-chapter-divider">
 <div class="bk-chapter-no">CHAPTER ${String(chapterNo).padStart(2, '0')}</div>
 <div class="bk-chapter-title">${escHtml(title)}</div>
@@ -63,7 +63,7 @@ function proseDoc(bookType: 'a4' | 'ppt', inner: string, theme: Theme | null, bg
   const cls = bookType === 'a4' ? 'bk-sheet' : 'bk-slide bk-prose-slide'
   const bg = bgColor ? `background:${bgColor};` : ''
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0}${proseSplitCss(bookType)}</style></head>` +
-    `<body class="bkr-host" style="${varCss};font-family:var(--book-font);color:var(--book-text)">` +
+    `<body class="bkr-host" style="${varCss};font-family:var(--font);color:var(--text)">` +
     `<section class="${cls}" style="${bg}">${inner}</section></body></html>`
 }
 
@@ -255,7 +255,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
     <div style={{
       width: thumbW, height: thumbH, display: 'flex', alignItems: 'center', justifyContent: 'center',
       flexDirection: 'column', gap: 4, fontSize: 11,
-      background: dark ? 'var(--book-primary, #18181b)' : 'var(--bg-secondary, #f4f4f5)', color: dark ? '#fff' : undefined,
+      background: dark ? 'var(--primary, #18181b)' : 'var(--bg-secondary, #f4f4f5)', color: dark ? '#fff' : undefined,
     }}>
       <span style={{ fontSize: 18 }}>{icon}</span>
       <span>{label}</span>

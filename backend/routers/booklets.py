@@ -9,7 +9,7 @@
 - 模板内不得写死任何书名/署名/章节/颜色实值，全部经 PLACEHOLDERS 占位符注入
 - 替换逻辑集中在 render_booklet() 单函数
 - 渲染后断言：产物中不允许残留任何 {{PLACEHOLDER}}，残留即 500
-- 主题归一化为同一组 --book-* CSS 变量注入，模板与主题解耦
+- 主题归一化为同一组 VI 规范 CSS 变量注入，模板与主题解耦
 """
 
 import base64
@@ -523,8 +523,9 @@ def render_booklet(booklet: dict, theme: dict) -> str:
 
         if book_type == "a4":
             toc_parts.append(
-                f'<li><a href="#{anchor}"><span class="bk-toc-num">{i:02d}</span>'
-                f'<span class="bk-toc-label">{title}</span><span class="bk-toc-dots"></span></a></li>'
+                f'<tr><td class="bk-toc-num">{i:02d}</td>'
+                f'<td class="bk-toc-title-cell"><a href="#{anchor}">{title}</a></td>'
+                f'<td class="bk-toc-page"></td></tr>'
             )
             if is_prose:
                 body = _sanitize_fragment(ch.get("content_html") or "")
@@ -553,8 +554,10 @@ def render_booklet(booklet: dict, theme: dict) -> str:
                     )
         else:  # ppt
             toc_parts.append(
-                f'<li><a href="#" data-slide-target="{anchor}"><span class="bk-toc-num">{i:02d}</span>'
-                f'<span class="bk-toc-label">{title}</span><span class="bk-toc-dots"></span></a></li>'
+                f'<tr data-slide-target="{anchor}"><td class="bk-toc-num">'
+                f'<div style="background:var(--chart-{(i-1)%5})">{i:02d}</div></td>'
+                f'<td class="bk-toc-title-cell">{title}</td>'
+                f'<td class="bk-toc-page"></td></tr>'
             )
             # 章标题片可隐藏（hide_divider）；隐藏时锚点移到第一张可见内容片，目录跳转不失效
             show_divider = not ch.get("hide_divider")
@@ -863,8 +866,10 @@ def cover_preview(data: CoverPreviewReq, request: Request):
     theme = _resolve_theme(booklet)
     try:
         full = render_booklet(booklet, theme)
-    except Exception:
-        return {"doc": ""}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"doc": "", "error": str(e)}
 
     styles = _extract_head_styles(full)
     w, h = (794, 1123) if data.book_type == "a4" else (1280, 720)

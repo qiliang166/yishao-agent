@@ -24,6 +24,7 @@ export default function StepCover({ draft, onChange }: Props) {
   const [themes, setThemes] = useState<Theme[]>([])
   const [uploading, setUploading] = useState(false)
   const [coverDoc, setCoverDoc] = useState('')
+  const [coverError, setCoverError] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
   const fetchTimer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -35,6 +36,7 @@ export default function StepCover({ draft, onChange }: Props) {
 
   const fetchCover = useCallback(() => {
     const theme = themes.find(t => t.id === draft.cover.theme_id) || themes[0]
+    setCoverError('')
     api.bookletCoverPreview({
       book_type: draft.book_type,
       title: draft.title,
@@ -48,7 +50,11 @@ export default function StepCover({ draft, onChange }: Props) {
       theme_id: draft.cover.theme_id || '',
       theme_colors: (theme?.colors || {}) as Record<string, string>,
       desk_none: !!draft.cover.desk_none,
-    }).then(doc => { if (doc) setCoverDoc(doc) }).catch(() => { /* 静默忽略 */ })
+    }).then(doc => { if (doc) { setCoverDoc(doc); setCoverError('') } })
+      .catch((e: any) => {
+        console.warn('封面预览加载失败:', e)
+        setCoverError('封面预览暂时不可用，请检查后端服务是否已部署最新版本')
+      })
   }, [draft.book_type, draft.title, draft.subtitle, draft.author,
       draft.cover.org, draft.cover.date_text, draft.cover.flyleaf_text, draft.cover.back_cover_text,
       draft.cover.logo_url, draft.cover.theme_id, draft.cover.desk_none, themes])
@@ -83,7 +89,6 @@ export default function StepCover({ draft, onChange }: Props) {
   return (
     <div className="panel-grid">
       <div className="panel-left">
-        {/* flexShrink:0 防止滚动列内卡片被压缩导致内容溢出重叠 */}
         <div className="card" style={{ flexShrink: 0 }}>
           <div className="card-title">📝 封面与署名</div>
           <div className="form-group">
@@ -177,10 +182,17 @@ export default function StepCover({ draft, onChange }: Props) {
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div className="card-title">👁 封面实时预览</div>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16 }}>
-            <Thumb doc={coverDoc}
-              pageW={draft.book_type === 'ppt' ? 1280 : 794}
-              pageH={draft.book_type === 'ppt' ? 720 : 1123}
-              thumbW={draft.book_type === 'ppt' ? 480 : 340} />
+            {coverError && !coverDoc ? (
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20 }}>
+                <div style={{ marginBottom: 8 }}>⚠️</div>
+                <div>{coverError}</div>
+              </div>
+            ) : (
+              <Thumb doc={coverDoc}
+                pageW={draft.book_type === 'ppt' ? 1280 : 794}
+                pageH={draft.book_type === 'ppt' ? 720 : 1123}
+                thumbW={draft.book_type === 'ppt' ? 480 : 340} />
+            )}
           </div>
         </div>
       </div>

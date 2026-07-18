@@ -9,10 +9,10 @@
 :root { {{THEME_CSS_VARS}} }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { background: var(--book-desk); overflow-x: hidden; }
+html { background: var(--desk); overflow-x: hidden; }
 body {
-  font-family: var(--book-font);
-  color: var(--book-text);
+  font-family: var(--font);
+  color: var(--text);
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -21,7 +21,7 @@ body {
 .bk-sheet {
   width: min(880px, 96vw);
   margin: 26px auto;
-  background: var(--book-bg);
+  background: var(--background);
   box-shadow: 0 4px 24px rgba(0,0,0,0.35);
   position: relative;
   display: flex;
@@ -33,53 +33,49 @@ body {
 
 /* ═══ 封面（横幅式，不占整页） ═══ */
 .bk-cover .bk-sheet-inner { align-items: center; text-align: center; padding: 64px 48px; }
-.bk-cover-band { width: 100%; height: 8px; background: var(--book-accent); flex-shrink: 0; }
+.bk-cover-band { width: 100%; height: 8px; background: var(--accent); flex-shrink: 0; }
 .bk-cover-logo { max-height: 90px; max-width: 240px; object-fit: contain; margin-bottom: 28px; }
-.bk-cover-title { font-size: 38px; font-weight: 700; color: var(--book-primary); line-height: 1.35; letter-spacing: 0.08em; }
-.bk-cover-subtitle { margin-top: 16px; font-size: 18px; color: var(--book-text); opacity: 0.75; letter-spacing: 0.2em; }
-.bk-cover-rule { width: 130px; height: 2px; background: var(--book-accent); margin: 26px auto 0; }
-.bk-cover-meta { margin-top: 30px; font-size: 15px; line-height: 2; color: var(--book-text); }
-.bk-cover-author { font-size: 17px; font-weight: 600; color: var(--book-primary); }
+.bk-cover-title { font-size: 38px; font-weight: 700; color: var(--primary); line-height: 1.35; letter-spacing: 0.08em; }
+.bk-cover-subtitle { margin-top: 16px; font-size: 18px; color: var(--text); opacity: 0.75; letter-spacing: 0.2em; }
+.bk-cover-rule { width: 130px; height: 2px; background: var(--accent); margin: 26px auto 0; }
+.bk-cover-meta { margin-top: 30px; font-size: 15px; line-height: 2; color: var(--text); }
+.bk-cover-author { font-size: 17px; font-weight: 600; color: var(--primary); }
 
 /* ═══ 扉页说明块 ═══ */
 .bk-flyleaf .bk-sheet-inner { align-items: center; text-align: center; }
-.bk-flyleaf-title { font-size: 22px; font-weight: 600; color: var(--book-primary); letter-spacing: 0.15em; }
+.bk-flyleaf-title { font-size: 22px; font-weight: 600; color: var(--primary); letter-spacing: 0.15em; }
 .bk-flyleaf-text { margin-top: 18px; font-size: 15px; line-height: 2.1; max-width: 640px; white-space: pre-wrap; }
-.bk-flyleaf-info { margin-top: 22px; font-size: 13px; line-height: 2.1; color: var(--book-text); opacity: 0.8; }
+.bk-flyleaf-info { margin-top: 22px; font-size: 13px; line-height: 2.1; color: var(--text); opacity: 0.8; }
 .bk-flyleaf-brand { margin-top: 16px; font-size: 12px; opacity: 0.6; line-height: 1.9; }
 
 /* ═══ 目录 ═══ */
-.bk-toc-title { font-size: 24px; font-weight: 700; color: var(--book-primary); text-align: center; letter-spacing: 0.3em; margin-bottom: 26px; }
-.bk-toc-list { list-style: none; }
-.bk-toc-list li { margin-bottom: 14px; }
-.bk-toc-list a {
-  display: flex; align-items: baseline; text-decoration: none; color: var(--book-text);
-  font-size: 15px; line-height: 1.7;
-}
-.bk-toc-num { flex-shrink: 0; width: 44px; font-weight: 700; color: var(--book-accent); font-variant-numeric: tabular-nums; }
-.bk-toc-label { flex-shrink: 1; }
-.bk-toc-dots { flex: 1; margin: 0 10px; border-bottom: 1.5px dotted var(--book-text); opacity: 0.35; transform: translateY(-4px); }
+.bk-toc-title { font-size: 24px; font-weight: 700; color: var(--primary); text-align: center; letter-spacing: 0.3em; margin-bottom: 26px; }
+.bk-toc-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.bk-toc-table td { padding: 7px 0; vertical-align: top; }
+.bk-toc-num { width: 44px; font-weight: 700; color: var(--primary); font-variant-numeric: tabular-nums; }
+.bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); }
+.bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 40px; font-size: 13px; }
 
 /* ═══ 章节正文 ═══ */
-.bk-chapter-head { border-left: 5px solid var(--book-accent); padding: 6px 0 6px 16px; margin-bottom: 22px; }
-.bk-chapter-no { font-size: 13px; color: var(--book-accent); font-weight: 600; letter-spacing: 0.2em; }
-.bk-chapter-title { font-size: 23px; font-weight: 700; color: var(--book-primary); margin-top: 4px; line-height: 1.4; }
+.bk-chapter-head { border-left: 5px solid var(--accent); padding: 6px 0 6px 16px; margin-bottom: 22px; }
+.bk-chapter-no { font-size: 13px; color: var(--accent); font-weight: 600; letter-spacing: 0.2em; }
+.bk-chapter-title { font-size: 23px; font-weight: 700; color: var(--primary); margin-top: 4px; line-height: 1.4; }
 .bk-chapter-src { font-size: 11px; opacity: 0.55; margin-top: 4px; }
 
 .bk-prose { font-size: 15px; line-height: 1.95; }
-.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--book-primary); margin: 20px 0 10px; line-height: 1.5; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--primary); margin: 20px 0 10px; line-height: 1.5; }
 .bk-prose h1 { font-size: 21px; } .bk-prose h2 { font-size: 19px; } .bk-prose h3 { font-size: 17px; } .bk-prose h4 { font-size: 16px; }
 .bk-prose p { margin: 8px 0; }
 .bk-prose ul, .bk-prose ol { margin: 8px 0 8px 22px; }
 .bk-prose li { margin: 4px 0; }
 .bk-prose table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
-.bk-prose th, .bk-prose td { border: 1px solid var(--book-text); padding: 6px 9px; }
-.bk-prose th { background: var(--book-card-bg); color: var(--book-primary); }
-.bk-prose blockquote { border-left: 3px solid var(--book-accent); background: var(--book-card-bg); padding: 8px 14px; margin: 12px 0; }
-.bk-prose code { background: var(--book-card-bg); padding: 1px 5px; border-radius: 2px; font-size: 13px; }
-.bk-prose pre { background: var(--book-card-bg); padding: 12px; overflow-x: auto; margin: 12px 0; }
+.bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 6px 9px; }
+.bk-prose th { background: var(--card-bg); color: var(--primary); }
+.bk-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 8px 14px; margin: 12px 0; }
+.bk-prose code { background: var(--card-bg); padding: 1px 5px; border-radius: 2px; font-size: 13px; }
+.bk-prose pre { background: var(--card-bg); padding: 12px; overflow-x: auto; margin: 12px 0; }
 .bk-prose img { max-width: 100%; }
-.bk-prose hr { border: none; border-top: 1px solid var(--book-text); opacity: 0.25; margin: 18px 0; }
+.bk-prose hr { border: none; border-top: 1px solid var(--text); opacity: 0.25; margin: 18px 0; }
 
 /* ═══ 课件嵌入页（iframe 隔离，避免样式互染） ═══ */
 .bk-embed-sheet { padding: 0; align-items: center; justify-content: center; }
@@ -87,7 +83,7 @@ body {
 
 /* ═══ 封底 ═══ */
 .bk-back .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
-.bk-back-band { width: 100%; height: 8px; background: var(--book-primary); flex-shrink: 0; margin-top: auto; }
+.bk-back-band { width: 100%; height: 8px; background: var(--primary); flex-shrink: 0; margin-top: auto; }
 .bk-back-text { font-size: 15px; line-height: 2.3; max-width: 640px; white-space: pre-wrap; }
 .bk-back-brand { margin-top: 26px; font-size: 12px; opacity: 0.6; line-height: 1.9; }
 
@@ -142,16 +138,17 @@ body {
 <!--/BK:FLYLEAF-->
 
 <!-- ═══ 目录 ═══ -->
-<!--BK:TOC-->
-<section class="bk-sheet bk-toc">
-  <div class="bk-sheet-inner">
-    <div class="bk-toc-title">目 录</div>
-    <ul class="bk-toc-list">
-      {{TOC_ENTRIES}}
-    </ul>
-  </div>
-</section>
-<!--/BK:TOC-->
+  <!-- ═══ 目录 ═══ -->
+  <!--BK:TOC-->
+  <section class="bk-sheet bk-toc">
+    <div class="bk-sheet-inner">
+      <div class="bk-toc-title">目 录</div>
+      <table class="bk-toc-table">
+        {{TOC_ENTRIES}}
+      </table>
+    </div>
+  </section>
+  <!--/BK:TOC-->
 
 <!-- ═══ 章节正文（连续排布） ═══ -->
 {{CHAPTERS}}

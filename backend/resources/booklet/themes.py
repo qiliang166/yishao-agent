@@ -4,7 +4,7 @@
 禁止在模板或代码中写死任何颜色实值。
 """
 
-# 变量键（与模板 var(--book-*) 一一对应）；desk = 产物页面外桌面底色
+# 变量键（与模板 var(--*) 一一对应）；desk = 产物页面外桌面底色
 THEME_VAR_KEYS = [
     "primary", "secondary", "accent", "bg", "text", "card_bg", "desk", "font",
     "chart-0", "chart-1", "chart-2", "chart-3",
@@ -94,19 +94,25 @@ def _safe_css_value(key: str, val: str, fallback: str) -> str:
     return val if _HEX_COLOR_RE.match(val) else fallback
 
 
+# 内部键名 → CSS 变量名映射（bg 对应 VI 规范 --background，其余去 book- 前缀）
+_KEY_TO_CSS_VAR = {
+    "bg": "background",
+    "card_bg": "card-bg",
+}
+
+
 def theme_css_vars(colors: dict) -> str:
-    """把主题色归一化为模板 CSS 变量声明串（缺失/非法值回退到第一套内置主题）。"""
+    """把主题色归一化为 VI 规范 CSS 变量声明串（缺失/非法值回退到第一套内置主题）。"""
     fallback = BUILTIN_THEMES[0]["colors"]
     parts = []
     for key in THEME_VAR_KEYS:
         val = _safe_css_value(key, (colors or {}).get(key, ""), fallback[key])
-        css_key = key.replace("_", "-")
-        parts.append(f"--book-{css_key}: {val};")
-    # RGB 分量变量（供 rgba(var(--book-primary-r), ...) 使用）
+        css_name = _KEY_TO_CSS_VAR.get(key, key.replace("_", "-"))
+        parts.append(f"--{css_name}: {val};")
+    # RGB 分量变量（供 rgba(var(--primary-rgb), ...) 使用，VI 规范格式）
     for rgb_key in ("primary", "accent", "bg"):
         hex_val = (colors or {}).get(rgb_key, "") or fallback[rgb_key]
         r, g, b = _hex_to_rgb_channels(hex_val)
-        parts.append(f"--book-{rgb_key}-r: {r};")
-        parts.append(f"--book-{rgb_key}-g: {g};")
-        parts.append(f"--book-{rgb_key}-b: {b};")
+        css_name = _KEY_TO_CSS_VAR.get(rgb_key, rgb_key)
+        parts.append(f"--{css_name}-rgb: {r}, {g}, {b};")
     return " ".join(parts)
