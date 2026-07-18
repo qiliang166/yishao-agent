@@ -170,9 +170,9 @@ function Stage2Controls({
   }
   const getSourceText = (src: string) => {
     switch (src) {
-      case 'video': return steps.raw_video || steps.step1_video || ''
-      case 'text': return steps.raw_text || steps.step1_text || ''
-      case 'file': return steps.raw_file || steps.step1_file || ''
+      case 'video': return steps.step1_video || steps.raw_video || ''
+      case 'text': return steps.step1_text || steps.raw_text || ''
+      case 'file': return steps.step1_file || steps.raw_file || ''
       default: return ''
     }
   }
@@ -1487,11 +1487,19 @@ export default function ProjectPage() {
 
   const executeBatchGenerate = async (resolvedModels: Record<string, string>) => {
     const stage2Source = STAGE2_CONFIGS.reduce((acc, c) => acc || steps[c.stepKey] || '', '')
-    const stage1Source = steps.raw_video || steps.raw_text || steps.raw_file || steps.step1_video || steps.step1_text || steps.step1_file || ''
+
+    // 严格按当前上下文取该源右侧整理后的内容（step1_xxx），不回退 raw，不跨源
+    const dsMapS1: Record<string, string> = { '1a': 'video', '1b': 'text', '1c': 'file' }
+    const effectiveDs = stage === 1 ? (dsMapS1[sub] || 'video') : (s2DataSources['sop'] || 'video')
+    const stage1Source = effectiveDs === 'video' ? (steps.step1_video || '')
+      : effectiveDs === 'text' ? (steps.step1_text || '')
+      : effectiveDs === 'file' ? (steps.step1_file || '')
+      : ''
     const source = stage2Source || stage1Source
 
     if (!source) {
-      modal.toast('没有可用的数据源。请先在 Stage 1 导入素材。', 'error')
+      const tabLabel = effectiveDs === 'video' ? '视频提取' : effectiveDs === 'text' ? '文字输入' : '文件提取'
+      modal.toast(`「${tabLabel}」右侧整理区没有内容，请先点击「整理文档」生成内容`, 'error')
       delete abortRef.current['step2_batch']
       return
     }
@@ -1500,11 +1508,9 @@ export default function ProjectPage() {
 
     // When called from Stage 1, auto-set all Stage 2 data sources
     if (stage === 1) {
-      const dsMap: Record<string, string> = { '1a': 'video', '1b': 'text', '1c': 'file' }
-      const ds = dsMap[sub] || 'video'
       ;['sop', 'dao', 'yanxi'].forEach(col => {
-        setS2DataSources(prev => ({ ...prev, [col]: ds }))
-        if (id) api.saveStep(id, `_ds_s2_${col}`, ds)
+        setS2DataSources(prev => ({ ...prev, [col]: effectiveDs }))
+        if (id) api.saveStep(id, `_ds_s2_${col}`, effectiveDs)
       })
     }
 
