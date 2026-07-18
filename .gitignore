@@ -39,3 +39,6 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# 本地测试令牌，禁止入库
+dev-log/*token*
