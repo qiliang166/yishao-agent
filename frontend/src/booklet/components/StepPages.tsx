@@ -28,6 +28,32 @@ function pageOrderOf(ch: Chapter | undefined, count: number): number[] {
 
 const safeBg = (v?: string) => (v && /^#[0-9a-fA-F]{3,8}$/.test(v) ? v : undefined)
 
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
+/** 生成 PPT 章节标题页缩略图文档（与合成模板 bk-chapter-divider 同款） */
+function chapterDividerDoc(chapterNo: number, title: string, src: string, theme: Theme | null): string {
+  const vars = themeVars(theme)
+  const varCss = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';')
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{font-family:var(--book-font);color:var(--book-text)}
+.bk-slide{width:1280px;height:720px;display:flex;flex-direction:column;overflow:hidden}
+.bk-chapter-divider{align-items:center;justify-content:center;text-align:center;background:var(--book-primary)}
+.bk-chapter-no{font-size:22px;color:var(--book-accent);letter-spacing:0.35em;font-weight:600}
+.bk-chapter-title{margin-top:26px;font-size:46px;font-weight:700;color:var(--book-bg);max-width:1000px;line-height:1.4}
+.bk-chapter-src{margin-top:20px;font-size:17px;color:var(--book-bg);opacity:0.6}
+</style></head>
+<body style="${varCss};font-family:var(--book-font);color:var(--book-text)">
+<section class="bk-slide bk-chapter-divider">
+<div class="bk-chapter-no">CHAPTER ${String(chapterNo).padStart(2, '0')}</div>
+<div class="bk-chapter-title">${escHtml(title)}</div>
+<div class="bk-chapter-src">来源：${escHtml(src)}</div>
+</section></body></html>`
+}
+
 /** 把拆页产物包成自包含文档（iframe 缩略图用，页数分界与合成产物一致） */
 function proseDoc(bookType: 'a4' | 'ppt', inner: string, theme: Theme | null, bgColor?: string): string {
   const vars = themeVars(theme)
@@ -298,15 +324,12 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
                 {!isA4 && (
                   <div style={cardStyle(!!ch?.hide_divider)}>
                     {ch?.hide_divider && badge}
-                    <div style={{
-                      width: thumbW, height: thumbH, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexDirection: 'column', gap: 3, background: 'var(--bg-secondary, #f4f4f5)', fontSize: 10, padding: 4, textAlign: 'center',
-                    }}>
-                      <span style={{ fontSize: 9, opacity: 0.6 }}>CHAPTER {String(chIdx + 1).padStart(2, '0')}</span>
-                      <span style={{ fontWeight: 600, overflow: 'hidden', maxHeight: 30 }}>{pm.title}</span>
-                      <span style={{ fontSize: 9, opacity: 0.6 }}>章节标题页</span>
-                    </div>
+                    <Thumb
+                      doc={chapterDividerDoc(chIdx + 1, pm.title, ch?.project_name || '自建章节', theme)}
+                      pageW={pageW} pageH={pageH} thumbW={thumbW}
+                    />
                     <div style={{ padding: '3px 4px', display: 'flex', justifyContent: 'center' }}>
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginRight: 2 }}>章节标题页</span>
                       {eyeBtn(!!ch?.hide_divider, () => toggleDivider(pm.chapter_id), ch?.hide_divider ? '恢复显示章节标题页' : '隐藏章节标题页')}
                     </div>
                   </div>
