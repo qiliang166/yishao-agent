@@ -24,18 +24,12 @@ const LOCATION_ORDER = [
   'project-stage-3a', 'project-stage-3b', 'project-stage-3c',
   'project-stage-4a', 'project-stage-4b',
   'project-stage-5',
-  'settings', 'proj-settings', 'templates', 'appendix',
+  'downloads', 'booklets', 'member-center',
+  'templates', 'prompt-studio',
+  'settings', 'proj-settings',
+  'roles', 'members', 'approval', 'stats', 'authors',
+  'appendix',
 ]
-
-/** 前台章节（展示在左侧栏目「操作说明」中，使用者可见） */
-const FRONT_LOCATIONS = new Set([
-  'home', 'dashboard',
-  'project-stage-1a', 'project-stage-1b', 'project-stage-1c',
-  'project-stage-2a', 'project-stage-2b', 'project-stage-2c',
-  'project-stage-3a', 'project-stage-3b', 'project-stage-3c',
-  'project-stage-4a', 'project-stage-4b',
-  'project-stage-5',
-])
 
 const LOCATION_LABELS: Record<string, string> = {
   home: '项目管理首页',
@@ -52,9 +46,18 @@ const LOCATION_LABELS: Record<string, string> = {
   'project-stage-4a': 'Stage 4 — 演讲文案',
   'project-stage-4b': 'Stage 4 — 演讲口播',
   'project-stage-5': 'Stage 5 — 输出列表',
-  settings: '全局设置页',
-  'proj-settings': '项目配置页',
-  templates: '模板管理页',
+  downloads: '下载文件',
+  booklets: '电子成册',
+  'member-center': '会员中心',
+  templates: '模板管理',
+  'prompt-studio': '提示词工作室',
+  settings: '全局设置',
+  'proj-settings': '全局配置',
+  roles: '角色管理',
+  members: '会员管理',
+  approval: '会员审批',
+  stats: '下载统计',
+  authors: '作者管理',
   appendix: '附录 — 常见问题与故障排除',
 }
 
@@ -861,90 +864,52 @@ function SettingsPage() {
               background: 'var(--bg)',
               display: 'flex', flexDirection: 'column',
             }}>
-              {/* 后台管理说明下载按钮 */}
+              {/* 全量下载按钮 */}
               <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
                 <button
                   className="btn btn-ghost btn-sm"
                   style={{ width: '100%', fontSize: 10 }}
                   onClick={() => {
-                    const backSections = helpSections.filter(s => !FRONT_LOCATIONS.has(s.location))
-                    if (backSections.length === 0) return
-                    const cover = '\n# 智绘教案系统 Yishao Agent — 操作说明书 V1.0.0\n\n> **后台管理说明（管理员）**\n\n本手册面向系统管理员，覆盖全局设置、全局配置、模板管理以及常见问题与故障排除。\n'
-                    const md = cover + '\n---\n' + backSections.map(s => s.content).join('\n\n---\n\n')
-                    const html = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>Yishao Agent 后台管理说明</title>\n<style>\nbody{max-width:800px;margin:0 auto;padding:40px 24px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;font-size:15px;line-height:1.8;color:#333}\nh1{font-size:24px;border-bottom:2px solid #b22222;padding-bottom:8px;margin-top:32px}\nh2{font-size:19px;color:#b22222;margin-top:28px}\ntable{border-collapse:collapse;width:100%}\nth,td{border:1px solid #ddd;padding:8px 12px;font-size:14px}\nth{background:#f5f5f5}\nhr{border:none;border-top:1px solid #eee;margin:32px 0}\n</style>\n</head>\n<body>\n' + DOMPurify.sanitize(marked.parse(md) as string) + '\n</body>\n</html>'
+                    if (helpSections.length === 0) return
+                    const cover = '\n# 智绘教案系统 Yishao Agent — 操作说明书 V1.0.0\n\n> **全量操作说明**\n'
+                    const md = cover + '\n---\n' + helpSections.map(s => s.content).join('\n\n---\n\n')
+                    const html = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>Yishao Agent 操作说明书</title>\n<style>\nbody{max-width:800px;margin:0 auto;padding:40px 24px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC",sans-serif;font-size:15px;line-height:1.8;color:#333}\nh1{font-size:24px;border-bottom:2px solid #b22222;padding-bottom:8px;margin-top:32px}\nh2{font-size:19px;color:#b22222;margin-top:28px}\ntable{border-collapse:collapse;width:100%}\nth,td{border:1px solid #ddd;padding:8px 12px;font-size:14px}\nth{background:#f5f5f5}\nhr{border:none;border-top:1px solid #eee;margin:32px 0}\n</style>\n</head>\n<body>\n' + DOMPurify.sanitize(marked.parse(md) as string) + '\n</body>\n</html>'
                     const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
                     const a = document.createElement('a')
                     a.href = URL.createObjectURL(blob)
-                    a.download = 'YishaoAgent_后台管理说明.html'
+                    a.download = 'YishaoAgent_操作说明书.html'
                     a.click()
                   }}
                 >
-                  📥 下载后台管理说明
+                  📥 下载全量说明书
                 </button>
               </div>
 
-              {(() => {
-                const frontSecs = helpSections.filter(s => FRONT_LOCATIONS.has(s.location))
-                const backSecs = helpSections.filter(s => !FRONT_LOCATIONS.has(s.location))
-                return (
-                  <>
-                    {/* 前台分组 */}
-                    <div style={{
-                      padding: '5px 12px', fontSize: 9, color: 'var(--text-secondary)',
-                      letterSpacing: 1, borderBottom: '1px solid var(--border)',
-                      background: 'var(--bg)',
-                    }}>
-                      前台操作说明（使用者可见）
-                    </div>
-                    {frontSecs.map(s => (
-                      <button
-                        key={s.location}
-                        onClick={() => selectSection(s)}
-                        style={{
-                          display: 'block', width: '100%', padding: '8px 12px',
-                          border: 'none', borderBottom: '1px solid var(--border)',
-                          background: activeEditSection === s.location ? 'var(--primary-light)' : 'transparent',
-                          color: activeEditSection === s.location ? 'var(--primary)' : 'var(--text)',
-                          fontWeight: activeEditSection === s.location ? 600 : 400,
-                          fontSize: 10, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'var(--font)',
-                          transition: 'all .1s',
-                        }}
-                      >
-                        {s.title}
-                      </button>
-                    ))}
-
-                    {/* 后台分组 */}
-                    <div style={{
-                      padding: '5px 12px', fontSize: 9, color: 'var(--text-secondary)',
-                      letterSpacing: 1, borderBottom: '1px solid var(--border)',
-                      borderTop: '2px solid var(--border)',
-                      background: 'var(--bg)',
-                    }}>
-                      后台管理说明（仅管理员）
-                    </div>
-                    {backSecs.map(s => (
-                      <button
-                        key={s.location}
-                        onClick={() => selectSection(s)}
-                        style={{
-                          display: 'block', width: '100%', padding: '8px 12px',
-                          border: 'none', borderBottom: '1px solid var(--border)',
-                          background: activeEditSection === s.location ? 'var(--primary-light)' : 'transparent',
-                          color: activeEditSection === s.location ? 'var(--primary)' : 'var(--text)',
-                          fontWeight: activeEditSection === s.location ? 600 : 400,
-                          fontSize: 10, cursor: 'pointer', textAlign: 'left',
-                          fontFamily: 'var(--font)',
-                          transition: 'all .1s',
-                        }}
-                      >
-                        {s.title}
-                      </button>
-                    ))}
-                  </>
-                )
-              })()}
+              <div style={{
+                padding: '5px 12px', fontSize: 9, color: 'var(--text-secondary)',
+                letterSpacing: 1, borderBottom: '1px solid var(--border)',
+                background: 'var(--bg)',
+              }}>
+                全部章节（按显示顺序）
+              </div>
+              {helpSections.map(s => (
+                <button
+                  key={s.location}
+                  onClick={() => selectSection(s)}
+                  style={{
+                    display: 'block', width: '100%', padding: '8px 12px',
+                    border: 'none', borderBottom: '1px solid var(--border)',
+                    background: activeEditSection === s.location ? 'var(--primary-light)' : 'transparent',
+                    color: activeEditSection === s.location ? 'var(--primary)' : 'var(--text)',
+                    fontWeight: activeEditSection === s.location ? 600 : 400,
+                    fontSize: 10, cursor: 'pointer', textAlign: 'left',
+                    fontFamily: 'var(--font)',
+                    transition: 'all .1s',
+                  }}
+                >
+                  {s.title}
+                </button>
+              ))}
             </div>
 
             {/* Right: editor + preview */}
