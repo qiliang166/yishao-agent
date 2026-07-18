@@ -108,7 +108,7 @@ export default function BookletEditorPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
       {/* 顶部：标题栏 + 步骤导航（与明细页生成流程同款视觉） */}
       <div className="proj-header-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--card)' }}>
         <button className="btn btn-ghost btn-sm" onClick={handleBack}>← 返回</button>
@@ -134,7 +134,7 @@ export default function BookletEditorPage() {
       </div>
 
       {/* 步骤内容区 */}
-      <div style={{ flex: 1, minHeight: 0, padding: 14, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minHeight: 0, padding: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {step === 1 && <StepContent draft={draft} onChange={onChange} />}
         {step === 2 && <StepArrange draft={draft} onChange={onChange} />}
         {step === 3 && <StepCover draft={draft} onChange={onChange} />}
