@@ -1497,9 +1497,6 @@ export default function ProjectPage() {
     // Stage 1 触发：严格只用当前 TAB 整理内容；Stage 2 触发：可用已有 Stage 2 输出回退
     const source = stage === 1 ? stage1Source : (STAGE2_CONFIGS.reduce((acc, c) => acc || steps[c.stepKey] || '', '') || stage1Source)
 
-    // DEBUG: 诊断数据源选择
-    console.log('[executeBatchGenerate]', { stage, sub, effectiveDs, stage1Source_preview: stage1Source?.substring(0, 80), source_preview: source?.substring(0, 80), has_step1_file: !!steps.step1_file, has_step1_video: !!steps.step1_video, has_raw_video: !!steps.raw_video })
-
     if (!source) {
       const tabLabel = effectiveDs === 'video' ? '视频提取' : effectiveDs === 'text' ? '文字输入' : '文件提取'
       modal.toast(`「${tabLabel}」右侧整理区没有内容，请先点击「整理文档」生成内容`, 'error')
@@ -2602,7 +2599,7 @@ export default function ProjectPage() {
                   )}
                 </div>
                 {videoText && (
-                  <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     <div className="card-title">📝 提取的原始文本</div>
                     <div className="card-hint">视频提取的原始字幕内容，可编辑后重新生成</div>
                     {(sourceMerged || sourceAsr || sourceSubtitle) && (
@@ -2648,7 +2645,7 @@ export default function ProjectPage() {
 
               {/* 1b: Text Input */}
               {mode1 === 'text' && (<>
-                <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                   <div className="card-title">✏️ 文字输入<HelpButton location="project-stage-1b" /></div>
                   <div className="card-hint">直接粘贴或输入内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
@@ -2711,7 +2708,7 @@ export default function ProjectPage() {
                       onClick={() => { abortRef.current['step1_1c']?.abort(); modal.toast('已取消生成', 'success') }}>取消</button>
                   )}
                 </div>
-                <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                   <div className="card-title">📝 文件原始内容</div>
                   <div className="card-hint">文件读取的原始内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
