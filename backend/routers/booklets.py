@@ -151,13 +151,16 @@ def _check_project_readable(db, user: dict, project_id: str):
         raise HTTPException(403, "该明细未解锁，无法调取内容")
 
 
-def _get_booklet_or_403(db, booklet_id: str, user: dict):
+def _get_booklet_or_403(db, booklet_id: str, user: dict, readonly_ok: bool = False):
     row = db.execute("SELECT * FROM booklets WHERE id=?", (booklet_id,)).fetchone()
     if not row:
         raise HTTPException(404, "册子不存在")
-    if not _is_admin(user) and row["owner_id"] != user["sub"]:
-        raise HTTPException(403, "无权访问该册子")
-    return row
+    is_owner = row["owner_id"] == user["sub"]
+    if _is_admin(user) or is_owner:
+        return row
+    if readonly_ok and row["is_recommended"]:
+        return row
+    raise HTTPException(403, "无权访问该册子")
 
 
 def _row_to_full(row) -> dict:
@@ -171,9 +174,81 @@ def _row_to_full(row) -> dict:
         "author": row["author"] or "",
         "cover": json.loads(row["cover_json"] or "{}"),
         "chapters": json.loads(row["chapters_json"] or "[]"),
+        "is_recommended": bool(row["is_recommended"]) if "is_recommended" in row.keys() else False,
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
     }
+
+
+def _deduct_booklet_points(db, user: dict, booklet: dict):
+    """下载电子书时扣积分：遍历章节引用的项目，对未解锁项目依次扣积分。"""
+    import uuid as _uuid
+    from datetime import datetime
+    uid = user.get("user_id", user.get("sub", ""))
+    # 收集所有章节引用的 project_id
+    project_ids = set()
+    for ch in booklet.get("chapters") or []:
+        pid = (ch.get("project_id") or "").strip()
+        if pid:
+            project_ids.add(pid)
+    if not project_ids:
+        return
+    marks = ",".join("?" * len(project_ids))
+    rows = db.execute(
+        f"SELECT id, name, is_downloadable, point_cost_deci FROM projects WHERE id IN ({marks})",
+        tuple(project_ids),
+    ).fetchall()
+    # 只处理 is_downloadable=1 且未解锁的项目
+    for proj in rows:
+        if not proj["is_downloadable"]:
+            continue
+        unlock = db.execute(
+            "SELECT 1 FROM project_unlocks WHERE user_id=? AND project_id=? "
+            "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+            (uid, proj["id"]),
+        ).fetchone()
+        if unlock:
+            continue
+        cost = int(proj["point_cost_deci"] or 0)
+        if cost <= 0:
+            continue
+        # 扣积分
+        now = datetime.utcnow().isoformat()
+        cur = db.execute(
+            "UPDATE user_points SET balance_deci = balance_deci - ?, updated_at = ? "
+            "WHERE user_id = ? AND balance_deci >= ?",
+            (cost, now, uid, cost),
+        )
+        if cur.rowcount == 0:
+            # 检查余额
+            pts_row = db.execute(
+                "SELECT balance_deci FROM user_points WHERE user_id=?", (uid,)
+            ).fetchone()
+            balance = int(pts_row["balance_deci"]) if pts_row else 0
+            raise HTTPException(
+                402,
+                f"积分不足：下载画册「{booklet.get('title','')}」需要消耗 {cost/10:.1f} 积分（项目「{proj['name']}」），"
+                f"当前余额 {balance/10:.1f} 积分",
+            )
+        # 记录交易
+        balance_row = db.execute(
+            "SELECT balance_deci FROM user_points WHERE user_id=?", (uid,)
+        ).fetchone()
+        new_balance = int(balance_row["balance_deci"]) if balance_row else 0
+        tx_id = str(_uuid.uuid4())
+        db.execute(
+            "INSERT INTO points_transactions (id, user_id, amount_deci, balance_after_deci, "
+            "type, ref_id, ref_type, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (tx_id, uid, -cost, new_balance, "booklet_download",
+             booklet.get("id", ""), "booklet",
+             f"下载电子书「{booklet.get('title','')}」— 项目「{proj['name']}」"),
+        )
+        # 创建解锁记录
+        db.execute(
+            "INSERT INTO project_unlocks (user_id, project_id, points_spent_deci, unlocked_at) "
+            "VALUES (?, ?, ?, ?)",
+            (uid, proj["id"], cost, now),
+        )
 
 
 # ── 内容源解析 ──
@@ -710,6 +785,7 @@ class BookletUpdate(BaseModel):
     author: str = None
     cover: dict = None
     chapters: list = None
+    is_recommended: bool = None
 
 
 # ══ 静态子路由（必须在 /{booklet_id} 之前注册） ══
@@ -1089,12 +1165,12 @@ def list_booklets(request: Request):
         if _is_admin(user):
             rows = db.execute(
                 "SELECT id, owner_id, owner_role, book_type, title, subtitle, "
-                "chapters_json, updated_at FROM booklets ORDER BY updated_at DESC"
+                "chapters_json, is_recommended, updated_at FROM booklets ORDER BY updated_at DESC"
             ).fetchall()
         else:
             rows = db.execute(
                 "SELECT id, owner_id, owner_role, book_type, title, subtitle, "
-                "chapters_json, updated_at FROM booklets WHERE owner_id=? "
+                "chapters_json, is_recommended, updated_at FROM booklets WHERE owner_id=? OR is_recommended=1 "
                 "ORDER BY updated_at DESC",
                 (user["sub"],),
             ).fetchall()
@@ -1112,6 +1188,7 @@ def list_booklets(request: Request):
                 "title": r["title"],
                 "subtitle": r["subtitle"] or "",
                 "chapter_count": chapter_count,
+                "is_recommended": bool(r["is_recommended"]) if "is_recommended" in r.keys() else False,
                 "updated_at": r["updated_at"],
             })
         return {"booklets": items}
@@ -1154,8 +1231,27 @@ def render_booklet_api(booklet_id: str, request: Request):
     user = _require_user(request)
     db = get_db()
     try:
-        row = _get_booklet_or_403(db, booklet_id, user)
+        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
         booklet = _row_to_full(row)
+        # 如果是推荐画册且用户不是 owner，先克隆为用户自己的副本
+        is_recommended = booklet.get("is_recommended")
+        is_owner = row["owner_id"] == user["sub"]
+        if is_recommended and not is_owner and not _is_admin(user):
+            new_id = f"bk-{uuid.uuid4().hex[:12]}"
+            db.execute(
+                "INSERT INTO booklets (id, owner_id, owner_role, book_type, title, subtitle, "
+                "author, cover_json, chapters_json, is_recommended) "
+                "SELECT ?, ?, ?, book_type, title, subtitle, author, cover_json, chapters_json, 0 "
+                "FROM booklets WHERE id=?",
+                (new_id, user["sub"], user.get("user_type") or "member", booklet_id),
+            )
+            db.commit()
+            booklet["id"] = new_id
+            booklet["owner_id"] = user["sub"]
+            booklet["is_recommended"] = False
+        # 扣积分：遍历章节引用的项目，对未解锁的扣积分
+        if not _is_admin(user):
+            _deduct_booklet_points(db, user, booklet)
     finally:
         db.close()
 
@@ -1222,8 +1318,32 @@ def get_booklet(booklet_id: str, request: Request):
     user = _require_user(request)
     db = get_db()
     try:
-        row = _get_booklet_or_403(db, booklet_id, user)
+        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
         return _row_to_full(row)
+    finally:
+        db.close()
+
+
+# ── API #9a 引用推荐画册（克隆为自己的副本） ──
+
+
+@router.post("/{booklet_id}/clone")
+def clone_booklet(booklet_id: str, request: Request):
+    user = _require_user(request)
+    db = get_db()
+    try:
+        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
+        new_id = f"bk-{uuid.uuid4().hex[:12]}"
+        db.execute(
+            "INSERT INTO booklets (id, owner_id, owner_role, book_type, title, subtitle, "
+            "author, cover_json, chapters_json, is_recommended) "
+            "SELECT ?, ?, ?, book_type, title, subtitle, author, cover_json, chapters_json, 0 "
+            "FROM booklets WHERE id=?",
+            (new_id, user["sub"], user.get("user_type") or "member", booklet_id),
+        )
+        db.commit()
+        new_row = db.execute("SELECT * FROM booklets WHERE id=?", (new_id,)).fetchone()
+        return _row_to_full(new_row)
     finally:
         db.close()
 
@@ -1259,6 +1379,11 @@ def update_booklet(booklet_id: str, req: BookletUpdate, request: Request):
                     raise HTTPException(400, "章节格式非法")
             sets.append("chapters_json=?")
             params.append(json.dumps(req.chapters, ensure_ascii=False))
+        if req.is_recommended is not None:
+            if not _is_admin(user):
+                raise HTTPException(403, "仅管理员可设置推荐状态")
+            sets.append("is_recommended=?")
+            params.append(1 if req.is_recommended else 0)
         if not sets:
             raise HTTPException(400, "没有可更新的字段")
         sets.append("updated_at=CURRENT_TIMESTAMP")

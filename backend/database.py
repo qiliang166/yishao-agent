@@ -1350,11 +1350,16 @@ def init_db():
                 author TEXT DEFAULT '',
                 cover_json TEXT DEFAULT '{}',
                 chapters_json TEXT NOT NULL DEFAULT '[]',
+                is_recommended INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_booklets_owner ON booklets(owner_id)")
+        try:
+            conn.execute("ALTER TABLE booklets ADD COLUMN is_recommended INTEGER DEFAULT 0")
+        except Exception:
+            pass  # column already exists
 
         conn.commit()
     finally:

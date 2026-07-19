@@ -39,6 +39,8 @@ export default function BookletEditorPage() {
             id: b.id, book_type: b.book_type, title: b.title,
             subtitle: b.subtitle || '', author: b.author || '',
             cover: b.cover || {}, chapters: b.chapters || [],
+            is_recommended: b.is_recommended || false,
+            owner_id: b.owner_id || '',
           })
         }
       })
@@ -71,6 +73,7 @@ export default function BookletEditorPage() {
         author: draft.author,
         cover: draft.cover,
         chapters,
+        is_recommended: draft.is_recommended,
       })
       if (r != null) {
         setDraft(d => (d ? { ...d, chapters } : d))

@@ -1273,13 +1273,16 @@ export const api = {
   listBooklets: () =>
     request('/api/booklets').then(d => d.booklets as {
       id: string; owner_id: string; owner_role: string; book_type: string
-      title: string; subtitle: string; chapter_count: number; updated_at: string
+      title: string; subtitle: string; chapter_count: number
+      is_recommended: boolean; updated_at: string
     }[]),
+  cloneBooklet: (id: string) =>
+    request(`/api/booklets/${id}/clone`, { method: 'POST' }),
   createBooklet: (title: string, bookType: string) =>
     request('/api/booklets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, book_type: bookType }) }),
   getBooklet: (id: string) =>
     request(`/api/booklets/${id}`),
-  updateBooklet: (id: string, data: { title?: string; subtitle?: string; author?: string; cover?: any; chapters?: any[] }) =>
+  updateBooklet: (id: string, data: { title?: string; subtitle?: string; author?: string; cover?: any; chapters?: any[]; is_recommended?: boolean }) =>
     request(`/api/booklets/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   deleteBooklet: (id: string) =>
     request(`/api/booklets/${id}`, { method: 'DELETE' }),

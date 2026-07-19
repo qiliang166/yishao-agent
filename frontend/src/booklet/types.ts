@@ -37,6 +37,18 @@ export interface Cover {
   hidden_fixed?: string[]
 }
 
+export interface BookletSummary {
+  id: string
+  book_type: BookType
+  title: string
+  subtitle: string
+  owner_id: string
+  owner_role: string
+  chapter_count: number
+  is_recommended: boolean
+  updated_at: string
+}
+
 export interface BookletDraft {
   id: string
   book_type: BookType
@@ -45,6 +57,8 @@ export interface BookletDraft {
   author: string
   cover: Cover
   chapters: Chapter[]
+  is_recommended?: boolean
+  owner_id?: string
 }
 
 export interface ContentItem {

@@ -2,26 +2,31 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
-import { BOOK_TYPE_LABEL, BookType } from './types'
+import { useAuth } from '../contexts/AuthContext'
+import { BOOK_TYPE_LABEL, BookType, BookletSummary } from './types'
 
 export default function BookletListPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { confirm, toast } = useModal()
+  const { user } = useAuth()
   const base = location.pathname.startsWith('/app') ? '/app/booklets' : '/booklets'
+  const isAdmin = user?.user_type === 'admin'
+  const userId = user?.sub || ''
 
-  const [booklets, setBooklets] = useState<any[]>([])
+  const [booklets, setBooklets] = useState<BookletSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newType, setNewType] = useState<BookType>('a4')
   const [creating, setCreating] = useState(false)
+  const [cloning, setCloning] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
     try {
       const list = await api.listBooklets()
-      if (list != null) setBooklets(list)
+      if (list != null) setBooklets(list as BookletSummary[])
     } catch (e: any) {
       toast(`加载失败: ${e?.message || e}`, 'error')
     } finally {
@@ -48,7 +53,7 @@ export default function BookletListPage() {
     }
   }
 
-  const handleDelete = async (b: any) => {
+  const handleDelete = async (b: BookletSummary) => {
     const ok = await confirm(`确定删除册子「${b.title}」？删除后无法恢复。`)
     if (!ok) return
     try {
@@ -61,6 +66,68 @@ export default function BookletListPage() {
       toast(`删除失败: ${e?.message || e}`, 'error')
     }
   }
+
+  const handleClone = async (b: BookletSummary) => {
+    setCloning(b.id)
+    try {
+      const cloned = await api.cloneBooklet(b.id)
+      if (cloned != null && cloned.id) {
+        toast('已引用到我的册子', 'success')
+        navigate(`${base}/${cloned.id}`)
+      }
+    } catch (e: any) {
+      toast(`引用失败: ${e?.message || e}`, 'error')
+    } finally {
+      setCloning(null)
+    }
+  }
+
+  // 推荐画册：管理员标记为推荐 + 非自己创建的
+  const recommended = booklets.filter(b => b.is_recommended && b.owner_id !== userId)
+  const own = isAdmin
+    ? booklets  // 管理员看到全部
+    : booklets.filter(b => !b.is_recommended || b.owner_id === userId)
+
+  const renderCard = (b: BookletSummary, isRec: boolean) => (
+    <div key={b.id} className="card" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6 }}
+      onClick={() => {
+        if (isRec && !isAdmin) {
+          // 推荐画册：管理员直接编辑，会员先引用再编辑
+          handleClone(b)
+        } else {
+          navigate(`${base}/${b.id}`)
+        }
+      }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 18 }}>{b.book_type === 'ppt' ? '🖥' : '📕'}</span>
+        <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
+        {isRec && (
+          <span style={{
+            fontSize: 10, background: 'var(--primary)', color: '#fff',
+            padding: '1px 6px', borderRadius: 3, fontWeight: 600, flexShrink: 0,
+          }}>⭐ 推荐</span>
+        )}
+      </div>
+      {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
+      <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 10 }}>
+        <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
+        <span>{b.chapter_count} 章</span>
+      </div>
+      <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
+        <span style={{ flex: 1 }}>更新于 {(b.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
+        {isRec ? (
+          cloning === b.id ? (
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>引用中...</span>
+          ) : (
+            <span style={{ fontSize: 10, color: 'var(--primary)' }}>点击引用到我的册子</span>
+          )
+        ) : (
+          <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+            onClick={e => { e.stopPropagation(); handleDelete(b) }}>🗑 删除</button>
+        )}
+      </div>
+    </div>
+  )
 
   return (
     <div style={{ padding: 20 }}>
@@ -79,27 +146,28 @@ export default function BookletListPage() {
           还没有册子 — 点击右上角「➕ 新建册子」开始
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-          {booklets.map(b => (
-            <div key={b.id} className="card" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6 }}
-              onClick={() => navigate(`${base}/${b.id}`)}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: 18 }}>{b.book_type === 'ppt' ? '🖥' : '📕'}</span>
-                <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
-              </div>
-              {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
-              <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 10 }}>
-                <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
-                <span>{b.chapter_count} 章</span>
-              </div>
-              <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
-                <span style={{ flex: 1 }}>更新于 {(b.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
-                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                  onClick={e => { e.stopPropagation(); handleDelete(b) }}>🗑 删除</button>
+        <>
+          {/* 推荐画册区 */}
+          {recommended.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>⭐ 推荐画册</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {recommended.map(b => renderCard(b, true))}
               </div>
             </div>
-          ))}
-        </div>
+          )}
+          {/* 我的画册区 */}
+          {own.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
+                {isAdmin ? '全部画册' : '📝 我的画册'}
+              </h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                {own.map(b => renderCard(b, false))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {showNew && (

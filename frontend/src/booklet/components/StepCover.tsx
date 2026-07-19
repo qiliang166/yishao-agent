@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
+import { useAuth } from '../../contexts/AuthContext'
 import { BookletDraft, Theme, isHtmlFirstChapter } from '../types'
 
 interface Props {
@@ -21,6 +22,8 @@ function Thumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; page
 
 export default function StepCover({ draft, onChange }: Props) {
   const { toast } = useModal()
+  const { user } = useAuth()
+  const isAdmin = user?.user_type === 'admin'
   const [themes, setThemes] = useState<Theme[]>([])
   const [uploading, setUploading] = useState(false)
   const [coverDoc, setCoverDoc] = useState('')
@@ -198,6 +201,15 @@ export default function StepCover({ draft, onChange }: Props) {
               不勾选时，页面外背景跟随所选主题的深色底，衬托书页更醒目。
             </div>
           </div>
+          {isAdmin && (
+            <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+                <input type="checkbox" checked={!!draft.is_recommended}
+                  onChange={e => onChange(d => ({ ...d, is_recommended: e.target.checked }))} />
+                ⭐ 设为推荐画册（所有会员可见，会员可引用到自己的册子）
+              </label>
+            </div>
+          )}
         </div>
       </div>
 

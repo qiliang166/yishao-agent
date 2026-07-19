@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../../services/api'
+import { useAuth } from '../../contexts/AuthContext'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft } from '../types'
 
@@ -11,7 +12,9 @@ interface Props {
 }
 
 export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
-  const { toast } = useModal()
+  const { confirm, toast } = useModal()
+  const { user } = useAuth()
+  const isAdmin = user?.user_type === 'admin'
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewing, setPreviewing] = useState(false)
   const [downloading, setDownloading] = useState(false)
@@ -50,6 +53,16 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
   }
 
   const handleDownload = async () => {
+    // 计算章节涉及的项目 ID 数量
+    const projectIds = new Set(
+      draft.chapters.filter(c => c.enabled).map(c => c.project_id).filter(Boolean)
+    )
+    if (!isAdmin && projectIds.size > 0) {
+      const ok = await confirm(
+        `下载此电子书将消耗相关 ${projectIds.size} 个项目的积分。\n\n确定要继续吗？`
+      )
+      if (!ok) return
+    }
     setDownloading(true)
     try {
       const html = await ensureSavedAndRender()
