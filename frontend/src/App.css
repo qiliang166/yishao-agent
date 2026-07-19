@@ -451,6 +451,11 @@
   transition: all .12s;
   white-space: nowrap;
 }
+.btn:disabled,
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 .btn-primary {
   background: var(--primary);
   color: #fff;
