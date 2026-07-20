@@ -71,6 +71,28 @@ def verify_project_access(project_id: str, user: dict) -> None:
         db.close()
 
 
+def can_access_project(project_id: str, user: dict) -> bool:
+    """Return True if user (member) can access this project's workspace. Admins always True."""
+    if user.get("user_type") == "admin":
+        return True
+    if "user_type" not in user and user.get("sub") == "admin":
+        return True
+    db = get_db()
+    try:
+        uid = user.get("user_id", user.get("sub", ""))
+        row = db.execute(
+            "SELECT 1 FROM projects p "
+            "LEFT JOIN member_workspaces mw ON mw.workspace_id = p.workspace_id AND mw.user_id = ? "
+            "LEFT JOIN workspace_roles wr ON wr.workspace_id = p.workspace_id "
+            "LEFT JOIN user_roles ur ON ur.role_id = wr.role_id AND ur.user_id = ? "
+            "WHERE p.id = ? AND (mw.user_id IS NOT NULL OR ur.user_id IS NOT NULL)",
+            (uid, uid, project_id),
+        ).fetchone()
+        return row is not None
+    finally:
+        db.close()
+
+
 def verify_project_unlock(project_id: str, user: dict) -> None:
     """Raise 402 if user hasn't unlocked this project. Admins are exempt."""
     if user.get("user_type") == "admin":

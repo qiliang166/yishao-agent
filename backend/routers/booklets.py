@@ -18,6 +18,9 @@ import importlib.util
 import io
 import json
 import os
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from permissions import can_access_project
 import re
 import uuid
 from datetime import date
@@ -159,6 +162,15 @@ def _get_booklet_or_403(db, booklet_id: str, user: dict, readonly_ok: bool = Fal
     if _is_admin(user) or is_owner:
         return row
     if readonly_ok and row["is_recommended"]:
+        # 会员预览推荐画册：校验所有章节来源项目的工作区访问权限
+        try:
+            chapters = json.loads(row["chapters_json"] or "[]")
+        except (ValueError, TypeError):
+            chapters = []
+        for ch in chapters:
+            pid = (ch.get("project_id") or "").strip()
+            if pid and not can_access_project(pid, user):
+                raise HTTPException(403, "无权访问该册子（含受限工作区内容）")
         return row
     raise HTTPException(403, "无权访问该册子")
 
@@ -788,6 +800,10 @@ class BookletUpdate(BaseModel):
     is_recommended: bool = None
 
 
+class BookletRenderBody(BaseModel):
+    render_mode: str = None
+
+
 # ══ 静态子路由（必须在 /{booklet_id} 之前注册） ══
 
 
@@ -1164,26 +1180,46 @@ def list_booklets(request: Request):
     try:
         if _is_admin(user):
             rows = db.execute(
-                "SELECT id, owner_id, owner_role, book_type, title, subtitle, "
-                "chapters_json, is_recommended, updated_at FROM booklets ORDER BY updated_at DESC"
+                "SELECT b.id, b.owner_id, b.owner_role, b.book_type, b.title, b.subtitle, "
+                "b.chapters_json, b.is_recommended, b.updated_at, "
+                "u.display_name AS owner_name "
+                "FROM booklets b LEFT JOIN users u ON u.id = b.owner_id ORDER BY b.updated_at DESC"
             ).fetchall()
         else:
             rows = db.execute(
-                "SELECT id, owner_id, owner_role, book_type, title, subtitle, "
-                "chapters_json, is_recommended, updated_at FROM booklets WHERE owner_id=? OR is_recommended=1 "
-                "ORDER BY updated_at DESC",
+                "SELECT b.id, b.owner_id, b.owner_role, b.book_type, b.title, b.subtitle, "
+                "b.chapters_json, b.is_recommended, b.updated_at, "
+                "u.display_name AS owner_name "
+                "FROM booklets b LEFT JOIN users u ON u.id = b.owner_id "
+                "WHERE b.owner_id=? OR b.is_recommended=1 "
+                "ORDER BY b.updated_at DESC",
                 (user["sub"],),
             ).fetchall()
         items = []
+        is_admin = _is_admin(user)
+        uid = user["sub"]
         for r in rows:
             try:
-                chapter_count = len(json.loads(r["chapters_json"] or "[]"))
+                chapters = json.loads(r["chapters_json"] or "[]")
+                chapter_count = len(chapters)
             except (ValueError, TypeError):
+                chapters = []
                 chapter_count = 0
+            # 会员：推荐画册需校验来源工作区访问权限
+            if not is_admin and r["is_recommended"] and r["owner_id"] != uid:
+                blocked = False
+                for ch in chapters:
+                    pid = (ch.get("project_id") or "").strip()
+                    if pid and not can_access_project(pid, user):
+                        blocked = True
+                        break
+                if blocked:
+                    continue
             items.append({
                 "id": r["id"],
                 "owner_id": r["owner_id"],
                 "owner_role": r["owner_role"],
+                "owner_name": r["owner_name"] or "",
                 "book_type": r["book_type"],
                 "title": r["title"],
                 "subtitle": r["subtitle"] or "",
@@ -1227,33 +1263,17 @@ def create_booklet(req: BookletCreate, request: Request):
 
 
 @router.post("/{booklet_id}/render")
-def render_booklet_api(booklet_id: str, request: Request):
+def render_booklet_api(booklet_id: str, request: Request, body: BookletRenderBody = None):
     user = _require_user(request)
     db = get_db()
     try:
         row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
         booklet = _row_to_full(row)
-        # 如果是推荐画册且用户不是 owner，先克隆为用户自己的副本
-        is_recommended = booklet.get("is_recommended")
-        is_owner = row["owner_id"] == user["sub"]
-        if is_recommended and not is_owner and not _is_admin(user):
-            new_id = f"bk-{uuid.uuid4().hex[:12]}"
-            db.execute(
-                "INSERT INTO booklets (id, owner_id, owner_role, book_type, title, subtitle, "
-                "author, cover_json, chapters_json, is_recommended) "
-                "SELECT ?, ?, ?, book_type, title, subtitle, author, cover_json, chapters_json, 0 "
-                "FROM booklets WHERE id=?",
-                (new_id, user["sub"], user.get("user_type") or "member", booklet_id),
-            )
-            db.commit()
-            booklet["id"] = new_id
-            booklet["owner_id"] = user["sub"]
-            booklet["is_recommended"] = False
-        # 扣积分：遍历章节引用的项目，对未解锁的扣积分
-        if not _is_admin(user):
-            _deduct_booklet_points(db, user, booklet)
     finally:
         db.close()
+
+    if body and body.render_mode and body.render_mode in ("paged", "flow", "standard"):
+        booklet["cover"] = {**booklet.get("cover", {}), "render_mode": body.render_mode}
 
     theme = _resolve_theme(booklet)
 
@@ -1278,7 +1298,7 @@ def booklet_page_map(booklet_id: str, request: Request):
     user = _require_user(request)
     db = get_db()
     try:
-        row = _get_booklet_or_403(db, booklet_id, user)
+        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
         booklet = _row_to_full(row)
     finally:
         db.close()

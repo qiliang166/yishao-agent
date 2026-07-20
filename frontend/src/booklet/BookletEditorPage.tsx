@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 import { useModal } from '../components/ModalProvider'
 import { BookletDraft, BOOK_TYPE_LABEL, normalizeChapters } from './types'
 import StepContent from './components/StepContent'
@@ -22,6 +23,9 @@ export default function BookletEditorPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { toast } = useModal()
+  const { user } = useAuth()
+  const isAdmin = user?.user_type === 'admin'
+  const userId = user?.user_id || ''
   const base = location.pathname.startsWith('/app') ? '/app/booklets' : '/booklets'
 
   const [draft, setDraft] = useState<BookletDraft | null>(null)
@@ -29,6 +33,11 @@ export default function BookletEditorPage() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState('')
+  const [cloning, setCloning] = useState(false)
+
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleInput, setTitleInput] = useState('')
+  const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -47,7 +56,6 @@ export default function BookletEditorPage() {
       .catch((e: any) => setLoadError(e?.message || String(e)))
   }, [id])
 
-  // 未保存离开提示（浏览器级）
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (dirty) { e.preventDefault(); e.returnValue = '' }
@@ -55,6 +63,13 @@ export default function BookletEditorPage() {
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [dirty])
+
+  useEffect(() => {
+    if (editingTitle && titleInputRef.current) {
+      titleInputRef.current.focus()
+      titleInputRef.current.select()
+    }
+  }, [editingTitle])
 
   const onChange = (updater: (d: BookletDraft) => BookletDraft) => {
     setDraft(d => (d ? updater(d) : d))
@@ -65,16 +80,16 @@ export default function BookletEditorPage() {
     if (!draft) return false
     setSaving(true)
     try {
-      // md 章节一律从原文重算渲染快照，不信任存量（旧草稿保存一次即自愈）
       const chapters = normalizeChapters(draft.chapters)
-      const r = await api.updateBooklet(draft.id, {
+      const payload: any = {
         title: draft.title || '未命名册子',
         subtitle: draft.subtitle,
         author: draft.author,
         cover: draft.cover,
         chapters,
-        is_recommended: draft.is_recommended,
-      })
+      }
+      if (isAdmin) payload.is_recommended = draft.is_recommended
+      const r = await api.updateBooklet(draft.id, payload)
       if (r != null) {
         setDraft(d => (d ? { ...d, chapters } : d))
         setDirty(false)
@@ -90,6 +105,22 @@ export default function BookletEditorPage() {
     }
   }
 
+  const handleClone = async () => {
+    if (!draft) return
+    setCloning(true)
+    try {
+      const cloned = await api.cloneBooklet(draft.id)
+      if (cloned != null && cloned.id) {
+        toast('已引用到我的册子', 'success')
+        navigate(`${base}/${cloned.id}`)
+      }
+    } catch (e: any) {
+      toast(`引用失败: ${e?.message || e}`, 'error')
+    } finally {
+      setCloning(false)
+    }
+  }
+
   const handleBack = async () => {
     if (dirty) {
       const saved = await handleSave()
@@ -97,6 +128,28 @@ export default function BookletEditorPage() {
     }
     navigate(base)
   }
+
+  const startRename = () => {
+    if (!draft) return
+    setTitleInput(draft.title || '')
+    setEditingTitle(true)
+  }
+
+  const commitRename = () => {
+    const trimmed = titleInput.trim()
+    if (trimmed && draft && trimmed !== draft.title) {
+      onChange(d => ({ ...d, title: trimmed }))
+    }
+    setEditingTitle(false)
+  }
+
+  const cancelRename = () => {
+    setEditingTitle(false)
+  }
+
+  const isOwnerView = !draft || draft.owner_id === userId || isAdmin
+  const isReadonly = !isOwnerView
+  const showUseRecommend = isReadonly && draft.is_recommended
 
   if (loadError) {
     return (
@@ -112,16 +165,50 @@ export default function BookletEditorPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
-      {/* 顶部：标题栏 + 步骤导航（与明细页生成流程同款视觉） */}
+      {/* 顶部：标题栏 + 步骤导航 */}
       <div className="proj-header-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--card)' }}>
         <button className="btn btn-ghost btn-sm" onClick={handleBack}>← 返回</button>
-        <span style={{ fontSize: 14, fontWeight: 600 }}>📚 {draft.title || '未命名册子'}</span>
+        {editingTitle ? (
+          <input
+            ref={titleInputRef}
+            className="form-input"
+            value={titleInput}
+            onChange={e => setTitleInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') commitRename()
+              if (e.key === 'Escape') cancelRename()
+            }}
+            onBlur={commitRename}
+            style={{ fontSize: 14, fontWeight: 600, padding: '2px 6px', width: 200 }}
+          />
+        ) : (
+          <span
+            style={{ fontSize: 14, fontWeight: 600, ...(isOwnerView ? { cursor: 'pointer' } : {}) }}
+            onClick={isOwnerView ? startRename : undefined}
+            title={isOwnerView ? '点击重命名' : undefined}
+          >📚 {draft.title || '未命名册子'}</span>
+        )}
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{BOOK_TYPE_LABEL[draft.book_type]}</span>
         <span style={{ flex: 1 }} />
-        {dirty && <span style={{ fontSize: 10, color: 'var(--warning, #d97706)' }}>● 未保存</span>}
-        <button className="btn btn-primary btn-sm" disabled={saving} onClick={handleSave}>
-          {saving ? '保存中...' : '💾 保存草稿'}
-        </button>
+        {!isReadonly && dirty && <span style={{ fontSize: 10, color: 'var(--warning, #d97706)' }}>● 未保存</span>}
+        {isAdmin && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer', marginRight: 8 }}>
+            <input type="checkbox" checked={!!draft.is_recommended}
+              onChange={e => onChange(d => ({ ...d, is_recommended: e.target.checked }))} />
+            ⭐ 推荐
+          </label>
+        )}
+        {showUseRecommend && (
+          <button type="button" className="btn btn-ghost btn-sm" disabled={cloning} onClick={handleClone}
+            style={{ fontSize: 11 }}>
+            {cloning ? '引用中...' : '使用推荐'}
+          </button>
+        )}
+        {isOwnerView && (
+          <button className="btn btn-primary btn-sm" disabled={saving} onClick={handleSave}>
+            {saving ? '保存中...' : '💾 保存草稿'}
+          </button>
+        )}
       </div>
 
       <div className="top-nav">
@@ -136,16 +223,14 @@ export default function BookletEditorPage() {
         ))}
       </div>
 
-      {/* 步骤内容区 */}
       <div style={{ flex: 1, minHeight: 0, padding: 14, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        {step === 1 && <StepContent draft={draft} onChange={onChange} />}
-        {step === 2 && <StepArrange draft={draft} onChange={onChange} />}
-        {step === 3 && <StepCover draft={draft} onChange={onChange} />}
-        {step === 4 && <StepPages draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} />}
-        {step === 5 && <StepFinish draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} />}
+        {step === 1 && <StepContent draft={draft} onChange={onChange} readonly={isReadonly} />}
+        {step === 2 && <StepArrange draft={draft} onChange={onChange} readonly={isReadonly} />}
+        {step === 3 && <StepCover draft={draft} onChange={onChange} readonly={isReadonly} />}
+        {step === 4 && <StepPages draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} readonly={isReadonly} />}
+        {step === 5 && <StepFinish draft={draft} dirty={dirty} onSave={handleSave} onChange={onChange} readonly={isReadonly} />}
       </div>
 
-      {/* 底部：上一步/下一步 */}
       <div style={{ display: 'flex', gap: 8, padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'var(--card)' }}>
         <button className="btn btn-ghost btn-sm" disabled={step === 1} onClick={() => setStep(step - 1)}>← 上一步</button>
         <span style={{ flex: 1 }} />

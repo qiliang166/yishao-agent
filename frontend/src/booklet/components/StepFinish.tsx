@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { api } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useModal } from '../../components/ModalProvider'
@@ -9,9 +9,10 @@ interface Props {
   dirty: boolean
   onSave: () => Promise<boolean>
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
+  readonly?: boolean
 }
 
-export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
+export default function StepFinish({ draft, dirty, onSave, onChange, readonly }: Props) {
   const { confirm, toast } = useModal()
   const { user } = useAuth()
   const isAdmin = user?.user_type === 'admin'
@@ -22,9 +23,13 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
 
   const enabledCount = draft.chapters.filter(c => c.enabled).length
   const renderMode = draft.cover.render_mode || 'paged'
+  const renderModeRef = useRef(renderMode)
+  renderModeRef.current = renderMode
 
-  const setRenderMode = (mode: 'paged' | 'flow' | 'standard') =>
+  const setRenderMode = (mode: 'paged' | 'flow' | 'standard') => {
     onChange(d => ({ ...d, cover: { ...d.cover, render_mode: mode } }))
+    setPreviewHtml('')
+  }
 
   const MODE_OPTIONS: { mode: 'paged' | 'flow' | 'standard'; label: string; descA4: string; descPpt: string }[] = [
     { mode: 'paged', label: '翻页式', descA4: '电子书形态：一次一页居中显示，按钮/方向键翻页', descPpt: '幻灯片形态：一次一屏，按钮/方向键翻页' },
@@ -35,13 +40,18 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
   const ensureSavedAndRender = async (): Promise<string | null> => {
     const ok = await onSave()
     if (!ok) return null
-    return api.renderBooklet(draft.id)
+    return api.renderBooklet(draft.id, renderModeRef.current)
   }
 
-  const handlePreview = async () => {
+  const doPreview = async () => {
     setPreviewing(true)
     try {
-      const html = await ensureSavedAndRender()
+      let html: string | null = null
+      if (readonly) {
+        html = await api.renderBooklet(draft.id, renderModeRef.current)
+      } else {
+        html = await ensureSavedAndRender()
+      }
       if (html != null) {
         setPreviewHtml(html)
       }
@@ -53,7 +63,6 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
   }
 
   const handleDownload = async () => {
-    // 计算章节涉及的项目 ID 数量
     const projectIds = new Set(
       draft.chapters.filter(c => c.enabled).map(c => c.project_id).filter(Boolean)
     )
@@ -85,7 +94,6 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
     }
   }
 
-  // 翻页式产物自带窗口自适应，缩放无意义（会被产物内部 fit 抵消）→ 固定 100%；滚动型限 25–100%
   const effZoom = renderMode === 'paged' ? 100 : Math.min(zoom, 100)
   const scale = effZoom / 100
 
@@ -134,19 +142,27 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
                 ? '打开后逐页向下滚动，Ctrl+P 打印即得逐页排版的 PDF。'
                 : '打开后上下滚动浏览全部内容。'}
           </div>
-          <button className="btn btn-primary" style={{ width: '100%', padding: '10px 0', fontSize: 14 }}
-            disabled={downloading || enabledCount === 0} onClick={handleDownload}>
-            {downloading ? '⏳ 合成中...' : '📥 合成并下载电子书'}
-          </button>
+          {readonly ? (
+            <div className="card-hint" style={{ marginTop: 8, marginBottom: 0, color: 'var(--warning, #d97706)' }}>
+              推荐画册请先点击顶部「使用推荐」按钮引用为自己的副本，即可下载。
+            </div>
+          ) : (
+            <>
+              <button className="btn btn-primary" style={{ width: '100%', padding: '10px 0', fontSize: 14 }}
+                disabled={downloading || enabledCount === 0} onClick={handleDownload}>
+                {downloading ? '⏳ 合成中...' : '📥 合成并下载电子书'}
+              </button>
+              {dirty && (
+                <div className="card-hint" style={{ marginTop: 8, marginBottom: 0 }}>
+                  有未保存的修改 — 预览/下载时会自动先保存草稿。
+                </div>
+              )}
+            </>
+          )}
           <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 8 }}
-            disabled={previewing || enabledCount === 0} onClick={handlePreview}>
+            disabled={previewing || enabledCount === 0} onClick={doPreview}>
             {previewing ? '⏳ 生成预览中...' : '👁 整书预览'}
           </button>
-          {dirty && (
-            <div className="card-hint" style={{ marginTop: 8, marginBottom: 0 }}>
-              有未保存的修改 — 预览/下载时会自动先保存草稿。
-            </div>
-          )}
         </div>
       </div>
 
@@ -172,7 +188,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange }: Props) {
                 width: `${10000 / effZoom}%`, height: `${10000 / effZoom}%`,
                 transform: `scale(${scale})`, transformOrigin: 'top left',
               }}>
-                <iframe srcDoc={previewHtml} title="booklet-preview" sandbox="allow-scripts"
+                <iframe key={renderMode} srcDoc={previewHtml} title="booklet-preview" sandbox="allow-scripts"
                   style={{ width: '100%', height: '100%', border: 'none', display: 'block', background: '#fff' }} />
               </div>
             </div>

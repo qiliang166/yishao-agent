@@ -9,11 +9,11 @@ interface Props {
   dirty: boolean
   onSave: () => Promise<boolean>
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
+  readonly?: boolean
 }
 
 const FIXED_LABEL: Record<string, string> = { flyleaf: '扉页', toc: '目录', back: '封底' }
 
-/** order 须为 0..n-1 完整排列才生效（与后端 _visible_page_indices / 模板编排脚本同规则） */
 function validOrder(order: number[] | undefined | null, count: number): number[] {
   const natural = Array.from({ length: count }, (_, i) => i)
   if (!Array.isArray(order)) return natural
@@ -32,7 +32,6 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-/** 生成 PPT 章节标题页缩略图文档（与合成模板 bk-chapter-divider 同款） */
 function chapterDividerDoc(chapterNo: number, title: string, src: string, theme: Theme | null): string {
   const vars = themeVars(theme)
   const varCss = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';')
@@ -56,7 +55,6 @@ body{font-family:var(--font);color:var(--text)}
 </section></body></html>`
 }
 
-/** 把拆页产物包成自包含文档（iframe 缩略图用，页数分界与合成产物一致） */
 function proseDoc(bookType: 'a4' | 'ppt', inner: string, theme: Theme | null, bgColor?: string): string {
   const vars = themeVars(theme)
   const varCss = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(';')
@@ -77,7 +75,7 @@ function Thumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; page
   )
 }
 
-export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
+export default function StepPages({ draft, dirty, onSave, onChange, readonly }: Props) {
   const [pageMap, setPageMap] = useState<PageMapChapter[] | null>(null)
   const [fixedKeys, setFixedKeys] = useState<string[]>([])
   const [fixedDocs, setFixedDocs] = useState<Record<string, string>>({})
@@ -101,7 +99,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
   useEffect(() => {
     api.bookletThemes()
       .then(list => { if (list != null) setThemes(list) })
-      .catch(() => { /* 主题加载失败时缩略图用默认配色，不阻断编排 */ })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -128,7 +126,6 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
     load()
   }, [reloadKey])
 
-  /* 正文章节浏览器端拆页（与合成模板 bkSplitProse 同算法）；网页式不分页不拆 */
   useEffect(() => {
     if (!pageMap || isFlow) { setProseDocs({}); return }
     const out: Record<string, string[]> = {}
@@ -145,7 +142,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
           chapterSrc: ch.project_name ? `来源：${ch.project_name}` : '自建章节',
         })
         out[pm.chapter_id] = pages.map(p => proseDoc(draft.book_type, p, theme, bg))
-      } catch { /* 拆页失败回退单卡展示 */ }
+      } catch {}
     })
     setProseDocs(out)
   }, [pageMap, theme, isFlow, draft.book_type])
@@ -186,7 +183,6 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
     }))
   }
 
-  /* 正文拆页级操作写 prose_* 新字段：与 hidden_pages=[0]（整章隐藏）语义独立，翻页式/标准页合成时生效 */
   const toggleProsePage = (chapterId: string, idx: number) => {
     onChange(d => ({
       ...d,
@@ -222,7 +218,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
   }
 
   const eyeBtn = (hidden: boolean, onClick: () => void, title: string) => (
-    <button className="btn btn-ghost btn-sm" title={title} onClick={onClick}
+    <button className="btn btn-ghost btn-sm" title={title} onClick={onClick} disabled={readonly}
       style={{ fontSize: 10, padding: '1px 6px' }}>
       {hidden ? '🚫 已隐藏' : '👁 显示中'}
     </button>
@@ -274,7 +270,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
 
-        {/* 固定页：可隐藏不可排序（封面不可隐藏） */}
+        {/* 固定页 */}
         <div style={{ fontSize: 12, fontWeight: 600, margin: '8px 0 6px' }}>📘 固定页</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div style={cardStyle(false)}>
@@ -293,7 +289,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
                   : fixedFallback(key === 'toc' ? '📋' : key === 'flyleaf' ? '📃' : '📄', FIXED_LABEL[key] || key)}
                 <div style={{ padding: '3px 4px', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                   <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{FIXED_LABEL[key] || key}</span>
-                  {eyeBtn(hidden, () => toggleFixed(key), hidden ? '恢复显示该固定页' : '隐藏该固定页（不进合成产物）')}
+                  {!readonly && eyeBtn(hidden, () => toggleFixed(key), hidden ? '恢复显示该固定页' : '隐藏该固定页（不进合成产物）')}
                 </div>
               </div>
             )
@@ -321,7 +317,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
                     : pm.kind === 'fulldoc' ? '页面章节（1 页）' : `${count} 页`}
                   {singlePage && '，隐藏后整章不进合成'}
                 </span>
-                {proseMulti && eyeBtn(chapterHidden, () => togglePage(pm.chapter_id, 0),
+                {!readonly && proseMulti && eyeBtn(chapterHidden, () => togglePage(pm.chapter_id, 0),
                   chapterHidden ? '恢复显示整章' : '隐藏整章（所有页不进合成产物）')}
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -335,7 +331,7 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
                     />
                     <div style={{ padding: '3px 4px', display: 'flex', justifyContent: 'center' }}>
                       <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginRight: 2 }}>章节标题页</span>
-                      {eyeBtn(!!ch?.hide_divider, () => toggleDivider(pm.chapter_id), ch?.hide_divider ? '恢复显示章节标题页' : '隐藏章节标题页')}
+                      {!readonly && eyeBtn(!!ch?.hide_divider, () => toggleDivider(pm.chapter_id), ch?.hide_divider ? '恢复显示章节标题页' : '隐藏章节标题页')}
                     </div>
                   </div>
                 )}
@@ -363,26 +359,28 @@ export default function StepPages({ draft, dirty, onSave, onChange }: Props) {
                       )}
                       <div style={{ padding: '3px 4px', display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'center' }}>
                         <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginRight: 2 }}>第{pos + 1}页</span>
-                        {proseMulti ? (
-                          <>
-                            <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === 0}
-                              title="向前移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, -1)}>◀</button>
-                            <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === order.length - 1}
-                              title="向后移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, 1)}>▶</button>
-                            {eyeBtn(hidden, () => toggleProsePage(pm.chapter_id, pageIdx), hidden ? '恢复显示该页' : '隐藏该页（不进合成产物）')}
-                          </>
-                        ) : (
-                          <>
-                            {!singlePage && (
-                              <>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === 0}
-                                  title="向前移动" onClick={() => movePage(pm.chapter_id, count, pos, -1)}>◀</button>
-                                <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === order.length - 1}
-                                  title="向后移动" onClick={() => movePage(pm.chapter_id, count, pos, 1)}>▶</button>
-                              </>
-                            )}
-                            {eyeBtn(hidden, () => togglePage(pm.chapter_id, pageIdx), hidden ? '恢复显示该页' : '隐藏该页（不进合成产物）')}
-                          </>
+                        {!readonly && (
+                          proseMulti ? (
+                            <>
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === 0}
+                                title="向前移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, -1)}>◀</button>
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === order.length - 1}
+                                title="向后移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, 1)}>▶</button>
+                              {eyeBtn(hidden, () => toggleProsePage(pm.chapter_id, pageIdx), hidden ? '恢复显示该页' : '隐藏该页（不进合成产物）')}
+                            </>
+                          ) : (
+                            <>
+                              {!singlePage && (
+                                <>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === 0}
+                                    title="向前移动" onClick={() => movePage(pm.chapter_id, count, pos, -1)}>◀</button>
+                                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === order.length - 1}
+                                    title="向后移动" onClick={() => movePage(pm.chapter_id, count, pos, 1)}>▶</button>
+                                </>
+                              )}
+                              {eyeBtn(hidden, () => togglePage(pm.chapter_id, pageIdx), hidden ? '恢复显示该页' : '隐藏该页（不进合成产物）')}
+                            </>
+                          )
                         )}
                       </div>
                     </div>

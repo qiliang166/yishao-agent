@@ -7,9 +7,10 @@ import MdToolbar from './MdToolbar'
 interface Props {
   draft: BookletDraft
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
+  readonly?: boolean
 }
 
-export default function StepContent({ draft, onChange }: Props) {
+export default function StepContent({ draft, onChange, readonly }: Props) {
   const { toast } = useModal()
   const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([])
   const [wsId, setWsId] = useState('')
@@ -117,7 +118,6 @@ export default function StepContent({ draft, onChange }: Props) {
     const officeExt = /\.(docx?|xlsx)$/i.exec(file.name)?.[1]?.toLowerCase()
     try {
       if (officeExt) {
-        // Word/Excel 走服务端转 Markdown
         setImporting(true)
         const r = await api.bookletImportFile(file)
         if (r != null && r.markdown) {
@@ -146,12 +146,11 @@ export default function StepContent({ draft, onChange }: Props) {
 
   return (
     <div className="panel-grid">
-      {/* overflow hidden 覆盖全局 .panel-left 的滚动：让内容树卡片内部滚动，自建章节卡片始终可见 */}
       <div className="panel-left" style={{ overflow: 'hidden' }}>
         <div className="card" style={{ flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column' }}>
           <div className="card-title" style={{ flexShrink: 0 }}>📂 从工作区调取内容</div>
           <div className="card-hint" style={{ flexShrink: 0 }}>勾选要装进册子的内容，可跨明细、跨工作区多选。</div>
-          <select className="form-input" value={wsId} onChange={e => setWsId(e.target.value)} style={{ flexShrink: 0 }}>
+          <select className="form-input" value={wsId} onChange={e => setWsId(e.target.value)} style={{ flexShrink: 0 }} disabled={readonly}>
             {workspaces.length === 0 && <option value="">（无可用工作区）</option>}
             {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
@@ -170,10 +169,10 @@ export default function StepContent({ draft, onChange }: Props) {
                     <label key={item.source_type + item.source_key + item.label}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 6, padding: '3px 4px 3px 16px',
-                        fontSize: 12, cursor: item.available ? 'pointer' : 'not-allowed',
+                        fontSize: 12, cursor: readonly || !item.available ? 'not-allowed' : 'pointer',
                         opacity: item.available ? 1 : 0.45,
                       }}>
-                      <input type="checkbox" checked={added} disabled={!item.available || busy}
+                      <input type="checkbox" checked={added} disabled={readonly || !item.available || busy}
                         onChange={() => handleToggle(p, item)} />
                       <span>{item.label}</span>
                       {busy && <span>⏳</span>}
@@ -186,43 +185,45 @@ export default function StepContent({ draft, onChange }: Props) {
           </div>
         </div>
 
-        <div className="card" style={{ flexShrink: 0 }}>
-          <div className="card-title">✍ 自己写一章</div>
-          {!showCustom ? (
-            <button className="btn btn-ghost btn-sm" onClick={() => setShowCustom(true)}>➕ 新增自建章节</button>
-          ) : (
-            <div>
-              <input className="form-input" placeholder="章节标题" value={customTitle}
-                onChange={e => setCustomTitle(e.target.value)} />
-              {customFormat === 'md' ? (
-                <div style={{ marginTop: 6 }}>
-                  <MdToolbar textareaRef={customTaRef} value={customText} onChange={setCustomText} />
-                  <textarea ref={customTaRef} className="form-input"
-                    placeholder="输入或粘贴内容（支持 Markdown / 纯文本，用上方按钮插入格式）"
-                    value={customText} onChange={e => setCustomText(e.target.value)}
-                    style={{ height: 120, resize: 'none', fontFamily: 'inherit', width: '100%' }} />
+        {!readonly && (
+          <div className="card" style={{ flexShrink: 0 }}>
+            <div className="card-title">✍ 自己写一章</div>
+            {!showCustom ? (
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowCustom(true)}>➕ 新增自建章节</button>
+            ) : (
+              <div>
+                <input className="form-input" placeholder="章节标题" value={customTitle}
+                  onChange={e => setCustomTitle(e.target.value)} />
+                {customFormat === 'md' ? (
+                  <div style={{ marginTop: 6 }}>
+                    <MdToolbar textareaRef={customTaRef} value={customText} onChange={setCustomText} />
+                    <textarea ref={customTaRef} className="form-input"
+                      placeholder="输入或粘贴内容（支持 Markdown / 纯文本，用上方按钮插入格式）"
+                      value={customText} onChange={e => setCustomText(e.target.value)}
+                      style={{ height: 120, resize: 'none', fontFamily: 'inherit', width: '100%' }} />
+                  </div>
+                ) : (
+                  <div className="card-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                    已导入 HTML 页面章节（{customText.length} 字符）— 加入后可在第②步页面里点字修改。
+                    <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px' }}
+                      onClick={() => { setCustomText(''); setCustomFormat('md') }}>清空重来</button>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <label className="btn btn-ghost btn-sm" style={{ cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.6 : 1 }}>
+                    {importing ? '⏳ 转换中...' : '📁 导入文件'}
+                    <input type="file" accept=".md,.txt,.html,.htm,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={importing}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = '' }} />
+                  </label>
+                  <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>支持 md/txt/html/Word/Excel</span>
+                  <span style={{ flex: 1 }} />
+                  <button className="btn btn-ghost btn-sm" onClick={resetCustom}>取消</button>
+                  <button className="btn btn-primary btn-sm" onClick={handleAddCustom}>加入册子</button>
                 </div>
-              ) : (
-                <div className="card-hint" style={{ marginTop: 6, marginBottom: 0 }}>
-                  已导入 HTML 页面章节（{customText.length} 字符）— 加入后可在第②步页面里点字修改。
-                  <button className="btn btn-ghost btn-sm" style={{ marginLeft: 6, fontSize: 10, padding: '1px 6px' }}
-                    onClick={() => { setCustomText(''); setCustomFormat('md') }}>清空重来</button>
-                </div>
-              )}
-              <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                <label className="btn btn-ghost btn-sm" style={{ cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.6 : 1 }}>
-                  {importing ? '⏳ 转换中...' : '📁 导入文件'}
-                  <input type="file" accept=".md,.txt,.html,.htm,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={importing}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = '' }} />
-                </label>
-                <span style={{ fontSize: 9, color: 'var(--text-secondary)' }}>支持 md/txt/html/Word/Excel</span>
-                <span style={{ flex: 1 }} />
-                <button className="btn btn-ghost btn-sm" onClick={resetCustom}>取消</button>
-                <button className="btn btn-primary btn-sm" onClick={handleAddCustom}>加入册子</button>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="panel-right">
@@ -249,9 +250,11 @@ export default function StepContent({ draft, onChange }: Props) {
               ))}
             </div>
           )}
-          <div className="card-hint" style={{ marginTop: 8, marginBottom: 0, flexShrink: 0 }}>
-            下一步可调整章节顺序、重命名和编辑内容。
-          </div>
+          {!readonly && (
+            <div className="card-hint" style={{ marginTop: 8, marginBottom: 0, flexShrink: 0 }}>
+              下一步可调整章节顺序、重命名和编辑内容。
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -44,6 +44,7 @@ export interface BookletSummary {
   subtitle: string
   owner_id: string
   owner_role: string
+  owner_name: string
   chapter_count: number
   is_recommended: boolean
   updated_at: string

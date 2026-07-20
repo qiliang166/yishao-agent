@@ -1309,8 +1309,15 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(d => (d as { doc: string }).doc),
-  renderBooklet: async (id: string) => {
-    const res = await fetch(`/api/booklets/${id}/render`, { method: 'POST', headers: getAuthHeaders() })
+  renderBooklet: async (id: string, renderMode?: string) => {
+    const body = renderMode ? JSON.stringify({ render_mode: renderMode }) : undefined
+    const headers = { ...getAuthHeaders() }
+    if (body) headers['Content-Type'] = 'application/json'
+    const res = await fetch(`/api/booklets/${id}/render`, {
+      method: 'POST',
+      headers,
+      body,
+    })
     if (!res.ok) {
       let detail = `服务器错误 (${res.status})`
       try { detail = (await res.json()).detail || detail } catch { /* not json */ }

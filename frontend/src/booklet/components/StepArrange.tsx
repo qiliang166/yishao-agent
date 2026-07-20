@@ -10,6 +10,7 @@ import MdToolbar from './MdToolbar'
 interface Props {
   draft: BookletDraft
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
+  readonly?: boolean
 }
 
 const PROSE_CSS = `
@@ -29,7 +30,7 @@ const PROSE_CSS = `
 .bkp-prose hr { border: none; border-top: 1px solid var(--text); opacity: 0.25; margin: 12px 0; }
 `
 
-export default function StepArrange({ draft, onChange }: Props) {
+export default function StepArrange({ draft, onChange, readonly }: Props) {
   const { confirm, prompt, toast } = useModal()
   const [selectedId, setSelectedId] = useState('')
   const [refreshingId, setRefreshingId] = useState('')
@@ -72,8 +73,6 @@ export default function StepArrange({ draft, onChange }: Props) {
     setIframeKey(k => k + 1)
   }, [selectedId])
 
-  /* prose：iframe 高度=内容自然高（body.scrollHeight 不受视口钳制，宽度变化后重测不棘轮）
-     非 prose：按预览框宽度整体缩放 1280 宽的 HTML 页面 */
   const measureProseHeight = () => {
     const doc = iframeRef.current?.contentDocument
     const h = doc?.body?.scrollHeight
@@ -96,7 +95,6 @@ export default function StepArrange({ draft, onChange }: Props) {
     return () => ro.disconnect()
   }, [isProse, iframeKey])
 
-  // Content HTML for the iframe — memoized to prevent spurious reloads
   const displayHtml = useMemo(() => {
     if (!selected) return ''
     if (isProse) {
@@ -168,8 +166,6 @@ ${PROSE_CSS}
     setIframeKey(k => k + 1)
   }
 
-  // ── Unified editor handlers ──
-
   const saveIframeSelection = () => {
     const iframe = iframeRef.current
     if (!iframe?.contentDocument) return
@@ -213,14 +209,12 @@ ${PROSE_CSS}
   const extractIframeHtml = (): string | null => {
     const doc = iframeRef.current?.contentDocument
     if (!doc || !selected) return null
-    // 存前剥离编辑态属性与注入样式，避免写进章节 HTML
     clearEditableDoc(doc)
     return '<!DOCTYPE html>\n' + doc.documentElement.outerHTML
   }
 
   const toggleEdit = () => {
     if (editorMode === 'edit') {
-      // Finish editing: extract HTML, update draft
       const html = extractIframeHtml()
       if (html) {
         onChange(d => ({
@@ -354,29 +348,31 @@ ${PROSE_CSS}
                     {c.source_type === 'custom' ? (c.content_format === 'html' ? '自建·页面' : '自建') : c.source_type === 'step_md' ? '文档' : '课件'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }} title="上移"
-                    disabled={i === 0} onClick={e => { e.stopPropagation(); move(i, -1) }}>↑</button>
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }} title="下移"
-                    disabled={i === draft.chapters.length - 1} onClick={e => { e.stopPropagation(); move(i, 1) }}>↓</button>
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
-                    onClick={e => { e.stopPropagation(); handleRename(c.id, c.title) }}>重命名</button>
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
-                    onClick={e => {
-                      e.stopPropagation()
-                      onChange(d => ({ ...d, chapters: d.chapters.map(x => x.id === c.id ? { ...x, enabled: !x.enabled } : x) }))
-                    }}>{c.enabled ? '停用' : '启用'}</button>
-                  {c.source_type !== 'custom' && (
+                {!readonly && (
+                  <div style={{ display: 'flex', gap: 2, marginTop: 4 }}>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }} title="上移"
+                      disabled={i === 0} onClick={e => { e.stopPropagation(); move(i, -1) }}>↑</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }} title="下移"
+                      disabled={i === draft.chapters.length - 1} onClick={e => { e.stopPropagation(); move(i, 1) }}>↓</button>
                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
-                      disabled={refreshingId === c.id}
-                      onClick={e => { e.stopPropagation(); handleRefresh(c.id) }}>
-                      {refreshingId === c.id ? '⏳' : '⟳ 从源刷新'}
-                    </button>
-                  )}
-                  <span style={{ flex: 1 }} />
-                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
-                    onClick={e => { e.stopPropagation(); handleDelete(c.id, c.title) }}>🗑</button>
-                </div>
+                      onClick={e => { e.stopPropagation(); handleRename(c.id, c.title) }}>重命名</button>
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
+                      onClick={e => {
+                        e.stopPropagation()
+                        onChange(d => ({ ...d, chapters: d.chapters.map(x => x.id === c.id ? { ...x, enabled: !x.enabled } : x) }))
+                      }}>{c.enabled ? '停用' : '启用'}</button>
+                    {c.source_type !== 'custom' && (
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
+                        disabled={refreshingId === c.id}
+                        onClick={e => { e.stopPropagation(); handleRefresh(c.id) }}>
+                        {refreshingId === c.id ? '⏳' : '⟳ 从源刷新'}
+                      </button>
+                    )}
+                    <span style={{ flex: 1 }} />
+                    <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
+                      onClick={e => { e.stopPropagation(); handleDelete(c.id, c.title) }}>🗑</button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -399,12 +395,12 @@ ${PROSE_CSS}
               </span>
               <span style={{ flex: 1 }} />
 
-              {htmlDirty && (
+              {!readonly && htmlDirty && (
                 <span style={{ fontSize: 10, color: 'var(--warning, #d97706)', marginRight: 4 }}>有未保存的修改</span>
               )}
 
               {/* WYSIWYG toggle — only for non-prose (HTML) chapters */}
-              {!isProse && (
+              {!isProse && !readonly && (
                 <button
                   onClick={toggleEdit}
                   className="btn btn-ghost btn-sm"
@@ -419,26 +415,30 @@ ${PROSE_CSS}
               )}
 
               {/* Source toggle */}
-              <button
-                onClick={toggleSource}
-                className="btn btn-ghost btn-sm"
-                style={{
-                  fontSize: 11,
-                  background: editorMode === 'source' ? 'var(--primary)' : undefined,
-                  color: editorMode === 'source' ? '#fff' : undefined,
-                }}
-              >
-                {editorMode === 'source' ? '预览' : '源码'}
-              </button>
+              {!readonly && (
+                <button
+                  onClick={toggleSource}
+                  className="btn btn-ghost btn-sm"
+                  style={{
+                    fontSize: 11,
+                    background: editorMode === 'source' ? 'var(--primary)' : undefined,
+                    color: editorMode === 'source' ? '#fff' : undefined,
+                  }}
+                >
+                  {editorMode === 'source' ? '预览' : '源码'}
+                </button>
+              )}
 
               {/* Save */}
-              <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={handleSave}>
-                💾 保存修改
-              </button>
+              {!readonly && (
+                <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={handleSave}>
+                  💾 保存修改
+                </button>
+              )}
             </div>
 
             {/* Formatting toolbar — visible only in edit mode */}
-            {editorMode === 'edit' && (
+            {editorMode === 'edit' && !readonly && (
               <div style={{
                 display: 'flex', gap: 2, alignItems: 'center', flexShrink: 0,
                 padding: '4px 8px', marginBottom: 8,
@@ -501,13 +501,13 @@ ${PROSE_CSS}
             )}
 
             {/* MD toolbar — visible only in source mode for prose chapters */}
-            {editorMode === 'source' && isProse && (
+            {editorMode === 'source' && isProse && !readonly && (
               <MdToolbar textareaRef={sourceTaRef} value={selected.content}
                 onChange={handleSourceChange} />
             )}
 
             {/* Page background color — always visible for prose chapters */}
-            {isProse && (
+            {isProse && !readonly && (
               <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <label style={{ fontWeight: 400, fontSize: 10, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                   页面底色
@@ -525,7 +525,7 @@ ${PROSE_CSS}
             {/* Content area */}
             {editorMode === 'source' ? (
               <textarea ref={sourceTaRef} className="form-input" value={selected.content}
-                onChange={e => handleSourceChange(e.target.value)}
+                onChange={e => handleSourceChange(e.target.value)} readOnly={readonly}
                 style={{ flex: 1, minHeight: 120, resize: 'none', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7 }} />
             ) : (
               <div ref={previewBoxRef} style={{ flex: 1, minHeight: 0, overflowX: 'hidden', overflowY: 'auto' }}>
@@ -558,12 +558,14 @@ ${PROSE_CSS}
               </div>
             )}
 
-            <div className="card-hint" style={{ marginTop: 6, marginBottom: 0, flexShrink: 0 }}>
-              {isProse
-                ? '默认显示排版预览；点击「源码」可编辑 Markdown 原文，点击「💾 保存修改」存入草稿。'
-                : `点击「编辑文字」可对页面内文字进行修改；点击「源码」可编辑原始 HTML。改动只存入本册子的副本${selected.source_type !== 'custom' ? '，「⟳ 从源刷新」可还原为明细最新内容' : ''}。`
-              }
-            </div>
+            {!readonly && (
+              <div className="card-hint" style={{ marginTop: 6, marginBottom: 0, flexShrink: 0 }}>
+                {isProse
+                  ? '默认显示排版预览；点击「源码」可编辑 Markdown 原文，点击「💾 保存修改」存入草稿。'
+                  : `点击「编辑文字」可对页面内文字进行修改；点击「源码」可编辑原始 HTML。改动只存入本册子的副本${selected.source_type !== 'custom' ? '，「⟳ 从源刷新」可还原为明细最新内容' : ''}。`
+                }
+              </div>
+            )}
           </div>
         )}
       </div>

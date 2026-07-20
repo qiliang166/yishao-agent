@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
@@ -12,7 +12,9 @@ export default function BookletListPage() {
   const { user } = useAuth()
   const base = location.pathname.startsWith('/app') ? '/app/booklets' : '/booklets'
   const isAdmin = user?.user_type === 'admin'
-  const userId = user?.sub || ''
+  const userId = user?.user_id || ''
+
+  const actionLock = useRef(false)
 
   const [booklets, setBooklets] = useState<BookletSummary[]>([])
   const [loading, setLoading] = useState(true)
@@ -53,20 +55,6 @@ export default function BookletListPage() {
     }
   }
 
-  const handleDelete = async (b: BookletSummary) => {
-    const ok = await confirm(`确定删除册子「${b.title}」？删除后无法恢复。`)
-    if (!ok) return
-    try {
-      const r = await api.deleteBooklet(b.id)
-      if (r != null) {
-        toast('已删除', 'success')
-        load()
-      }
-    } catch (e: any) {
-      toast(`删除失败: ${e?.message || e}`, 'error')
-    }
-  }
-
   const handleClone = async (b: BookletSummary) => {
     setCloning(b.id)
     try {
@@ -82,58 +70,111 @@ export default function BookletListPage() {
     }
   }
 
-  // 推荐画册：管理员标记为推荐 + 非自己创建的
-  const recommended = booklets.filter(b => b.is_recommended && b.owner_id !== userId)
-  const own = isAdmin
-    ? booklets  // 管理员看到全部
+  // Category logic
+  const recommended = isAdmin
+    ? booklets.filter(b => b.is_recommended)
+    : booklets.filter(b => b.is_recommended && b.owner_id !== userId)
+
+  const myBooklets = isAdmin
+    ? booklets.filter(b => !b.is_recommended && b.owner_id === userId)
     : booklets.filter(b => !b.is_recommended || b.owner_id === userId)
 
-  const renderCard = (b: BookletSummary, isRec: boolean) => (
-    <div key={b.id} className="card" style={{ cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 6 }}
-      onClick={() => {
-        if (isRec && !isAdmin) {
-          // 推荐画册：管理员直接编辑，会员先引用再编辑
-          handleClone(b)
-        } else {
-          navigate(`${base}/${b.id}`)
-        }
-      }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 18 }}>{b.book_type === 'ppt' ? '🖥' : '📕'}</span>
-        <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
-        {isRec && (
-          <span style={{
-            fontSize: 10, background: 'var(--primary)', color: '#fff',
-            padding: '1px 6px', borderRadius: 3, fontWeight: 600, flexShrink: 0,
-          }}>⭐ 推荐</span>
+  const userBooklets = isAdmin
+    ? booklets.filter(b => !b.is_recommended && b.owner_id !== userId)
+    : []
+
+  const handleCardClick = (b: BookletSummary) => {
+    if (actionLock.current) { actionLock.current = false; return }
+    navigate(`${base}/${b.id}`)
+  }
+
+  const handleToggleRecommend = async (b: BookletSummary, e?: React.MouseEvent) => {
+    if (e) e.preventDefault()
+    actionLock.current = true
+    try {
+      await api.updateBooklet(b.id, { is_recommended: !b.is_recommended })
+      toast(b.is_recommended ? '已取消推荐' : '已设为推荐', 'success')
+      load()
+    } catch (err: any) { toast(`${b.is_recommended ? '取消' : '推荐'}失败: ${err?.message || err}`, 'error') }
+    finally { actionLock.current = false }
+  }
+
+  const handleDelete = async (b: BookletSummary, e?: React.MouseEvent) => {
+    if (e) e.preventDefault()
+    actionLock.current = true
+    const ok = await confirm(`确定删除册子「${b.title}」？删除后无法恢复。`)
+    if (!ok) { actionLock.current = false; return }
+    try {
+      const r = await api.deleteBooklet(b.id)
+      if (r != null) {
+        toast('已删除', 'success')
+        load()
+      }
+    } catch (e: any) {
+      toast(`删除失败: ${e?.message || e}`, 'error')
+    } finally { actionLock.current = false }
+  }
+
+  const renderCard = (b: BookletSummary, isRec: boolean) => {
+    return (
+    <div key={b.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ cursor: 'pointer' }} onClick={() => handleCardClick(b)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 18 }}>{b.book_type === 'ppt' ? '🖥' : '📕'}</span>
+          <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
+        </div>
+        {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 10, marginTop: 2 }}>
+          <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
+          <span>{b.chapter_count} 章</span>
+        </div>
+        {isAdmin && b.owner_name && (
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
+            创建者：{b.owner_name}
+          </div>
         )}
+        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
+          更新于 {(b.updated_at || '').replace('T', ' ').slice(0, 16)}
+        </div>
       </div>
-      {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
-      <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 10 }}>
-        <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
-        <span>{b.chapter_count} 章</span>
-      </div>
-      <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}>
-        <span style={{ flex: 1 }}>更新于 {(b.updated_at || '').replace('T', ' ').slice(0, 16)}</span>
+      <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 2 }}>
         {isRec ? (
-          cloning === b.id ? (
-            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>引用中...</span>
+          isAdmin ? (
+            <>
+              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                onClick={(e) => handleToggleRecommend(b, e)}>取消推荐</button>
+              {b.owner_id === userId && (
+                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                  onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+              )}
+            </>
           ) : (
-            <span style={{ fontSize: 10, color: 'var(--primary)' }}>点击引用到我的册子</span>
+            cloning === b.id ? (
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>引用中...</span>
+            ) : (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                onClick={(e) => { e.preventDefault(); handleClone(b) }}>使用推荐</button>
+            )
           )
         ) : (
-          <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-            onClick={e => { e.stopPropagation(); handleDelete(b) }}>🗑 删除</button>
+          <>
+            {isAdmin && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                onClick={(e) => handleToggleRecommend(b, e)}>⭐ 推荐</button>
+            )}
+            <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+              onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+          </>
         )}
       </div>
     </div>
-  )
+  )}
 
   return (
     <div style={{ padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, flex: 1 }}>📚 电子成册</h2>
-        <button className="btn btn-primary" onClick={() => setShowNew(true)}>➕ 新建册子</button>
+        <button type="button" className="btn btn-primary" onClick={(e) => { e.preventDefault(); setShowNew(true); }}>➕ 新建册子</button>
       </div>
       <div className="card-hint" style={{ marginBottom: 14 }}>
         把已生成的文档、课件、演讲稿汇编成一本可下载的电子书 — 选内容 → 排顺序 → 填封面 → 合成下载，四步完成。
@@ -147,7 +188,6 @@ export default function BookletListPage() {
         </div>
       ) : (
         <>
-          {/* 推荐画册区 */}
           {recommended.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>⭐ 推荐画册</h3>
@@ -156,14 +196,21 @@ export default function BookletListPage() {
               </div>
             </div>
           )}
-          {/* 我的画册区 */}
-          {own.length > 0 && (
-            <div>
+          {myBooklets.length > 0 && (
+            <div style={{ marginBottom: userBooklets.length > 0 ? 24 : 0 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
-                {isAdmin ? '全部画册' : '📝 我的画册'}
+                {isAdmin ? '📝 我的画册' : '📝 我的画册'}
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {own.map(b => renderCard(b, false))}
+                {myBooklets.map(b => renderCard(b, false))}
+              </div>
+            </div>
+          )}
+          {userBooklets.length > 0 && (
+            <div>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>👥 用户画册</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                {userBooklets.map(b => renderCard(b, false))}
               </div>
             </div>
           )}
@@ -200,8 +247,8 @@ export default function BookletListPage() {
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowNew(false)}>取消</button>
-              <button className="btn btn-primary btn-sm" disabled={creating} onClick={handleCreate}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowNew(false)}>取消</button>
+              <button type="button" className="btn btn-primary btn-sm" disabled={creating} onClick={handleCreate}>
                 {creating ? '创建中...' : '创建并编辑'}
               </button>
             </div>

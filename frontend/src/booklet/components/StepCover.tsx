@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
-import { useAuth } from '../../contexts/AuthContext'
 import { BookletDraft, Theme, isHtmlFirstChapter } from '../types'
 
 interface Props {
   draft: BookletDraft
   onChange: (updater: (d: BookletDraft) => BookletDraft) => void
+  readonly?: boolean
 }
 
 function Thumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; pageH: number; thumbW: number }) {
@@ -20,10 +20,8 @@ function Thumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; page
   )
 }
 
-export default function StepCover({ draft, onChange }: Props) {
+export default function StepCover({ draft, onChange, readonly }: Props) {
   const { toast } = useModal()
-  const { user } = useAuth()
-  const isAdmin = user?.user_type === 'admin'
   const [themes, setThemes] = useState<Theme[]>([])
   const [uploading, setUploading] = useState(false)
   const [coverDoc, setCoverDoc] = useState('')
@@ -119,54 +117,56 @@ export default function StepCover({ draft, onChange }: Props) {
           <div className="card-title">📝 封面与署名</div>
           <div className="form-group">
             <label className="form-label">书名</label>
-            <input className="form-input" value={draft.title}
+            <input className="form-input" value={draft.title} disabled={readonly}
               onChange={e => onChange(d => ({ ...d, title: e.target.value }))} />
           </div>
           <div className="form-group">
             <label className="form-label">副标题</label>
-            <input className="form-input" value={draft.subtitle} placeholder="选填"
+            <input className="form-input" value={draft.subtitle} placeholder="选填" disabled={readonly}
               onChange={e => onChange(d => ({ ...d, subtitle: e.target.value }))} />
           </div>
           <div className="form-group">
             <label className="form-label">署名（作者/编者）</label>
-            <input className="form-input" value={draft.author} placeholder="例如：张三"
+            <input className="form-input" value={draft.author} placeholder="例如：张三" disabled={readonly}
               onChange={e => onChange(d => ({ ...d, author: e.target.value }))} />
           </div>
           <div className="form-group">
             <label className="form-label">单位</label>
-            <input className="form-input" value={draft.cover.org || ''} placeholder="选填"
+            <input className="form-input" value={draft.cover.org || ''} placeholder="选填" disabled={readonly}
               onChange={e => setCover({ org: e.target.value })} />
           </div>
           <div className="form-group">
             <label className="form-label">日期文字</label>
-            <input className="form-input" value={draft.cover.date_text || ''} placeholder="留空则用合成当天日期"
+            <input className="form-input" value={draft.cover.date_text || ''} placeholder="留空则用合成当天日期" disabled={readonly}
               onChange={e => setCover({ date_text: e.target.value })} />
           </div>
-          <div className="form-group">
-            <label className="form-label">LOGO</label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              {draft.cover.logo_url && (
-                <img src={draft.cover.logo_url} alt="logo" style={{ height: 32, maxWidth: 90, objectFit: 'contain' }} />
-              )}
-              <button className="btn btn-ghost btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
-                {uploading ? '上传中...' : draft.cover.logo_url ? '更换' : '📁 上传 LOGO'}
-              </button>
-              {draft.cover.logo_url && (
-                <button className="btn btn-ghost btn-sm" onClick={() => setCover({ logo_url: '' })}>移除</button>
-              )}
-              <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadLogo(f); e.target.value = '' }} />
+          {!readonly && (
+            <div className="form-group">
+              <label className="form-label">LOGO</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {draft.cover.logo_url && (
+                  <img src={draft.cover.logo_url} alt="logo" style={{ height: 32, maxWidth: 90, objectFit: 'contain' }} />
+                )}
+                <button className="btn btn-ghost btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                  {uploading ? '上传中...' : draft.cover.logo_url ? '更换' : '📁 上传 LOGO'}
+                </button>
+                {draft.cover.logo_url && (
+                  <button className="btn btn-ghost btn-sm" onClick={() => setCover({ logo_url: '' })}>移除</button>
+                )}
+                <input ref={fileRef} type="file" accept=".png,.jpg,.jpeg,.gif,.svg,.webp" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleUploadLogo(f); e.target.value = '' }} />
+              </div>
             </div>
-          </div>
+          )}
           <div className="form-group">
             <label className="form-label">扉页文字（封面背面的编制说明）</label>
-            <textarea className="form-input" value={draft.cover.flyleaf_text || ''} placeholder="选填，如编制说明、致读者"
+            <textarea className="form-input" value={draft.cover.flyleaf_text || ''} placeholder="选填，如编制说明、致读者" disabled={readonly}
               onChange={e => setCover({ flyleaf_text: e.target.value })}
               style={{ height: 64, resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">封底文字</label>
-            <textarea className="form-input" value={draft.cover.back_cover_text || ''} placeholder="选填，如致谢、版权说明"
+            <textarea className="form-input" value={draft.cover.back_cover_text || ''} placeholder="选填，如致谢、版权说明" disabled={readonly}
               onChange={e => setCover({ back_cover_text: e.target.value })}
               style={{ height: 64, resize: 'vertical', fontFamily: 'inherit' }} />
           </div>
@@ -176,10 +176,11 @@ export default function StepCover({ draft, onChange }: Props) {
           <div className="card-title">🎨 主题配色</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
             {themes.map(t => (
-              <div key={t.id} onClick={() => setCover({ theme_id: t.id, theme_colors: {} })}
+              <div key={t.id} onClick={() => { if (!readonly) setCover({ theme_id: t.id, theme_colors: {} }) }}
                 style={{
-                  padding: '6px 8px', borderRadius: 5, cursor: 'pointer', fontSize: 11,
+                  padding: '6px 8px', borderRadius: 5, cursor: readonly ? 'default' : 'pointer', fontSize: 11,
                   border: `2px solid ${draft.cover.theme_id === t.id ? 'var(--primary)' : 'var(--border)'}`,
+                  opacity: readonly && draft.cover.theme_id !== t.id ? 0.5 : 1,
                 }}>
                 <div style={{ display: 'flex', gap: 3, marginBottom: 4 }}>
                   {[t.colors.primary, t.colors.accent, t.colors.bg].map((c, i) => (
@@ -191,23 +192,16 @@ export default function StepCover({ draft, onChange }: Props) {
               </div>
             ))}
           </div>
-          <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-              <input type="checkbox" checked={!!draft.cover.desk_none}
-                onChange={e => setCover({ desk_none: e.target.checked })} />
-              不要页面外背景色（合成后页面四周用白色底）
-            </label>
-            <div className="card-hint" style={{ marginTop: 6, marginBottom: 0 }}>
-              不勾选时，页面外背景跟随所选主题的深色底，衬托书页更醒目。
-            </div>
-          </div>
-          {isAdmin && (
+          {!readonly && (
             <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-                <input type="checkbox" checked={!!draft.is_recommended}
-                  onChange={e => onChange(d => ({ ...d, is_recommended: e.target.checked }))} />
-                ⭐ 设为推荐画册（所有会员可见，会员可引用到自己的册子）
+                <input type="checkbox" checked={!!draft.cover.desk_none}
+                  onChange={e => setCover({ desk_none: e.target.checked })} />
+                不要页面外背景色（合成后页面四周用白色底）
               </label>
+              <div className="card-hint" style={{ marginTop: 6, marginBottom: 0 }}>
+                不勾选时，页面外背景跟随所选主题的深色底，衬托书页更醒目。
+              </div>
             </div>
           )}
         </div>
