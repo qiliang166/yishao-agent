@@ -5,6 +5,17 @@ import { useModal } from '../components/ModalProvider'
 import { useAuth } from '../contexts/AuthContext'
 import { BOOK_TYPE_LABEL, BookType, BookletSummary } from './types'
 
+const triggerHtmlDownload = (html: string, filename: string) => {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 export default function BookletListPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -23,6 +34,7 @@ export default function BookletListPage() {
   const [newType, setNewType] = useState<BookType>('a4')
   const [creating, setCreating] = useState(false)
   const [cloning, setCloning] = useState<string | null>(null)
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -67,6 +79,42 @@ export default function BookletListPage() {
       toast(`引用失败: ${e?.message || e}`, 'error')
     } finally {
       setCloning(null)
+    }
+  }
+
+  const handleCardDownload = async (b: BookletSummary, e: React.MouseEvent) => {
+    e.preventDefault()
+    actionLock.current = true
+    try {
+      const costInfo = await api.getBookletDownloadCost(b.id)
+      if (costInfo == null) { toast('操作失败', 'error'); return }
+
+      // 超管或 owner 直接下载
+      if (costInfo.is_super_admin || costInfo.is_owner || costInfo.cost_deci === 0) {
+        setDownloadingId(b.id)
+        const html = await api.downloadBooklet(b.id)
+        triggerHtmlDownload(html, `${b.title}.html`)
+        toast('下载完成', 'success')
+        return
+      }
+
+      // 需要扣积分 → 确认弹窗
+      const cost = (costInfo.cost_deci / 10).toFixed(1)
+      const balance = (costInfo.balance_deci / 10).toFixed(1)
+      const ok = await confirm(
+        `下载「${b.title}」将消耗 ${cost} 积分（余额 ${balance} 积分），共 ${costInfo.project_count} 个项目。\n\n确定下载吗？`
+      )
+      if (!ok) return
+
+      setDownloadingId(b.id)
+      const html = await api.downloadBooklet(b.id)
+      triggerHtmlDownload(html, `${b.title}.html`)
+      toast('下载完成', 'success')
+    } catch (e: any) {
+      toast(`下载失败: ${e?.message || e}`, 'error')
+    } finally {
+      setDownloadingId(null)
+      actionLock.current = false
     }
   }
 
@@ -157,6 +205,7 @@ export default function BookletListPage() {
   }
 
   const renderCard = (b: BookletSummary, isRec: boolean) => {
+    const isDownloading = downloadingId === b.id
     return (
     <div key={b.id} className="card" style={{ display: 'flex', flexDirection: 'row', padding: 0, overflow: 'hidden', gap: 0 }}>
       {renderThumb(b)}
@@ -184,7 +233,12 @@ export default function BookletListPage() {
               <>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   onClick={(e) => handleToggleRecommend(b, e)}>取消推荐</button>
-                <span>
+                <span style={{ display: 'flex', gap: 4 }}>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                    disabled={isDownloading}
+                    onClick={(e) => { e.preventDefault(); handleCardDownload(b, e) }}>
+                    {isDownloading ? '下载中...' : '📥 下载'}
+                  </button>
                   {b.owner_id === userId && (
                     <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                       onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
@@ -195,8 +249,15 @@ export default function BookletListPage() {
               cloning === b.id ? (
                 <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>引用中...</span>
               ) : (
-                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                  onClick={(e) => { e.preventDefault(); handleClone(b) }}>使用推荐</button>
+                <>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                    onClick={(e) => { e.preventDefault(); handleClone(b) }}>使用推荐</button>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                    disabled={isDownloading}
+                    onClick={(e) => { e.preventDefault(); handleCardDownload(b, e) }}>
+                    {isDownloading ? '下载中...' : '📥 下载'}
+                  </button>
+                </>
               )
             )
           ) : (
@@ -207,8 +268,15 @@ export default function BookletListPage() {
                     onClick={(e) => handleToggleRecommend(b, e)}>⭐ 推荐</button>
                 )}
               </span>
-              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+              <span style={{ display: 'flex', gap: 4 }}>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                  disabled={isDownloading}
+                  onClick={(e) => { e.preventDefault(); handleCardDownload(b, e) }}>
+                  {isDownloading ? '下载中...' : '📥 下载'}
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                  onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+              </span>
             </>
           )}
         </div>

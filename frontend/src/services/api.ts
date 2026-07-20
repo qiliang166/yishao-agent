@@ -1325,6 +1325,26 @@ export const api = {
     }
     return res.text()
   },
+  getBookletDownloadCost: (id: string) =>
+    request(`/api/booklets/${id}/download-cost`).then(d => d as {
+      cost_deci: number; project_count: number
+      projects: { id: string; name: string; cost_deci: number }[]
+      balance_deci: number; can_afford: boolean
+      is_super_admin: boolean; is_owner: boolean
+    }),
+  downloadBooklet: async (id: string) => {
+    const res = await fetch(`/api/booklets/${id}/render`, {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ render_mode: 'standard' }),
+    })
+    if (!res.ok) {
+      let detail = `服务器错误 (${res.status})`
+      try { detail = (await res.json()).detail || detail } catch { /* not json */ }
+      throw new Error(detail)
+    }
+    return res.text()
+  },
   bookletPageMap: (id: string) =>
     request(`/api/booklets/${id}/page-map`).then(d => d as {
       book_type: string; fixed: string[]

@@ -1319,7 +1319,72 @@ def cover_thumb(booklet_id: str, request: Request):
     return Response(content=doc, media_type="text/html")
 
 
-# ── API #9 合成下载 ──
+# ── API #9a 下载成本查询 ──
+
+
+@router.get("/{booklet_id}/download-cost")
+def booklet_download_cost(booklet_id: str, request: Request):
+    """查询下载画册所需的积分消耗（只读，不扣积分）。"""
+    user = _require_user(request)
+    db = get_db()
+    try:
+        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
+        booklet = _row_to_full(row)
+        uid = user.get("user_id", user.get("sub", ""))
+        is_super_admin = user.get("username", "") == "admin"
+        is_owner = uid == booklet.get("owner_id", "")
+        # 收集章节引用的项目
+        project_ids = set()
+        for ch in booklet.get("chapters") or []:
+            pid = (ch.get("project_id") or "").strip()
+            if pid:
+                project_ids.add(pid)
+        if not project_ids:
+            return {
+                "cost_deci": 0, "project_count": 0, "projects": [],
+                "balance_deci": 0, "can_afford": True,
+                "is_super_admin": is_super_admin, "is_owner": is_owner,
+            }
+        marks = ",".join("?" * len(project_ids))
+        rows = db.execute(
+            f"SELECT id, name, is_downloadable, point_cost_deci FROM projects WHERE id IN ({marks})",
+            tuple(project_ids),
+        ).fetchall()
+        projects = []
+        total = 0
+        for r in rows:
+            if not r["is_downloadable"]:
+                continue
+            cost = int(r["point_cost_deci"] or 0)
+            if cost <= 0:
+                continue
+            ul = db.execute(
+                "SELECT 1 FROM project_unlocks WHERE user_id=? AND project_id=? "
+                "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+                (uid, r["id"]),
+            ).fetchone()
+            if ul:
+                continue
+            projects.append({"id": r["id"], "name": r["name"], "cost_deci": cost})
+            total += cost
+        bal = db.execute(
+            "SELECT balance_deci FROM user_points WHERE user_id=?", (uid,)
+        ).fetchone()
+        balance = int(bal["balance_deci"]) if bal else 0
+        return {
+            "cost_deci": total,
+            "project_count": len(projects),
+            "projects": projects,
+            "balance_deci": balance,
+            "can_afford": balance >= total,
+            "is_super_admin": is_super_admin,
+            "is_owner": is_owner,
+        }
+    finally:
+        db.close()
+
+
+# ── API #9b 合成下载 ──
 
 
 @router.post("/{booklet_id}/render")
@@ -1329,6 +1394,9 @@ def render_booklet_api(booklet_id: str, request: Request, body: BookletRenderBod
     try:
         row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
         booklet = _row_to_full(row)
+        # 超管免积分；owner 下载自己画册不扣积分
+        if user.get("username", "") != "admin" and user.get("user_id", user.get("sub", "")) != booklet.get("owner_id", ""):
+            _deduct_booklet_points(db, user, booklet)
     finally:
         db.close()
 
