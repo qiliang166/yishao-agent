@@ -135,29 +135,40 @@ export default function BookletListPage() {
     const { bg, text } = getCoverColors(b.cover_json || '{}', b.book_type)
     return (
       <div style={{
-        width: isPpt ? 90 : 65,
+        width: isPpt ? 100 : 72,
         flexShrink: 0,
         alignSelf: 'stretch',
-        background: bg,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '10px 6px',
-        overflow: 'hidden',
+        padding: '10px 8px',
       }}>
-        <span style={{
-          color: text,
-          fontSize: 10,
-          fontWeight: 700,
-          writingMode: isPpt ? 'horizontal-tb' : 'vertical-rl',
-          textAlign: 'center',
-          lineHeight: 1.4,
-          maxHeight: '100%',
+        <div style={{
+          width: '100%',
+          height: '100%',
+          background: bg,
+          borderRadius: 4,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '10px 8px',
           overflow: 'hidden',
-          opacity: 0.9,
+          border: '1px solid rgba(0,0,0,0.08)',
         }}>
-          {b.title}
-        </span>
+          <span style={{
+            color: text,
+            fontSize: 10,
+            fontWeight: 700,
+            writingMode: isPpt ? 'horizontal-tb' : 'vertical-rl',
+            textAlign: 'center',
+            lineHeight: 1.4,
+            maxHeight: '100%',
+            overflow: 'hidden',
+            opacity: 0.9,
+          }}>
+            {b.title}
+          </span>
+        </div>
       </div>
     )
   }
@@ -186,16 +197,18 @@ export default function BookletListPage() {
             更新于 {(b.updated_at || '').replace('T', ' ').slice(0, 16)}
           </div>
         </div>
-        <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 6 }}>
+        <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 6 }}>
           {isRec ? (
             isAdmin ? (
               <>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   onClick={(e) => handleToggleRecommend(b, e)}>取消推荐</button>
-                {b.owner_id === userId && (
-                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                    onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
-                )}
+                <span>
+                  {b.owner_id === userId && (
+                    <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                      onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+                  )}
+                </span>
               </>
             ) : (
               cloning === b.id ? (
@@ -207,10 +220,12 @@ export default function BookletListPage() {
             )
           ) : (
             <>
-              {isAdmin && (
-                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                  onClick={(e) => handleToggleRecommend(b, e)}>⭐ 推荐</button>
-              )}
+              <span>
+                {isAdmin && (
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                    onClick={(e) => handleToggleRecommend(b, e)}>⭐ 推荐</button>
+                )}
+              </span>
               <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                 onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
             </>
