@@ -128,7 +128,7 @@ export default function BookletListPage() {
           <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
           <span>{b.chapter_count} 章</span>
         </div>
-        {isAdmin && b.owner_name && (
+        {(isAdmin || isRec) && b.owner_name && (
           <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
             创建者：{b.owner_name}
           </div>
