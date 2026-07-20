@@ -237,7 +237,7 @@ export default function BookletListPage() {
                   <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                     disabled={isDownloading}
                     onClick={(e) => { e.preventDefault(); handleCardDownload(b, e) }}>
-                    {isDownloading ? '下载中...' : '📥 下载'}
+                    {isDownloading ? '下载中...' : '下载'}
                   </button>
                   {b.owner_id === userId && (
                     <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
@@ -251,11 +251,11 @@ export default function BookletListPage() {
               ) : (
                 <>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                    onClick={(e) => { e.preventDefault(); handleClone(b) }}>使用推荐</button>
+                    onClick={(e) => { e.preventDefault(); handleClone(b) }}>复制推荐</button>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                     disabled={isDownloading}
                     onClick={(e) => { e.preventDefault(); handleCardDownload(b, e) }}>
-                    {isDownloading ? '下载中...' : '📥 下载'}
+                    {isDownloading ? '下载中...' : '下载'}
                   </button>
                 </>
               )
@@ -272,7 +272,7 @@ export default function BookletListPage() {
                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   disabled={isDownloading}
                   onClick={(e) => { e.preventDefault(); handleCardDownload(b, e) }}>
-                  {isDownloading ? '下载中...' : '📥 下载'}
+                  {isDownloading ? '下载中...' : '下载'}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   onClick={(e) => handleDelete(b, e)}>🗑 删除</button>

@@ -262,6 +262,8 @@ def _deduct_booklet_points(db, user: dict, booklet: dict):
             (uid, proj["id"], cost, now),
         )
 
+    db.commit()
+
 
 # ── 内容源解析 ──
 
@@ -1394,6 +1396,7 @@ def render_booklet_api(booklet_id: str, request: Request, body: BookletRenderBod
     try:
         row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
         booklet = _row_to_full(row)
+        # 超管免积分；owner 下载自己画册不扣积分
         # 超管免积分；owner 下载自己画册不扣积分
         if user.get("username", "") != "admin" and user.get("user_id", user.get("sub", "")) != booklet.get("owner_id", ""):
             _deduct_booklet_points(db, user, booklet)
