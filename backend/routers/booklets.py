@@ -1181,14 +1181,14 @@ def list_booklets(request: Request):
         if _is_admin(user):
             rows = db.execute(
                 "SELECT b.id, b.owner_id, b.owner_role, b.book_type, b.title, b.subtitle, "
-                "b.chapters_json, b.is_recommended, b.updated_at, "
+                "b.author, b.cover_json, b.chapters_json, b.is_recommended, b.updated_at, "
                 "u.display_name AS owner_name "
                 "FROM booklets b LEFT JOIN users u ON u.id = b.owner_id ORDER BY b.updated_at DESC"
             ).fetchall()
         else:
             rows = db.execute(
                 "SELECT b.id, b.owner_id, b.owner_role, b.book_type, b.title, b.subtitle, "
-                "b.chapters_json, b.is_recommended, b.updated_at, "
+                "b.author, b.cover_json, b.chapters_json, b.is_recommended, b.updated_at, "
                 "u.display_name AS owner_name "
                 "FROM booklets b LEFT JOIN users u ON u.id = b.owner_id "
                 "WHERE b.owner_id=? OR b.is_recommended=1 "
@@ -1223,6 +1223,8 @@ def list_booklets(request: Request):
                 "book_type": r["book_type"],
                 "title": r["title"],
                 "subtitle": r["subtitle"] or "",
+                "author": r["author"] or "",
+                "cover_json": r["cover_json"] or "{}",
                 "chapter_count": chapter_count,
                 "is_recommended": bool(r["is_recommended"]) if "is_recommended" in r.keys() else False,
                 "updated_at": r["updated_at"],

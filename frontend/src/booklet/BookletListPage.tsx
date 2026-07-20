@@ -5,6 +5,22 @@ import { useModal } from '../components/ModalProvider'
 import { useAuth } from '../contexts/AuthContext'
 import { BOOK_TYPE_LABEL, BookType, BookletSummary } from './types'
 
+function getCoverColors(coverJson: string, bookType: string) {
+  try {
+    const cover = JSON.parse(coverJson)
+    const c = cover.theme_colors || {}
+    return {
+      bg: c.bg || c.primary || (bookType === 'ppt' ? '#1a1a2e' : '#f5f0e8'),
+      text: c.text || (bookType === 'ppt' ? '#fff' : '#333'),
+    }
+  } catch {
+    return {
+      bg: bookType === 'ppt' ? '#1a1a2e' : '#f5f0e8',
+      text: bookType === 'ppt' ? '#fff' : '#333',
+    }
+  }
+}
+
 export default function BookletListPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -70,7 +86,6 @@ export default function BookletListPage() {
     }
   }
 
-  // Category logic
   const recommended = isAdmin
     ? booklets.filter(b => b.is_recommended)
     : booklets.filter(b => b.is_recommended && b.owner_id !== userId)
@@ -115,57 +130,92 @@ export default function BookletListPage() {
     } finally { actionLock.current = false }
   }
 
+  const renderThumb = (b: BookletSummary) => {
+    const isPpt = b.book_type === 'ppt'
+    const { bg, text } = getCoverColors(b.cover_json || '{}', b.book_type)
+    return (
+      <div style={{
+        width: isPpt ? 90 : 65,
+        flexShrink: 0,
+        alignSelf: 'stretch',
+        background: bg,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '10px 6px',
+        overflow: 'hidden',
+      }}>
+        <span style={{
+          color: text,
+          fontSize: 10,
+          fontWeight: 700,
+          writingMode: isPpt ? 'horizontal-tb' : 'vertical-rl',
+          textAlign: 'center',
+          lineHeight: 1.4,
+          maxHeight: '100%',
+          overflow: 'hidden',
+          opacity: 0.9,
+        }}>
+          {b.title}
+        </span>
+      </div>
+    )
+  }
+
   const renderCard = (b: BookletSummary, isRec: boolean) => {
     return (
-    <div key={b.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ cursor: 'pointer' }} onClick={() => handleCardClick(b)}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 18 }}>{b.book_type === 'ppt' ? '🖥' : '📕'}</span>
-          <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
-        </div>
-        {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 10, marginTop: 2 }}>
-          <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
-          <span>{b.chapter_count} 章</span>
-        </div>
-        {(isAdmin || isRec) && b.owner_name && (
-          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
-            创建者：{b.owner_name}
+    <div key={b.id} className="card" style={{ display: 'flex', flexDirection: 'row', padding: 0, overflow: 'hidden', gap: 0 }}>
+      {renderThumb(b)}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 12px', minWidth: 0 }}>
+        <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => handleCardClick(b)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 16 }}>{b.book_type === 'ppt' ? '🖥' : '📕'}</span>
+            <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
           </div>
-        )}
-        <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
-          更新于 {(b.updated_at || '').replace('T', ' ').slice(0, 16)}
+          {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 10, marginTop: 2 }}>
+            <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
+            <span>{b.chapter_count} 章</span>
+          </div>
+          {(isAdmin || isRec) && b.owner_name && (
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
+              创建者：{b.owner_name}
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 1 }}>
+            更新于 {(b.updated_at || '').replace('T', ' ').slice(0, 16)}
+          </div>
         </div>
-      </div>
-      <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 2 }}>
-        {isRec ? (
-          isAdmin ? (
-            <>
-              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                onClick={(e) => handleToggleRecommend(b, e)}>取消推荐</button>
-              {b.owner_id === userId && (
+        <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 6 }}>
+          {isRec ? (
+            isAdmin ? (
+              <>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                  onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
-              )}
-            </>
-          ) : (
-            cloning === b.id ? (
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>引用中...</span>
+                  onClick={(e) => handleToggleRecommend(b, e)}>取消推荐</button>
+                {b.owner_id === userId && (
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                    onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+                )}
+              </>
             ) : (
-              <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                onClick={(e) => { e.preventDefault(); handleClone(b) }}>使用推荐</button>
+              cloning === b.id ? (
+                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>引用中...</span>
+              ) : (
+                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                  onClick={(e) => { e.preventDefault(); handleClone(b) }}>使用推荐</button>
+              )
             )
-          )
-        ) : (
-          <>
-            {isAdmin && (
+          ) : (
+            <>
+              {isAdmin && (
+                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                  onClick={(e) => handleToggleRecommend(b, e)}>⭐ 推荐</button>
+              )}
               <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                onClick={(e) => handleToggleRecommend(b, e)}>⭐ 推荐</button>
-            )}
-            <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-              onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
-          </>
-        )}
+                onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )}

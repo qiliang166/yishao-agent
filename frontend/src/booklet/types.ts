@@ -42,9 +42,11 @@ export interface BookletSummary {
   book_type: BookType
   title: string
   subtitle: string
+  author: string
   owner_id: string
   owner_role: string
   owner_name: string
+  cover_json: string
   chapter_count: number
   is_recommended: boolean
   updated_at: string
