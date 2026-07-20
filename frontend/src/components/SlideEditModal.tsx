@@ -322,7 +322,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
         const r = await api.getRegenerateLog(runId)
         if (r.log) setRegenerateLog(r.log)
       } catch (_) { /* log not available yet */ }
-    }, 10000)
+    }, 2000)
 
     try {
       const result = await api.regenerateSlide({
@@ -898,6 +898,19 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
                     '输入页码并点击"重新生成"，日志将在此处显示'
                   )}
                 </div>
+              )}
+              {newPageUrl && regenerateLog && (
+                <pre style={{
+                  margin: 0, padding: '8px 16px',
+                  background: '#1e293b', color: '#94a3b8',
+                  fontFamily: 'monospace', fontSize: 11,
+                  lineHeight: 1.6, whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  maxHeight: 160, overflow: 'auto',
+                  flexShrink: 0,
+                }}>
+                  {regenerateLog}
+                </pre>
               )}
             </div>
           )}
