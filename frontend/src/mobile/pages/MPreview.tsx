@@ -20,6 +20,15 @@ const isSafeSrc = (u: string) => {
   }
 }
 
+// 将 /api/download/{filename}?project_id=xxx 转为 /api/member/preview-file（免解锁预览）
+const toPreviewSrc = (u: string, pid: string): string => {
+  if (!u.startsWith('/api/download/')) return u
+  const parsed = new URL(u, window.location.origin)
+  const fn = parsed.pathname.replace('/api/download/', '')
+  const pid2 = parsed.searchParams.get('project_id') || pid
+  return `/api/member/preview-file?project_id=${encodeURIComponent(pid2)}&filename=${encodeURIComponent(fn)}`
+}
+
 // 注入到课件 HTML 末尾的测量脚本：由课件自己上报真实内容宽高。
 // 微信等移动端 WebView 中父页面直接读 iframe contentDocument 的时机/结果不可靠，
 // postMessage 是各端一致的方式。
@@ -140,11 +149,12 @@ export default function MPreview() {
         } else if (kind === 'html') {
           if (!src) throw new Error('缺少文件地址')
           // 统一 fetch 取文本 → 注入测量脚本 → srcdoc 内联加载
-          // 安全：不强制 MIME，仅当服务器声明 text/html 时才渲染
+          // /api/download/ 会校验解锁 → 返回 402，这里自动转为免解锁预览端点
+          const fetchSrc = toPreviewSrc(src, pid)
           const token = localStorage.getItem('auth_token')
           const headers: Record<string, string> = {}
-          if (!src.startsWith('/api/exports/') && token) headers['Authorization'] = `Bearer ${token}`
-          const resp = await fetch(src, { headers })
+          if (!fetchSrc.startsWith('/api/exports/') && token) headers['Authorization'] = `Bearer ${token}`
+          const resp = await fetch(fetchSrc, { headers })
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
           const ct = resp.headers.get('content-type') || ''
           if (!ct.includes('text/html')) throw new Error('该文件不是 HTML，无法预览')
@@ -182,8 +192,10 @@ export default function MPreview() {
   const handleDownload = async () => {
     if (!src) return
     try {
-      await api.downloadWithName(src, name)
-      mToast('已开始下载')
+      const token = localStorage.getItem('auth_token')
+      const sep = src.includes('?') ? '&' : '?'
+      const finalUrl = token ? `${src}${sep}token=${encodeURIComponent(token)}` : src
+      window.open(finalUrl, '_blank')
     } catch (e: any) {
       mToast(`下载失败: ${e?.message || e}`, 'error')
     }

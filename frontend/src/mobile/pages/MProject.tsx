@@ -152,15 +152,11 @@ export default function MProject() {
 
   const handleDownload = async (f: ProjectFile) => {
     try {
-      const dlName = f.display_name || f.filename
-      if (f.download_url) {
-        await api.downloadWithName(f.download_url, dlName)
-      } else {
-        await api.downloadWithName(
-          `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(id || '')}`,
-          dlName
-        )
-      }
+      const dlUrl = f.download_url || `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(id || '')}`
+      const token = localStorage.getItem('auth_token')
+      const sep = dlUrl.includes('?') ? '&' : '?'
+      const finalUrl = token ? `${dlUrl}${sep}token=${encodeURIComponent(token)}` : dlUrl
+      window.open(finalUrl, '_blank')
     } catch (e: any) {
       mToast(`下载失败: ${e?.message || e}`, 'error')
     }
