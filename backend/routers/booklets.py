@@ -1261,6 +1261,64 @@ def create_booklet(req: BookletCreate, request: Request):
         db.close()
 
 
+# ── 封面缩略图（列表页用） ──
+
+
+@router.get("/{booklet_id}/cover-thumb")
+def cover_thumb(booklet_id: str, request: Request):
+    """返回封面的自包含 HTML 片段，供列表页缩略图 iframe 使用。支持 ?token= 认证。"""
+    user = getattr(request.state, "user", None)
+    if user is None:
+        token = request.query_params.get("token")
+        if token:
+            try:
+                import jwt as _jwt
+                from app_config import SECRET_KEY, ALGORITHM
+                user = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                if "token_version" in user and "sub" in user:
+                    db2 = get_db()
+                    try:
+                        urow = db2.execute(
+                            "SELECT token_version FROM users WHERE id=? AND is_active=1",
+                            (user["sub"],),
+                        ).fetchone()
+                        if not urow or urow["token_version"] != user["token_version"]:
+                            user = None
+                    finally:
+                        db2.close()
+            except Exception:
+                user = None
+    if user is None:
+        raise HTTPException(401, "请先登录")
+    db = get_db()
+    try:
+        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
+        booklet = _row_to_full(row)
+        theme = _resolve_theme(booklet)
+    finally:
+        db.close()
+    try:
+        full = render_booklet(booklet, theme)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        return Response(content="", media_type="text/html")
+    styles = _extract_head_styles(full)
+    w, h = (794, 1123) if booklet["book_type"] == "a4" else (1280, 720)
+    m = re.search(r'<section class="[^"]*\bbk-cover\b[^"]*"[^>]*>.*?</section>', full, re.S)
+    if not m:
+        return Response(content="", media_type="text/html")
+    doc = (
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+        f"{styles}"
+        f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;background:var(--background) !important;}}"
+        ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
+        "position:relative !important;margin:0 !important;box-shadow:none !important;}</style>"
+        f"</head><body>{m.group(0)}</body></html>"
+    )
+    return Response(content=doc, media_type="text/html")
+
+
 # ── API #9 合成下载 ──
 
 

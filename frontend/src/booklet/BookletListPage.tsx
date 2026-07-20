@@ -5,27 +5,11 @@ import { useModal } from '../components/ModalProvider'
 import { useAuth } from '../contexts/AuthContext'
 import { BOOK_TYPE_LABEL, BookType, BookletSummary } from './types'
 
-function getCoverColors(coverJson: string, bookType: string) {
-  try {
-    const cover = JSON.parse(coverJson)
-    const c = cover.theme_colors || {}
-    return {
-      bg: c.bg || c.primary || (bookType === 'ppt' ? '#1a1a2e' : '#f5f0e8'),
-      text: c.text || (bookType === 'ppt' ? '#fff' : '#333'),
-    }
-  } catch {
-    return {
-      bg: bookType === 'ppt' ? '#1a1a2e' : '#f5f0e8',
-      text: bookType === 'ppt' ? '#fff' : '#333',
-    }
-  }
-}
-
 export default function BookletListPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const { confirm, toast } = useModal()
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const base = location.pathname.startsWith('/app') ? '/app/booklets' : '/booklets'
   const isAdmin = user?.user_type === 'admin'
   const userId = user?.user_id || ''
@@ -132,10 +116,17 @@ export default function BookletListPage() {
 
   const renderThumb = (b: BookletSummary) => {
     const isPpt = b.book_type === 'ppt'
-    const { bg, text } = getCoverColors(b.cover_json || '{}', b.book_type)
+    const pageW = isPpt ? 1280 : 794
+    const pageH = isPpt ? 720 : 1123
+    const thumbW = isPpt ? 100 : 65
+    const scale = thumbW / pageW
+    const thumbH = Math.round(pageH * scale)
+    const coverUrl = token
+      ? `/api/booklets/${b.id}/cover-thumb?token=${encodeURIComponent(token)}`
+      : `/api/booklets/${b.id}/cover-thumb`
     return (
       <div style={{
-        width: isPpt ? 100 : 72,
+        width: thumbW + 16,
         flexShrink: 0,
         alignSelf: 'stretch',
         display: 'flex',
@@ -144,30 +135,22 @@ export default function BookletListPage() {
         padding: '10px 8px',
       }}>
         <div style={{
-          width: '100%',
-          height: '100%',
-          background: bg,
-          borderRadius: 4,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '10px 8px',
+          width: thumbW,
+          height: thumbH,
           overflow: 'hidden',
+          borderRadius: 3,
           border: '1px solid rgba(0,0,0,0.08)',
+          background: 'var(--bg-secondary, #f5f5f5)',
         }}>
-          <span style={{
-            color: text,
-            fontSize: 10,
-            fontWeight: 700,
-            writingMode: isPpt ? 'horizontal-tb' : 'vertical-rl',
-            textAlign: 'center',
-            lineHeight: 1.4,
-            maxHeight: '100%',
-            overflow: 'hidden',
-            opacity: 0.9,
-          }}>
-            {b.title}
-          </span>
+          <iframe src={coverUrl} sandbox="allow-scripts" scrolling="no" title="封面"
+            style={{
+              width: pageW,
+              height: pageH,
+              border: 'none',
+              transform: `scale(${scale})`,
+              transformOrigin: 'top left',
+              pointerEvents: 'none',
+            }} />
         </div>
       </div>
     )
