@@ -163,7 +163,6 @@ export default function BookletListPage() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 12px', minWidth: 0 }}>
         <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => handleCardClick(b)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 16 }}>{b.book_type === 'ppt' ? '🖥' : '📕'}</span>
             <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
           </div>
           {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
