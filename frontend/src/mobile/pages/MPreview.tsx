@@ -24,7 +24,7 @@ const isSafeSrc = (u: string) => {
 const toPreviewSrc = (u: string, pid: string): string => {
   if (!u.startsWith('/api/download/')) return u
   const parsed = new URL(u, window.location.origin)
-  const fn = parsed.pathname.replace('/api/download/', '')
+  const fn = decodeURIComponent(parsed.pathname.replace('/api/download/', ''))
   const pid2 = parsed.searchParams.get('project_id') || pid
   return `/api/member/preview-file?project_id=${encodeURIComponent(pid2)}&filename=${encodeURIComponent(fn)}`
 }
