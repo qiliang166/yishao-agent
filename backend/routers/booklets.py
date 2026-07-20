@@ -1272,9 +1272,9 @@ def cover_thumb(booklet_id: str, request: Request):
         token = request.query_params.get("token")
         if token:
             try:
-                import jwt as _jwt
-                from app_config import SECRET_KEY, ALGORITHM
-                user = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                from jose import jwt
+                from app import SECRET_KEY, ALGORITHM
+                user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
                 if "token_version" in user and "sub" in user:
                     db2 = get_db()
                     try:
