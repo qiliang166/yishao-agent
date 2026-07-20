@@ -152,11 +152,43 @@ export default function MProject() {
 
   const handleDownload = async (f: ProjectFile) => {
     try {
-      const dlUrl = f.download_url || `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(id || '')}`
+      const pid = id || ''
+      const dlUrl = f.download_url || `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(pid)}`
       const token = localStorage.getItem('auth_token')
       const sep = dlUrl.includes('?') ? '&' : '?'
       const finalUrl = token ? `${dlUrl}${sep}token=${encodeURIComponent(token)}` : dlUrl
-      window.open(finalUrl, '_blank')
+
+      // 检查解锁状态（与桌面端同流程：canDownload → unlock → download）
+      const check = await api.canDownload([{ project_id: pid, filename: f.filename }])
+      if (check == null) { mToast('操作失败，请重试', 'error'); return }
+
+      if (check.is_admin) {
+        window.open(finalUrl, '_blank')
+        return
+      }
+
+      if (check.need_unlock && check.need_unlock.length > 0) {
+        const item = check.need_unlock[0]
+        const cost = item.point_cost_deci != null ? (item.point_cost_deci / 10).toFixed(1) : '?'
+        const balance = check.balance_deci != null ? (check.balance_deci / 10).toFixed(1) : '?'
+        const ok = window.confirm(`下载「${f.display_name || f.filename}」需消耗 ${cost} 积分（余额 ${balance} 积分），确认下载？`)
+        if (!ok) return
+        await api.unlockProjects([pid])
+        window.open(finalUrl, '_blank')
+        return
+      }
+
+      if (check.already_unlocked && check.already_unlocked.length > 0) {
+        window.open(finalUrl, '_blank')
+        return
+      }
+
+      if (check.not_downloadable && check.not_downloadable.length > 0) {
+        mToast('该项目未开放积分解锁下载，请联系管理员', 'error')
+        return
+      }
+
+      mToast('无法下载，请重试', 'error')
     } catch (e: any) {
       mToast(`下载失败: ${e?.message || e}`, 'error')
     }

@@ -29,39 +29,48 @@ const toPreviewSrc = (u: string, pid: string): string => {
   return `/api/member/preview-file?project_id=${encodeURIComponent(pid2)}&filename=${encodeURIComponent(fn)}`
 }
 
-// 注入到课件 HTML 末尾的测量脚本：由课件自己上报真实内容宽高。
-// 微信等移动端 WebView 中父页面直接读 iframe contentDocument 的时机/结果不可靠，
-// postMessage 是各端一致的方式。
-// 宽度必须用「子元素包围盒并集」而非 scrollWidth：
-// COL4/COL5 课件 body 是 flex 居中布局（1280px 固定宽 slide），
-// 视口窄时内容向左溢出到负坐标区，scrollWidth 只统计右侧溢出，会严重偏小
-const MEASURE_SCRIPT = `<script>(function(){
-function measure(){
-  var de = document.documentElement, b = document.body;
-  var maxR = Math.max(de.scrollWidth, b ? b.scrollWidth : 0);
-  var minL = 0;
-  var h = Math.max(de.scrollHeight, b ? b.scrollHeight : 0);
-  if (b) {
-    var els = b.children;
-    for (var i = 0; i < els.length; i++) {
-      var r = els[i].getBoundingClientRect();
-      if (r.width <= 0 && r.height <= 0) continue;
-      if (r.left < minL) minL = r.left;
-      if (r.right > maxR) maxR = r.right;
-      if (r.bottom > h) h = r.bottom;
-    }
+// 从 src URL 中提取文件名
+const extractFilename = (u: string): string => {
+  try {
+    const parsed = new URL(u, window.location.origin)
+    const fn = parsed.searchParams.get('filename') || ''
+    if (fn) return fn
+    const path = parsed.pathname
+    const last = path.substring(path.lastIndexOf('/') + 1)
+    return decodeURIComponent(last)
+  } catch {
+    return ''
   }
-  return { w: maxR - minL, h: h };
 }
-function report(){
-  try{
-    var m = measure();
-    parent.postMessage({ t: 'm-preview-size', w: m.w, h: m.h }, '*');
-  }catch(e){}
-}
-if (document.readyState === 'complete') { report() } else { window.addEventListener('load', report) }
-setTimeout(report, 300); setTimeout(report, 1200);
-})()<\/script>`
+
+// 注入到课件 HTML 末尾的测量脚本：由课件自己上报真实内容宽高。
+const MEASURE_SCRIPT = `<script>(function(){
+  function measure(){
+    var de = document.documentElement, b = document.body;
+    var maxR = Math.max(de.scrollWidth, b ? b.scrollWidth : 0);
+    var minL = 0;
+    var h = Math.max(de.scrollHeight, b ? b.scrollHeight : 0);
+    if (b) {
+      var els = b.children;
+      for (var i = 0; i < els.length; i++) {
+        var r = els[i].getBoundingClientRect();
+        if (r.width <= 0 && r.height <= 0) continue;
+        if (r.left < minL) minL = r.left;
+        if (r.right > maxR) maxR = r.right;
+        if (r.bottom > h) h = r.bottom;
+      }
+    }
+    return { w: maxR - minL, h: h };
+  }
+  function report(){
+    try{
+      var m = measure();
+      parent.postMessage({ t: 'm-preview-size', w: m.w, h: m.h }, '*');
+    }catch(e){}
+  }
+  if (document.readyState === 'complete') { report() } else { window.addEventListener('load', report) }
+  setTimeout(report, 300); setTimeout(report, 1200);
+  })()<\/script>`
 
 // 父页面兜底测量（srcdoc 同源可读时），与 MEASURE_SCRIPT 同一套包围盒并集逻辑
 const measureDoc = (doc: Document): { w: number; h: number } => {
@@ -94,7 +103,6 @@ export default function MPreview() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [textContent, setTextContent] = useState('')
-  // 微信 X5/XWeb 对 blob: iframe 支持不可靠（真机空白），改用 srcdoc 内联 HTML
   const [htmlDoc, setHtmlDoc] = useState('')
   const [mediaUrl, setMediaUrl] = useState('')
   const [frameDims, setFrameDims] = useState<{ w: number; h: number; scale: number } | null>(null)
@@ -106,7 +114,6 @@ export default function MPreview() {
     const cw = containerRef.current?.clientWidth || window.innerWidth
     if (w > 0 && h > 0 && w > cw) {
       setFrameDims(prev => {
-        // 取最大上报宽度，避免早期未布局完成的偏小值
         if (prev != null && prev.w >= w) return prev
         return { w, h, scale: cw / w }
       })
@@ -132,8 +139,10 @@ export default function MPreview() {
       try {
         if (kind === 'text') {
           if (!src) throw new Error('缺少文件地址')
+          // 文本也走免解锁预览端点，避免 402
+          const fetchSrc = toPreviewSrc(src, pid)
           const token = localStorage.getItem('auth_token')
-          const resp = await fetch(src, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+          const resp = await fetch(fetchSrc, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
           if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
           const text = await resp.text()
           if (!cancelled) setTextContent(text)
@@ -148,8 +157,6 @@ export default function MPreview() {
           setTextContent(target.raw_content || target.processed_content || '（素材内容为空）')
         } else if (kind === 'html') {
           if (!src) throw new Error('缺少文件地址')
-          // 统一 fetch 取文本 → 注入测量脚本 → srcdoc 内联加载
-          // /api/download/ 会校验解锁 → 返回 402，这里自动转为免解锁预览端点
           const fetchSrc = toPreviewSrc(src, pid)
           const token = localStorage.getItem('auth_token')
           const headers: Record<string, string> = {}
@@ -160,10 +167,14 @@ export default function MPreview() {
           if (!ct.includes('text/html')) throw new Error('该文件不是 HTML，无法预览')
           const html = await resp.text()
           if (!cancelled) setHtmlDoc(html + MEASURE_SCRIPT)
-        } else if (kind === 'image' || kind === 'video' || kind === 'audio') {
+        } else if (kind === 'image' || kind === 'video') {
           if (!src) throw new Error('缺少文件地址')
-          // 媒体标签无法带 Authorization 头，用 token 查询参数（src 已限定本站 /api/）
-          if (!cancelled) setMediaUrl(kind === 'audio' ? src : withToken(src))
+          // 图片/视频也走免解锁预览端点 + token 认证（浏览器标签无法带 Authorization 头）
+          const previewSrc = toPreviewSrc(src, pid)
+          if (!cancelled) setMediaUrl(withToken(previewSrc))
+        } else if (kind === 'audio') {
+          if (!src) throw new Error('缺少文件地址')
+          if (!cancelled) setMediaUrl(src)
         } else {
           throw new Error('不支持的预览类型')
         }
@@ -195,6 +206,42 @@ export default function MPreview() {
       const token = localStorage.getItem('auth_token')
       const sep = src.includes('?') ? '&' : '?'
       const finalUrl = token ? `${src}${sep}token=${encodeURIComponent(token)}` : src
+
+      // 检查解锁状态（与桌面端同流程：canDownload → unlock → download）
+      const fn = extractFilename(src) || name
+      if (!pid || !fn) {
+        window.open(finalUrl, '_blank')
+        return
+      }
+      const check = await api.canDownload([{ project_id: pid, filename: fn }])
+      if (check == null) { mToast('操作失败，请重试', 'error'); return }
+
+      if (check.is_admin) {
+        window.open(finalUrl, '_blank')
+        return
+      }
+
+      if (check.need_unlock && check.need_unlock.length > 0) {
+        const item = check.need_unlock[0]
+        const cost = item.point_cost_deci != null ? (item.point_cost_deci / 10).toFixed(1) : '?'
+        const balance = check.balance_deci != null ? (check.balance_deci / 10).toFixed(1) : '?'
+        const ok = window.confirm(`下载「${name}」需消耗 ${cost} 积分（余额 ${balance} 积分），确认下载？`)
+        if (!ok) return
+        await api.unlockProjects([pid])
+        window.open(finalUrl, '_blank')
+        return
+      }
+
+      if (check.already_unlocked && check.already_unlocked.length > 0) {
+        window.open(finalUrl, '_blank')
+        return
+      }
+
+      if (check.not_downloadable && check.not_downloadable.length > 0) {
+        mToast('该项目未开放积分解锁下载，请联系管理员', 'error')
+        return
+      }
+
       window.open(finalUrl, '_blank')
     } catch (e: any) {
       mToast(`下载失败: ${e?.message || e}`, 'error')
