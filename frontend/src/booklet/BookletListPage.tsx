@@ -165,7 +165,6 @@ export default function BookletListPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.title}</div>
           </div>
-          {b.subtitle && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{b.subtitle}</div>}
           <div style={{ fontSize: 10, color: 'var(--text-secondary)', display: 'flex', gap: 10, marginTop: 2 }}>
             <span>{BOOK_TYPE_LABEL[b.book_type as BookType] || b.book_type}</span>
             <span>{b.chapter_count} 章</span>
