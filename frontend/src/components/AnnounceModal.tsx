@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { api } from '../services/api'
 
 export default function AnnounceModal() {
@@ -40,7 +41,7 @@ export default function AnnounceModal() {
             }}
           >✕</button>
         </div>
-        <div dangerouslySetInnerHTML={{ __html: html }} />
+        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="btn btn-primary btn-sm" onClick={handleClose}>我知道了</button>
         </div>

@@ -2,6 +2,10 @@
 
 ## 2026-07-21
 
+- feat: 激活服务器站点配置 — 标价说明 + 公告弹窗系统
+
+## 2026-07-21
+
 - fix: 整站备份去重 — base walk已覆盖routers/services，移除重复条目 + strict_timestamps=False
 
 ## 2026-07-21

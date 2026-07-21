@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import AboutDialog from '../components/AboutDialog'
@@ -215,7 +216,7 @@ export default function LoginPage() {
           <div style={{
             borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 12,
           }}>
-            <div dangerouslySetInnerHTML={{ __html: pricingHtml }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(pricingHtml) }} />
           </div>
         )}
       </div>
