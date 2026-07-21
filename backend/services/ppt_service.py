@@ -3882,7 +3882,11 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
                         # Start from stage1 (preserves all content fields)
                         merged = dict(s1)
                         # Overlay LLM structure decisions
-                        merged["type"] = s.get("type") or s1.get("page_type", "content")
+                        # structural page types from stage1 always take precedence
+                        # over LLM's type — prevents TOC/cover/section pages from
+                        # being misclassified as "content" and skipping code-fill.
+                        s1_type = s1.get("page_type", "")
+                        merged["type"] = s1_type if s1_type in STRUCTURAL_PAGE_TYPES else (s.get("type") or s1_type or "content")
                         merged["layout"] = s.get("layout") or s1.get("layout_hint", "")
                         merged["has_chart"] = s.get("has_chart", False)
                         merged["chart_hint"] = s.get("chart_hint", "")
@@ -4161,6 +4165,11 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
     def _gen_one(slide, idx):
         seq = slide.get("seq", idx + 1)
         stype = slide.get("type", "content")
+        # Defensive fallback: if type is not structural but page_type is, use page_type
+        if stype not in STRUCTURAL_PAGE_TYPES:
+            ptype = slide.get("page_type", "")
+            if ptype in STRUCTURAL_PAGE_TYPES:
+                stype = ptype
         layout = slide.get("layout", "hero_grid")
         heading = slide.get("heading", "")
         body = slide.get("body", "")
