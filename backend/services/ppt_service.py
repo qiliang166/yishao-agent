@@ -4174,6 +4174,38 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         description = slide.get("description", "")
         title_format = slide.get("title_format", "")
 
+        # ── TOC data fallback (landscape): populate chapters/cards/key_points from
+        # project_items SKILL JSON when slide data is empty. Same pattern as the
+        # A4 TOC path below (line ~4245), but for landscape code-fill templates.
+        if stype == "toc" and not is_a4:
+            chapters = slide.get("chapters") or []
+            cards = slide.get("cards") or []
+            key_points = slide.get("key_points") or []
+            if not chapters or not cards:
+                try:
+                    _db_toc = get_db()
+                    _pi_toc = _db_toc.execute(
+                        "SELECT skill FROM project_items WHERE id = ?",
+                        (f"pi-{project_id}-{column_id}",)
+                    ).fetchone()
+                    if _pi_toc and _pi_toc[0]:
+                        _skill = json.loads(_pi_toc[0])
+                        if isinstance(_skill, list):
+                            for _item in _skill:
+                                if isinstance(_item, dict) and _item.get("page_type") == "toc":
+                                    _chs = _item.get("chapters") or []
+                                    if _chs:
+                                        slide["chapters"] = _chs
+                                        slide["cards"] = [
+                                            {"title": c.get("label", ""), "content_hint": c.get("example", "")}
+                                            if isinstance(c, dict) else {"title": str(c), "content_hint": ""}
+                                            for c in _chs
+                                        ]
+                                        slide["key_points"] = _item.get("key_points") or []
+                                    break
+                except Exception:
+                    pass
+
         # ── Structural page template: VI-first, code-fill fallback ──
         if stype in STRUCTURAL_PAGE_TYPES and not is_a4:
             # VI-first, code-fill: extract HTML template from VI and do deterministic
@@ -6579,6 +6611,13 @@ def _fill_slide_template(template_html: str, slide: dict, total_pages: int) -> s
     key_points = slide.get("key_points", [])
     cards = slide.get("cards", [])
     description = slide.get("description", "")
+
+    # Derive cards from key_points when cards is empty (TOC fallback).
+    # The {{#CHAPTERS}} loop block depends on cards; when the slide data
+    # lacks chapters/cards but has key_points (common after outline generation
+    # by LLM), convert key_points strings into card dicts so the TOC renders.
+    if not cards and key_points:
+        cards = [{"title": str(kp).strip(), "content_hint": ""} for kp in key_points if str(kp).strip()]
 
     # Extract sub-parts: subtitle prefers explicit field, then lead (short phrases only).
     # Never fall back to body — long body text belongs in {{SUMMARY}}, not the subtitle.
