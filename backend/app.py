@@ -6397,6 +6397,25 @@ def update_settings(req: dict, user=require_perm("config.global")):
         db.close()
 
 
+@app.get("/api/backup-database")
+def backup_database(user=require_perm("config.global")):
+    """Download a snapshot of the database."""
+    import shutil
+    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    tmp = os.path.join(BASE_DIR, "data", f"yishao-snapshot-{ts}.db")
+    try:
+        shutil.copy2(os.path.join(BASE_DIR, "data", "yishao.db"), tmp)
+        return FileResponse(
+            tmp,
+            media_type="application/octet-stream",
+            filename=f"yishao-snapshot-{ts}.db",
+        )
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise HTTPException(status_code=500, detail="备份失败")
+
+
 # ── Help Manual Sections ──
 
 @app.get("/api/help-manual/sections")

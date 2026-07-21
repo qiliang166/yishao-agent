@@ -673,6 +673,25 @@ function SettingsPage() {
           </div>
 
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
+            <h3>数据备份</h3>
+            <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
+              一键下载当前数据库快照到本地。建议每周备份一次，保存到安全位置。
+            </p>
+            {canSaveGlobal && <button className="btn btn-primary btn-sm"
+              onClick={async () => {
+                try {
+                  const a = document.createElement('a')
+                  a.href = '/api/backup-database'
+                  a.download = ''
+                  a.click()
+                } catch (e: any) {
+                  alert('下载失败: ' + e.message)
+                }
+              }}
+            >下载备份</button>}
+          </div>
+
+          <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
             <h3>许可证</h3>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
               激活状态管理。一个许可证密钥仅绑定一台机器。
