@@ -6427,20 +6427,29 @@ def backup_full(user=require_perm("config.global")):
             # Database
             db_path = os.path.join(BASE_DIR, "data", "yishao.db")
             zf.write(db_path, "yishao.db")
-            # Backend source
-            for root, _, files in os.walk(os.path.dirname(BASE_DIR)):
-                for f in files:
-                    if f.endswith((".py", ".txt", ".json", ".yaml", ".yml")):
-                        fp = os.path.join(root, f)
-                        arc = os.path.relpath(fp, os.path.dirname(BASE_DIR))
-                        zf.write(fp, arc)
+            # Backend source (explicit dirs only, avoid walking activation_server/venv etc.)
+            source_dirs = [
+                ("", (".py", ".txt")),
+                ("routers", (".py",)),
+                ("services", (".py",)),
+                ("resources", (".txt", ".json", ".yaml", ".yml", ".md")),
+            ]
+            for sub, exts in source_dirs:
+                sd = os.path.join(BASE_DIR, sub) if sub else BASE_DIR
+                if os.path.isdir(sd):
+                    for root, _, files in os.walk(sd):
+                        for f in files:
+                            if f.endswith(exts):
+                                fp = os.path.join(root, f)
+                                arc = os.path.join("backend", os.path.relpath(fp, BASE_DIR))
+                                zf.write(fp, arc)
             # Frontend dist
             fe = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
             if os.path.isdir(fe):
                 for root, _, files in os.walk(fe):
                     for f in files:
                         fp = os.path.join(root, f)
-                        arc = os.path.relpath(fp, os.path.dirname(BASE_DIR))
+                        arc = os.path.join("frontend", "dist", os.path.relpath(fp, fe))
                         zf.write(fp, arc)
         return FileResponse(
             tmp,
