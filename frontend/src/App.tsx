@@ -27,6 +27,7 @@ import BookletListPage from './booklet/BookletListPage'
 import BookletEditorPage from './booklet/BookletEditorPage'
 import { ModalProvider } from './components/ModalProvider'
 import AboutDialog from './components/AboutDialog'
+import AnnounceModal from './components/AnnounceModal'
 import ProtectedRoute from './components/ProtectedRoute'
 import SettingsLock from './components/SettingsLock'
 import SetupWizard from './components/SetupWizard'
@@ -569,6 +570,7 @@ function MemberAppShell() {
 
   return (
     <div className="app-layout">
+      <AnnounceModal />
       <MemberSidebar />
       <div className="main-area">
         <div className={isWorkspace ? 'workspace-content' : 'main-content'}>
@@ -648,6 +650,7 @@ function AppShell() {
   return (
     <>
       <PhoneReminder />
+      <AnnounceModal />
       {showWizard && <SetupWizard onDone={() => setShowWizard(false)} />}
     <div className="app-layout">
       <Sidebar onOpenWizard={() => setShowWizard(true)} />

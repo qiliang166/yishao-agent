@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>激活服务器 — 站点管理</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f5f5f5; color: #333; line-height: 1.6;
+  }
+  .container { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+
+  .login-card, .panel-card {
+    background: #fff; border-radius: 12px; padding: 32px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    margin-bottom: 20px;
+  }
+  h1 { font-size: 20px; margin-bottom: 8px; }
+  h2 { font-size: 16px; margin-bottom: 12px; color: #555; }
+  .sub { font-size: 12px; color: #999; margin-bottom: 24px; }
+
+  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: #444; }
+  textarea {
+    width: 100%; min-height: 120px; padding: 10px 12px;
+    border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px;
+    font-family: inherit; resize: vertical; line-height: 1.5;
+  }
+  textarea:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .hint { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+
+  input[type="text"], input[type="password"] {
+    width: 100%; padding: 10px 12px; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: 14px;
+  }
+  input:focus { outline: none; border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 20px; border: none; border-radius: 8px;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover { background: #4f46e5; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: #6b7280; }
+  .btn-ghost:hover { background: #f3f4f6; }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  .toggle-row {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+  }
+  .toggle {
+    position: relative; width: 44px; height: 24px; cursor: pointer;
+  }
+  .toggle input { display: none; }
+  .toggle .slider {
+    position: absolute; inset: 0; background: #d1d5db;
+    border-radius: 24px; transition: background 0.2s;
+  }
+  .toggle .slider::after {
+    content: ''; position: absolute; top: 2px; left: 2px;
+    width: 20px; height: 20px; background: #fff;
+    border-radius: 50%; transition: transform 0.2s;
+  }
+  .toggle input:checked + .slider { background: #6366f1; }
+  .toggle input:checked + .slider::after { transform: translateX(20px); }
+
+  .toast {
+    position: fixed; top: 20px; right: 20px; z-index: 9999;
+    padding: 10px 18px; border-radius: 8px; font-size: 13px;
+    color: #fff; animation: fadeIn 0.2s;
+  }
+  .toast-success { background: #10b981; }
+  .toast-error { background: #ef4444; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .error-msg { font-size: 12px; color: #ef4444; margin-top: 8px; }
+  .section-divider { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Login -->
+  <div id="loginBlock" class="login-card">
+    <h1>激活服务器管理</h1>
+    <p class="sub">请输入管理令牌以继续</p>
+    <div style="margin-bottom: 16px;">
+      <label>管理令牌</label>
+      <input type="password" id="tokenInput" placeholder="Bearer Token" autofocus>
+      <div id="loginError" class="error-msg" style="display:none;"></div>
+    </div>
+    <button class="btn btn-primary" id="loginBtn" onclick="doLogin()">登录</button>
+  </div>
+
+  <!-- Panel -->
+  <div id="panel" style="display:none;">
+
+    <!-- Pricing -->
+    <div class="panel-card">
+      <h2>标价说明</h2>
+      <p class="sub">设置在软件登录页底部显示的购买/标价信息（支持 HTML）</p>
+      <div style="margin-bottom: 12px;">
+        <label>标价 HTML 内容</label>
+        <textarea id="pricingHtml" placeholder="例：&lt;div style='text-align:center'&gt;&lt;p&gt;永久授权 ¥299&lt;/p&gt;&lt;p&gt;联系微信：xxx&lt;/p&gt;&lt;/div&gt;"></textarea>
+        <p class="hint">留空则不显示。支持任意 HTML，会直接渲染在登录页底部。</p>
+      </div>
+      <button class="btn btn-primary" onclick="savePricing()">保存标价</button>
+      <span id="pricingSaved" style="display:none; color:#10b981; font-size:12px; margin-left:8px;">已保存</span>
+    </div>
+
+    <!-- Announcement -->
+    <div class="panel-card">
+      <h2>公告弹窗</h2>
+      <p class="sub">设置会员/管理员登录后自动弹出的公告内容</p>
+      <div class="toggle-row">
+        <label class="toggle">
+          <input type="checkbox" id="announceEnabled" onchange="saveAnnounceEnabled()">
+          <span class="slider"></span>
+        </label>
+        <span style="font-size:13px;">启用公告弹窗</span>
+        <span id="enabledSaved" style="display:none; color:#10b981; font-size:12px; margin-left:8px;">已保存</span>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label>公告 HTML 内容</label>
+        <textarea id="announceHtml" placeholder="例：&lt;h2&gt;系统升级通知&lt;/h2&gt;&lt;p&gt;今晚 22:00-24:00 系统维护，届时可能无法访问。&lt;/p&gt;"></textarea>
+        <p class="hint">支持任意 HTML 格式。公告开关打开且有内容时，用户登录后自动弹出。</p>
+      </div>
+      <button class="btn btn-primary" onclick="saveAnnounce()">保存公告</button>
+      <span id="announceSaved" style="display:none; color:#10b981; font-size:12px; margin-left:8px;">已保存</span>
+    </div>
+
+    <!-- Logout -->
+    <div style="text-align:center; margin-top: 20px;">
+      <button class="btn btn-ghost btn-sm" onclick="doLogout()">退出登录</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const BASE = '';
+
+function getToken() { return sessionStorage.getItem('admin_token'); }
+
+function toast(msg, type) {
+  const el = document.createElement('div');
+  el.className = 'toast toast-' + type;
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => { el.remove(); }, 2500);
+}
+
+async function doLogin() {
+  const token = document.getElementById('tokenInput').value.trim();
+  if (!token) { showLoginError('请输入管理令牌'); return; }
+
+  try {
+    const res = await fetch(BASE + '/api/admin/site-config', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!res.ok) throw new Error('令牌无效或权限不足');
+    sessionStorage.setItem('admin_token', token);
+    document.getElementById('loginBlock').style.display = 'none';
+    document.getElementById('panel').style.display = 'block';
+    document.getElementById('loginError').style.display = 'none';
+    await loadConfig();
+  } catch (e) {
+    showLoginError(e.message);
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+async function authFetch(path, options) {
+  const headers = { Authorization: 'Bearer ' + getToken() };
+  if (options?.body) headers['Content-Type'] = 'application/json';
+  const res = await fetch(BASE + path, { ...options, headers });
+  if (res.status === 401) {
+    doLogout();
+    throw new Error('令牌已过期，请重新登录');
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || '请求失败 (' + res.status + ')');
+  }
+  return res.json();
+}
+
+async function loadConfig() {
+  try {
+    const data = await authFetch('/api/admin/site-config');
+    document.getElementById('pricingHtml').value = data.pricing_html || '';
+    document.getElementById('announceHtml').value = data.announce_html || '';
+    document.getElementById('announceEnabled').checked = data.announce_enabled === '1';
+  } catch (e) {
+    toast('加载配置失败: ' + e.message, 'error');
+  }
+}
+
+async function savePricing() {
+  try {
+    const html = document.getElementById('pricingHtml').value;
+    await authFetch('/api/admin/site-config', {
+      method: 'PUT',
+      body: JSON.stringify({ pricing_html: html }),
+    });
+    const el = document.getElementById('pricingSaved');
+    el.style.display = 'inline';
+    setTimeout(() => { el.style.display = 'none'; }, 2000);
+    toast('标价说明已保存', 'success');
+  } catch (e) {
+    toast('保存失败: ' + e.message, 'error');
+  }
+}
+
+async function saveAnnounce() {
+  try {
+    const html = document.getElementById('announceHtml').value;
+    await authFetch('/api/admin/site-config', {
+      method: 'PUT',
+      body: JSON.stringify({ announce_html: html }),
+    });
+    const el = document.getElementById('announceSaved');
+    el.style.display = 'inline';
+    setTimeout(() => { el.style.display = 'none'; }, 2000);
+    toast('公告已保存', 'success');
+  } catch (e) {
+    toast('保存失败: ' + e.message, 'error');
+  }
+}
+
+async function saveAnnounceEnabled() {
+  try {
+    const enabled = document.getElementById('announceEnabled').checked ? '1' : '0';
+    await authFetch('/api/admin/site-config', {
+      method: 'PUT',
+      body: JSON.stringify({ announce_enabled: enabled }),
+    });
+    const el = document.getElementById('enabledSaved');
+    el.style.display = 'inline';
+    setTimeout(() => { el.style.display = 'none'; }, 2000);
+  } catch (e) {
+    toast('保存失败: ' + e.message, 'error');
+  }
+}
+
+function doLogout() {
+  sessionStorage.removeItem('admin_token');
+  document.getElementById('loginBlock').style.display = 'block';
+  document.getElementById('panel').style.display = 'none';
+  document.getElementById('tokenInput').value = '';
+}
+
+// Enter key login
+document.getElementById('tokenInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') doLogin();
+});
+</script>
+</body>
+</html>

@@ -453,6 +453,11 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Site config (from activation server)
+  getSiteConfig: () => request('/api/site-config').then(d => d as {
+    pricing_html: string; announce_html: string; announce_enabled: string;
+  }),
+
   // Settings
   getSettings: () => request('/api/settings'),
   updateSettings: (data: Record<string, string>) =>

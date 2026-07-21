@@ -6460,6 +6460,19 @@ def backup_full(user=require_perm("config.global")):
         raise HTTPException(status_code=500, detail="备份失败")
 
 
+@app.get("/api/site-config")
+def get_site_config():
+    """Proxy to activation server — public site config (pricing, announcements)."""
+    import httpx
+    activation_url = os.environ.get("ACTIVATION_SERVER_URL", "http://127.0.0.1:18777")
+    try:
+        resp = httpx.get(f"{activation_url}/api/site-config", timeout=5.0)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return {"pricing_html": "", "announce_html": "", "announce_enabled": "0"}
+
+
 # ── Help Manual Sections ──
 
 @app.get("/api/help-manual/sections")

@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [phoneError, setPhoneError] = useState('')
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
+  const [pricingHtml, setPricingHtml] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -41,6 +42,9 @@ export default function LoginPage() {
         setInitialAdminPassword(s.initial_admin_password)
         setUsername('admin')
       }
+    }).catch(() => {})
+    fetch('/api/site-config').then(r => r.json()).then(cfg => {
+      if (cfg.pricing_html) setPricingHtml(cfg.pricing_html)
     }).catch(() => {})
   }, [])
 
@@ -207,6 +211,13 @@ export default function LoginPage() {
           <span onClick={() => setShowAbout(true)}
             style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>关于软件</span>
         </div>
+        {pricingHtml && (
+          <div style={{
+            borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 12,
+          }}>
+            <div dangerouslySetInnerHTML={{ __html: pricingHtml }} />
+          </div>
+        )}
       </div>
 
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}

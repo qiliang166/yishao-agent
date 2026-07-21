@@ -16,6 +16,8 @@ from typing import Optional, Tuple
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -89,6 +91,20 @@ def init_db():
             db.execute("ALTER TABLE license_keys ADD COLUMN phone TEXT DEFAULT ''")
     except Exception:
         pass
+
+    # site_config table for pricing & announcements
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS site_config (
+            key TEXT PRIMARY KEY,
+            value TEXT DEFAULT ''
+        )
+    """)
+    # Seed default rows if missing
+    for key in ("pricing_html", "announce_html", "announce_enabled"):
+        db.execute(
+            "INSERT OR IGNORE INTO site_config (key, value) VALUES (?, ?)",
+            (key, "0" if key == "announce_enabled" else ""),
+        )
 
     db.commit()
     db.close()
@@ -381,6 +397,57 @@ def admin_set_phone(req: dict, request: Request):
         db.close()
 
 
+# ── Site config: public ──────────────────────────────────────────────
+@app.get("/api/site-config")
+def get_site_config():
+    """Public endpoint — no auth required."""
+    db = get_db()
+    try:
+        rows = db.execute("SELECT key, value FROM site_config").fetchall()
+        config = {r["key"]: r["value"] for r in rows}
+        return {
+            "pricing_html": config.get("pricing_html", ""),
+            "announce_html": config.get("announce_html", ""),
+            "announce_enabled": config.get("announce_enabled", "0"),
+        }
+    finally:
+        db.close()
+
+
+# ── Site config: admin ───────────────────────────────────────────────
+@app.get("/api/admin/site-config")
+def admin_get_site_config(request: Request):
+    _check_admin(request)
+    db = get_db()
+    try:
+        rows = db.execute("SELECT key, value FROM site_config").fetchall()
+        config = {r["key"]: r["value"] for r in rows}
+        return {
+            "pricing_html": config.get("pricing_html", ""),
+            "announce_html": config.get("announce_html", ""),
+            "announce_enabled": config.get("announce_enabled", "0"),
+        }
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/site-config")
+def admin_update_site_config(req: dict, request: Request):
+    _check_admin(request)
+    db = get_db()
+    try:
+        for key in ("pricing_html", "announce_html", "announce_enabled"):
+            if key in req:
+                db.execute(
+                    "INSERT OR REPLACE INTO site_config (key, value) VALUES (?, ?)",
+                    (key, str(req[key])),
+                )
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
 # ── Client: activate ─────────────────────────────────────────────────
 @app.post("/api/activate")
 def client_activate(req: dict):
@@ -496,6 +563,16 @@ def client_deactivate(req: dict):
         return {"ok": True}
     finally:
         db.close()
+
+
+# ── Admin panel (static) ─────────────────────────────────────────────
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+os.makedirs(STATIC_DIR, exist_ok=True)
+
+
+@app.get("/admin.html", include_in_schema=False)
+def admin_page():
+    return FileResponse(os.path.join(STATIC_DIR, "admin.html"))
 
 
 # ── Main ─────────────────────────────────────────────────────────────
