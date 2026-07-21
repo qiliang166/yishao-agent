@@ -107,11 +107,13 @@ Copy-Item "$root\backend\data\templates\*" "$distDir\backend\data\templates\" -R
 # Copy built frontend
 Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force
 
-# Copy production start scripts, install guide, and changelog
+# Copy production start scripts, install guide, changelog, and safe deploy
 Copy-Item "$root\start_prod.bat" "$distDir\" -ErrorAction SilentlyContinue
 Copy-Item "$root\start_prod.sh" "$distDir\" -ErrorAction SilentlyContinue
 Copy-Item "$root\INSTALL.txt" "$distDir\" -ErrorAction SilentlyContinue
 Copy-Item "$root\CHANGELOG.md" "$distDir\" -ErrorAction SilentlyContinue
+Copy-Item "$root\deploy_backup.sh" "$distDir\" -ErrorAction SilentlyContinue
+Copy-Item "$root\server_backup_cron.sh" "$distDir\" -ErrorAction SilentlyContinue
 
 # Build the server deployment zip
 $zipFile = "$root\yishao-agent-server.zip"
