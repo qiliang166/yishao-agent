@@ -949,6 +949,19 @@ export const api = {
     document.body.removeChild(a)
     URL.revokeObjectURL(a.href)
   },
+  downloadFullBackup: async () => {
+    const headers = getAuthHeaders()
+    const res = await fetch('/api/backup-full', { headers })
+    if (!res.ok) throw new Error('下载失败')
+    const blob = await res.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'yishao-full-backup.zip'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+  },
 
   // Prompt Studio
   getDefaultProvider: () =>

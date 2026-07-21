@@ -6416,6 +6416,43 @@ def backup_database(user=require_perm("config.global")):
         raise HTTPException(status_code=500, detail="备份失败")
 
 
+@app.get("/api/backup-full")
+def backup_full(user=require_perm("config.global")):
+    """Download a complete backup: database + backend source + frontend dist."""
+    import shutil, zipfile
+    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    tmp = os.path.join(BASE_DIR, "data", f"yishao-full-{ts}.zip")
+    try:
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+            # Database
+            db_path = os.path.join(BASE_DIR, "data", "yishao.db")
+            zf.write(db_path, "yishao.db")
+            # Backend source
+            for root, _, files in os.walk(os.path.dirname(BASE_DIR)):
+                for f in files:
+                    if f.endswith((".py", ".txt", ".json", ".yaml", ".yml")):
+                        fp = os.path.join(root, f)
+                        arc = os.path.relpath(fp, os.path.dirname(BASE_DIR))
+                        zf.write(fp, arc)
+            # Frontend dist
+            fe = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
+            if os.path.isdir(fe):
+                for root, _, files in os.walk(fe):
+                    for f in files:
+                        fp = os.path.join(root, f)
+                        arc = os.path.relpath(fp, os.path.dirname(BASE_DIR))
+                        zf.write(fp, arc)
+        return FileResponse(
+            tmp,
+            media_type="application/zip",
+            filename=f"yishao-full-{ts}.zip",
+        )
+    except Exception:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        raise HTTPException(status_code=500, detail="备份失败")
+
+
 # ── Help Manual Sections ──
 
 @app.get("/api/help-manual/sections")

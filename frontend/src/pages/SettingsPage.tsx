@@ -675,17 +675,28 @@ function SettingsPage() {
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
             <h3>数据备份</h3>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 10 }}>
-              一键下载当前数据库快照到本地。建议每周备份一次，保存到安全位置。
+              建议每周下载整站备份，保存到安全位置。
             </p>
-            {canSaveGlobal && <button className="btn btn-primary btn-sm"
-              onClick={async () => {
-                try {
-                  await api.downloadBackup()
-                } catch (e: any) {
-                  alert('下载失败: ' + e.message)
-                }
-              }}
-            >下载备份</button>}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {canSaveGlobal && <button className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  try {
+                    await api.downloadBackup()
+                  } catch (e: any) {
+                    alert('下载失败: ' + e.message)
+                  }
+                }}
+              >下载数据库</button>}
+              {canSaveGlobal && <button className="btn btn-primary btn-sm"
+                onClick={async () => {
+                  try {
+                    await api.downloadFullBackup()
+                  } catch (e: any) {
+                    alert('下载失败: ' + e.message)
+                  }
+                }}
+              >下载整站备份</button>}
+            </div>
           </div>
 
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
