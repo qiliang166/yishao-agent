@@ -290,12 +290,20 @@ def _resolve_run_index_html(run_id: str) -> str:
 
     run_id 必须先经 _project_ppt_runs 白名单校验，此处不接受任意输入。
     """
-    from app import _run_dirs, EXPORT_DIR  # 延迟导入，规避循环依赖
+    from app import _run_dirs, EXPORT_DIR, _scan_output_bases, _save_run_dirs
     run_dir = _run_dirs.get(run_id)
     if not run_dir:
         candidate = os.path.join(EXPORT_DIR, run_id)
         if os.path.isdir(candidate):
             run_dir = candidate
+    if not run_dir:
+        for base in [EXPORT_DIR] + _scan_output_bases():
+            candidate = os.path.join(base, run_id)
+            if os.path.isdir(candidate):
+                run_dir = candidate
+                _run_dirs[run_id] = run_dir
+                _save_run_dirs(_run_dirs)
+                break
     if not run_dir or not os.path.isdir(run_dir):
         return ""
     index_path = os.path.join(run_dir, "index.html")
