@@ -1307,13 +1307,15 @@ def cover_thumb(booklet_id: str, request: Request):
     m = re.search(r'<section class="[^"]*\bbk-cover\b[^"]*"[^>]*>.*?</section>', full, re.S)
     if not m:
         return Response(content="", media_type="text/html")
+    vi_mode = booklet["book_type"] == "a4" and _first_chapter_is_html(booklet.get("chapters") or [])
+    body_cls = ' class="bk-vi"' if vi_mode else ""
     doc = (
         "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
         f"{styles}"
-        f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;background:var(--background) !important;}}"
+        f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;}}"
         ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
         "position:relative !important;margin:0 !important;box-shadow:none !important;}</style>"
-        f"</head><body>{m.group(0)}</body></html>"
+        f"</head><body{body_cls}>{m.group(0)}</body></html>"
     )
     return Response(content=doc, media_type="text/html")
 
