@@ -2984,8 +2984,8 @@ def _load_scheme_data(style_id: str, color_scheme: str = "deep-blue") -> dict:
             return schemes[color_scheme]
         if schemes:
             return next(iter(schemes.values()))
-    except Exception:
-        pass
+    except Exception as _e:
+        _logger.warning(f"_load_scheme_data({style_id}/{color_scheme}): YAML parse failed — {_e}")
     return {}
 
 
@@ -4175,7 +4175,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         title_format = slide.get("title_format", "")
 
         # ── Structural page template: VI-first, code-fill fallback ──
-        if stype in STRUCTURAL_PAGE_TYPES and not is_a4 and active_scheme:
+        if stype in STRUCTURAL_PAGE_TYPES and not is_a4:
             # VI-first, code-fill: extract HTML template from VI and do deterministic
             # string replacement. LLM is NOT involved — placeholder filling is mechanical.
             vi_cover = _load_style_vi_section(style_id, stype, color_scheme, resolve_vars=False, column_id=column_id, project_id=project_id)
