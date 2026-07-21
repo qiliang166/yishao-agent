@@ -6423,15 +6423,13 @@ def backup_full(user=require_perm("config.global")):
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     tmp = os.path.join(BASE_DIR, "data", f"yishao-full-{ts}.zip")
     try:
-        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as zf:
             # Database
             db_path = os.path.join(BASE_DIR, "data", "yishao.db")
             zf.write(db_path, "yishao.db")
             # Backend source (explicit dirs only, avoid walking activation_server/venv etc.)
             source_dirs = [
                 ("", (".py", ".txt")),
-                ("routers", (".py",)),
-                ("services", (".py",)),
                 ("resources", (".txt", ".json", ".yaml", ".yml", ".md")),
             ]
             for sub, exts in source_dirs:
