@@ -680,10 +680,7 @@ function SettingsPage() {
             {canSaveGlobal && <button className="btn btn-primary btn-sm"
               onClick={async () => {
                 try {
-                  const a = document.createElement('a')
-                  a.href = '/api/backup-database'
-                  a.download = ''
-                  a.click()
+                  await api.downloadBackup()
                 } catch (e: any) {
                   alert('下载失败: ' + e.message)
                 }

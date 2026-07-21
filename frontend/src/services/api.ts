@@ -935,6 +935,21 @@ export const api = {
   deactivateLicense: () =>
     request('/api/license/deactivate', { method: 'POST' }),
 
+  // Backup
+  downloadBackup: async () => {
+    const headers = getAuthHeaders()
+    const res = await fetch('/api/backup-database', { headers })
+    if (!res.ok) throw new Error('下载失败')
+    const blob = await res.blob()
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = 'yishao-backup.db'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(a.href)
+  },
+
   // Prompt Studio
   getDefaultProvider: () =>
     request('/api/prompt-studio/default-provider').then(d => d as { provider_id: string; model: string; name: string; available: boolean }),
