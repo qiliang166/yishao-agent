@@ -1,5 +1,6 @@
 """License key manager GUI for Yishao Agent.
-Connects to activation server: generate, suspend, resume, set expiry, set notes, revoke.
+Connects to activation server: generate, suspend, resume, set expiry, set notes, revoke,
+plus site config (pricing & announcement).
 """
 import json
 import tkinter as tk
@@ -13,13 +14,13 @@ class KeyGenApp:
         self.root = root
         self.root.title("Yishao Agent — 注册码管理器")
         self.root.resizable(True, True)
-        w, h = 1100, 720
+        w, h = 1100, 740
         ws = root.winfo_screenwidth()
         hs = root.winfo_screenheight()
         x = (ws - w) // 2
         y = (hs - h) // 2
         root.geometry(f"{w}x{h}+{x}+{y}")
-        root.minsize(900, 520)
+        root.minsize(900, 560)
         self._all_keys = []  # cached for search/filter
         self._build_ui()
 
@@ -45,7 +46,7 @@ class KeyGenApp:
         # Title
         ttk.Label(self.root, text="Yishao Agent 注册码管理器",
                   font=("Microsoft YaHei UI", 14, "bold")).pack(pady=(16, 2))
-        ttk.Label(self.root, text="生成 / 查看 / 暂停 / 授权时间 / 备注 / 吊销",
+        ttk.Label(self.root, text="生成 / 查看 / 暂停 / 授权时间 / 备注 / 吊销  |  站点配置（标价 & 公告）",
                   font=("Microsoft YaHei UI", 9)).pack(pady=(0, 12))
 
         # ── Server config ──
@@ -66,9 +67,27 @@ class KeyGenApp:
         self._token_eye = ttk.Button(row2, text="显示", width=5, command=self._toggle_token_vis)
         self._token_eye.pack(side="right")
 
+        # ── Notebook tabs ──
+        self.notebook = ttk.Notebook(self.root)
+        self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+
+        self._build_key_tab()
+        self._build_site_config_tab()
+
+        # Status bar
+        self.status_var = tk.StringVar(value="就绪")
+        ttk.Label(self.root, textvariable=self.status_var, font=("Microsoft YaHei UI", 8),
+                  foreground="gray").pack(side="bottom", anchor="w", padx=12, pady=(0, 8))
+
+    # ── Tab 1: Key Management ────────────────────────────────────────
+
+    def _build_key_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="注册码管理")
+
         # ── Generate section ──
-        gen_frame = ttk.LabelFrame(self.root, text="生成新注册码", padding=8)
-        gen_frame.pack(fill="x", padx=12, pady=(0, 8))
+        gen_frame = ttk.LabelFrame(tab, text="生成新注册码", padding=8)
+        gen_frame.pack(fill="x", pady=(8, 8))
 
         gen_row1 = ttk.Frame(gen_frame); gen_row1.pack(fill="x")
         ttk.Label(gen_row1, text="到期时间：", width=10).pack(side="left")
@@ -89,19 +108,19 @@ class KeyGenApp:
         self.gen_btn.pack(anchor="w", pady=(6, 0))
 
         # Generated key output
-        self.output = tk.Text(self.root, height=2, font=("Consolas", 10),
+        self.output = tk.Text(tab, height=2, font=("Consolas", 10),
                               bg="#1e1e1e", fg="#4ec94e", relief="flat", borderwidth=1,
                               highlightthickness=1, highlightbackground="#555", padx=10, pady=8)
-        self.output.pack(fill="x", padx=12, pady=(0, 4))
+        self.output.pack(fill="x", pady=(0, 4))
         self.output.insert("1.0", "点击[生成注册码]...")
         self.output.configure(state="disabled")
 
-        cp_frame = ttk.Frame(self.root); cp_frame.pack(fill="x", padx=12, pady=(0, 8))
+        cp_frame = ttk.Frame(tab); cp_frame.pack(fill="x", pady=(0, 8))
         self.copy_btn = ttk.Button(cp_frame, text="复制注册码", command=self._copy)
         self.copy_btn.pack(side="left")
 
         # ── Search bar ──
-        search_frame = ttk.Frame(self.root); search_frame.pack(fill="x", padx=12, pady=(0, 4))
+        search_frame = ttk.Frame(tab); search_frame.pack(fill="x", pady=(0, 4))
         ttk.Label(search_frame, text="手机搜索：",
                   font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 6))
         self.search_var = tk.StringVar()
@@ -113,10 +132,10 @@ class KeyGenApp:
                    command=self._clear_search).pack(side="left")
 
         # ── Key list ──
-        ttk.Label(self.root, text="所有注册码（单击选中后可操作）：",
-                  font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w", padx=12, pady=(0, 2))
+        ttk.Label(tab, text="所有注册码（单击选中后可操作）：",
+                  font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w", pady=(0, 2))
 
-        tree_frame = ttk.Frame(self.root); tree_frame.pack(fill="both", expand=True, padx=12, pady=(0, 4))
+        tree_frame = ttk.Frame(tab); tree_frame.pack(fill="both", expand=True, pady=(0, 4))
         columns = ("sn", "license_key", "status", "phone", "notes", "expires", "created")
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings", height=8)
         self.tree.heading("sn", text="序列号", anchor="center")
@@ -140,7 +159,7 @@ class KeyGenApp:
         scrollbar.pack(side="right", fill="y")
 
         # ── Action buttons ──
-        act_frame = ttk.Frame(self.root); act_frame.pack(fill="x", padx=12, pady=(0, 4))
+        act_frame = ttk.Frame(tab); act_frame.pack(fill="x", pady=(0, 4))
         ttk.Label(act_frame, text="选中后操作：", font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 6))
         self.list_btn = ttk.Button(act_frame, text="刷新列表", command=self._list_keys)
         self.list_btn.pack(side="left", padx=(0, 3))
@@ -159,10 +178,103 @@ class KeyGenApp:
         self.revoke_btn = ttk.Button(act_frame, text="吊销", command=self._revoke)
         self.revoke_btn.pack(side="left")
 
-        # Status bar
-        self.status_var = tk.StringVar(value="就绪")
-        ttk.Label(self.root, textvariable=self.status_var, font=("Microsoft YaHei UI", 8),
-                  foreground="gray").pack(side="bottom", anchor="w", padx=12, pady=(0, 8))
+    # ── Tab 2: Site Config ───────────────────────────────────────────
+
+    def _build_site_config_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="站点配置")
+
+        # ── Pricing ──
+        pricing_frame = ttk.LabelFrame(tab, text="标价说明（显示在软件登录页底部）", padding=8)
+        pricing_frame.pack(fill="x", padx=0, pady=(8, 8))
+
+        info1 = ttk.Frame(pricing_frame); info1.pack(fill="x", pady=(0, 4))
+        ttk.Label(info1, text="支持 HTML 格式。留空则不显示在登录页。",
+                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(anchor="w")
+
+        self.pricing_text = tk.Text(pricing_frame, height=4, font=("Consolas", 10),
+                                    relief="flat", borderwidth=1, highlightthickness=1,
+                                    highlightbackground="#ccc", padx=8, pady=6)
+        self.pricing_text.pack(fill="x")
+
+        btn_row1 = ttk.Frame(pricing_frame); btn_row1.pack(fill="x", pady=(6, 0))
+        ttk.Button(btn_row1, text="加载当前设置", command=self._load_site_config).pack(side="left", padx=(0, 8))
+        ttk.Button(btn_row1, text="保存标价", command=self._save_pricing).pack(side="left")
+        self.pricing_status = tk.StringVar()
+        ttk.Label(btn_row1, textvariable=self.pricing_status, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        # ── Announcement ──
+        announce_frame = ttk.LabelFrame(tab, text="公告弹窗（管理员/会员登录后自动弹出）", padding=8)
+        announce_frame.pack(fill="x", padx=0, pady=(0, 8))
+
+        toggle_row = ttk.Frame(announce_frame); toggle_row.pack(fill="x", pady=(0, 4))
+        self.announce_enabled_var = tk.BooleanVar(value=False)
+        self._announce_cb = ttk.Checkbutton(toggle_row, text="启用公告弹窗",
+                                             variable=self.announce_enabled_var)
+        self._announce_cb.pack(side="left")
+        self.announce_enabled_status = tk.StringVar()
+        ttk.Label(toggle_row, textvariable=self.announce_enabled_status, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        info2 = ttk.Frame(announce_frame); info2.pack(fill="x", pady=(4, 4))
+        ttk.Label(info2, text="支持 HTML 格式。开关打开且有内容时，用户登录后弹出公告，关闭后当天不再显示。",
+                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(anchor="w")
+
+        self.announce_text = tk.Text(announce_frame, height=4, font=("Consolas", 10),
+                                     relief="flat", borderwidth=1, highlightthickness=1,
+                                     highlightbackground="#ccc", padx=8, pady=6)
+        self.announce_text.pack(fill="x")
+
+        btn_row2 = ttk.Frame(announce_frame); btn_row2.pack(fill="x", pady=(6, 0))
+        ttk.Button(btn_row2, text="保存公告", command=self._save_announce).pack(side="left")
+        self.announce_status = tk.StringVar()
+        ttk.Label(btn_row2, textvariable=self.announce_status, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+    def _load_site_config(self):
+        try:
+            data = self._call_api("GET", "/api/admin/site-config")
+            self.pricing_text.delete("1.0", "end")
+            self.pricing_text.insert("1.0", data.get("pricing_html", ""))
+            self.announce_text.delete("1.0", "end")
+            self.announce_text.insert("1.0", data.get("announce_html", ""))
+            self.announce_enabled_var.set(data.get("announce_enabled", "0") == "1")
+            self.status_var.set("站点配置已加载")
+            self.pricing_status.set("")
+            self.announce_status.set("")
+            self.announce_enabled_status.set("")
+        except Exception as e:
+            messagebox.showerror("加载失败", str(e))
+            self.status_var.set(f"加载失败: {e}")
+
+    def _save_pricing(self):
+        try:
+            html = self.pricing_text.get("1.0", "end-1c")
+            self._call_api("PUT", "/api/admin/site-config", {"pricing_html": html})
+            self.pricing_status.set("已保存")
+            self.status_var.set("标价说明已保存")
+            self.root.after(3000, lambda: self.pricing_status.set(""))
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            self.status_var.set(f"保存失败: {e}")
+
+    def _save_announce(self):
+        try:
+            html = self.announce_text.get("1.0", "end-1c")
+            enabled = "1" if self.announce_enabled_var.get() else "0"
+            self._call_api("PUT", "/api/admin/site-config", {
+                "announce_html": html,
+                "announce_enabled": enabled,
+            })
+            self.announce_status.set("已保存")
+            self.status_var.set("公告已保存")
+            self.root.after(3000, lambda: self.announce_status.set(""))
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            self.status_var.set(f"保存失败: {e}")
+
+    # ── Helpers ──────────────────────────────────────────────────────
 
     def _toggle_token_vis(self):
         self._token_showing = not self._token_showing
@@ -453,7 +565,9 @@ class KeyGenApp:
 
 def main():
     root = tk.Tk()
-    KeyGenApp(root)
+    app = KeyGenApp(root)
+    # Auto-load on start
+    root.after(200, lambda: app._list_keys())
     root.mainloop()
 
 

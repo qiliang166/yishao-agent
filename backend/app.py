@@ -6464,7 +6464,7 @@ def backup_full(user=require_perm("config.global")):
 def get_site_config():
     """Proxy to activation server — public site config (pricing, announcements)."""
     import httpx
-    activation_url = os.environ.get("ACTIVATION_SERVER_URL", "http://127.0.0.1:18777")
+    activation_url = os.environ.get("ACTIVATION_SERVER_URL", "http://120.25.251.172:18777")
     try:
         resp = httpx.get(f"{activation_url}/api/site-config", timeout=5.0)
         resp.raise_for_status()
@@ -7889,6 +7889,22 @@ async def approve_renewal(user_id: str, request: Request, user=require_perm("mem
                        expires_at=new_expires)
             db.execute("UPDATE payment_records SET points_granted_deci=?, rate=? WHERE id=?",
                       (points_granted, points_per_yuan, payment["id"]))
+
+        # Upgrade trial → paid member on renewal approval
+        trial_role = db.execute(
+            "SELECT id FROM roles WHERE name='试用会员' AND is_system=1"
+        ).fetchone()
+        paid_role = db.execute(
+            "SELECT id FROM roles WHERE name='付费会员' AND is_system=1"
+        ).fetchone()
+        if trial_role:
+            db.execute("DELETE FROM user_roles WHERE user_id=? AND role_id=?",
+                      (user_id, trial_role["id"]))
+        if paid_role:
+            db.execute(
+                "INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                (user_id, paid_role["id"]),
+            )
 
         _write_audit(db, user["sub"], "member.approve_renewal", "user", user_id,
                       json.dumps({"payment_id": payment["id"], "plan": payment["plan_name"],

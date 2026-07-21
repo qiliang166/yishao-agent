@@ -2,6 +2,10 @@
 
 ## 2026-07-21
 
+- fix: dangerouslySetInnerHTML 加 DOMPurify.sanitize 防 XSS
+
+## 2026-07-21
+
 - feat: 激活服务器站点配置 — 标价说明 + 公告弹窗系统
 
 ## 2026-07-21

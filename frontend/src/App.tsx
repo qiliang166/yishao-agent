@@ -1,5 +1,6 @@
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import DOMPurify from 'dompurify'
 import HomePage from './pages/HomePage'
 import ProjectDashboard from './pages/ProjectDashboard'
 import ProjectPage from './pages/ProjectPage'
@@ -108,6 +109,13 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const canPrompt = usePermission('prompt.manage')
   const canMember = usePermission('member.manage')
   const canRole = usePermission('role.manage')
+
+  const [sidebarPricing, setSidebarPricing] = useState('')
+  useEffect(() => {
+    api.getSiteConfig().then(cfg => {
+      if (cfg.pricing_html) setSidebarPricing(cfg.pricing_html)
+    }).catch(() => {})
+  }, [])
 
   return (
     <aside className="sidebar">
@@ -256,6 +264,14 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
               👤 {user.display_name || user.username}
             </div>
           )}
+          {sidebarPricing && (
+            <div style={{
+              borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 8,
+              fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+            }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sidebarPricing) }}
+            />
+          )}
           <LogoutButton />
       </div>
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
@@ -333,6 +349,7 @@ function MemberSidebar() {
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
   const [projName, setProjName] = useState('')
   const [showAbout, setShowAbout] = useState(false)
+  const [sidebarPricing, setSidebarPricing] = useState('')
   const isWorkspace = location.pathname.startsWith('/app/workspace/') || location.pathname.startsWith('/app/project/')
 
   useEffect(() => {
@@ -345,6 +362,9 @@ function MemberSidebar() {
       if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
       if ((ver as any).version) setSidebarVersion((ver as any).version)
       if (s.app_version) setSidebarVersion(s.app_version)
+    }).catch(() => {})
+    api.getSiteConfig().then(cfg => {
+      if (cfg.pricing_html) setSidebarPricing(cfg.pricing_html)
     }).catch(() => {})
   }, [])
 
@@ -436,6 +456,14 @@ function MemberSidebar() {
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               👤 {user.display_name || user.username}
             </div>
+          )}
+          {sidebarPricing && (
+            <div style={{
+              borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 8,
+              fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
+            }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sidebarPricing) }}
+            />
           )}
           <MemberLogoutButton />
       </div>

@@ -7,10 +7,6 @@ export default function AnnounceModal() {
   const [show, setShow] = useState(false)
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    const closed = localStorage.getItem('announce_closed')
-    if (closed === today) return
-
     api.getSiteConfig().then(cfg => {
       if (cfg.announce_enabled === '1' && cfg.announce_html) {
         setHtml(cfg.announce_html)
@@ -22,8 +18,6 @@ export default function AnnounceModal() {
   if (!show) return null
 
   const handleClose = () => {
-    const today = new Date().toISOString().slice(0, 10)
-    localStorage.setItem('announce_closed', today)
     setShow(false)
   }
 
@@ -41,7 +35,10 @@ export default function AnnounceModal() {
             }}
           >✕</button>
         </div>
-        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
+        <div
+          style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--text)' }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }}
+        />
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
           <button className="btn btn-primary btn-sm" onClick={handleClose}>我知道了</button>
         </div>

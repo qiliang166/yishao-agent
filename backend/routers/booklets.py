@@ -210,10 +210,7 @@ def _deduct_booklet_points(db, user: dict, booklet: dict):
         f"SELECT id, name, is_downloadable, point_cost_deci FROM projects WHERE id IN ({marks})",
         tuple(project_ids),
     ).fetchall()
-    # 只处理 is_downloadable=1 且未解锁的项目
     for proj in rows:
-        if not proj["is_downloadable"]:
-            continue
         unlock = db.execute(
             "SELECT 1 FROM project_unlocks WHERE user_id=? AND project_id=? "
             "AND (expires_at IS NULL OR expires_at > datetime('now'))",
@@ -1355,8 +1352,6 @@ def booklet_download_cost(booklet_id: str, request: Request):
         projects = []
         total = 0
         for r in rows:
-            if not r["is_downloadable"]:
-                continue
             cost = int(r["point_cost_deci"] or 0)
             if cost <= 0:
                 continue

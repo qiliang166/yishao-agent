@@ -24,33 +24,22 @@ fi
 echo "[2/3] Updating code..."
 cd /opt/yishao-agent
 
-# Remove ONLY code files, NOT data directory
-if [ -d "backend" ]; then
-    # Save data directory
-    if [ -d "backend/data" ]; then
-        cp -r backend/data /tmp/yishao_data_backup_${TIMESTAMP}
-        echo "  Data directory preserved"
-    fi
-    rm -rf backend
+# Save data directory BEFORE removing backend
+if [ -d "backend/data" ]; then
+    cp -r backend/data "/tmp/yishao_data_backup_${TIMESTAMP}"
+    echo "  Data directory preserved"
 fi
+
+# Remove old code
+rm -rf backend frontend/dist
 
 # Extract new package
 tar -xzf /root/yishao-agent-server.tar.gz
-
-# Copy frontend dist from new package
-if [ -d "frontend/dist" ]; then
-    rm -rf frontend/dist
-fi
-mkdir -p frontend/dist
-if [ -d "dist_server_tmp/frontend/dist" ]; then
-    cp -r dist_server_tmp/frontend/dist/* frontend/dist/
-fi
+echo "  Package extracted"
 
 # Restore data directory
 if [ -d "/tmp/yishao_data_backup_${TIMESTAMP}" ]; then
-    if [ -d "backend/data" ]; then
-        rm -rf backend/data
-    fi
+    rm -rf backend/data
     cp -r "/tmp/yishao_data_backup_${TIMESTAMP}" backend/data
     rm -rf "/tmp/yishao_data_backup_${TIMESTAMP}"
     echo "  Data directory restored"

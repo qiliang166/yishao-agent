@@ -16,8 +16,6 @@ from typing import Optional, Tuple
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -563,16 +561,6 @@ def client_deactivate(req: dict):
         return {"ok": True}
     finally:
         db.close()
-
-
-# ── Admin panel (static) ─────────────────────────────────────────────
-STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
-os.makedirs(STATIC_DIR, exist_ok=True)
-
-
-@app.get("/admin.html", include_in_schema=False)
-def admin_page():
-    return FileResponse(os.path.join(STATIC_DIR, "admin.html"))
 
 
 # ── Main ─────────────────────────────────────────────────────────────
