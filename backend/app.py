@@ -6090,22 +6090,7 @@ def split_text(text: str, max_chunk: int = 290, mode: str = "chars") -> list:
     lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
 
     if mode == "newline":
-        chunks = []
-        current = ""
-        for line in lines:
-            stripped = line.strip()
-            if not stripped:
-                if current:
-                    chunks.append(current)
-                    current = ""
-                continue
-            if current:
-                current += '\n' + stripped
-            else:
-                current = stripped
-        if current:
-            chunks.append(current)
-        return chunks
+        return [line.strip() for line in lines if line.strip()]
 
     # mode == "chars": keep whole lines, fallback for single long lines
     chunks = []
