@@ -1281,6 +1281,21 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_dl_project ON download_logs(project_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_dl_created ON download_logs(created_at)")
 
+        # 12. view_logs table (preview/read tracking)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS view_logs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                filename TEXT DEFAULT '',
+                ip_address TEXT DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_vl_user ON view_logs(user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_vl_project ON view_logs(project_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_vl_created ON view_logs(created_at)")
+
         # Migrate: points system columns on projects
         try:
             proj_cols = [r[1] for r in conn.execute("PRAGMA table_info(projects)").fetchall()]
@@ -1290,6 +1305,8 @@ def init_db():
                 conn.execute("ALTER TABLE projects ADD COLUMN is_downloadable INTEGER NOT NULL DEFAULT 0")
             if "download_count" not in proj_cols:
                 conn.execute("ALTER TABLE projects ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0")
+            if "view_count" not in proj_cols:
+                conn.execute("ALTER TABLE projects ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0")
         except Exception as e:
             print(f"[DB] Warning: could not add points columns to projects: {e}")
 
@@ -1579,6 +1596,21 @@ def _migrate_v1_create_tables(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_dl_project ON download_logs(project_id)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_dl_created ON download_logs(created_at)")
 
+    # 12. view_logs table (preview/read tracking)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS view_logs (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+            filename TEXT DEFAULT '',
+            ip_address TEXT DEFAULT '',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_vl_user ON view_logs(user_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_vl_project ON view_logs(project_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_vl_created ON view_logs(created_at)")
+
     # Migrate: add must_change_password to users (first-time setup wizard flag)
     try:
         users_cols = [r[1] for r in conn.execute("PRAGMA table_info(users)").fetchall()]
@@ -1633,6 +1665,8 @@ def _migrate_v1_create_tables(conn):
             conn.execute("ALTER TABLE projects ADD COLUMN is_downloadable INTEGER NOT NULL DEFAULT 0")
         if "download_count" not in proj_cols:
             conn.execute("ALTER TABLE projects ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0")
+        if "view_count" not in proj_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0")
     except Exception as e:
         print(f"[DB] Warning: could not add points columns to projects: {e}")
 

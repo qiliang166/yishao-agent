@@ -5484,6 +5484,8 @@ def api_member_preview_file(project_id: str, filename: str, request: Request):
         raise HTTPException(status_code=400, detail="非法文件路径")
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="文件不存在")
+    # Record view count (preview = read)
+    _incr_view_count(project_id, user["sub"], filename, request)
     # CSP sandbox：直接打开预览 URL 时 HTML 也在不透明源里执行，脚本摸不到应用 localStorage
     csp_headers = {"Content-Security-Policy": "sandbox allow-scripts"}
     ext = os.path.splitext(filepath)[1].lower()
@@ -5807,7 +5809,7 @@ def api_download_stats_projects(user=require_perm("member.manage")):
         rows = db.execute(
             """SELECT p.id as project_id, p.name as project_name,
                       p.project_code, w.name as workspace_name,
-                      p.download_count, p.point_cost_deci, p.is_downloadable,
+                      p.download_count, p.view_count, p.point_cost_deci, p.is_downloadable,
                       p.category_id, p.author_id,
                       pc.name as category_name, au.name as author_name,
                       COALESCE(creator.display_name, creator.username, '超级管理员') as creator_name,
@@ -5837,10 +5839,12 @@ def api_download_stats_members(user=require_perm("member.manage")):
         rows = db.execute(
             """SELECT u.id, u.username, u.display_name, u.user_type,
                       COUNT(dl.id) as total_downloads,
+                      COUNT(vl.id) as total_views,
                       COUNT(DISTINCT dl.project_id) as unique_projects,
                       MAX(dl.created_at) as last_download
                FROM users u
                LEFT JOIN download_logs dl ON dl.user_id = u.id
+               LEFT JOIN view_logs vl ON vl.user_id = u.id
                WHERE u.user_type = 'member'
                GROUP BY u.id
                ORDER BY total_downloads DESC""",
@@ -5970,6 +5974,24 @@ def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
         (str(_uuid.uuid4()), uid, project_id, filename, download_type, ip),
     )
     return True
+
+
+def _incr_view_count(project_id: str, user_id: str, filename: str, request: Request):
+    """Record a preview view — increment project view_count and insert view_logs."""
+    try:
+        db = get_db()
+        vid = str(_uuid.uuid4())
+        ip = request.client.host if request.client else ""
+        now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        db.execute(
+            "INSERT INTO view_logs (id, user_id, project_id, filename, ip_address, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (vid, user_id, project_id, filename, ip, now),
+        )
+        db.execute("UPDATE projects SET view_count = view_count + 1 WHERE id = ?", (project_id,))
+        db.commit()
+    except Exception:
+        pass
 
 
 @app.get("/api/download/{filename}")

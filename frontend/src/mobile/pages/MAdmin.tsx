@@ -942,7 +942,8 @@ export default function MAdmin() {
                         </span>
                       </div>
                       <div className="m-user-meta">
-                        下载次数：<strong>{p.download_count || 0}</strong>
+                        下载：<strong>{p.download_count || 0}</strong> 次
+                        {' · '}阅读：<strong>{p.view_count || 0}</strong> 次
                         {' · '}积分：{(p.point_cost_deci / 10).toFixed(1)}
                       </div>
                     </div>
@@ -960,6 +961,7 @@ export default function MAdmin() {
                       <div className="m-user-meta">
                         {m.username}
                         {' · '}下载：<strong>{m.total_downloads || 0}</strong> 次
+                        {' · '}阅读：<strong>{m.total_views || 0}</strong> 次
                         {' · '}明细：{m.unique_projects || 0} 个
                         <br />最近：{m.last_download ? new Date(m.last_download).toLocaleDateString('zh-CN') : '—'}
                       </div>

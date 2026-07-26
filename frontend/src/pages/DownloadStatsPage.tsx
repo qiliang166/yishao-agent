@@ -157,7 +157,7 @@ export default function DownloadStatsPage() {
                 )}
                 {(catFilter || authorFilter || creatorFilter) && (
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-                    共 {filteredStats.length} 条，下载合计 {filteredStats.reduce((s: number, p: any) => s + (p.download_count || 0), 0)} 次
+                    共 {filteredStats.length} 条，下载合计 {filteredStats.reduce((s: number, p: any) => s + (p.download_count || 0), 0)} 次，阅读合计 {filteredStats.reduce((s: number, p: any) => s + (p.view_count || 0), 0)} 次
                   </span>
                 )}
               </div>
@@ -174,6 +174,7 @@ export default function DownloadStatsPage() {
                     <th style={{ width: 100 }}>作者</th>
                     <th style={{ width: 100 }}>创建者</th>
                     <th style={{ width: 80 }}>下载次数</th>
+                    <th style={{ width: 80 }}>阅读次数</th>
                     <th style={{ width: 60 }}>可下载</th>
                     <th style={{ width: 60 }}>积分</th>
                   </tr>
@@ -189,6 +190,7 @@ export default function DownloadStatsPage() {
                       <td style={{ fontSize: 11 }}>{p.author_name || '—'}</td>
                       <td style={{ fontSize: 11 }}>{p.creator_name || '超级管理员'}</td>
                       <td style={{ fontWeight: 600 }}>{p.download_count || 0}</td>
+                      <td>{p.view_count || 0}</td>
                       <td style={{ color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
                         {p.is_downloadable ? '是' : '否'}
                       </td>
@@ -243,6 +245,7 @@ export default function DownloadStatsPage() {
                   <th style={{ width: 80 }}>剩余积分</th>
                   <th style={{ width: 80 }}>消耗积分</th>
                   <th style={{ width: 80 }}>下载次数</th>
+                  <th style={{ width: 80 }}>阅读次数</th>
                   <th style={{ width: 70 }}>明细数</th>
                   <th style={{ width: 110 }}>最近下载</th>
                 </tr>
@@ -259,6 +262,7 @@ export default function DownloadStatsPage() {
                     <td style={{ fontWeight: 600, color: 'var(--success)' }}>{((m.balance_deci || 0) / 10).toFixed(1)}</td>
                     <td style={{ color: 'var(--warning)' }}>{((m.spent_deci || 0) / 10).toFixed(1)}</td>
                     <td style={{ fontWeight: 600 }}>{m.total_downloads || 0}</td>
+                    <td>{m.total_views || 0}</td>
                     <td>{m.unique_projects || 0}</td>
                     <td>{m.last_download ? new Date(m.last_download).toLocaleDateString('zh-CN') : '—'}</td>
                   </tr>
