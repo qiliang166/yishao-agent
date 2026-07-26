@@ -12,12 +12,23 @@ export const BatchDialog: React.FC<Props> = ({ workspaceId, onClose, onImported 
   const [tab, setTab] = useState<'import' | 'execute'>('import')
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-panel" style={{ maxWidth: 960, width: '95vw', maxHeight: '90vh' }}
-        onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div className="modal-title" style={{ fontSize: 16 }}>批量管理</div>
-          <button className="modal-close" onClick={onClose}>&times;</button>
+    <div className="dialog-overlay" onClick={onClose}>
+      <div style={{
+        background: 'var(--card)', borderRadius: 'var(--radius)',
+        width: '95vw', maxWidth: 960, maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+      }} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '16px 24px', borderBottom: '1px solid var(--border)',
+        }}>
+          <span style={{ fontSize: 16, fontWeight: 700 }}>批量管理</span>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', fontSize: 20, cursor: 'pointer',
+            color: 'var(--text-secondary)', lineHeight: 1, padding: 0,
+          }}>&times;</button>
         </div>
 
         {/* Tabs */}
@@ -30,7 +41,7 @@ export const BatchDialog: React.FC<Props> = ({ workspaceId, onClose, onImported 
               borderBottom: tab === 'import' ? '2px solid var(--primary)' : '2px solid transparent',
               fontWeight: tab === 'import' ? 600 : 400,
             }}
-          >📥 批量导入明细</div>
+          >批量导入明细</div>
           <div
             onClick={() => setTab('execute')}
             style={{
@@ -39,11 +50,11 @@ export const BatchDialog: React.FC<Props> = ({ workspaceId, onClose, onImported 
               borderBottom: tab === 'execute' ? '2px solid var(--primary)' : '2px solid transparent',
               fontWeight: tab === 'execute' ? 600 : 400,
             }}
-          >⚡ 批量执行</div>
+          >批量执行</div>
         </div>
 
         {/* Body */}
-        <div className="modal-body" style={{ padding: 20, overflow: 'auto', flex: 1 }}>
+        <div style={{ padding: 20, overflow: 'auto', flex: 1 }}>
           {tab === 'import' ? (
             <BatchImportTab workspaceId={workspaceId} onImported={onImported} />
           ) : (
