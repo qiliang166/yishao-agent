@@ -21,12 +21,19 @@ const isSafeSrc = (u: string) => {
 }
 
 // 将 /api/download/{filename}?project_id=xxx 转为 /api/member/preview-file（免解锁预览）
+// exports URL 加 project_id 以统计阅读次数
 const toPreviewSrc = (u: string, pid: string): string => {
-  if (!u.startsWith('/api/download/')) return u
-  const parsed = new URL(u, window.location.origin)
-  const fn = decodeURIComponent(parsed.pathname.replace('/api/download/', ''))
-  const pid2 = parsed.searchParams.get('project_id') || pid
-  return `/api/member/preview-file?project_id=${encodeURIComponent(pid2)}&filename=${encodeURIComponent(fn)}`
+  if (u.startsWith('/api/download/')) {
+    const parsed = new URL(u, window.location.origin)
+    const fn = decodeURIComponent(parsed.pathname.replace('/api/download/', ''))
+    const pid2 = parsed.searchParams.get('project_id') || pid
+    return `/api/member/preview-file?project_id=${encodeURIComponent(pid2)}&filename=${encodeURIComponent(fn)}`
+  }
+  if (u.startsWith('/api/exports/') && pid) {
+    const sep = u.includes('?') ? '&' : '?'
+    return `${u}${sep}project_id=${encodeURIComponent(pid)}`
+  }
+  return u
 }
 
 // 从 src URL 中提取文件名
@@ -174,7 +181,8 @@ export default function MPreview() {
           if (!cancelled) setMediaUrl(withToken(previewSrc))
         } else if (kind === 'audio') {
           if (!src) throw new Error('缺少文件地址')
-          if (!cancelled) setMediaUrl(src)
+          const previewSrc = toPreviewSrc(src, pid)
+          if (!cancelled) setMediaUrl(withToken(previewSrc))
         } else {
           throw new Error('不支持的预览类型')
         }
