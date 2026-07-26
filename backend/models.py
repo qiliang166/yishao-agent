@@ -111,6 +111,7 @@ class LLMRefineRequest(BaseModel):
 class TtsSplitRequest(BaseModel):
     text: str
     max_chunk: int = 290
+    mode: str = "chars"  # "chars" | "newline"
 
 
 class SynthesizeRequest(BaseModel):

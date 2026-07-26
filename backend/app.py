@@ -6079,10 +6079,35 @@ def download_file(filename: str, request: Request, project_id: str = None, name:
 
 # ── TTS ──
 
-def split_text(text: str, max_chunk: int = 290) -> list:
-    """Split text into chunks at natural boundaries (paragraph → sentence → comma → hard)."""
+def split_text(text: str, max_chunk: int = 290, mode: str = "chars") -> list:
+    """Split text into chunks.
+
+    mode == "newline": split at every newline, one paragraph per line.
+    mode == "chars":   accumulate lines up to max_chunk, keeping lines intact;
+                       fall through sentence→comma→hard split only for single
+                       over-long lines.
+    """
     lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
 
+    if mode == "newline":
+        chunks = []
+        current = ""
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                if current:
+                    chunks.append(current)
+                    current = ""
+                continue
+            if current:
+                current += '\n' + stripped
+            else:
+                current = stripped
+        if current:
+            chunks.append(current)
+        return chunks
+
+    # mode == "chars": keep whole lines, fallback for single long lines
     chunks = []
     current = ""
 
@@ -6146,7 +6171,7 @@ def split_text(text: str, max_chunk: int = 290) -> list:
 @app.post("/api/tts/split")
 def api_tts_split(req: TtsSplitRequest, user=require_perm("stage4.view")):
     """Split text into segments for per-segment synthesis."""
-    segments = split_text(req.text, req.max_chunk)
+    segments = split_text(req.text, req.max_chunk, req.mode)
     return {"segments": [{"index": i + 1, "text": s} for i, s in enumerate(segments)], "total": len(segments)}
 
 

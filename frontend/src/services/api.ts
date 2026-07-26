@@ -818,8 +818,8 @@ export const api = {
     request('/api/export/sop', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({content, branding, project_id: projectId || null}) }),
 
   // TTS
-  ttsSplit: (text: string, maxChunk?: number) =>
-    request('/api/tts/split', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, max_chunk: maxChunk || 290}) }),
+  ttsSplit: (text: string, maxChunk?: number, mode?: string) =>
+    request('/api/tts/split', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, max_chunk: maxChunk || 290, mode: mode || 'chars'}) }),
   ttsSynthesize: (text: string, model?: string, voiceId?: string, volume?: number, speed?: number, projectId?: string, providerId?: string, voiceName?: string, sourceName?: string) =>
     request('/api/tts/synthesize', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text, model: model || 'cosyvoice-v3-flash', voice_id: voiceId, volume: volume || 50, speed: speed || 1.0, project_id: projectId || null, provider_id: providerId || null, voice_name: voiceName || null, source_name: sourceName || null}), timeoutMs: 120000 }),
 

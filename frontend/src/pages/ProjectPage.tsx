@@ -805,6 +805,8 @@ export default function ProjectPage() {
   const [splitSegments, setSplitSegments] = useState<{ index: number; text: string; audioUrl?: string }[]>([])
   const [selectedSegments, setSelectedSegments] = useState<Set<number>>(new Set())
   const [splitGenerating, setSplitGenerating] = useState(false)
+  const [splitMode, setSplitMode] = useState<'newline' | 'chars'>('chars')
+  const [splitMaxChunk, setSplitMaxChunk] = useState(290)
   const [projStoragePath, setProjStoragePath] = useState('')
   const [savingPath, setSavingPath] = useState(false)
   // Voice clone states
@@ -1953,7 +1955,7 @@ export default function ProjectPage() {
   const doSplit = async () => {
     if (!ttsInputText.trim()) return
     try {
-      const res: any = await api.ttsSplit(ttsInputText)
+      const res: any = await api.ttsSplit(ttsInputText, splitMaxChunk, splitMode)
       setSplitSegments(res.segments.map((s: any) => ({ index: s.index, text: s.text })))
       setSelectedSegments(new Set())
       setTtsEditorTab('split')
@@ -1992,6 +1994,36 @@ export default function ProjectPage() {
     for (const idx of sorted) {
       await synthesizeSegment(idx)
     }
+  }
+
+  const addSegment = () => {
+    const newIndex = splitSegments.length > 0 ? Math.max(...splitSegments.map(s => s.index)) + 1 : 1
+    setSplitSegments(prev => [...prev, { index: newIndex, text: '' }])
+  }
+
+  const moveSegmentUp = (idx: number) => {
+    setSplitSegments(prev => {
+      const i = prev.findIndex(s => s.index === idx)
+      if (i <= 0) return prev
+      const next = [...prev]
+      ;[next[i - 1], next[i]] = [next[i], next[i - 1]]
+      return next
+    })
+  }
+
+  const moveSegmentDown = (idx: number) => {
+    setSplitSegments(prev => {
+      const i = prev.findIndex(s => s.index === idx)
+      if (i < 0 || i >= prev.length - 1) return prev
+      const next = [...prev]
+      ;[next[i], next[i + 1]] = [next[i + 1], next[i]]
+      return next
+    })
+  }
+
+  const removeSegment = (idx: number) => {
+    setSplitSegments(prev => prev.filter(s => s.index !== idx))
+    setSelectedSegments(prev => { const n = new Set(prev); n.delete(idx); return n })
   }
 
   // ── Voice Clone ──
@@ -4553,6 +4585,21 @@ export default function ProjectPage() {
                               style={{ color: 'var(--primary)' }}
                               onClick={doSplit}>✂ 分割</button>
                           </CanEdit>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+                            <span>分割方式：</span>
+                            <select className="form-input" style={{ width: 80, fontSize: 10, padding: '1px 4px' }}
+                              value={splitMode} onChange={e => setSplitMode(e.target.value as 'newline' | 'chars')}>
+                              <option value="newline">按换行</option>
+                              <option value="chars">按字数</option>
+                            </select>
+                            {splitMode === 'chars' && <>
+                              <span>每段≤</span>
+                              <input type="number" className="form-input" style={{ width: 60, fontSize: 10, padding: '1px 4px' }}
+                                value={splitMaxChunk} min={50} max={2000} step={10}
+                                onChange={e => setSplitMaxChunk(Number(e.target.value) || 290)} />
+                              <span>字</span>
+                            </>}
+                          </div>
                         </div>
                         <CanEdit perm={canGenerate4}>
                         <button className="btn btn-primary btn-sm w-full"
@@ -4600,7 +4647,7 @@ export default function ProjectPage() {
                                           setSplitSegments(prev => prev.map(s => s.index === seg.index ? { ...s, text: e.target.value } : s))
                                         }} />
                                     </div>
-                                    <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                                    <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignItems: 'center' }}>
                                       {seg.audioUrl ? (
                                         <button type="button" className="btn btn-ghost btn-sm"
                                           style={{ fontSize: 9, padding: '0 3px' }}
@@ -4613,6 +4660,18 @@ export default function ProjectPage() {
                                           {splitGenerating ? '⏳' : '合成'}
                                         </button>
                                       )}
+                                      <button type="button" className="btn btn-ghost btn-sm"
+                                        style={{ fontSize: 9, padding: '0 2px', color: 'var(--text-secondary)' }}
+                                        title="上移"
+                                        onClick={e => { e.stopPropagation(); moveSegmentUp(seg.index) }}>↑</button>
+                                      <button type="button" className="btn btn-ghost btn-sm"
+                                        style={{ fontSize: 9, padding: '0 2px', color: 'var(--text-secondary)' }}
+                                        title="下移"
+                                        onClick={e => { e.stopPropagation(); moveSegmentDown(seg.index) }}>↓</button>
+                                      <button type="button" className="btn btn-ghost btn-sm"
+                                        style={{ fontSize: 9, padding: '0 2px', color: 'var(--danger)' }}
+                                        title="删除"
+                                        onClick={e => { e.stopPropagation(); removeSegment(seg.index) }}>✕</button>
                                     </div>
                                   </div>
                                 </div>
@@ -4622,6 +4681,11 @@ export default function ProjectPage() {
                               disabled={splitGenerating || selectedSegments.size === 0}
                               onClick={synthesizeSelected}>
                               {splitGenerating ? '⏳ 合成中...' : `🔊 合成选中段落 (${selectedSegments.size})`}
+                            </button>
+                            <button className="btn btn-ghost btn-sm w-full"
+                              style={{ marginTop: 4, fontSize: 10, border: '1px dashed var(--border)' }}
+                              onClick={addSegment}>
+                              + 新增段落
                             </button>
                           </>
                         )}
