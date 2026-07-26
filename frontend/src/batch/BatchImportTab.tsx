@@ -21,7 +21,6 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ success: number; failed: number } | null>(null)
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
-  const [selectedErrors, setSelectedErrors] = useState<Set<number>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleDownloadTemplate = async () => {
@@ -37,8 +36,10 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
     if (!file) return
     try {
       const data = await api.previewBatchImport(file)
-      setPreviewRows(data.rows || [])
+      const rows = data.rows || []
+      setPreviewRows(rows)
       setErrors(data.errors || [])
+      setSelectedRows(new Set(rows.map((_: any, i: number) => i)))
       setResult(null)
     } catch (err: any) {
       alert('解析失败: ' + (err.message || err))
@@ -48,17 +49,19 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
   }
 
   const handleImport = async () => {
-    if (previewRows.length === 0) return
+    if (selectedRows.size === 0) return
     setImporting(true)
     setResult(null)
     try {
-      const resp = await api.batchImport(previewRows, workspaceId)
+      const toImport = previewRows.filter((_, i) => selectedRows.has(i))
+      const resp = await api.batchImport(toImport, workspaceId)
       setResult({
         success: resp.total_created || 0,
         failed: (resp.failed || []).length,
       })
       if (resp.total_created > 0) {
         setPreviewRows([])
+        setSelectedRows(new Set())
         if (fileRef.current) fileRef.current.value = ''
         onImported?.()
       }
@@ -85,19 +88,24 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
     }
   }
 
-  const toggleError = (i: number) => {
-    setSelectedErrors(prev => {
-      const next = new Set(prev)
-      next.has(i) ? next.delete(i) : next.add(i)
+  const deleteRow = (i: number) => {
+    setPreviewRows(prev => {
+      const next = prev.filter((_, idx) => idx !== i)
+      // Rebuild selectedRows with shifted indices
+      setSelectedRows(s => {
+        const ns = new Set<number>()
+        s.forEach(n => {
+          if (n < i) ns.add(n)
+          else if (n > i) ns.add(n - 1)
+        })
+        return ns
+      })
       return next
     })
   }
 
-  const deleteSelected = () => {
-    setPreviewRows(prev => prev.filter((_, i) => !selectedRows.has(i)))
-    setErrors(prev => prev.filter((_, i) => !selectedErrors.has(i)))
-    setSelectedRows(new Set())
-    setSelectedErrors(new Set())
+  const dismissError = (i: number) => {
+    setErrors(prev => prev.filter((_, idx) => idx !== i))
   }
 
   const hasData = previewRows.length > 0 || errors.length > 0
@@ -149,9 +157,9 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
             检查预览数据无误后<br />一键创建所有项目
           </p>
           <button className="btn btn-primary btn-sm" style={{ marginTop: 12 }}
-            disabled={previewRows.length === 0 || importing}
+            disabled={selectedRows.size === 0 || importing}
             onClick={handleImport}>
-            {importing ? '导入中...' : `确认导入 (${previewRows.length}条)`}
+            {importing ? '导入中...' : `确认导入 (${selectedRows.size}条)`}
           </button>
         </div>
       </div>
@@ -175,15 +183,8 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
         <div style={{ marginTop: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-              数据预览 (共 {previewRows.length + errors.length} 条)
+              数据预览 (共 {previewRows.length + errors.length} 条，已选 {selectedRows.size} 条)
             </span>
-            {(selectedRows.size > 0 || selectedErrors.size > 0) && (
-              <button className="btn btn-outline btn-sm"
-                style={{ fontSize: 11, color: '#ff4d4f', borderColor: '#ff4d4f' }}
-                onClick={deleteSelected}>
-                删除选中 ({selectedRows.size + selectedErrors.size})
-              </button>
-            )}
           </div>
           <div style={{ overflow: 'auto', maxHeight: 300 }}>
             <table className="data-table" style={{ width: '100%', fontSize: 11 }}>
@@ -195,11 +196,12 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
                   </th>
                   <th>名称</th><th>分类</th><th>出处作者</th>
                   <th>积分</th><th>可下载</th><th style={{ maxWidth: 200 }}>第一步文字内容</th>
+                  <th style={{ width: 36 }}></th>
                 </tr>
               </thead>
               <tbody>
                 {previewRows.map((row, i) => (
-                  <tr key={i} style={{ background: selectedRows.has(i) ? 'var(--bg-hover)' : undefined }}>
+                  <tr key={i} style={{ opacity: selectedRows.has(i) ? 1 : 0.45 }}>
                     <td>
                       <input type="checkbox" checked={selectedRows.has(i)}
                         onChange={() => toggleRow(i)} />
@@ -212,17 +214,28 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
                     <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.raw_text || '—'}
                     </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button onClick={() => deleteRow(i)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: '#ff4d4f', fontSize: 14, lineHeight: 1, padding: 2,
+                        }} title="移除此行">&times;</button>
+                    </td>
                   </tr>
                 ))}
                 {errors.map((e, i) => (
-                  <tr key={`err-${i}`} style={{ background: selectedErrors.has(i) ? '#ffd8d2' : '#fff2f0' }}>
-                    <td>
-                      <input type="checkbox" checked={selectedErrors.has(i)}
-                        onChange={() => toggleError(i)} />
-                    </td>
+                  <tr key={`err-${i}`} style={{ background: '#fff2f0' }}>
+                    <td></td>
                     <td style={{ color: '#ff4d4f' }}>第{e.row}行</td>
                     <td colSpan={5} style={{ color: '#ff4d4f' }}>
                       &times; {e.error}
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button onClick={() => dismissError(i)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          color: '#ff4d4f', fontSize: 14, lineHeight: 1, padding: 2,
+                        }} title="忽略">&times;</button>
                     </td>
                   </tr>
                 ))}
