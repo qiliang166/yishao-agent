@@ -5838,15 +5838,12 @@ def api_download_stats_members(user=require_perm("member.manage")):
     try:
         rows = db.execute(
             """SELECT u.id, u.username, u.display_name, u.user_type,
-                      COUNT(dl.id) as total_downloads,
-                      COUNT(vl.id) as total_views,
-                      COUNT(DISTINCT dl.project_id) as unique_projects,
-                      MAX(dl.created_at) as last_download
+                      (SELECT COUNT(*) FROM download_logs dl WHERE dl.user_id = u.id) as total_downloads,
+                      (SELECT COUNT(*) FROM view_logs vl WHERE vl.user_id = u.id) as total_views,
+                      (SELECT COUNT(DISTINCT dl2.project_id) FROM download_logs dl2 WHERE dl2.user_id = u.id) as unique_projects,
+                      (SELECT MAX(created_at) FROM download_logs dl3 WHERE dl3.user_id = u.id) as last_download
                FROM users u
-               LEFT JOIN download_logs dl ON dl.user_id = u.id
-               LEFT JOIN view_logs vl ON vl.user_id = u.id
                WHERE u.user_type = 'member'
-               GROUP BY u.id
                ORDER BY total_downloads DESC""",
         ).fetchall()
         members = [dict(r) for r in rows]
