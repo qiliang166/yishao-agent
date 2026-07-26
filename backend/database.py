@@ -1700,6 +1700,36 @@ def _migrate_v1_create_tables(conn):
         except Exception as e:
             print(f"[DB] Warning: could not add created_by to {tbl}: {e}")
 
+    # Batch execution tables
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS batch_jobs (
+            id TEXT PRIMARY KEY,
+            workspace_id TEXT NOT NULL,
+            start_time TEXT NOT NULL,
+            end_time TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            total_count INTEGER NOT NULL DEFAULT 0,
+            completed_count INTEGER NOT NULL DEFAULT 0,
+            failed_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS batch_job_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            batch_id TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            steps TEXT NOT NULL DEFAULT '[]',
+            status TEXT NOT NULL DEFAULT 'pending',
+            logs TEXT NOT NULL DEFAULT '',
+            started_at TEXT,
+            finished_at TEXT,
+            FOREIGN KEY (batch_id) REFERENCES batch_jobs(id) ON DELETE CASCADE
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bji_batch ON batch_job_items(batch_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_bji_project ON batch_job_items(project_id)")
+
 
 def _migrate_v1_seed_roles(conn):
     """Insert 4 system roles with their permissions."""

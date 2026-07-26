@@ -921,6 +921,35 @@ export const api = {
   copyProject: (projectId: string) =>
     request(`/api/projects/${projectId}/copy`, { method: 'POST' }),
 
+  // Batch Import / Execute
+  downloadBatchTemplate: async () => {
+    const headers = getAuthHeaders()
+    const res = await fetch(`${BASE}/api/batch/template`, { headers })
+    if (!res.ok) throw new Error('下载模板失败')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'batch_import_template.xlsx'; a.click()
+    URL.revokeObjectURL(url)
+  },
+  previewBatchImport: (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return request('/api/batch/preview-import', { method: 'POST', body: fd })
+  },
+  batchImport: (rows: Record<string, any>[], workspaceId?: string) =>
+    request('/api/batch/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows, workspace_id: workspaceId || '' }) }),
+  batchProjectsStatus: (workspaceId?: string) => {
+    const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
+    return request(`/api/batch/projects-status${qs}`).then(d => d.projects || [])
+  },
+  batchExecute: (projectSteps: Record<string, any>, startTime: string, endTime: string, workspaceId?: string) =>
+    request('/api/batch/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_steps: projectSteps, start_time: startTime, end_time: endTime, workspace_id: workspaceId || '' }) }),
+  batchStatus: (batchId: string) =>
+    request(`/api/batch/status/${batchId}`),
+  batchCancel: (batchId: string) =>
+    request(`/api/batch/cancel/${batchId}`, { method: 'POST' }),
+
   // Downloads
   getDownloadInfo: () => request('/api/download/info'),
 

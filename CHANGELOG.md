@@ -1,5 +1,53 @@
 ﻿# 更新日志
 
+## 2026-07-27
+
+- build: server zip (fac413f — 分段自动保存)
+
+## 2026-07-26
+
+- feat: 文案分割段落自动保存/恢复 — 存为 _tts_segments 到 step_results
+- fix: newline 分割模式每行独立一段，不再合并连续非空行
+
+## 2026-07-26
+
+- build: server zip (5016c8c — 文案分割三合一)
+
+## 2026-07-26
+
+- feat: 演讲口播文案分割三合一 — 换行分割/保整行字数分割/段落增删排序
+
+## 2026-07-26
+
+- fix: 下载统计表格列宽调整 — 所属项目/分类/作者/创建者缩窄，下载/阅读次数缩窄
+
+## 2026-07-26
+
+- fix: H5 audio preview not counted — use toPreviewSrc + withToken like image/video
+- feat: 统计页明细/会员表头点击切换排序 — 下载次数/阅读次数互切，默认下载降序
+- fix: exports 预览（PPT产物）未计入阅读次数 — api_serve_export_file 加 project_id 参数并调用 _incr_view_count
+- fix: member stats SQL JOIN 膨胀 — 双 LEFT JOIN 导致笛卡尔积，改用子查询
+- fix: _incr_view_count 中 datetime.datetime.utcnow() → datetime.utcnow()，多一层 .datetime 导致 AttributeError
+- fix: _incr_view_count 缺少 import uuid as _uuid 导致 NameError 静默失败
+
+## 2026-07-26
+
+- feat: 下载统计增加阅读次数 — view_logs 表 + preview-file 计数 + 前后端展示
+
+## 2026-07-22
+
+- fix: landscape TOC 目录页空白 — stage1 page_type 被 LLM type 覆盖导致跳过代码填充
+
+## 2026-07-22
+
+- fix: _resolve_run_index_html 补齐扫描输出目录回退，与导出端点逻辑对齐
+
+## 2026-07-22
+
+- fix: cover_thumb 缩略图补回 bk-vi body class，课件深色封面不再变白
+- fix: landscape TOC 目录页空白 — cards 空时从 key_points 派生
+- fix: 画册下载积分扣除移除is_downloadable跳过 + approve_renewal角色升级 + 站点配置系统
+
 ## 2026-07-21
 
 - fix: dangerouslySetInnerHTML 加 DOMPurify.sanitize 防 XSS

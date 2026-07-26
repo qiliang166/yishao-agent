@@ -5,6 +5,7 @@ import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
 import HelpButton from '../components/HelpButton'
+import { BatchDialog } from '../batch/BatchDialog'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 
 const PAGE_SIZE = 20
@@ -39,6 +40,7 @@ export default function ProjectDashboard() {
 
   // Create dialog state
   const [showCreate, setShowCreate] = useState(false)
+  const [showBatch, setShowBatch] = useState(false)
   // Expand project row to show output files
   const [editPointProject, setEditPointProject] = useState('')
   const [editPointValue, setEditPointValue] = useState('')
@@ -524,6 +526,7 @@ export default function ProjectDashboard() {
         )}
         <HelpButton location="dashboard" />
         {canCreate && <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建明细</button>}
+        {canCreate && <button className="btn btn-outline btn-sm" onClick={() => setShowBatch(true)}>批量管理</button>}
 
       </div>
 
@@ -1043,6 +1046,12 @@ export default function ProjectDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Batch Dialog */}
+      {showBatch && (
+        <BatchDialog workspaceId={wid} onClose={() => setShowBatch(false)}
+          onImported={() => loadProjects(page)} />
       )}
     </div>
   )

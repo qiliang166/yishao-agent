@@ -236,3 +236,16 @@ class ImageGenerateRequest(BaseModel):
     watermark: bool = False
     seed: Optional[int] = None
     reference_images: list[str] = []  # URLs for image edit / multi-image fusion
+
+
+# ── Batch import / execute models ──
+
+class BatchImportRequest(BaseModel):
+    """Confirm importing previewed Excel rows as projects."""
+    rows: list[dict]  # each row = {name, category, author, point_cost_deci, is_downloadable, raw_text}
+
+
+class BatchExecuteRequest(BaseModel):
+    project_steps: dict  # { project_id: [["1", ["video","text","file"]], ["2", ["sop","dao","yanxi"]], ...] }
+    start_time: str      # ISO datetime
+    end_time: str        # ISO datetime

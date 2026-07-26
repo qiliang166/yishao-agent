@@ -8328,6 +8328,323 @@ if os.path.isdir(FRONTEND_DIST):
 
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
+# ═══════════════════════════════════════════════════════════════
+# Batch Import / Execution Routes
+# ═══════════════════════════════════════════════════════════════
+
+import io as _io
+from openpyxl import Workbook as _Workbook
+from openpyxl.styles import Font as _Font, PatternFill as _Fill, Alignment as _Alignment
+
+_BATCH_TEMPLATE_HEADERS = ["名称", "分类", "出处作者", "下载所需积分", "允许会员下载", "第一步文字内容"]
+
+
+@app.get("/api/batch/template")
+def api_batch_template(user=require_perm("project.create")):
+    """Download the Excel import template."""
+    wb = _Workbook()
+    ws = wb.active
+    ws.title = "批量导入模板"
+
+    header_font = _Font(bold=True, color="FFFFFF", size=11)
+    header_fill = _Fill(start_color="1A73E8", end_color="1A73E8", fill_type="solid")
+    header_align = _Alignment(horizontal="center", vertical="center")
+
+    for col_idx, h in enumerate(_BATCH_TEMPLATE_HEADERS, 1):
+        cell = ws.cell(row=1, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+
+    # Example row
+    example = ["豆豉辣椒炒皮蛋", "湘菜", "古志辉", "10", "是", "皮蛋切丁，大火翻炒，加豆豉调味..."]
+    for col_idx, val in enumerate(example, 1):
+        ws.cell(row=2, column=col_idx, value=val)
+
+    # Column widths
+    widths = [20, 10, 10, 12, 12, 40]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+
+    # Add instruction row
+    ws.cell(row=4, column=1, value="说明：").font = _Font(bold=True, color="FF0000")
+    ws.cell(row=5, column=1, value="1. 名称必填，其他列可选")
+    ws.cell(row=6, column=1, value="2. 允许会员下载填写「是」或「否」，不填默认「否」")
+    ws.cell(row=7, column=1, value="3. 下载所需积分填写数字，不填默认 0")
+    ws.cell(row=8, column=1, value="4. 第一步文字内容为项目素材输入的文字内容")
+
+    buf = _io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": "attachment; filename=batch_import_template.xlsx"})
+
+
+@app.post("/api/batch/preview-import")
+async def api_batch_preview_import(file: UploadFile = File(...), user=require_perm("project.create")):
+    """Parse uploaded Excel and return preview rows without creating projects."""
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(400, "仅支持 .xlsx 文件")
+
+    contents = await file.read()
+    wb = _Workbook(_io.BytesIO(contents), read_only=True, data_only=True)
+    ws = wb.active
+
+    rows = []
+    errors = []
+    for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+        if not row or all(c is None or str(c).strip() == "" for c in row):
+            continue
+        vals = [str(c).strip() if c is not None else "" for c in row[:6]]
+        while len(vals) < 6:
+            vals.append("")
+
+        name = vals[0]
+        if not name:
+            errors.append({"row": row_idx, "error": "名称为空"})
+            continue
+
+        category = vals[1]
+        author = vals[2]
+        try:
+            points = int(vals[3]) if vals[3] else 0
+        except ValueError:
+            errors.append({"row": row_idx, "error": f"积分格式错误: {vals[3]}"})
+            continue
+        is_dl = 1 if vals[4] in ("是", "1", "Yes", "yes", "Y", "y", "YES") else 0
+
+        rows.append({
+            "name": name,
+            "category": category,
+            "author": author,
+            "point_cost_deci": points,
+            "is_downloadable": is_dl,
+            "raw_text": vals[5],
+        })
+
+    return {"rows": rows, "errors": errors, "total": len(rows)}
+
+
+@app.post("/api/batch/import")
+def api_batch_import(req: dict, user=require_perm("project.create")):
+    """Create projects from previewed rows."""
+    rows = req.get("rows", [])
+    if not rows:
+        raise HTTPException(400, "没有要导入的数据")
+
+    db = get_db()
+    created = []
+    failed = []
+    try:
+        user_id = user.get("id", "")
+        for r in rows:
+            try:
+                name = r.get("name", "").strip()
+                if not name:
+                    failed.append({"name": name, "error": "名称为空"})
+                    continue
+
+                # Resolve or create category
+                cat_name = r.get("category", "").strip()
+                cat_id = None
+                if cat_name:
+                    existing = db.execute(
+                        "SELECT id FROM project_categories WHERE name=?", (cat_name,)
+                    ).fetchone()
+                    if existing:
+                        cat_id = existing[0]
+                    else:
+                        cat_id = f"cat-{uuid.uuid4().hex[:8]}"
+                        db.execute("INSERT INTO project_categories (id, name) VALUES (?,?)", (cat_id, cat_name))
+
+                # Resolve or create author
+                author_name = r.get("author", "").strip()
+                author_id = None
+                if author_name:
+                    existing = db.execute(
+                        "SELECT id FROM authors WHERE name=?", (author_name,)
+                    ).fetchone()
+                    if existing:
+                        author_id = existing[0]
+                    else:
+                        author_id = f"auth-{uuid.uuid4().hex[:8]}"
+                        db.execute("INSERT INTO authors (id, name) VALUES (?,?)", (author_id, author_name))
+
+                proj_id = uuid.uuid4().hex[:12]
+                workspace_id = req.get("workspace_id", "")
+                if not workspace_id:
+                    ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
+                    if ws:
+                        workspace_id = ws[0]
+
+                db.execute(
+                    "INSERT INTO projects (id, workspace_id, name, source_type, status, "
+                    "category_id, author_id, point_cost_deci, is_downloadable, created_by) "
+                    "VALUES (?, ?, ?, 'text', 'draft', ?, ?, ?, ?, ?)",
+                    (proj_id, workspace_id, name, cat_id, author_id,
+                     r.get("point_cost_deci", 0), r.get("is_downloadable", 0), user_id))
+
+                # Init project items from factory
+                _init_project_items_from_factory(proj_id, workspace_id)
+
+                # Save raw_text as step1 content
+                raw_text = r.get("raw_text", "").strip()
+                if raw_text:
+                    existing_step = db.execute(
+                        "SELECT id FROM step_results WHERE project_id=? AND step_name=?",
+                        (proj_id, "raw_text")
+                    ).fetchone()
+                    if existing_step:
+                        db.execute(
+                            "UPDATE step_results SET content=?, updated_at=datetime('now') WHERE project_id=? AND step_name=?",
+                            (raw_text, proj_id, "raw_text"))
+                    else:
+                        db.execute(
+                            "INSERT INTO step_results (id, project_id, step_name, content, content_type) VALUES (?,?,?,?,?)",
+                            (uuid.uuid4().hex[:16], proj_id, "raw_text", raw_text, "markdown"))
+
+                created.append({"name": name, "project_id": proj_id})
+            except Exception as e:
+                failed.append({"name": r.get("name", ""), "error": str(e)})
+
+        db.commit()
+        return {"created": created, "failed": failed, "total_created": len(created)}
+    finally:
+        db.close()
+
+
+@app.get("/api/batch/projects-status")
+def api_batch_projects_status(workspace_id: str = "", user=require_perm("project.view_all")):
+    """List all projects with step completion status for batch execution tab."""
+    db = get_db()
+    try:
+        if workspace_id:
+            rows = db.execute(
+                "SELECT p.*, w.name as workspace_name FROM projects p "
+                "JOIN workspaces w ON w.id = p.workspace_id "
+                "WHERE p.workspace_id = ? ORDER BY p.created_at DESC",
+                (workspace_id,)
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT p.*, w.name as workspace_name FROM projects p "
+                "JOIN workspaces w ON w.id = p.workspace_id "
+                "ORDER BY p.created_at DESC"
+            ).fetchall()
+
+        result = []
+        for r in rows:
+            r = dict(r)
+            pid = r["id"]
+
+            # Check step completion
+            steps_status = {
+                "step1": False, "step2": False, "step3": False, "step4": False
+            }
+
+            # Step 1: raw_text, raw_video, or raw_file exists
+            s1 = db.execute(
+                "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name IN ('raw_text','raw_video','raw_file')",
+                (pid,)
+            ).fetchone()[0]
+            steps_status["step1"] = s1 > 0
+
+            # Step 2: step2_sop, step2_daoshuyi, step2_yanxi
+            s2 = db.execute(
+                "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name IN ('step2_sop','step2_daoshuyi','step2_yanxi')",
+                (pid,)
+            ).fetchone()[0]
+            steps_status["step2"] = s2 > 0
+
+            # Step 3: Check for PPT outputs
+            s3 = db.execute(
+                "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name IN ('step3_col1','step3_col2','step3_col3','ppt_output')",
+                (pid,)
+            ).fetchone()[0]
+            steps_status["step3"] = s3 > 0
+
+            # Step 4: TTS history
+            s4 = db.execute(
+                "SELECT COUNT(*) FROM tts_history WHERE project_id=?",
+                (pid,)
+            ).fetchone()[0]
+            steps_status["step4"] = s4 > 0
+
+            r["steps_status"] = steps_status
+
+            # Category name
+            cat = db.execute("SELECT name FROM project_categories WHERE id=?", (r.get("category_id",""),)).fetchone()
+            r["category_name"] = cat[0] if cat else ""
+
+            # Author name
+            auth = db.execute("SELECT name FROM authors WHERE id=?", (r.get("author_id",""),)).fetchone()
+            r["author_name"] = auth[0] if auth else ""
+
+            result.append(r)
+
+        return {"projects": result}
+    finally:
+        db.close()
+
+
+@app.post("/api/batch/execute")
+def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
+    """Submit a batch execution job."""
+    project_steps = req.get("project_steps", {})
+    start_time = req.get("start_time", "")
+    end_time = req.get("end_time", "")
+
+    if not project_steps:
+        raise HTTPException(400, "未选择任何项目")
+    if not start_time or not end_time:
+        raise HTTPException(400, "请设置开始和结束时间")
+
+    workspace_id = req.get("workspace_id", "")
+    batch_id = f"batch-{uuid.uuid4().hex[:8]}"
+
+    # Build items list
+    db = get_db()
+    items = []
+    try:
+        for pid, steps in project_steps.items():
+            proj = db.execute("SELECT id, name FROM projects WHERE id=?", (pid,)).fetchone()
+            if proj:
+                items.append({
+                    "project_id": pid,
+                    "project_name": proj[1],
+                    "steps": steps,
+                })
+    finally:
+        db.close()
+
+    if not items:
+        raise HTTPException(400, "未找到有效项目")
+
+    from batch_executor import start_batch
+    job = start_batch(batch_id, workspace_id, start_time, end_time, items)
+
+    return {"batch_id": batch_id, "status": job.status}
+
+
+@app.get("/api/batch/status/{batch_id}")
+def api_batch_status(batch_id: str):
+    """Get batch execution status and logs."""
+    from batch_executor import get_batch_status
+    status = get_batch_status(batch_id)
+    if not status:
+        raise HTTPException(404, "批次不存在")
+    return status
+
+
+@app.post("/api/batch/cancel/{batch_id}")
+def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
+    """Cancel a pending/running batch."""
+    from batch_executor import cancel_batch
+    if cancel_batch(batch_id):
+        return {"status": "cancelled"}
+    raise HTTPException(400, "无法取消该批次")
+
+
 if __name__ == "__main__":
     import uvicorn
     port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
