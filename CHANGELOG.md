@@ -2,6 +2,10 @@
 
 ## 2026-07-27
 
+- fix: Step 1 data source — use step1_xxx (AI-organized) not raw_xxx (raw input); Step 1 actually calls LLM to process raw content
+
+## 2026-07-27
+
 - feat: batch execute — step1 radio single-select, step4 source selector, sub-TAB status, project conflict detection
 
 ## 2026-07-27

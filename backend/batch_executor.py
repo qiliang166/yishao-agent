@@ -299,7 +299,8 @@ async def _execute_project(item: dict, job: BatchJob):
                     _log(item, f"  缺少 LLM 配置，跳过整理: {sub}")
                     continue
 
-                _log(item, f"  正在整理: {sub}")
+                sub_label = {"text": "整理文档", "video": "整理视频", "file": "整理文件"}.get(sub, sub)
+                _log(item, f"  正在批量{sub_label}")
                 try:
                     prompt = _stage1_prompts.get(sub, _stage1_prompts["text"])
                     result = await generate(
