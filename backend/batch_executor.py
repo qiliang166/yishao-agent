@@ -232,21 +232,36 @@ async def _execute_project(item: dict, job: BatchJob):
         if not provider_id or not model:
             _log(item, "  注意: 未找到启用的 LLM 提供商，使用默认设置")
 
-        # Get raw content for context
-        raw_rows = db.execute(
-            "SELECT content FROM step_results WHERE project_id=? AND step_name IN ('raw_text','raw_video','raw_file')",
-            (project_id,)
-        ).fetchall()
+        # Determine which step1 data sources to use (filter by selected sub)
+        step1_subs_flat: list[str] = []
+        for s in steps_list:
+            if s[0] == "1":
+                step1_subs_flat = s[1]  # e.g. ["text"] or ["video"]
+                break
+        _step1_source_map = {"text": "raw_text", "video": "raw_video", "file": "raw_file"}
+        step1_source_names = [_step1_source_map[sub] for sub in step1_subs_flat if sub in _step1_source_map]
+
+        # Get raw content filtered by selected source type
+        if step1_source_names:
+            placeholders = ",".join(["?" for _ in step1_source_names])
+            raw_rows = db.execute(
+                f"SELECT content FROM step_results WHERE project_id=? AND step_name IN ({placeholders})",
+                [project_id] + step1_source_names
+            ).fetchall()
+        else:
+            raw_rows = db.execute(
+                "SELECT content FROM step_results WHERE project_id=? AND step_name IN ('raw_text','raw_video','raw_file')",
+                (project_id,)
+            ).fetchall()
         raw_text = "\n\n".join([r[0] for r in raw_rows if r[0]])
 
         # ── Step 1: Material Processing ──
-        step1_subs = [s[1] for s in steps_list if s[0] == "1"]
-        if step1_subs:
+        if step1_subs_flat:
             _log(item, "开始第一步·素材处理")
             if not raw_text:
                 _log(item, "  无素材内容，跳过第一步")
             else:
-                for sub in step1_subs[0]:
+                for sub in step1_subs_flat:
                     _log(item, f"  素材类型: {sub}")
                 _log(item, "第一步完成")
         else:
@@ -398,17 +413,31 @@ async def _execute_project(item: dict, job: BatchJob):
             return
 
         # ── Step 4: Speech Generation ──
-        step4_subs = [s[1] for s in steps_list if s[0] == "4"]
+        # Payload format: ["4", sourceSub, [subs]]
+        #   sourceSub: "doc-ppt" | "analysis-ppt" | "comprehensive-ppt"
+        #   subs: ["speech-script"] or ["speech-script", "speech-tts"]
+        step4_entries = [s for s in steps_list if s[0] == "4"]
+        _step3_to_source = {"doc-ppt": "step3_col1", "analysis-ppt": "step3_col2", "comprehensive-ppt": "step3_col3"}
 
-        if step4_subs and raw_text:
+        if step4_entries:
             _log(item, "开始第四步·演讲课件")
 
-            # Best source: step2_sop or raw_text
-            s2_sop = step2_results.get("sop", "")
-            speech_source = s2_sop if s2_sop else raw_text
+            for entry in step4_entries:
+                source_sub = entry[1]   # e.g. "doc-ppt"
+                subs = entry[2]          # e.g. ["speech-script", "speech-tts"]
 
-            for sub_group in step4_subs:
-                for sub in sub_group:
+                # Fetch the corresponding Step 3 output as speech source
+                step3_name = _step3_to_source.get(source_sub, "step3_col1")
+                step3_row = db.execute(
+                    "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                    (project_id, step3_name)
+                ).fetchone()
+                speech_source = step3_row[0] if step3_row else raw_text
+
+                source_label = {"doc-ppt": "文档课件", "analysis-ppt": "分析PPT", "comprehensive-ppt": "综合PPT"}.get(source_sub, source_sub)
+                _log(item, f"  演讲来源: {source_label}")
+
+                for sub in subs:
                     if sub == "speech-script":
                         info = _STEP4_SUB_MAP.get(sub, {})
                         item_name = info.get("name_pat", "演讲文案")
@@ -440,7 +469,7 @@ async def _execute_project(item: dict, job: BatchJob):
                                 "VALUES (?, ?, ?, ?)",
                                 (project_id, "step4_speech_script", result, "markdown"))
                             db.commit()
-                            speech_source = result  # Use for TTS
+                            speech_source = result  # Chain to TTS if selected
                             _log(item, f"  ✓ {item_name} 生成完成 ({len(result)}字)")
                         except Exception as e:
                             _log(item, f"  ✗ {item_name} 生成失败: {e}")
@@ -449,8 +478,7 @@ async def _execute_project(item: dict, job: BatchJob):
                     elif sub == "speech-tts":
                         _log(item, f"  演讲口播: TTS 合成需前端交互，已标记")
 
-        elif step4_subs and not raw_text:
-            _log(item, "无素材内容，跳过第四步")
+            _log(item, "第四步完成")
         else:
             _log(item, "未选择第四步，跳过")
 

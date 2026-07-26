@@ -8550,6 +8550,25 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
 
             r["steps_status"] = steps_status
 
+            # Per-sub-TAB status for batch execution TAB
+            sub_steps = {}
+            for sub_key in ("raw_video", "raw_text", "raw_file",
+                            "step2_sop", "step2_daoshuyi", "step2_yanxi",
+                            "step3_col1", "step3_col2", "step3_col3",
+                            "step4_speech_script"):
+                cnt = db.execute(
+                    "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name=?",
+                    (pid, sub_key)
+                ).fetchone()[0]
+                sub_steps[sub_key] = cnt > 0
+            # TTS lives in a separate table
+            tts_cnt = db.execute(
+                "SELECT COUNT(*) FROM tts_history WHERE project_id=?",
+                (pid,)
+            ).fetchone()[0]
+            sub_steps["tts"] = tts_cnt > 0
+            r["sub_steps"] = sub_steps
+
             # Category name
             cat = db.execute("SELECT name FROM project_categories WHERE id=?", (r.get("category_id",""),)).fetchone()
             r["category_name"] = cat[0] if cat else ""
@@ -8578,6 +8597,36 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
         raise HTTPException(400, "请设置开始和结束时间")
 
     workspace_id = req.get("workspace_id", "")
+
+    # Check for project conflicts in active batches
+    from batch_executor import _active_batches
+    conflicts = []
+    for bid, job in _active_batches.items():
+        if job.status in ("pending", "running"):
+            for item in job.items:
+                pid = item["project_id"]
+                if pid in project_steps and item["status"] in ("pending", "running"):
+                    pname = item.get("project_name", pid)
+                    if pname not in conflicts:
+                        conflicts.append(pname)
+
+    if conflicts:
+        # Remove conflicting projects from the request
+        clean_steps = {}
+        conflict_ids = set()
+        for bid, job in _active_batches.items():
+            if job.status in ("pending", "running"):
+                for item in job.items:
+                    if item["project_id"] in project_steps and item["status"] in ("pending", "running"):
+                        conflict_ids.add(item["project_id"])
+        for pid, steps in project_steps.items():
+            if pid not in conflict_ids:
+                clean_steps[pid] = steps
+        project_steps = clean_steps
+
+    if not project_steps:
+        return {"conflicts": conflicts}
+
     batch_id = f"batch-{uuid.uuid4().hex[:8]}"
 
     # Build items list
@@ -8601,7 +8650,10 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
     from batch_executor import start_batch
     job = start_batch(batch_id, workspace_id, start_time, end_time, items)
 
-    return {"batch_id": batch_id, "status": job.status}
+    resp = {"batch_id": batch_id, "status": job.status}
+    if conflicts:
+        resp["conflicts"] = conflicts
+    return resp
 
 
 @app.get("/api/batch/status/{batch_id}")

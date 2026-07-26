@@ -2,6 +2,25 @@
 
 ## 2026-07-27
 
+- fix: move batch_jobs table creation from migration to init_db() for every-startup execution
+- fix: checkbox = select rows to import, per-row delete button instead of batch delete
+- fix: batch import — workspace_id ordering, step_results PK, db lock, decimal points, response mapping, row select/delete
+- fix: batch import — use load_workbook for reading Excel and support decimal point values
+
+## 2026-07-27
+
+- fix: BatchDialog uses project's dialog-overlay class instead of nonexistent modal-overlay
+
+## 2026-07-27
+
+- fix: move batch API routes before SPA catch-all to prevent HTML responses
+
+## 2026-07-27
+
+- feat: batch import + execute — Excel bulk import and scheduled batch generation
+
+## 2026-07-27
+
 - build: server zip (fac413f — 分段自动保存)
 
 ## 2026-07-26
