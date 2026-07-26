@@ -599,23 +599,29 @@ export const api = {
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
     URL.revokeObjectURL(objUrl)
   },
-  /** 会员下载页预览地址：PPT 导出走公开 exports 路径，项目文件走带 token 的内联预览端点 */
+  /** 会员下载页预览地址：统一走后端端点，均带 project_id 以统计阅读次数 */
   previewFileUrl: (projectId: string, file: { filename: string; download_url?: string }) => {
-    if (file.download_url && file.download_url.startsWith('/api/exports/')) {
-      return `${BASE}${file.download_url}`
-    }
     const token = localStorage.getItem('auth_token')
-    const q = `project_id=${encodeURIComponent(projectId)}&filename=${encodeURIComponent(file.filename)}`
-    return `${BASE}/api/member/preview-file?${q}${token ? `&token=${encodeURIComponent(token)}` : ''}`
-  },
-  /** 预览文本内容：项目文件带 Authorization 头取（token 不进 URL），exports 直取 */
-  previewFileText: async (projectId: string, file: { filename: string; download_url?: string }) => {
+    const pid = `project_id=${encodeURIComponent(projectId)}`
+    const tok = token ? `&token=${encodeURIComponent(token)}` : ''
     if (file.download_url && file.download_url.startsWith('/api/exports/')) {
-      const res = await fetch(`${BASE}${file.download_url}`)
+      const sep = file.download_url.includes('?') ? '&' : '?'
+      return `${BASE}${file.download_url}${sep}${pid}${tok}`
+    }
+    const q = `${pid}&filename=${encodeURIComponent(file.filename)}`
+    return `${BASE}/api/member/preview-file?${q}${tok}`
+  },
+  /** 预览文本内容：统一走后端端点，均带 project_id 以统计阅读次数 */
+  previewFileText: async (projectId: string, file: { filename: string; download_url?: string }) => {
+    const pid = `project_id=${encodeURIComponent(projectId)}`
+    const token = localStorage.getItem('auth_token')
+    const tok = token ? `&token=${encodeURIComponent(token)}` : ''
+    if (file.download_url && file.download_url.startsWith('/api/exports/')) {
+      const sep = file.download_url.includes('?') ? '&' : '?'
+      const res = await fetch(`${BASE}${file.download_url}${sep}${pid}${tok}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       return res.text()
     }
-    const token = localStorage.getItem('auth_token')
     const q = `project_id=${encodeURIComponent(projectId)}&filename=${encodeURIComponent(file.filename)}`
     const res = await fetch(`${BASE}/api/member/preview-file?${q}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},

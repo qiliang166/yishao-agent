@@ -261,8 +261,31 @@ def _scan_output_bases() -> list[str]:
     return bases
 
 @app.get("/api/exports/{run_id}/{filename:path}")
-def api_serve_export_file(run_id: str, filename: str):
+def api_serve_export_file(run_id: str, filename: str, request: Request, project_id: str = None):
     import starlette.responses as _sr
+    # Count view for export preview (iframe/img/audio/video loads via exports URL directly)
+    if project_id:
+        user = getattr(request.state, "user", None)
+        if user is None:
+            token = request.query_params.get("token")
+            if token:
+                try:
+                    user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                    if "token_version" in user and "sub" in user:
+                        db = get_db()
+                        try:
+                            urow = db.execute(
+                                "SELECT token_version FROM users WHERE id=? AND is_active=1",
+                                (user["sub"],),
+                            ).fetchone()
+                            if not urow or urow["token_version"] != user["token_version"]:
+                                user = None
+                        finally:
+                            db.close()
+                except JWTError:
+                    pass
+        if user is not None:
+            _incr_view_count(project_id, user["sub"], filename, request)
     run_dir = _run_dirs.get(run_id)
     if not run_dir:
         # Fallback: look in EXPORT_DIR and scan subdirs
