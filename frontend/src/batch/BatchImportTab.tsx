@@ -20,6 +20,8 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
   const [errors, setErrors] = useState<{ row: number; error: string }[]>([])
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ success: number; failed: number } | null>(null)
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
+  const [selectedErrors, setSelectedErrors] = useState<Set<number>>(new Set())
   const fileRef = useRef<HTMLInputElement>(null)
 
   const handleDownloadTemplate = async () => {
@@ -52,10 +54,10 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
     try {
       const resp = await api.batchImport(previewRows, workspaceId)
       setResult({
-        success: resp.created || 0,
-        failed: resp.errors?.length || 0,
+        success: resp.total_created || 0,
+        failed: (resp.failed || []).length,
       })
-      if (resp.created > 0) {
+      if (resp.total_created > 0) {
         setPreviewRows([])
         if (fileRef.current) fileRef.current.value = ''
         onImported?.()
@@ -65,6 +67,37 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
     } finally {
       setImporting(false)
     }
+  }
+
+  const toggleRow = (i: number) => {
+    setSelectedRows(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  const toggleAllRows = () => {
+    if (selectedRows.size === previewRows.length) {
+      setSelectedRows(new Set())
+    } else {
+      setSelectedRows(new Set(previewRows.map((_, i) => i)))
+    }
+  }
+
+  const toggleError = (i: number) => {
+    setSelectedErrors(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  const deleteSelected = () => {
+    setPreviewRows(prev => prev.filter((_, i) => !selectedRows.has(i)))
+    setErrors(prev => prev.filter((_, i) => !selectedErrors.has(i)))
+    setSelectedRows(new Set())
+    setSelectedErrors(new Set())
   }
 
   const hasData = previewRows.length > 0 || errors.length > 0
@@ -140,25 +173,41 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
       {/* Preview Table */}
       {hasData && (
         <div style={{ marginTop: 20 }}>
-          <h4 style={{ fontSize: 13, color: 'var(--text-primary)', margin: '0 0 10px' }}>
-            数据预览 (共 {previewRows.length + errors.length} 条)
-          </h4>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+              数据预览 (共 {previewRows.length + errors.length} 条)
+            </span>
+            {(selectedRows.size > 0 || selectedErrors.size > 0) && (
+              <button className="btn btn-outline btn-sm"
+                style={{ fontSize: 11, color: '#ff4d4f', borderColor: '#ff4d4f' }}
+                onClick={deleteSelected}>
+                删除选中 ({selectedRows.size + selectedErrors.size})
+              </button>
+            )}
+          </div>
           <div style={{ overflow: 'auto', maxHeight: 300 }}>
             <table className="data-table" style={{ width: '100%', fontSize: 11 }}>
               <thead>
                 <tr>
-                  <th>#</th><th>名称</th><th>分类</th><th>出处作者</th>
+                  <th style={{ width: 30 }}>
+                    <input type="checkbox" checked={previewRows.length > 0 && selectedRows.size === previewRows.length}
+                      onChange={toggleAllRows} />
+                  </th>
+                  <th>名称</th><th>分类</th><th>出处作者</th>
                   <th>积分</th><th>可下载</th><th style={{ maxWidth: 200 }}>第一步文字内容</th>
                 </tr>
               </thead>
               <tbody>
                 {previewRows.map((row, i) => (
-                  <tr key={i}>
-                    <td>{i + 1}</td>
+                  <tr key={i} style={{ background: selectedRows.has(i) ? 'var(--bg-hover)' : undefined }}>
+                    <td>
+                      <input type="checkbox" checked={selectedRows.has(i)}
+                        onChange={() => toggleRow(i)} />
+                    </td>
                     <td>{row.name}</td>
                     <td>{row.category || '—'}</td>
                     <td>{row.author || '—'}</td>
-                    <td>{row.point_cost_deci}</td>
+                    <td>{(row.point_cost_deci / 10).toFixed(1)}</td>
                     <td>{row.is_downloadable ? '是' : '否'}</td>
                     <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {row.raw_text || '—'}
@@ -166,9 +215,13 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
                   </tr>
                 ))}
                 {errors.map((e, i) => (
-                  <tr key={`err-${i}`} style={{ background: '#fff2f0' }}>
-                    <td>{e.row}</td>
-                    <td colSpan={6} style={{ color: '#ff4d4f' }}>
+                  <tr key={`err-${i}`} style={{ background: selectedErrors.has(i) ? '#ffd8d2' : '#fff2f0' }}>
+                    <td>
+                      <input type="checkbox" checked={selectedErrors.has(i)}
+                        onChange={() => toggleError(i)} />
+                    </td>
+                    <td style={{ color: '#ff4d4f' }}>第{e.row}行</td>
+                    <td colSpan={5} style={{ color: '#ff4d4f' }}>
                       &times; {e.error}
                     </td>
                   </tr>

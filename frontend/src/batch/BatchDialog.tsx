@@ -10,6 +10,12 @@ interface Props {
 
 export const BatchDialog: React.FC<Props> = ({ workspaceId, onClose, onImported }) => {
   const [tab, setTab] = useState<'import' | 'execute'>('import')
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  const handleImported = () => {
+    setRefreshKey(k => k + 1)
+    onImported?.()
+  }
 
   return (
     <div className="dialog-overlay" onClick={onClose}>
@@ -56,9 +62,9 @@ export const BatchDialog: React.FC<Props> = ({ workspaceId, onClose, onImported 
         {/* Body */}
         <div style={{ padding: 20, overflow: 'auto', flex: 1 }}>
           {tab === 'import' ? (
-            <BatchImportTab workspaceId={workspaceId} onImported={onImported} />
+            <BatchImportTab workspaceId={workspaceId} onImported={handleImported} />
           ) : (
-            <BatchExecuteTab workspaceId={workspaceId} />
+            <BatchExecuteTab workspaceId={workspaceId} refreshKey={refreshKey} />
           )}
         </div>
       </div>

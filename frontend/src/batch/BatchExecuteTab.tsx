@@ -3,6 +3,7 @@ import { api } from '../services/api'
 
 interface Props {
   workspaceId?: string
+  refreshKey?: number
 }
 
 interface ProjectStatus {
@@ -38,7 +39,7 @@ interface BatchStatus {
   }>
 }
 
-export const BatchExecuteTab: React.FC<Props> = ({ workspaceId }) => {
+export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) => {
   const [projects, setProjects] = useState<ProjectStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -59,7 +60,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId }) => {
       setProjects(data)
       setLoading(false)
     }).catch(() => setLoading(false))
-  }, [workspaceId])
+  }, [workspaceId, refreshKey])
 
   // Cleanup polling
   useEffect(() => {

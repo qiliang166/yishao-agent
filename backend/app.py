@@ -1019,14 +1019,16 @@ def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", re
         db.close()
 
 
-def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
+def _init_project_items_from_factory(project_id: str, workspace_id: str = None, db=None):
     """Initialize project_items for a new project from its workspace's configs.
 
     Copies from the project's workspace-specific column_configs, speech_configs,
     tts_configs, and core_prompt_configs into project_items so the project owns
     its independent copies of all prompts.
     """
-    db = get_db()
+    _close_db = db is None
+    if db is None:
+        db = get_db()
     try:
         # Resolve workspace_id from project if not provided
         if not workspace_id:
@@ -1113,7 +1115,8 @@ def _init_project_items_from_factory(project_id: str, workspace_id: str = None):
 
         db.commit()
     finally:
-        db.close()
+        if _close_db:
+            db.close()
 
 
 @app.post("/api/projects")
@@ -8417,18 +8420,25 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
                     failed.append({"name": name, "error": "名称为空"})
                     continue
 
+                # Resolve workspace_id
+                workspace_id = req.get("workspace_id", "")
+                if not workspace_id:
+                    ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
+                    if ws:
+                        workspace_id = ws[0]
+
                 # Resolve or create category
                 cat_name = r.get("category", "").strip()
                 cat_id = None
                 if cat_name:
                     existing = db.execute(
-                        "SELECT id FROM project_categories WHERE name=?", (cat_name,)
+                        "SELECT id FROM project_categories WHERE name=? AND workspace_id=?", (cat_name, workspace_id)
                     ).fetchone()
                     if existing:
                         cat_id = existing[0]
                     else:
                         cat_id = f"cat-{uuid.uuid4().hex[:8]}"
-                        db.execute("INSERT INTO project_categories (id, name) VALUES (?,?)", (cat_id, cat_name))
+                        db.execute("INSERT INTO project_categories (id, name, workspace_id) VALUES (?,?,?)", (cat_id, cat_name, workspace_id))
 
                 # Resolve or create author
                 author_name = r.get("author", "").strip()
@@ -8444,11 +8454,6 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
                         db.execute("INSERT INTO authors (id, name) VALUES (?,?)", (author_id, author_name))
 
                 proj_id = uuid.uuid4().hex[:12]
-                workspace_id = req.get("workspace_id", "")
-                if not workspace_id:
-                    ws = db.execute("SELECT id FROM workspaces LIMIT 1").fetchone()
-                    if ws:
-                        workspace_id = ws[0]
 
                 db.execute(
                     "INSERT INTO projects (id, workspace_id, name, source_type, status, "
@@ -8457,8 +8462,8 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
                     (proj_id, workspace_id, name, cat_id, author_id,
                      r.get("point_cost_deci", 0), r.get("is_downloadable", 0), user_id))
 
-                # Init project items from factory
-                _init_project_items_from_factory(proj_id, workspace_id)
+                # Init project items from factory (pass db to avoid lock)
+                _init_project_items_from_factory(proj_id, workspace_id, db=db)
 
                 # Save raw_text as step1 content
                 raw_text = r.get("raw_text", "").strip()
@@ -8473,8 +8478,8 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
                             (raw_text, proj_id, "raw_text"))
                     else:
                         db.execute(
-                            "INSERT INTO step_results (id, project_id, step_name, content, content_type) VALUES (?,?,?,?,?)",
-                            (uuid.uuid4().hex[:16], proj_id, "raw_text", raw_text, "markdown"))
+                            "INSERT INTO step_results (project_id, step_name, content, content_type) VALUES (?,?,?,?)",
+                            (proj_id, "raw_text", raw_text, "markdown"))
 
                 created.append({"name": name, "project_id": proj_id})
             except Exception as e:
