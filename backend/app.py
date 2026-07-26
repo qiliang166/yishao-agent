@@ -5979,6 +5979,7 @@ def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
 def _incr_view_count(project_id: str, user_id: str, filename: str, request: Request):
     """Record a preview view — increment project view_count and insert view_logs."""
     try:
+        import uuid as _uuid
         db = get_db()
         vid = str(_uuid.uuid4())
         ip = request.client.host if request.client else ""
@@ -5990,8 +5991,10 @@ def _incr_view_count(project_id: str, user_id: str, filename: str, request: Requ
         )
         db.execute("UPDATE projects SET view_count = view_count + 1 WHERE id = ?", (project_id,))
         db.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        import traceback
+        print(f"[view_count] ERROR: {e}")
+        traceback.print_exc()
 
 
 @app.get("/api/download/{filename}")
