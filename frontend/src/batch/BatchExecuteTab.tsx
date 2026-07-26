@@ -38,6 +38,13 @@ const RAW_SOURCE_KEYS: Record<string, string> = {
   'video': 'raw_video', 'text': 'raw_text', 'file': 'raw_file',
 }
 
+// Step 2 → Step 3 1:1 mapping
+const STEP2_TO_STEP3: Record<string, string> = {
+  'sop': 'doc-ppt',
+  'dao': 'analysis-ppt',
+  'yanxi': 'comprehensive-ppt',
+}
+
 // Step 3 subs for Step 4 source selector
 const STEP3_SUBS = [
   { key: 'doc-ppt', label: '文档演讲' },
@@ -378,90 +385,92 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                             }}>
                               {def.label}
                             </span>
-                            {def.subs.map((sub, i) => {
-                              const hasData = subHasData(p, def.key, sub)
-                              const checked = curSubs.includes(sub)
-                              const inputType = isStep1 ? 'radio' : 'checkbox'
-                              // Step1: radio disabled when raw source is empty
-                              const rawKey: string = isStep1 ? (RAW_SOURCE_KEYS[sub] || '') : ''
-                              const rawMissing: boolean = isStep1 && !!rawKey && !!(p.sub_steps && p.sub_steps[rawKey] === false)
-                              const step1Disabled: boolean = locked || rawMissing
-                              return (
-                                <label key={sub} style={{
-                                  display: 'flex', alignItems: 'center', gap: 4, cursor: step1Disabled ? 'not-allowed' : 'pointer',
-                                  color: step1Disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
-                                  opacity: step1Disabled ? 0.5 : 1,
-                                }}>
-                                  <input type={inputType} checked={checked}
-                                    name={isStep1 ? `step1-${p.id}` : undefined}
-                                    disabled={step1Disabled}
-                                    onChange={() => {
-                                      if (isStep1) setStep1Sub(p.id, sub)
-                                      else toggleStepSub(p.id, def.key, sub)
-                                    }} />
-                                  {def.subLabels[i]}
-                                  {rawMissing && (
-                                    <span style={{ color: 'var(--text-secondary)', fontSize: 9, marginLeft: 2 }}>(无内容)</span>
-                                  )}
-                                  {hasData && (
-                                    <span style={{ color: 'var(--success)', fontSize: 10, marginLeft: 2 }} title="已有数据">✓</span>
-                                  )}
-                                </label>
-                              )
-                            })}
+                            {isStep4 && !locked ? (
+                              /* Step 4: Source selector + generate checkbox */
+                              <>
+                                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                  选择课件来源：
+                                </span>
+                                {STEP3_SUBS.filter(s3 => {
+                                  const step3Subs = projSteps['step3'] || []
+                                  return step3Subs.includes(s3.key)
+                                }).map(s3 => {
+                                  const s3HasData = subHasData(p, 'step3', s3.key)
+                                  return (
+                                    <label key={s3.key} style={{
+                                      marginRight: 12, fontSize: 10, cursor: 'pointer',
+                                      color: step4Src === s3.key ? 'var(--primary)' : 'var(--text-secondary)',
+                                      fontWeight: step4Src === s3.key ? 600 : 400,
+                                    }}>
+                                      <input type="radio" name={`step4src-${p.id}`}
+                                        checked={step4Src === s3.key}
+                                        onChange={() => setStep4SourceSub(p.id, s3.key)}
+                                        style={{ marginRight: 3 }} />
+                                      {s3.label}
+                                      {s3HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}>✓</span>}
+                                    </label>
+                                  )
+                                })}
+                                {step4Src && def.subs.map((sub, i) => {
+                                  const hasData = subHasData(p, def.key, sub)
+                                  const checked = curSubs.includes(sub)
+                                  return (
+                                    <label key={sub} style={{
+                                      display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                                      color: 'var(--text-primary)', fontSize: 10,
+                                    }}>
+                                      <input type="checkbox" checked={checked}
+                                        onChange={() => toggleStepSub(p.id, def.key, sub)} />
+                                      {def.subLabels[i]}
+                                      {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据">✓</span>}
+                                    </label>
+                                  )
+                                })}
+                              </>
+                            ) : (
+                              !isStep4 && def.subs.filter(sub => {
+                                // Step 3: only show subs matching Step 2 selections
+                                if (def.key !== 'step3') return true
+                                const step2Subs = projSteps['step2'] || []
+                                const step2Key = Object.entries(STEP2_TO_STEP3).find(([, v]) => v === sub)?.[0]
+                                return step2Key ? step2Subs.includes(step2Key) : true
+                              }).map((sub, i) => {
+                                const hasData = subHasData(p, def.key, sub)
+                                const checked = curSubs.includes(sub)
+                                const inputType = isStep1 ? 'radio' : 'checkbox'
+                                const rawKey: string = isStep1 ? (RAW_SOURCE_KEYS[sub] || '') : ''
+                                const rawMissing: boolean = isStep1 && !!rawKey && !!(p.sub_steps && p.sub_steps[rawKey] === false)
+                                const step1Disabled: boolean = locked || (rawMissing && !hasData)
+                                return (
+                                  <label key={sub} style={{
+                                    display: 'flex', alignItems: 'center', gap: 4, cursor: step1Disabled ? 'not-allowed' : 'pointer',
+                                    color: step1Disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                    opacity: step1Disabled ? 0.5 : 1,
+                                  }}>
+                                    <input type={inputType} checked={checked}
+                                      name={isStep1 ? `step1-${p.id}` : undefined}
+                                      disabled={step1Disabled}
+                                      onChange={() => {
+                                        if (isStep1) setStep1Sub(p.id, sub)
+                                        else toggleStepSub(p.id, def.key, sub)
+                                      }} />
+                                    {def.subLabels[i]}
+                                    {rawMissing && !hasData && (
+                                      <span style={{ color: 'var(--text-secondary)', fontSize: 9, marginLeft: 2 }}>(无内容)</span>
+                                    )}
+                                    {hasData && (
+                                      <span style={{ color: 'var(--success)', fontSize: 10, marginLeft: 2 }} title="已有数据">✓</span>
+                                    )}
+                                  </label>
+                                )
+                              })
+                            )}
                             {locked && (
                               <span style={{ color: 'var(--text-secondary)', marginLeft: 'auto', fontSize: 10 }}>
                                 🔒 需上一步勾选
                               </span>
                             )}
                           </div>
-
-                          {/* Step 4: Source selector from Step 3 */}
-                          {isStep4 && !locked && (
-                            <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
-                              <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginRight: 8 }}>
-                                选择课件来源：
-                              </span>
-                              {STEP3_SUBS.map(s3 => {
-                                const s3HasData = subHasData(p, 'step3', s3.key)
-                                return (
-                                  <label key={s3.key} style={{
-                                    marginRight: 12, fontSize: 10, cursor: 'pointer',
-                                    color: step4Src === s3.key ? 'var(--primary)' : 'var(--text-secondary)',
-                                    fontWeight: step4Src === s3.key ? 600 : 400,
-                                  }}>
-                                    <input type="radio" name={`step4src-${p.id}`}
-                                      checked={step4Src === s3.key}
-                                      onChange={() => setStep4SourceSub(p.id, s3.key)}
-                                      style={{ marginRight: 3 }} />
-                                    {s3.label}
-                                    {s3HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}>✓</span>}
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          )}
-
-                          {/* Step 4: sub-item (single checkbox after source selected) */}
-                          {isStep4 && !locked && step4Src && (
-                            <div style={{ marginTop: 6, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                              {def.subs.map((sub, i) => {
-                                const hasData = subHasData(p, def.key, sub)
-                                const checked = curSubs.includes(sub)
-                                return (
-                                  <label key={sub} style={{
-                                    display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
-                                    color: 'var(--text-primary)', fontSize: 10,
-                                  }}>
-                                    <input type="checkbox" checked={checked}
-                                      onChange={() => toggleStepSub(p.id, def.key, sub)} />
-                                    {def.subLabels[i]}
-                                    {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据">✓</span>}
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          )}
                         </div>
                       )
                     })}

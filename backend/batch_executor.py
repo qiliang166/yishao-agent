@@ -289,6 +289,13 @@ async def _execute_project(item: dict, job: BatchJob):
             for sub in step1_subs_flat:
                 raw_key, step1_key = _step1_source_map[sub]
                 raw_content = raw_content_map.get(raw_key, "")
+                sub_label = {"text": "整理文档", "video": "整理视频", "file": "整理文件"}.get(sub, sub)
+
+                # Skip if already has step1 output
+                existing = step1_content_map.get(step1_key, "")
+                if existing:
+                    _log(item, f"  {sub_label} 已有结果，跳过整理")
+                    continue
 
                 if not raw_content:
                     _log(item, f"  无原始素材({sub})，跳过整理")
@@ -298,7 +305,6 @@ async def _execute_project(item: dict, job: BatchJob):
                     _log(item, f"  缺少 LLM 配置，跳过整理: {sub}")
                     continue
 
-                sub_label = {"text": "整理文档", "video": "整理视频", "file": "整理文件"}.get(sub, sub)
                 _log(item, f"  正在批量{sub_label}")
                 try:
                     prompt = _stage1_prompts.get(sub, _stage1_prompts["text"])
@@ -354,6 +360,26 @@ async def _execute_project(item: dict, job: BatchJob):
                     prompt_text = pi.get("prompt", "") if pi else ""
                     item_name = pi.get("name", info.get("name_pat", sub)) if pi else info.get("name_pat", sub)
 
+                    # Determine step_name
+                    if sub == "sop":
+                        step_name = "step2_sop"
+                    elif sub == "dao":
+                        step_name = "step2_daoshuyi"
+                    elif sub == "yanxi":
+                        step_name = "step2_yanxi"
+                    else:
+                        step_name = f"step2_{sub}"
+
+                    # Skip if already has output
+                    existing = db.execute(
+                        "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                        (project_id, step_name)
+                    ).fetchone()
+                    if existing and existing[0]:
+                        _log(item, f"  {item_name} 已有结果，跳过")
+                        step2_results[sub] = existing[0]
+                        continue
+
                     if not provider_id or not model:
                         _log(item, f"  缺少 LLM 配置，跳过: {item_name}")
                         continue
@@ -374,16 +400,6 @@ async def _execute_project(item: dict, job: BatchJob):
                             user_message=user_message,
                             temperature=0.7,
                         )
-
-                        # Determine step_name
-                        if sub == "sop":
-                            step_name = "step2_sop"
-                        elif sub == "dao":
-                            step_name = "step2_daoshuyi"
-                        elif sub == "yanxi":
-                            step_name = "step2_yanxi"
-                        else:
-                            step_name = f"step2_{sub}"
 
                         # Save to step_results
                         db.execute(
@@ -429,6 +445,25 @@ async def _execute_project(item: dict, job: BatchJob):
                     prompt_text = pi.get("prompt", "") if pi else ""
                     item_name = pi.get("name", info.get("name_pat", sub)) if pi else info.get("name_pat", sub)
 
+                    # Determine step_name
+                    if sub == "doc-ppt":
+                        step_name = "step3_col1"
+                    elif sub == "analysis-ppt":
+                        step_name = "step3_col2"
+                    elif sub == "comprehensive-ppt":
+                        step_name = "step3_col3"
+                    else:
+                        step_name = f"step3_{sub}"
+
+                    # Skip if already has output
+                    existing = db.execute(
+                        "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                        (project_id, step_name)
+                    ).fetchone()
+                    if existing and existing[0]:
+                        _log(item, f"  {item_name} 已有结果，跳过")
+                        continue
+
                     if not provider_id or not model:
                         _log(item, f"  缺少 LLM 配置，跳过: {item_name}")
                         continue
@@ -449,16 +484,6 @@ async def _execute_project(item: dict, job: BatchJob):
                             user_message=user_message,
                             temperature=0.7,
                         )
-
-                        # Determine step_name
-                        if sub == "doc-ppt":
-                            step_name = "step3_col1"
-                        elif sub == "analysis-ppt":
-                            step_name = "step3_col2"
-                        elif sub == "comprehensive-ppt":
-                            step_name = "step3_col3"
-                        else:
-                            step_name = f"step3_{sub}"
 
                         db.execute(
                             "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) "
@@ -508,6 +533,15 @@ async def _execute_project(item: dict, job: BatchJob):
                     if sub == "speech-script":
                         info = _STEP4_SUB_MAP.get(sub, {})
                         item_name = info.get("name_pat", "演讲文案")
+
+                        # Skip if already has output
+                        existing = db.execute(
+                            "SELECT content FROM step_results WHERE project_id=? AND step_name='step4_speech_script'",
+                            (project_id,)
+                        ).fetchone()
+                        if existing and existing[0]:
+                            _log(item, f"  {item_name} 已有结果，跳过")
+                            continue
 
                         if not provider_id or not model:
                             _log(item, f"  缺少 LLM 配置，跳过: {item_name}")

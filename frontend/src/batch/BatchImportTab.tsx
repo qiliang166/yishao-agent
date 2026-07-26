@@ -194,6 +194,7 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
                     <input type="checkbox" checked={previewRows.length > 0 && selectedRows.size === previewRows.length}
                       onChange={toggleAllRows} />
                   </th>
+                  <th style={{ width: 36 }}>#</th>
                   <th>名称</th><th>分类</th><th>出处作者</th>
                   <th>积分</th><th>可下载</th><th style={{ maxWidth: 200 }}>第一步文字内容</th>
                   <th style={{ width: 36 }}></th>
@@ -206,6 +207,7 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
                       <input type="checkbox" checked={selectedRows.has(i)}
                         onChange={() => toggleRow(i)} />
                     </td>
+                    <td style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>{i + 1}</td>
                     <td>{row.name}</td>
                     <td>{row.category || '—'}</td>
                     <td>{row.author || '—'}</td>
@@ -226,8 +228,9 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
                 {errors.map((e, i) => (
                   <tr key={`err-${i}`} style={{ background: '#fff2f0' }}>
                     <td></td>
+                    <td></td>
                     <td style={{ color: '#ff4d4f' }}>第{e.row}行</td>
-                    <td colSpan={5} style={{ color: '#ff4d4f' }}>
+                    <td colSpan={6} style={{ color: '#ff4d4f' }}>
                       &times; {e.error}
                     </td>
                     <td style={{ textAlign: 'center' }}>

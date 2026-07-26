@@ -8455,11 +8455,19 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
 
                 proj_id = uuid.uuid4().hex[:12]
 
+                # Generate project_code (KH{date}-{seq})
+                today = datetime.now().strftime("%y%m%d")
+                today_prefix = f"KH{today}%"
+                today_count = db.execute(
+                    "SELECT COUNT(*) FROM projects WHERE project_code LIKE ?", (today_prefix,)
+                ).fetchone()[0]
+                project_code = f"KH{today}-{today_count + 1:04d}"
+
                 db.execute(
-                    "INSERT INTO projects (id, workspace_id, name, source_type, status, "
+                    "INSERT INTO projects (id, workspace_id, name, source_type, status, project_code, "
                     "category_id, author_id, point_cost_deci, is_downloadable, created_by) "
-                    "VALUES (?, ?, ?, 'text', 'draft', ?, ?, ?, ?, ?)",
-                    (proj_id, workspace_id, name, cat_id, author_id,
+                    "VALUES (?, ?, ?, 'text', 'draft', ?, ?, ?, ?, ?, ?)",
+                    (proj_id, workspace_id, name, project_code, cat_id, author_id,
                      r.get("point_cost_deci", 0), r.get("is_downloadable", 0), user_id))
 
                 # Init project items from factory (pass db to avoid lock)
@@ -8562,6 +8570,12 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
                     (pid, sub_key)
                 ).fetchone()[0]
                 sub_steps[sub_key] = cnt > 0
+
+            # Cross-check: step1 only valid if raw source exists
+            for raw_key, step1_key in [("raw_video", "step1_video"), ("raw_text", "step1_text"), ("raw_file", "step1_file")]:
+                if not sub_steps.get(raw_key, False):
+                    sub_steps[step1_key] = False
+
             r["sub_steps"] = sub_steps
 
             # Category name
