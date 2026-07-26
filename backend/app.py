@@ -8306,6 +8306,7 @@ def open_folder(req: OpenFolderRequest, user=require_perm("config.project")):
 
 import io as _io
 from openpyxl import Workbook as _Workbook
+from openpyxl import load_workbook as _load_workbook
 from openpyxl.styles import Font as _Font, PatternFill as _Fill, Alignment as _Alignment
 
 _BATCH_TEMPLATE_HEADERS = ["名称", "分类", "出处作者", "下载所需积分", "允许会员下载", "第一步文字内容"]
@@ -8359,7 +8360,7 @@ async def api_batch_preview_import(file: UploadFile = File(...), user=require_pe
         raise HTTPException(400, "仅支持 .xlsx 文件")
 
     contents = await file.read()
-    wb = _Workbook(_io.BytesIO(contents), read_only=True, data_only=True)
+    wb = _load_workbook(_io.BytesIO(contents), read_only=True, data_only=True)
     ws = wb.active
 
     rows = []
@@ -8379,7 +8380,7 @@ async def api_batch_preview_import(file: UploadFile = File(...), user=require_pe
         category = vals[1]
         author = vals[2]
         try:
-            points = int(vals[3]) if vals[3] else 0
+            points = int(float(vals[3]) * 10) if vals[3] else 0
         except ValueError:
             errors.append({"row": row_idx, "error": f"积分格式错误: {vals[3]}"})
             continue
