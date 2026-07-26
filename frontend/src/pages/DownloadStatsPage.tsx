@@ -183,14 +183,14 @@ export default function DownloadStatsPage() {
                     <th style={{ width: 50 }}>序号</th>
                     <th style={{ width: 90 }}>编号</th>
                     <th>明细名称</th>
-                    <th style={{ width: 110 }}>所属项目</th>
-                    <th style={{ width: 100 }}>所属分类</th>
-                    <th style={{ width: 100 }}>作者</th>
-                    <th style={{ width: 100 }}>创建者</th>
-                    <th style={{ width: 80, cursor: 'pointer' }} onClick={() => { setProjSort(s => s === 'downloads' ? 'views' : 'downloads'); setProjPage(1) }}>
+                    <th style={{ width: 100 }}>所属项目</th>
+                    <th style={{ width: 80 }}>所属分类</th>
+                    <th style={{ width: 80 }}>作者</th>
+                    <th style={{ width: 80 }}>创建者</th>
+                    <th style={{ width: 60, cursor: 'pointer' }} onClick={() => { setProjSort(s => s === 'downloads' ? 'views' : 'downloads'); setProjPage(1) }}>
                       下载次数{projSort === 'downloads' ? ' ▼' : ''}
                     </th>
-                    <th style={{ width: 80, cursor: 'pointer' }} onClick={() => { setProjSort(s => s === 'views' ? 'downloads' : 'views'); setProjPage(1) }}>
+                    <th style={{ width: 60, cursor: 'pointer' }} onClick={() => { setProjSort(s => s === 'views' ? 'downloads' : 'views'); setProjPage(1) }}>
                       阅读次数{projSort === 'views' ? ' ▼' : ''}
                     </th>
                     <th style={{ width: 60 }}>可下载</th>
