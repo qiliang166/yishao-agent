@@ -25,6 +25,8 @@ export default function DownloadStatsPage() {
   const [creatorFilter, setCreatorFilter] = useState('')
   const [projPage, setProjPage] = useState(1)
   const [memPage, setMemPage] = useState(1)
+  const [projSort, setProjSort] = useState<'downloads' | 'views'>('downloads')
+  const [memSort, setMemSort] = useState<'downloads' | 'views'>('downloads')
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
@@ -63,6 +65,18 @@ export default function DownloadStatsPage() {
     (!creatorFilter || p.creator_name === creatorFilter)
   )
 
+  const sortedStats = [...filteredStats].sort((a, b) =>
+    projSort === 'views'
+      ? (b.view_count || 0) - (a.view_count || 0)
+      : (b.download_count || 0) - (a.download_count || 0)
+  )
+
+  const sortedMembers = [...memberStats].sort((a, b) =>
+    memSort === 'views'
+      ? (b.total_views || 0) - (a.total_views || 0)
+      : (b.total_downloads || 0) - (a.total_downloads || 0)
+  )
+
   const sumBy = (key: string) => {
     const m = new Map<string, number>()
     for (const p of filteredStats) {
@@ -85,10 +99,10 @@ export default function DownloadStatsPage() {
     return [...m.entries()].sort((a, b) => b[1].downloads - a[1].downloads)
   }
 
-  const projTotalPages = Math.max(1, Math.ceil(filteredStats.length / PAGE_SIZE))
-  const projPageItems = filteredStats.slice((projPage - 1) * PAGE_SIZE, projPage * PAGE_SIZE)
-  const memTotalPages = Math.max(1, Math.ceil(memberStats.length / PAGE_SIZE))
-  const memPageItems = memberStats.slice((memPage - 1) * PAGE_SIZE, memPage * PAGE_SIZE)
+  const projTotalPages = Math.max(1, Math.ceil(sortedStats.length / PAGE_SIZE))
+  const projPageItems = sortedStats.slice((projPage - 1) * PAGE_SIZE, projPage * PAGE_SIZE)
+  const memTotalPages = Math.max(1, Math.ceil(sortedMembers.length / PAGE_SIZE))
+  const memPageItems = sortedMembers.slice((memPage - 1) * PAGE_SIZE, memPage * PAGE_SIZE)
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 960, margin: '0 auto' }}>
@@ -173,8 +187,12 @@ export default function DownloadStatsPage() {
                     <th style={{ width: 100 }}>所属分类</th>
                     <th style={{ width: 100 }}>作者</th>
                     <th style={{ width: 100 }}>创建者</th>
-                    <th style={{ width: 80 }}>下载次数</th>
-                    <th style={{ width: 80 }}>阅读次数</th>
+                    <th style={{ width: 80, cursor: 'pointer' }} onClick={() => { setProjSort(s => s === 'downloads' ? 'views' : 'downloads'); setProjPage(1) }}>
+                      下载次数{projSort === 'downloads' ? ' ▼' : ''}
+                    </th>
+                    <th style={{ width: 80, cursor: 'pointer' }} onClick={() => { setProjSort(s => s === 'views' ? 'downloads' : 'views'); setProjPage(1) }}>
+                      阅读次数{projSort === 'views' ? ' ▼' : ''}
+                    </th>
                     <th style={{ width: 60 }}>可下载</th>
                     <th style={{ width: 60 }}>积分</th>
                   </tr>
@@ -199,7 +217,7 @@ export default function DownloadStatsPage() {
                   ))}
                 </tbody>
               </table>
-              <Pager page={projPage} totalPages={projTotalPages} total={filteredStats.length} onChange={setProjPage} />
+              <Pager page={projPage} totalPages={projTotalPages} total={sortedStats.length} onChange={setProjPage} />
             </div>
             {filteredStats.length > 0 && (
               <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
@@ -244,8 +262,12 @@ export default function DownloadStatsPage() {
                   <th style={{ width: 90 }}>充值金额</th>
                   <th style={{ width: 80 }}>剩余积分</th>
                   <th style={{ width: 80 }}>消耗积分</th>
-                  <th style={{ width: 80 }}>下载次数</th>
-                  <th style={{ width: 80 }}>阅读次数</th>
+                  <th style={{ width: 80, cursor: 'pointer' }} onClick={() => { setMemSort(s => s === 'downloads' ? 'views' : 'downloads'); setMemPage(1) }}>
+                    下载次数{memSort === 'downloads' ? ' ▼' : ''}
+                  </th>
+                  <th style={{ width: 80, cursor: 'pointer' }} onClick={() => { setMemSort(s => s === 'views' ? 'downloads' : 'views'); setMemPage(1) }}>
+                    阅读次数{memSort === 'views' ? ' ▼' : ''}
+                  </th>
                   <th style={{ width: 70 }}>明细数</th>
                   <th style={{ width: 110 }}>最近下载</th>
                 </tr>
@@ -269,7 +291,7 @@ export default function DownloadStatsPage() {
                 ))}
               </tbody>
             </table>
-            <Pager page={memPage} totalPages={memTotalPages} total={memberStats.length} onChange={setMemPage} />
+            <Pager page={memPage} totalPages={memTotalPages} total={sortedMembers.length} onChange={setMemPage} />
           </div>
         )
       )}
