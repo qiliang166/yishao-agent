@@ -5983,7 +5983,7 @@ def _incr_view_count(project_id: str, user_id: str, filename: str, request: Requ
         db = get_db()
         vid = str(_uuid.uuid4())
         ip = request.client.host if request.client else ""
-        now = datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
         db.execute(
             "INSERT INTO view_logs (id, user_id, project_id, filename, ip_address, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
