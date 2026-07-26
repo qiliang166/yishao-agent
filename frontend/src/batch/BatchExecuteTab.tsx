@@ -27,10 +27,15 @@ const STEP_DEFS = [
 
 // Sub-TAB → step_results step_name mapping for status check
 const SUB_STEP_NAMES: Record<string, string> = {
-  'video': 'raw_video', 'text': 'raw_text', 'file': 'raw_file',
+  'video': 'step1_video', 'text': 'step1_text', 'file': 'step1_file',
   'sop': 'step2_sop', 'dao': 'step2_daoshuyi', 'yanxi': 'step2_yanxi',
   'doc-ppt': 'step3_col1', 'analysis-ppt': 'step3_col2', 'comprehensive-ppt': 'step3_col3',
   'speech-script': 'step4_speech_script', 'speech-tts': 'tts',
+}
+
+// Raw source keys for Step 1 radio availability (input box must have content)
+const RAW_SOURCE_KEYS: Record<string, string> = {
+  'video': 'raw_video', 'text': 'raw_text', 'file': 'raw_file',
 }
 
 // Step 3 subs for Step 4 source selector
@@ -377,20 +382,27 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                               const hasData = subHasData(p, def.key, sub)
                               const checked = curSubs.includes(sub)
                               const inputType = isStep1 ? 'radio' : 'checkbox'
+                              // Step1: radio disabled when raw source is empty
+                              const rawKey: string = isStep1 ? (RAW_SOURCE_KEYS[sub] || '') : ''
+                              const rawMissing: boolean = isStep1 && !!rawKey && !!(p.sub_steps && p.sub_steps[rawKey] === false)
+                              const step1Disabled: boolean = locked || rawMissing
                               return (
                                 <label key={sub} style={{
-                                  display: 'flex', alignItems: 'center', gap: 4, cursor: locked ? 'not-allowed' : 'pointer',
-                                  color: locked ? 'var(--text-secondary)' : 'var(--text-primary)',
-                                  opacity: locked ? 0.5 : 1,
+                                  display: 'flex', alignItems: 'center', gap: 4, cursor: step1Disabled ? 'not-allowed' : 'pointer',
+                                  color: step1Disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                  opacity: step1Disabled ? 0.5 : 1,
                                 }}>
                                   <input type={inputType} checked={checked}
                                     name={isStep1 ? `step1-${p.id}` : undefined}
-                                    disabled={locked}
+                                    disabled={step1Disabled}
                                     onChange={() => {
                                       if (isStep1) setStep1Sub(p.id, sub)
                                       else toggleStepSub(p.id, def.key, sub)
                                     }} />
                                   {def.subLabels[i]}
+                                  {rawMissing && (
+                                    <span style={{ color: 'var(--text-secondary)', fontSize: 9, marginLeft: 2 }}>(无内容)</span>
+                                  )}
                                   {hasData && (
                                     <span style={{ color: 'var(--success)', fontSize: 10, marginLeft: 2 }} title="已有数据">✓</span>
                                   )}

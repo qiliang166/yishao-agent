@@ -238,32 +238,99 @@ async def _execute_project(item: dict, job: BatchJob):
             if s[0] == "1":
                 step1_subs_flat = s[1]  # e.g. ["text"] or ["video"]
                 break
-        _step1_source_map = {"text": "raw_text", "video": "raw_video", "file": "raw_file"}
-        step1_source_names = [_step1_source_map[sub] for sub in step1_subs_flat if sub in _step1_source_map]
+        _step1_source_map = {"text": ("raw_text", "step1_text"), "video": ("raw_video", "step1_video"), "file": ("raw_file", "step1_file")}
 
-        # Get raw content filtered by selected source type
-        if step1_source_names:
-            placeholders = ",".join(["?" for _ in step1_source_names])
-            raw_rows = db.execute(
-                f"SELECT content FROM step_results WHERE project_id=? AND step_name IN ({placeholders})",
-                [project_id] + step1_source_names
-            ).fetchall()
-        else:
-            raw_rows = db.execute(
-                "SELECT content FROM step_results WHERE project_id=? AND step_name IN ('raw_text','raw_video','raw_file')",
-                (project_id,)
-            ).fetchall()
-        raw_text = "\n\n".join([r[0] for r in raw_rows if r[0]])
+        # Determine which step1 sub is selected
+        step1_subs_flat: list[str] = []
+        for s in steps_list:
+            if s[0] == "1":
+                step1_subs_flat = s[1]
+                break
 
-        # ── Step 1: Material Processing ──
+        # Get ALL raw content (for Step 1 processing input)
+        raw_rows = db.execute(
+            "SELECT step_name, content FROM step_results WHERE project_id=? AND step_name IN ('raw_text','raw_video','raw_file')",
+            (project_id,)
+        ).fetchall()
+        raw_content_map: dict[str, str] = {}
+        for r in raw_rows:
+            if r[1]:
+                raw_content_map[r[0]] = r[1]
+
+        # Get existing step1 content (pre-processed, as fallback for Step 2)
+        step1_rows = db.execute(
+            "SELECT step_name, content FROM step_results WHERE project_id=? AND step_name IN ('step1_text','step1_video','step1_file')",
+            (project_id,)
+        ).fetchall()
+        step1_content_map: dict[str, str] = {}
+        for r in step1_rows:
+            if r[1]:
+                step1_content_map[r[0]] = r[1]
+
+        # Build source text for Step 2 — prefer step1_xxx, fall back to raw
+        source_parts: list[str] = []
+        for raw_key, step1_key in _step1_source_map.values():
+            content = step1_content_map.get(step1_key) or raw_content_map.get(raw_key, "")
+            if content:
+                source_parts.append(content)
+        raw_text = "\n\n".join(source_parts)
+
+        # ── Step 1: Material Processing (LLM organize) ──
+        _stage1_prompts = {
+            "text": "请将用户输入的内容整理为标准文档格式。",
+            "video": "请根据视频相关内容提取完整信息，整理为标准文档。",
+            "file": "请从上传文件中提取完整内容，整理为标准文档格式。",
+        }
+        _stage1_skill = "## 文档标题\n**标题**：\n**分类**：\n**日期**：\n**来源**：\n\n### 一、基本信息\n| 序号 | 项目 | 内容 | 备注 |\n|------|------|------|------|\n| 1 | | | |\n\n### 二、主要内容\n| 序号 | 要点 | 详细说明 |\n|------|------|----------|\n| 1 | | |\n\n### 三、总结\n- **要点1**：\n- **要点2**："
+
         if step1_subs_flat:
-            _log(item, "开始第一步·素材处理")
-            if not raw_text:
-                _log(item, "  无素材内容，跳过第一步")
-            else:
-                for sub in step1_subs_flat:
-                    _log(item, f"  素材类型: {sub}")
-                _log(item, "第一步完成")
+            _log(item, "开始第一步·素材整理")
+            step1_new_results: dict[str, str] = {}
+
+            for sub in step1_subs_flat:
+                raw_key, step1_key = _step1_source_map[sub]
+                raw_content = raw_content_map.get(raw_key, "")
+
+                if not raw_content:
+                    _log(item, f"  无原始素材({sub})，跳过整理")
+                    continue
+
+                if not provider_id or not model:
+                    _log(item, f"  缺少 LLM 配置，跳过整理: {sub}")
+                    continue
+
+                _log(item, f"  正在整理: {sub}")
+                try:
+                    prompt = _stage1_prompts.get(sub, _stage1_prompts["text"])
+                    result = await generate(
+                        provider_id=provider_id,
+                        model=model,
+                        system_prompt=prompt,
+                        user_message=f"请将以下内容按指定格式整理：\n\n{raw_content}\n\n输出格式要求：\n{_stage1_skill}",
+                        temperature=0.7,
+                    )
+                    db.execute(
+                        "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) "
+                        "VALUES (?, ?, ?, ?)",
+                        (project_id, step1_key, result, "markdown"))
+                    db.commit()
+                    step1_new_results[step1_key] = result
+                    step1_content_map[step1_key] = result
+                    _log(item, f"  ✓ 整理完成 ({len(result)}字)")
+                except Exception as e:
+                    _log(item, f"  ✗ 整理失败: {e}")
+                    raise
+
+            # Update source_text with newly processed step1 results for Step 2
+            if step1_new_results:
+                new_parts = []
+                for raw_key, step1_key in _step1_source_map.values():
+                    content = step1_content_map.get(step1_key) or raw_content_map.get(raw_key, "")
+                    if content:
+                        new_parts.append(content)
+                raw_text = "\n\n".join(new_parts)
+
+            _log(item, "第一步完成")
         else:
             _log(item, "未选择第一步，跳过")
 

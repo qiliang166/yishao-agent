@@ -2,6 +2,10 @@
 
 ## 2026-07-27
 
+- feat: batch execute — step1 radio single-select, step4 source selector, sub-TAB status, project conflict detection
+
+## 2026-07-27
+
 - fix: move batch_jobs table creation from migration to init_db() for every-startup execution
 - fix: checkbox = select rows to import, per-row delete button instead of batch delete
 - fix: batch import — workspace_id ordering, step_results PK, db lock, decimal points, response mapping, row select/delete

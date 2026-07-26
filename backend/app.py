@@ -8553,6 +8553,7 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
             # Per-sub-TAB status for batch execution TAB
             sub_steps = {}
             for sub_key in ("raw_video", "raw_text", "raw_file",
+                            "step1_video", "step1_text", "step1_file",
                             "step2_sop", "step2_daoshuyi", "step2_yanxi",
                             "step3_col1", "step3_col2", "step3_col3",
                             "step4_speech_script"):
