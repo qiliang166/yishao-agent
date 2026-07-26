@@ -8562,12 +8562,6 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
                     (pid, sub_key)
                 ).fetchone()[0]
                 sub_steps[sub_key] = cnt > 0
-            # TTS lives in a separate table
-            tts_cnt = db.execute(
-                "SELECT COUNT(*) FROM tts_history WHERE project_id=?",
-                (pid,)
-            ).fetchone()[0]
-            sub_steps["tts"] = tts_cnt > 0
             r["sub_steps"] = sub_steps
 
             # Category name

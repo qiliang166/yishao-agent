@@ -22,7 +22,7 @@ const STEP_DEFS = [
   { key: 'step1', label: '第一步·素材输入', subs: ['video', 'text', 'file'], subLabels: ['整理视频', '整理文字', '整理文件'] },
   { key: 'step2', label: '第二步·文档生成', subs: ['sop', 'dao', 'yanxi'], subLabels: ['标准文档', '分析文档', '综合文档'] },
   { key: 'step3', label: '第三步·课件输出', subs: ['doc-ppt', 'analysis-ppt', 'comprehensive-ppt'], subLabels: ['文档课件', '分析PPT', '综合PPT'] },
-  { key: 'step4', label: '第四步·演讲课件', subs: ['speech-script', 'speech-tts'], subLabels: ['演讲文案', '演讲口播'] },
+  { key: 'step4', label: '第四步·演讲课件', subs: ['speech-script'], subLabels: ['生成演讲稿'] },
 ]
 
 // Sub-TAB → step_results step_name mapping for status check
@@ -30,7 +30,7 @@ const SUB_STEP_NAMES: Record<string, string> = {
   'video': 'step1_video', 'text': 'step1_text', 'file': 'step1_file',
   'sop': 'step2_sop', 'dao': 'step2_daoshuyi', 'yanxi': 'step2_yanxi',
   'doc-ppt': 'step3_col1', 'analysis-ppt': 'step3_col2', 'comprehensive-ppt': 'step3_col3',
-  'speech-script': 'step4_speech_script', 'speech-tts': 'tts',
+  'speech-script': 'step4_speech_script',
 }
 
 // Raw source keys for Step 1 radio availability (input box must have content)
@@ -40,9 +40,9 @@ const RAW_SOURCE_KEYS: Record<string, string> = {
 
 // Step 3 subs for Step 4 source selector
 const STEP3_SUBS = [
-  { key: 'doc-ppt', label: '文档课件' },
-  { key: 'analysis-ppt', label: '分析PPT' },
-  { key: 'comprehensive-ppt', label: '综合PPT' },
+  { key: 'doc-ppt', label: '文档演讲' },
+  { key: 'analysis-ppt', label: '分析演讲' },
+  { key: 'comprehensive-ppt', label: '综合演讲' },
 ]
 
 interface BatchStatus {
@@ -442,28 +442,21 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                             </div>
                           )}
 
-                          {/* Step 4: sub-item lock (口播 depends on 文案) */}
+                          {/* Step 4: sub-item (single checkbox after source selected) */}
                           {isStep4 && !locked && step4Src && (
                             <div style={{ marginTop: 6, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                               {def.subs.map((sub, i) => {
                                 const hasData = subHasData(p, def.key, sub)
                                 const checked = curSubs.includes(sub)
-                                // 口播 locked if 文案 not checked and not done
-                                const subLocked = sub === 'speech-tts' && !curSubs.includes('speech-script') && !subHasData(p, def.key, 'speech-script')
                                 return (
                                   <label key={sub} style={{
-                                    display: 'flex', alignItems: 'center', gap: 4,
-                                    cursor: subLocked ? 'not-allowed' : 'pointer',
-                                    opacity: subLocked ? 0.5 : 1,
-                                    color: subLocked ? 'var(--text-secondary)' : 'var(--text-primary)',
-                                    fontSize: 10,
+                                    display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                                    color: 'var(--text-primary)', fontSize: 10,
                                   }}>
                                     <input type="checkbox" checked={checked}
-                                      disabled={subLocked}
                                       onChange={() => toggleStepSub(p.id, def.key, sub)} />
                                     {def.subLabels[i]}
                                     {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据">✓</span>}
-                                    {subLocked && <span style={{ color: 'var(--text-secondary)', fontSize: 9 }}>🔒</span>}
                                   </label>
                                 )
                               })}

@@ -153,7 +153,6 @@ _STEP3_SUB_MAP = {
 
 _STEP4_SUB_MAP = {
     "speech-script": {"name_pat": "演讲文案"},
-    "speech-tts": {"name_pat": "演讲口播"},
 }
 
 
@@ -483,7 +482,7 @@ async def _execute_project(item: dict, job: BatchJob):
         # ── Step 4: Speech Generation ──
         # Payload format: ["4", sourceSub, [subs]]
         #   sourceSub: "doc-ppt" | "analysis-ppt" | "comprehensive-ppt"
-        #   subs: ["speech-script"] or ["speech-script", "speech-tts"]
+        #   subs: ["speech-script"]
         step4_entries = [s for s in steps_list if s[0] == "4"]
         _step3_to_source = {"doc-ppt": "step3_col1", "analysis-ppt": "step3_col2", "comprehensive-ppt": "step3_col3"}
 
@@ -492,7 +491,7 @@ async def _execute_project(item: dict, job: BatchJob):
 
             for entry in step4_entries:
                 source_sub = entry[1]   # e.g. "doc-ppt"
-                subs = entry[2]          # e.g. ["speech-script", "speech-tts"]
+                subs = entry[2]          # e.g. ["speech-script"]
 
                 # Fetch the corresponding Step 3 output as speech source
                 step3_name = _step3_to_source.get(source_sub, "step3_col1")
@@ -502,7 +501,7 @@ async def _execute_project(item: dict, job: BatchJob):
                 ).fetchone()
                 speech_source = step3_row[0] if step3_row else raw_text
 
-                source_label = {"doc-ppt": "文档课件", "analysis-ppt": "分析PPT", "comprehensive-ppt": "综合PPT"}.get(source_sub, source_sub)
+                source_label = {"doc-ppt": "文档演讲", "analysis-ppt": "分析演讲", "comprehensive-ppt": "综合演讲"}.get(source_sub, source_sub)
                 _log(item, f"  演讲来源: {source_label}")
 
                 for sub in subs:
@@ -543,8 +542,6 @@ async def _execute_project(item: dict, job: BatchJob):
                             _log(item, f"  ✗ {item_name} 生成失败: {e}")
                             raise
 
-                    elif sub == "speech-tts":
-                        _log(item, f"  演讲口播: TTS 合成需前端交互，已标记")
 
             _log(item, "第四步完成")
         else:

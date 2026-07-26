@@ -2,6 +2,10 @@
 
 ## 2026-07-27
 
+- fix: batch Step 1 log — "正在批量整理文档/视频/文件" instead of "正在整理: text"
+
+## 2026-07-27
+
 - fix: Step 1 data source — use step1_xxx (AI-organized) not raw_xxx (raw input); Step 1 actually calls LLM to process raw content
 
 ## 2026-07-27
