@@ -807,6 +807,13 @@ export default function ProjectPage() {
   const [splitGenerating, setSplitGenerating] = useState(false)
   const [splitMode, setSplitMode] = useState<'newline' | 'chars'>('chars')
   const [splitMaxChunk, setSplitMaxChunk] = useState(290)
+  const segmentsLoaded = useRef(false)
+
+  // Auto-save splitSegments to step_results whenever they change
+  useEffect(() => {
+    if (!segmentsLoaded.current) { segmentsLoaded.current = true; return }
+    saveStep('_tts_segments', JSON.stringify(splitSegments))
+  }, [splitSegments])
   const [projStoragePath, setProjStoragePath] = useState('')
   const [savingPath, setSavingPath] = useState(false)
   // Voice clone states
@@ -915,6 +922,16 @@ export default function ProjectPage() {
       setVideoText(map['raw_video'] || map['video_text'] || '')
       setTextInput(map['raw_text'] || '')
       setFileText(map['raw_file'] || '')
+      // Restore saved split segments
+      if (map['_tts_segments']) {
+        try {
+          const parsed = JSON.parse(map['_tts_segments'])
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            segmentsLoaded.current = true
+            setSplitSegments(parsed)
+          }
+        } catch {}
+      }
       // Restore saved model selections
       if (map['_model_s1_video'] || map['_model_s1_text'] || map['_model_s1_file']) {
         setStep1Models({
