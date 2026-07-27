@@ -257,30 +257,18 @@ def _update_item_db(batch_id: str, item: dict):
 
 def _load_column_configs(db, workspace_id: str) -> list[dict]:
     rows = db.execute(
-        "SELECT * FROM column_configs WHERE workspace_id = ? OR workspace_id IS NULL "
-        "ORDER BY workspace_id IS NULL, sort_order",
+        "SELECT * FROM column_configs WHERE workspace_id = ? ORDER BY sort_order",
         (workspace_id,),
     ).fetchall()
-    seen = {}
-    for r in rows:
-        r = dict(r)
-        if r["id"] not in seen:
-            seen[r["id"]] = r
-    return list(seen.values())
+    return [dict(r) for r in rows]
 
 
 def _load_speech_configs(db, workspace_id: str) -> list[dict]:
     rows = db.execute(
-        "SELECT * FROM speech_configs WHERE workspace_id = ? OR workspace_id IS NULL "
-        "ORDER BY workspace_id IS NULL, sort_order",
+        "SELECT * FROM speech_configs WHERE workspace_id = ? ORDER BY sort_order",
         (workspace_id,),
     ).fetchall()
-    seen = {}
-    for r in rows:
-        r = dict(r)
-        if r["id"] not in seen:
-            seen[r["id"]] = r
-    return list(seen.values())
+    return [dict(r) for r in rows]
 
 
 def _get_provider_model(db, workspace_id: str, step_name: str = "_model_s2_sop") -> tuple:
@@ -394,11 +382,13 @@ def _run_batch(job: BatchJob):
 
             _update_db(job)
             _update_item_db(job.batch_id, item)
-    finally:
-        pass
-
-    job.status = "completed"
-    _update_db(job)
+    except BaseException as e:
+        job.status = "stopped"
+        _update_db(job)
+        raise
+    else:
+        job.status = "completed"
+        _update_db(job)
 
 
 def get_batch_status(batch_id: str) -> dict | None:
@@ -449,11 +439,11 @@ def cancel_batch(batch_id: str) -> bool:
 
 
 def get_active_batches() -> list[dict]:
-    """Return list of active (pending/running) batches. Checks memory first, then DB."""
+    """Return list of active (pending/running/stopped) batches. Checks memory first, then DB."""
     result = []
     with _batch_lock:
         for job in _active_batches.values():
-            if job.status in ("pending", "running"):
+            if job.status in ("pending", "running", "stopped"):
                 result.append({"batch_id": job.batch_id, "status": job.status,
                                "total_count": job.total_count,
                                "completed_count": job.completed_count,
@@ -465,7 +455,7 @@ def get_active_batches() -> list[dict]:
         db = get_db()
         try:
             rows = db.execute(
-                "SELECT id, status, total_count, completed_count, failed_count FROM batch_jobs WHERE status IN ('pending','running') ORDER BY created_at DESC"
+                "SELECT id, status, total_count, completed_count, failed_count FROM batch_jobs WHERE status IN ('pending','running','stopped') ORDER BY created_at DESC"
             ).fetchall()
             for r in rows:
                 result.append({"batch_id": r[0], "status": r[1], "total_count": r[2] or 0,
@@ -760,6 +750,9 @@ def _execute_project(item: dict, job: BatchJob):
                                 "provider_id": provider_id,
                                 "model": model,
                             }
+                            _log(item, f"  Step2 DIAG: tab={tab} prompt_len={len(pipeline['step2']['prompt'])} "
+                                 f"skill_len={len(pipeline['step2']['skill'])} "
+                                 f"source_len={len(source_text)} model={model}")
             else:
                 pipeline["step2_skip"] = True
 
@@ -1005,6 +998,12 @@ def _tab_pipeline(project_id: str, pipeline: dict, item: dict):
         if not speech_source:
             _log(item, f"    [{label}] Step4 缺少演讲稿源内容，跳过")
         else:
+            import hashlib
+            _p_hash = hashlib.md5(task['prompt'].encode()).hexdigest()[:8] if task['prompt'] else 'none'
+            _s_hash = hashlib.md5(task['skill'].encode()).hexdigest()[:8] if task['skill'] else 'none'
+            _src_hash = hashlib.md5(speech_source.encode()).hexdigest()[:8] if speech_source else 'none'
+            _log(item, f"    [{label}] Step4 HASH: prompt={_p_hash} skill={_s_hash} source={_src_hash} "
+                 f"speech_key={task.get('speech_key','?')} model={task['model']}")
             user_message = (
                 f"请将以下内容按指定格式生成演讲稿：\n\n{speech_source}\n\n输出格式要求：\n{task['skill']}"
                 if task["skill"] else speech_source
