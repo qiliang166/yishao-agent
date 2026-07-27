@@ -1006,13 +1006,13 @@ def _tab_pipeline(project_id: str, pipeline: dict, item: dict):
             _log(item, f"    [{label}] Step4 缺少演讲稿源内容，跳过")
         else:
             user_message = (
-                f"请将以下内容按指定格式生成演讲稿：\n\n{speech_source[:6000]}\n\n输出格式要求：\n{task['skill']}"
-                if task["skill"] else speech_source[:6000]
+                f"请将以下内容按指定格式生成演讲稿：\n\n{speech_source}\n\n输出格式要求：\n{task['skill']}"
+                if task["skill"] else speech_source
             )
             result = _call("POST", "/api/llm/generate", {
                 "provider_id": task["provider_id"], "model": task["model"],
                 "system_prompt": task["prompt"], "user_message": user_message,
-                "temperature": 0.7,
+                "temperature": 0.3,
             })
             content = result.get("content", "")
             _call("PUT", f"/api/projects/{project_id}/steps/{task['step4_name']}", {
