@@ -288,6 +288,30 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
     return count
   }
 
+  const startPolling = (batchId: string) => {
+    setExecuting(true)
+    pollRef.current = setInterval(async () => {
+      try {
+        const status = await api.batchStatus(batchId)
+        setBatchStatus(status)
+        if (status.status === 'completed' || status.status === 'cancelled' || status.status === 'stopped') {
+          if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+          setExecuting(false)
+          api.batchProjectsStatus(workspaceId).then(setProjects)
+        }
+      } catch { /* ignore poll errors */ }
+    }, 2000)
+  }
+
+  // Auto-detect running batch on mount (e.g. user navigated away and came back)
+  useEffect(() => {
+    api.batchActive().then((batches: Array<{batch_id: string, status: string}>) => {
+      if (batches && batches.length > 0) {
+        startPolling(batches[0].batch_id)
+      }
+    }).catch(() => {})
+  }, [])
+
   const handleExecute = async () => {
     const payload = buildStepsPayload()
     if (Object.keys(payload).length === 0) return
@@ -309,17 +333,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       }
       const batchId = resp.batch_id
       if (!batchId) { setExecuting(false); return }
-      pollRef.current = setInterval(async () => {
-        try {
-          const status = await api.batchStatus(batchId)
-          setBatchStatus(status)
-          if (status.status === 'completed' || status.status === 'cancelled' || status.status === 'stopped') {
-            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-            setExecuting(false)
-            api.batchProjectsStatus(workspaceId).then(setProjects)
-          }
-        } catch { /* ignore poll errors */ }
-      }, 2000)
+      startPolling(batchId)
     } catch (err: any) {
       alert('执行失败: ' + (err.message || err))
       setExecuting(false)

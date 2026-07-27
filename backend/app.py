@@ -8694,6 +8694,13 @@ def api_batch_status(batch_id: str):
     return status
 
 
+@app.get("/api/batch/active")
+def api_batch_active():
+    """List active (pending/running) batches."""
+    from batch.scheduler import get_active_batches
+    return {"batches": get_active_batches()}
+
+
 @app.post("/api/batch/cancel/{batch_id}")
 def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
     """Cancel a pending/running batch."""
