@@ -257,7 +257,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
     let count = 0
     const payload = buildStepsPayload()
     for (const pid of Object.keys(payload)) {
-      count += payload[pid].length
+      count += (payload[pid].steps || []).length
     }
     return count
   }
