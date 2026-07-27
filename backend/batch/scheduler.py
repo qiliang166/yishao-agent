@@ -135,6 +135,22 @@ class BatchJob:
         }
 
 
+def get_project_active_batch(project_id: str) -> dict | None:
+    """Check if a project is in any active batch. Returns batch info or None."""
+    with _batch_lock:
+        for batch_id, job in list(_active_batches.items()):
+            for item in job.items:
+                if item.get("project_id") == project_id and item.get("status") not in ("completed", "failed"):
+                    return {
+                        "batch_id": batch_id,
+                        "batch_status": job.status,
+                        "project_status": item.get("status", "unknown"),
+                        "project_name": item.get("project_name", ""),
+                        "total_projects": job.total_count,
+                    }
+    return None
+
+
 # ── Time helpers ──
 
 

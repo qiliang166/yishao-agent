@@ -949,6 +949,8 @@ export const api = {
     request(`/api/batch/status/${batchId}`),
   batchCancel: (batchId: string) =>
     request(`/api/batch/cancel/${batchId}`, { method: 'POST' }),
+  projectBatchStatus: (projectId: string) =>
+    request(`/api/batch/project-batch/${projectId}`),
 
   // Downloads
   getDownloadInfo: () => request('/api/download/info'),

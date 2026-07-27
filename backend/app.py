@@ -8701,6 +8701,14 @@ def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
     raise HTTPException(400, "无法取消该批次")
 
 
+@app.get("/api/batch/project-batch/{project_id}")
+def api_project_batch_status(project_id: str, user=require_perm("project.view_own")):
+    """Check if a project is being processed by an active batch."""
+    from batch.scheduler import get_project_active_batch
+    info = get_project_active_batch(project_id)
+    return {"in_batch": info is not None, "batch_info": info}
+
+
 # Production mode: serve built frontend (after all API routes)
 if getattr(sys, 'frozen', False):
     FRONTEND_DIST = os.path.join(sys._MEIPASS, "frontend", "dist")

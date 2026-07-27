@@ -641,6 +641,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null)
   const [editName, setEditName] = useState(false)
   const [editNameValue, setEditNameValue] = useState('')
+  const [batchWarning, setBatchWarning] = useState('')
   const [hdrCategories, setHdrCategories] = useState<{id:string;name:string}[]>([])
   const [hdrAuthors, setHdrAuthors] = useState<{id:string;name:string}[]>([])
   const styleColorMap = useRef<Record<string, any>>({})
@@ -865,6 +866,10 @@ export default function ProjectPage() {
         api.listCategories(p.workspace_id).then(d => setHdrCategories((d?.categories || []) as {id:string;name:string}[])).catch(() => {})
       }
       api.listAuthorOptions().then(d => setHdrAuthors((d?.authors || []) as {id:string;name:string}[])).catch(() => {})
+      api.projectBatchStatus(id).then((r: any) => {
+        if (r?.in_batch) setBatchWarning('此项目正在批量执行中，生成过程由服务器自动完成。请勿在此页面手动操作，以免结果冲突。')
+        else setBatchWarning('')
+      }).catch(() => {})
 
       // Load configs only after we have the workspace_id to avoid race condition
       // where listColumnConfigs(undefined) returns global seed configs instead of
@@ -1147,6 +1152,17 @@ export default function ProjectPage() {
       }
     }).catch(() => {})
   }, [id, navigate])
+
+  // Poll batch status so the warning clears when batch finishes
+  useEffect(() => {
+    if (!id || !batchWarning) return
+    const timer = setInterval(() => {
+      api.projectBatchStatus(id).then((r: any) => {
+        if (!r?.in_batch) setBatchWarning('')
+      }).catch(() => {})
+    }, 10000)
+    return () => clearInterval(timer)
+  }, [id, batchWarning])
 
   // Load color schemes when template selection changes (handles initial load, restoration, and user clicks)
   useEffect(() => {
@@ -2406,6 +2422,15 @@ export default function ProjectPage() {
         )}
         {readOnly && (
           <span style={{ fontSize: 11, color: 'var(--warning)', marginLeft: 8, fontWeight: 600 }}>只读模式</span>
+        )}
+        {batchWarning && (
+          <span style={{
+            fontSize: 11, color: '#fff', marginLeft: 8, fontWeight: 600,
+            background: 'var(--warning)', padding: '2px 10px', borderRadius: 4,
+            animation: 'pulse 2s infinite',
+          }}>
+            ⚠ {batchWarning}
+          </span>
         )}
         {isGlobalGenerating && (
           <span style={{
