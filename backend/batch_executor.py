@@ -1,6 +1,10 @@
 """
-Batch Executor — background thread that processes project generation steps
-within a time window. One at a time, sequentially.
+Batch Executor — background thread scheduler.
+Does NOT own any pipeline logic. Reads configs from DB (column_configs,
+speech_configs), builds messages exactly like the frontend, calls the same
+llm_service.generate(), saves to the same step_results table.
+
+Rule: zero hardcoded prompts. Everything comes from the config tables.
 """
 import asyncio
 import json
@@ -18,7 +22,7 @@ class BatchJob:
         self.workspace_id = workspace_id
         self.start_time = start_time
         self.end_time = end_time
-        self.status = "pending"  # pending / running / completed / stopped / cancelled
+        self.status = "pending"
         self.total_count = 0
         self.completed_count = 0
         self.failed_count = 0
@@ -62,7 +66,6 @@ def _now():
 
 def start_batch(batch_id: str, workspace_id: str, start_time: str, end_time: str,
                 items: list[dict]) -> BatchJob:
-    """Create and start a batch job. Returns the job object."""
     with _batch_lock:
         if batch_id in _active_batches:
             return _active_batches[batch_id]
@@ -83,7 +86,6 @@ def start_batch(batch_id: str, workspace_id: str, start_time: str, end_time: str
 
 
 def _run_batch(job: BatchJob):
-    """Main execution loop: wait for start time, then process items sequentially."""
     start_dt = _parse_iso(job.start_time)
     end_dt = _parse_iso(job.end_time)
 
@@ -101,7 +103,6 @@ def _run_batch(job: BatchJob):
     job.status = "running"
     _update_db(job)
 
-    # Create event loop in this thread for async LLM calls
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -138,54 +139,51 @@ def _run_batch(job: BatchJob):
     _update_db(job)
 
 
-# Sub-step → project_item column_id / name mapping
-_STEP2_SUB_MAP = {
-    "sop": {"col": "col1", "name_pat": "标准"},
-    "dao": {"col": "col2", "name_pat": "分析"},
-    "yanxi": {"col": "col3", "name_pat": "综合"},
-}
+# ── Config loading (reads same tables the frontend reads) ──
 
-_STEP3_SUB_MAP = {
-    "doc-ppt": {"col": "col3", "name_pat": "文档课件"},
-    "analysis-ppt": {"col": "col4", "name_pat": "分析PPT"},
-    "comprehensive-ppt": {"col": "col5", "name_pat": "综合PPT"},
-}
-
-_STEP4_SUB_MAP = {
-    "speech-script": {"name_pat": "演讲文案"},
-}
-
-
-def _find_item(items: list[dict], info: dict) -> dict | None:
-    """Find a project_item by column_id first, then by name pattern."""
-    col_id = info.get("col", "")
-    name_pat = info.get("name_pat", "")
-    for it in items:
-        name = it.get("name", "")
-        # Column-based lookup: our items have column_id embedded in id like pi-xxx-col1
-        if col_id and col_id in it.get("id", ""):
-            return it
-    # Fallback: name pattern
-    for it in items:
-        if name_pat and name_pat in it.get("name", ""):
-            return it
-    return None
+def _load_column_configs(db, workspace_id: str) -> list[dict]:
+    """Load column_configs for a workspace (same as frontend's listColumnConfigs)."""
+    rows = db.execute(
+        "SELECT * FROM column_configs WHERE workspace_id = ? OR workspace_id IS NULL "
+        "ORDER BY workspace_id IS NULL, sort_order",
+        (workspace_id,)
+    ).fetchall()
+    # workspace-specific overrides global (same id)
+    seen = {}
+    for r in rows:
+        r = dict(r)
+        if r["id"] not in seen:
+            seen[r["id"]] = r
+    return list(seen.values())
 
 
-def _get_provider_model(db, workspace_id: str, items: list[dict]) -> tuple:
-    """Get provider_id and model from workspace settings, falling back to first enabled."""
-    # Check step_results for saved model settings
+def _load_speech_configs(db, workspace_id: str) -> list[dict]:
+    """Load speech_configs for a workspace (same as frontend's listSpeechConfigs)."""
+    rows = db.execute(
+        "SELECT * FROM speech_configs WHERE workspace_id = ? OR workspace_id IS NULL "
+        "ORDER BY workspace_id IS NULL, sort_order",
+        (workspace_id,)
+    ).fetchall()
+    seen = {}
+    for r in rows:
+        r = dict(r)
+        if r["id"] not in seen:
+            seen[r["id"]] = r
+    return list(seen.values())
+
+
+def _get_provider_model(db, workspace_id: str, step_name: str = "_model_s2_sop") -> tuple:
+    """Get provider_id and model from step_results model setting, falling back to first enabled."""
     provider_id = ""
     model = ""
     try:
         row = db.execute(
             "SELECT content FROM step_results WHERE project_id IN "
-            "(SELECT id FROM projects WHERE workspace_id=?) AND step_name='_model_s2_sop' LIMIT 1",
-            (workspace_id,)
+            "(SELECT id FROM projects WHERE workspace_id=?) AND step_name=? LIMIT 1",
+            (workspace_id, step_name)
         ).fetchone()
-        if row:
+        if row and row[0]:
             combined = row[0]
-            # Format may be "provider_id:model" or just "model"
             if ":" in combined:
                 provider_id, model = combined.split(":", 1)
             else:
@@ -210,8 +208,9 @@ def _get_provider_model(db, workspace_id: str, items: list[dict]) -> tuple:
     return provider_id, model
 
 
+# ── Step execution (reads configs → calls generate() → saves to step_results) ──
+
 async def _execute_project(item: dict, job: BatchJob):
-    """Execute selected steps for a single project using LLM generation."""
     from services.llm_service import generate
     from database import get_db
 
@@ -226,32 +225,39 @@ async def _execute_project(item: dict, job: BatchJob):
         proj = dict(proj)
         workspace_id = proj.get("workspace_id", "")
 
-        # Get project items
-        pitems = db.execute(
-            "SELECT * FROM project_items WHERE project_id = ? ORDER BY sort_order", (project_id,)
-        ).fetchall()
-        pitems = [dict(it) for it in pitems]
+        # ── Load all configs (same tables the frontend reads) ──
+        col_configs = _load_column_configs(db, workspace_id)
 
-        provider_id, model = _get_provider_model(db, workspace_id, pitems)
-        if not provider_id or not model:
-            _log(item, "  注意: 未找到启用的 LLM 提供商，使用默认设置")
+        # Step 1 configs: col1 with sort_order 0=text, 1=video, 2=file
+        step1_configs: dict[str, dict] = {}
+        for c in col_configs:
+            if c["column_id"] == "col1":
+                key = {0: "text", 1: "video", 2: "file"}.get(c["sort_order"], "")
+                if key:
+                    step1_configs[key] = {"prompt": c["prompt"] or "", "skill": c["skill"] or ""}
 
-        # Determine which step1 data sources to use (filter by selected sub)
-        step1_subs_flat: list[str] = []
-        for s in steps_list:
-            if s[0] == "1":
-                step1_subs_flat = s[1]  # e.g. ["text"] or ["video"]
-                break
+        # Step 2 configs: col2 with sort_order 3=sop, 4=dao, 5=yanxi
+        step2_configs: dict[str, dict] = {}
+        for c in col_configs:
+            if c["column_id"] == "col2":
+                key = {3: "sop", 4: "dao", 5: "yanxi"}.get(c["sort_order"], "")
+                if key:
+                    step2_configs[key] = {"prompt": c["prompt"] or "", "skill": c["skill"] or ""}
+
+        # Step 4 configs: from speech_configs table
+        speech_configs = _load_speech_configs(db, workspace_id)
+        step4_configs: dict[str, dict] = {}
+        for sc in speech_configs:
+            key = {"文档演讲": "doc", "分析演讲": "analysis", "综合演讲": "comprehensive"}.get(sc["label"], "")
+            if key:
+                step4_configs[key] = {"prompt": sc["prompt"] or "", "skill": sc["skill"] or ""}
+
+        # Step name → source key mapping
+        _step2_to_source = {"sop": "step2_sop", "dao": "step2_daoshuyi", "yanxi": "step2_yanxi"}
         _step1_source_map = {"text": ("raw_text", "step1_text"), "video": ("raw_video", "step1_video"), "file": ("raw_file", "step1_file")}
+        _step1_label = {"text": "整理文字", "video": "整理视频", "file": "整理文件"}
 
-        # Determine which step1 sub is selected
-        step1_subs_flat: list[str] = []
-        for s in steps_list:
-            if s[0] == "1":
-                step1_subs_flat = s[1]
-                break
-
-        # Get ALL raw content (for Step 1 processing input)
+        # Get raw content map
         raw_rows = db.execute(
             "SELECT step_name, content FROM step_results WHERE project_id=? AND step_name IN ('raw_text','raw_video','raw_file')",
             (project_id,)
@@ -261,7 +267,7 @@ async def _execute_project(item: dict, job: BatchJob):
             if r[1]:
                 raw_content_map[r[0]] = r[1]
 
-        # Get existing step1 content (pre-processed, as fallback for Step 2)
+        # Get existing step1 content
         step1_rows = db.execute(
             "SELECT step_name, content FROM step_results WHERE project_id=? AND step_name IN ('step1_text','step1_video','step1_file')",
             (project_id,)
@@ -271,76 +277,72 @@ async def _execute_project(item: dict, job: BatchJob):
             if r[1]:
                 step1_content_map[r[0]] = r[1]
 
-        # Build source text for Step 2 — prefer step1_xxx, fall back to raw
-        source_parts: list[str] = []
-        for raw_key, step1_key in _step1_source_map.values():
-            content = step1_content_map.get(step1_key) or raw_content_map.get(raw_key, "")
-            if content:
-                source_parts.append(content)
-        raw_text = "\n\n".join(source_parts)
+        # Build combined source text for Step 2 (prefer step1 over raw)
+        def _build_source_text():
+            parts = []
+            for raw_key, step1_key in _step1_source_map.values():
+                content = step1_content_map.get(step1_key) or raw_content_map.get(raw_key, "")
+                if content:
+                    parts.append(content)
+            return "\n\n".join(parts)
 
-        # ── Step 1: Material Processing (LLM organize) ──
-        _stage1_prompts = {
-            "text": "请将用户输入的内容整理为标准文档格式。",
-            "video": "请根据视频相关内容提取完整信息，整理为标准文档。",
-            "file": "请从上传文件中提取完整内容，整理为标准文档格式。",
-        }
-        _stage1_skill = "## 文档标题\n**标题**：\n**分类**：\n**日期**：\n**来源**：\n\n### 一、基本信息\n| 序号 | 项目 | 内容 | 备注 |\n|------|------|------|------|\n| 1 | | | |\n\n### 二、主要内容\n| 序号 | 要点 | 详细说明 |\n|------|------|----------|\n| 1 | | |\n\n### 三、总结\n- **要点1**：\n- **要点2**："
+        raw_text = _build_source_text()
 
-        if step1_subs_flat:
+        # ── Step 1: Material Processing ──
+        step1_subs: list[str] = []
+        for s in steps_list:
+            if s[0] == "1":
+                step1_subs = s[1]
+                break
+
+        if step1_subs:
             _log(item, "开始第一步·素材整理")
-            step1_new_results: dict[str, str] = {}
 
-            for sub in step1_subs_flat:
+            for sub in step1_subs:
+                cfg = step1_configs.get(sub, {})
+                prompt = cfg.get("prompt") or "请将用户输入的内容整理为标准文档格式。"
+                skill = cfg.get("skill") or ""
                 raw_key, step1_key = _step1_source_map[sub]
                 raw_content = raw_content_map.get(raw_key, "")
-                sub_label = {"text": "整理文档", "video": "整理视频", "file": "整理文件"}.get(sub, sub)
+                label = _step1_label.get(sub, sub)
 
-                # Skip if already has step1 output
                 existing = step1_content_map.get(step1_key, "")
                 if existing:
-                    _log(item, f"  {sub_label} 已有结果，跳过整理")
+                    _log(item, f"  {label} 已有结果，跳过")
                     continue
 
                 if not raw_content:
-                    _log(item, f"  无原始素材({sub})，跳过整理")
+                    _log(item, f"  无原始素材({sub})，跳过{label}")
                     continue
+
+                # Per-source model: _model_s1_text, _model_s1_video, _model_s1_file
+                s1_model_key = f"_model_s1_{sub}"
+                provider_id, model = _get_provider_model(db, workspace_id, s1_model_key)
+                if not provider_id or not model:
+                    provider_id, model = _get_provider_model(db, workspace_id)
 
                 if not provider_id or not model:
-                    _log(item, f"  缺少 LLM 配置，跳过整理: {sub}")
+                    _log(item, f"  缺少 LLM 配置，跳过: {label}")
                     continue
 
-                _log(item, f"  正在批量{sub_label}")
+                _log(item, f"  正在{label}")
                 try:
-                    prompt = _stage1_prompts.get(sub, _stage1_prompts["text"])
+                    user_message = f"请将以下内容按指定格式整理：\n\n{raw_content}\n\n输出格式要求：\n{skill}" if skill else raw_content
                     result = await generate(
-                        provider_id=provider_id,
-                        model=model,
-                        system_prompt=prompt,
-                        user_message=f"请将以下内容按指定格式整理：\n\n{raw_content}\n\n输出格式要求：\n{_stage1_skill}",
-                        temperature=0.7,
+                        provider_id=provider_id, model=model,
+                        system_prompt=prompt, user_message=user_message, temperature=0.7,
                     )
                     db.execute(
-                        "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) "
-                        "VALUES (?, ?, ?, ?)",
+                        "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
                         (project_id, step1_key, result, "markdown"))
                     db.commit()
-                    step1_new_results[step1_key] = result
                     step1_content_map[step1_key] = result
-                    _log(item, f"  ✓ 整理完成 ({len(result)}字)")
+                    _log(item, f"  ✓ {label} 完成 ({len(result)}字)")
                 except Exception as e:
-                    _log(item, f"  ✗ 整理失败: {e}")
+                    _log(item, f"  ✗ {label} 失败: {e}")
                     raise
 
-            # Update source_text with newly processed step1 results for Step 2
-            if step1_new_results:
-                new_parts = []
-                for raw_key, step1_key in _step1_source_map.values():
-                    content = step1_content_map.get(step1_key) or raw_content_map.get(raw_key, "")
-                    if content:
-                        new_parts.append(content)
-                raw_text = "\n\n".join(new_parts)
-
+            raw_text = _build_source_text()
             _log(item, "第一步完成")
         else:
             _log(item, "未选择第一步，跳过")
@@ -349,77 +351,65 @@ async def _execute_project(item: dict, job: BatchJob):
             return
 
         # ── Step 2: Document Generation ──
-        step2_subs = [s[1] for s in steps_list if s[0] == "2"]
-        step2_results = {}
+        step2_subs_flat: list[str] = []
+        for s in steps_list:
+            if s[0] == "2":
+                step2_subs_flat = s[1]
+                break
 
-        if step2_subs and raw_text:
+        step2_results: dict[str, str] = {}
+
+        if step2_subs_flat and raw_text:
             _log(item, "开始第二步·文档生成")
-            for sub_group in step2_subs:
-                for sub in sub_group:
-                    info = _STEP2_SUB_MAP.get(sub)
-                    if not info:
-                        _log(item, f"  未知子步骤: {sub}，跳过")
-                        continue
 
-                    pi = _find_item(pitems, info)
-                    prompt_text = pi.get("prompt", "") if pi else ""
-                    item_name = pi.get("name", info.get("name_pat", sub)) if pi else info.get("name_pat", sub)
+            for sub in step2_subs_flat:
+                cfg = step2_configs.get(sub, {})
+                prompt = cfg.get("prompt") or "你是一个专业的内容创作助手。"
+                skill = cfg.get("skill") or ""
 
-                    # Determine step_name
-                    if sub == "sop":
-                        step_name = "step2_sop"
-                    elif sub == "dao":
-                        step_name = "step2_daoshuyi"
-                    elif sub == "yanxi":
-                        step_name = "step2_yanxi"
-                    else:
-                        step_name = f"step2_{sub}"
+                step_name_map = {"sop": "step2_sop", "dao": "step2_daoshuyi", "yanxi": "step2_yanxi"}
+                step_name = step_name_map.get(sub, f"step2_{sub}")
+                label_map = {"sop": "标准文档", "dao": "分析文档", "yanxi": "综合文档"}
+                label = label_map.get(sub, sub)
 
-                    # Skip if already has output
-                    existing = db.execute(
-                        "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
-                        (project_id, step_name)
-                    ).fetchone()
-                    if existing and existing[0]:
-                        _log(item, f"  {item_name} 已有结果，跳过")
-                        step2_results[sub] = existing[0]
-                        continue
+                existing = db.execute(
+                    "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                    (project_id, step_name)
+                ).fetchone()
+                if existing and existing[0]:
+                    _log(item, f"  {label} 已有结果，跳过")
+                    step2_results[sub] = existing[0]
+                    continue
 
-                    if not provider_id or not model:
-                        _log(item, f"  缺少 LLM 配置，跳过: {item_name}")
-                        continue
+                # Get model for this sub
+                model_key = f"_model_s2_{sub}"
+                provider_id, model = _get_provider_model(db, workspace_id, model_key)
+                if not provider_id or not model:
+                    provider_id, model = _get_provider_model(db, workspace_id)
 
-                    _log(item, f"  正在生成: {item_name}")
-                    try:
-                        system_prompt = prompt_text or "你是一个专业的内容创作助手。"
-                        user_message = f"""请根据以下素材内容，生成一份完整的文档。
+                if not provider_id or not model:
+                    _log(item, f"  缺少 LLM 配置，跳过: {label}")
+                    continue
 
-素材内容：
-{raw_text}
-
-请生成结构清晰、内容丰富的文档。"""
-                        result = await generate(
-                            provider_id=provider_id,
-                            model=model,
-                            system_prompt=system_prompt,
-                            user_message=user_message,
-                            temperature=0.7,
-                        )
-
-                        # Save to step_results
-                        db.execute(
-                            "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) "
-                            "VALUES (?, ?, ?, ?)",
-                            (project_id, step_name, result, "markdown"))
-                        db.commit()
-                        step2_results[sub] = result
-                        _log(item, f"  ✓ {item_name} 生成完成 ({len(result)}字)")
-                    except Exception as e:
-                        _log(item, f"  ✗ {item_name} 生成失败: {e}")
-                        raise
+                _log(item, f"  正在生成: {label}")
+                try:
+                    user_message = f"请将以下内容按指定格式整理：\n\n{raw_text}\n\n输出格式要求：\n{skill}" if skill else raw_text
+                    result = await generate(
+                        provider_id=provider_id, model=model,
+                        system_prompt=prompt, user_message=user_message, temperature=0.7,
+                    )
+                    db.execute(
+                        "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
+                        (project_id, step_name, result, "markdown"))
+                    db.commit()
+                    step2_results[sub] = result
+                    _log(item, f"  ✓ {label} 生成完成 ({len(result)}字)")
+                except Exception as e:
+                    _log(item, f"  ✗ {label} 生成失败: {e}")
+                    raise
 
             _log(item, "第二步完成")
-        elif step2_subs and not raw_text:
+        elif step2_subs_flat and not raw_text:
             _log(item, "无素材内容，跳过第二步")
         else:
             _log(item, "未选择第二步，跳过")
@@ -428,81 +418,170 @@ async def _execute_project(item: dict, job: BatchJob):
             return
 
         # ── Step 3: PPT/HTML Generation ──
-        step3_subs = [s[1] for s in steps_list if s[0] == "3"]
+        step3_subs_flat: list[str] = []
+        for s in steps_list:
+            if s[0] == "3":
+                step3_subs_flat = s[1]
+                break
 
-        if step3_subs and raw_text:
+        if step3_subs_flat:
             _log(item, "开始第三步·课件输出")
 
-            # Build context from step2 results
-            s2_context = ""
-            for k, v in step2_results.items():
-                s2_context += f"\n\n=== {k} ===\n{v[:2000]}"
-            context = raw_text + s2_context
+            _step3_map = {
+                "doc-ppt": {"col": "col3", "step2": "sop", "step_name": "step3_col1", "label": "文档课件", "stage_type": "sop"},
+                "analysis-ppt": {"col": "col4", "step2": "dao", "step_name": "step3_col2", "label": "分析PPT", "stage_type": "daoPpt"},
+                "comprehensive-ppt": {"col": "col5", "step2": "yanxi", "step_name": "step3_col3", "label": "综合PPT", "stage_type": "yanxiPpt"},
+            }
 
-            for sub_group in step3_subs:
-                for sub in sub_group:
-                    info = _STEP3_SUB_MAP.get(sub)
-                    if not info:
-                        _log(item, f"  未知子步骤: {sub}，跳过")
-                        continue
+            for sub in step3_subs_flat:
+                info = _step3_map.get(sub)
+                if not info:
+                    _log(item, f"  未知子步骤: {sub}，跳过")
+                    continue
 
-                    pi = _find_item(pitems, info)
-                    prompt_text = pi.get("prompt", "") if pi else ""
-                    item_name = pi.get("name", info.get("name_pat", sub)) if pi else info.get("name_pat", sub)
-
-                    # Determine step_name
-                    if sub == "doc-ppt":
-                        step_name = "step3_col1"
-                    elif sub == "analysis-ppt":
-                        step_name = "step3_col2"
-                    elif sub == "comprehensive-ppt":
-                        step_name = "step3_col3"
-                    else:
-                        step_name = f"step3_{sub}"
-
-                    # Skip if already has output
-                    existing = db.execute(
+                # Get source from corresponding Step 2 document
+                step2_sub = info["step2"]
+                source_content = step2_results.get(step2_sub) or ""
+                if not source_content:
+                    source_content = db.execute(
                         "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
-                        (project_id, step_name)
+                        (project_id, f"step2_{step2_sub}")
                     ).fetchone()
-                    if existing and existing[0]:
-                        _log(item, f"  {item_name} 已有结果，跳过")
-                        continue
+                    source_content = source_content[0] if source_content else ""
 
-                    if not provider_id or not model:
-                        _log(item, f"  缺少 LLM 配置，跳过: {item_name}")
-                        continue
+                if not source_content:
+                    _log(item, f"  {info['label']} 缺少源文档(step2_{step2_sub})，跳过")
+                    continue
 
-                    _log(item, f"  正在生成: {item_name}")
-                    try:
-                        system_prompt = prompt_text or "你是一个专业的PPT课件设计师。"
-                        user_message = f"""请根据以下内容生成一份PPT课件。
+                # Get prompt/skill from column_configs col3/col4/col5
+                col_prompt = ""
+                col_skill = ""
+                for c in col_configs:
+                    if c["column_id"] == info["col"]:
+                        col_prompt = c["prompt"] or ""
+                        col_skill = c["skill"] or ""
+                        break
 
-内容素材：
-{context[:8000]}
+                # Get model for this step3 sub (keys match frontend: _model_step3_sop, _model_step3_dao_ppt, _model_step3_yan_ppt)
+                _step3_model_keys = {"sop": "_model_step3_sop", "daoPpt": "_model_step3_dao_ppt", "yanxiPpt": "_model_step3_yan_ppt"}
+                model_key = _step3_model_keys.get(info["stage_type"], "_model_step3_sop")
+                provider_id, model = _get_provider_model(db, workspace_id, model_key)
+                if not provider_id or not model:
+                    provider_id, model = _get_provider_model(db, workspace_id)
 
-请生成适合PPT展示的结构化内容，包括标题页、目录、各章节内容和总结页。"""
-                        result = await generate(
-                            provider_id=provider_id,
-                            model=model,
-                            system_prompt=system_prompt,
-                            user_message=user_message,
-                            temperature=0.7,
+                if not provider_id or not model:
+                    _log(item, f"  缺少 LLM 配置，跳过: {info['label']}")
+                    continue
+
+                # Check existing
+                existing = db.execute(
+                    "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                    (project_id, info["step_name"])
+                ).fetchone()
+                if existing and existing[0]:
+                    _log(item, f"  {info['label']} 已有结果，跳过")
+                    continue
+
+                _log(item, f"  正在生成: {info['label']}")
+
+                try:
+                    # Find a style template
+                    tmpl_row = db.execute(
+                        "SELECT id FROM templates WHERE type='style' AND enabled=1 ORDER BY is_default DESC LIMIT 1"
+                    ).fetchone()
+                    template_id = tmpl_row[0] if tmpl_row else None
+
+                    if template_id:
+                        from services.ppt_service import _generate_outline_only, generate_ppt
+
+                        # Load template rules for outline generation
+                        rules = {}
+                        tmpl_rules_row = db.execute(
+                            "SELECT rules FROM templates WHERE id=?", (template_id,)
+                        ).fetchone()
+                        if tmpl_rules_row and tmpl_rules_row[0]:
+                            try:
+                                template_rules = json.loads(tmpl_rules_row[0])
+                                for key in ("style_id", "layout_types", "page_rhythm", "design_principles"):
+                                    if key in template_rules:
+                                        rules[key] = template_rules[key]
+                            except Exception:
+                                pass
+
+                        # Generate outline
+                        _log(item, f"    生成大纲中...")
+                        outline_json, outline_text = _generate_outline_only(
+                            provider_id, model, rules, source_content,
+                            system_prompt=col_prompt, skill_template=col_skill,
+                            temperature=0.3, project_id=project_id, column_id=info["col"],
                         )
 
+                        if outline_json:
+                            db.execute(
+                                "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
+                                (project_id, info["step_name"], outline_text or "", "markdown"))
+                            db.execute(
+                                "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
+                                (project_id, f"_ppt_outline_json_{info['step_name']}", json.dumps(outline_json, ensure_ascii=False), "json"))
+                            db.commit()
+                            _log(item, f"    大纲已生成: {len(outline_json)} 页")
+
+                            # Generate PPT
+                            _log(item, f"    生成PPT中...")
+                            from database import get_db as _get_db
+                            output_dir = None
+                            try:
+                                from app import resolve_project_storage
+                                output_dir = resolve_project_storage(project_id)
+                            except Exception:
+                                pass
+
+                            filepath, generated_slides = generate_ppt(
+                                source_content, template_id, None, output_dir,
+                                provider_id, model, outline_json,
+                                project_name=proj.get("name", ""),
+                                column_id=info["col"],
+                                color_scheme="deep-blue", temperature=0.3,
+                                project_id=project_id,
+                            )
+
+                            if generated_slides is not None:
+                                plan_data = {
+                                    "slides": generated_slides,
+                                    "filename": filepath or "",
+                                    "templateId": template_id,
+                                    "format": "svg",
+                                }
+                                db.execute(
+                                    "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
+                                    (project_id, f"_ppt_plan_{info['step_name']}", json.dumps(plan_data, ensure_ascii=False), "json"))
+                                db.commit()
+                                _log(item, f"  ✓ {info['label']} 生成完成 ({len(generated_slides)} 页)")
+                            else:
+                                _log(item, f"  ✓ {info['label']} 大纲已生成 (无slide_plan)")
+                        else:
+                            _log(item, f"  ✗ {info['label']} 大纲生成失败：返回为空")
+                            raise Exception(f"{info['label']} 大纲生成失败")
+                    else:
+                        # No template — generate as markdown fallback
+                        _log(item, f"    无PPT模板，使用文本生成")
+                        result = await generate(
+                            provider_id=provider_id, model=model,
+                            system_prompt=col_prompt or "你是一个专业的PPT课件设计师。",
+                            user_message=f"请根据以下内容生成一份PPT课件。\n\n内容素材：\n{source_content[:8000]}\n\n请生成适合PPT展示的结构化内容。",
+                            temperature=0.7,
+                        )
                         db.execute(
-                            "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) "
-                            "VALUES (?, ?, ?, ?)",
-                            (project_id, step_name, result, "markdown"))
+                            "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
+                            (project_id, info["step_name"], result, "markdown"))
                         db.commit()
-                        _log(item, f"  ✓ {item_name} 生成完成 ({len(result)}字)")
-                    except Exception as e:
-                        _log(item, f"  ✗ {item_name} 生成失败: {e}")
-                        raise
+                        _log(item, f"  ✓ {info['label']} 生成完成 ({len(result)}字)")
+
+                except Exception as e:
+                    _log(item, f"  ✗ {info['label']} 生成失败: {e}")
+                    raise
 
             _log(item, "第三步完成")
-        elif step3_subs and not raw_text:
-            _log(item, "无素材内容，跳过第三步")
         else:
             _log(item, "未选择第三步，跳过")
 
@@ -510,20 +589,15 @@ async def _execute_project(item: dict, job: BatchJob):
             return
 
         # ── Step 4: Speech Generation ──
-        # Payload format: ["4", sourceSub, [subs]]
-        #   sourceSub: "sop" | "dao" | "yanxi"  (Step 2 document types)
-        #   subs: ["speech-script"]
         step4_entries = [s for s in steps_list if s[0] == "4"]
-        _step2_to_source = {"sop": "step2_sop", "dao": "step2_daoshuyi", "yanxi": "step2_yanxi"}
 
         if step4_entries:
             _log(item, "开始第四步·演讲课件")
 
             for entry in step4_entries:
-                source_sub = entry[1]   # e.g. "sop"
-                subs = entry[2]          # e.g. ["speech-script"]
+                source_sub = entry[1]   # "sop" | "dao" | "yanxi"
+                subs = entry[2]          # ["speech-script"]
 
-                # Fetch the corresponding Step 2 document as speech source
                 step2_name = _step2_to_source.get(source_sub, "step2_sop")
                 step2_row = db.execute(
                     "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
@@ -534,53 +608,50 @@ async def _execute_project(item: dict, job: BatchJob):
                 source_label = {"sop": "文档演讲", "dao": "分析演讲", "yanxi": "综合演讲"}.get(source_sub, source_sub)
                 _log(item, f"  演讲来源: {source_label}")
 
+                # Map source_sub to speech_config key
+                speech_key = {"sop": "doc", "dao": "analysis", "yanxi": "comprehensive"}.get(source_sub, "doc")
+                cfg = step4_configs.get(speech_key, {})
+                prompt = cfg.get("prompt") or "请根据以下内容生成演讲稿，风格亲切自然。"
+                skill = cfg.get("skill") or ""
+
                 for sub in subs:
                     if sub == "speech-script":
-                        info = _STEP4_SUB_MAP.get(sub, {})
-                        item_name = info.get("name_pat", "演讲文案")
+                        label = "演讲文案"
 
-                        # Skip if already has output
                         existing = db.execute(
                             "SELECT content FROM step_results WHERE project_id=? AND step_name='step4_speech_script'",
                             (project_id,)
                         ).fetchone()
                         if existing and existing[0]:
-                            _log(item, f"  {item_name} 已有结果，跳过")
+                            _log(item, f"  {label} 已有结果，跳过")
                             continue
+
+                        # Get model for Step 4
+                        model_key = f"_model_s4_speech_{speech_key}"
+                        provider_id, model = _get_provider_model(db, workspace_id, model_key)
+                        if not provider_id or not model:
+                            provider_id, model = _get_provider_model(db, workspace_id)
 
                         if not provider_id or not model:
-                            _log(item, f"  缺少 LLM 配置，跳过: {item_name}")
+                            _log(item, f"  缺少 LLM 配置，跳过: {label}")
                             continue
 
-                        _log(item, f"  正在生成: {item_name}")
+                        _log(item, f"  正在生成: {label}")
                         try:
+                            user_message = f"请将以下内容按指定格式生成演讲稿：\n\n{speech_source[:6000]}\n\n输出格式要求：\n{skill}" if skill else speech_source[:6000]
                             result = await generate(
-                                provider_id=provider_id,
-                                model=model,
-                                system_prompt="你是一个专业的演讲稿撰写人。请生成适合口播的演讲文案，自然流畅，有感染力。",
-                                user_message=f"""请根据以下内容，生成一份口播演讲文案：
-
-{speech_source[:6000]}
-
-要求：
-1. 语言口语化，适合朗读
-2. 段落分明，每段200-300字
-3. 有开场白和结束语
-4. 总字数控制在1500字以内""",
-                                temperature=0.7,
+                                provider_id=provider_id, model=model,
+                                system_prompt=prompt, user_message=user_message, temperature=0.7,
                             )
-
                             db.execute(
-                                "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) "
-                                "VALUES (?, ?, ?, ?)",
+                                "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
                                 (project_id, "step4_speech_script", result, "markdown"))
                             db.commit()
-                            speech_source = result  # Chain to TTS if selected
-                            _log(item, f"  ✓ {item_name} 生成完成 ({len(result)}字)")
+                            speech_source = result
+                            _log(item, f"  ✓ {label} 生成完成 ({len(result)}字)")
                         except Exception as e:
-                            _log(item, f"  ✗ {item_name} 生成失败: {e}")
+                            _log(item, f"  ✗ {label} 生成失败: {e}")
                             raise
-
 
             _log(item, "第四步完成")
         else:
@@ -596,7 +667,6 @@ def _log(item: dict, msg: str):
 
 
 def _update_db(job: BatchJob):
-    """Persist batch job status to database."""
     try:
         from database import get_db
         db = get_db()
@@ -620,7 +690,6 @@ def _update_db(job: BatchJob):
 
 
 def _update_item_db(batch_id: str, item: dict):
-    """Persist batch item status to database."""
     try:
         from database import get_db
         db = get_db()
@@ -647,7 +716,6 @@ def _update_item_db(batch_id: str, item: dict):
 
 
 def get_batch_status(batch_id: str) -> dict | None:
-    """Get current status of a batch job."""
     with _batch_lock:
         job = _active_batches.get(batch_id)
         if job:
@@ -684,7 +752,6 @@ def get_batch_status(batch_id: str) -> dict | None:
 
 
 def cancel_batch(batch_id: str) -> bool:
-    """Cancel a pending batch."""
     with _batch_lock:
         job = _active_batches.get(batch_id)
         if job and job.status in ("pending", "running"):
