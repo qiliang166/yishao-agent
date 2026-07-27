@@ -8704,10 +8704,7 @@ def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
 @app.get("/api/batch/project-batch/{project_id}")
 def api_project_batch_status(project_id: str, user=require_perm("project.view_own")):
     """Check if a project is being processed by an active batch."""
-    db = get_db()
-    proj = db.execute("SELECT id, workspace_id FROM projects WHERE id=?", (project_id,)).fetchone()
-    if not proj:
-        raise HTTPException(404, "项目不存在")
+    verify_project_access(project_id, user)
     from batch.scheduler import get_project_active_batch
     info = get_project_active_batch(project_id)
     return {"in_batch": info is not None, "batch_info": info}
