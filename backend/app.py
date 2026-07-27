@@ -8542,18 +8542,23 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
             ).fetchone()[0]
             steps_status["step2"] = s2 > 0
 
-            # Step 3: Check for PPT outputs
+            # Step 3: Check for PPT outputs (matching ProjectPage.tsx step names)
             s3 = db.execute(
-                "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name IN ('step3_col1','step3_col2','step3_col3','ppt_output')",
+                "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name IN ('step3_sop_doc','step3_dao_ppt','step3_yan_ppt')",
                 (pid,)
             ).fetchone()[0]
             steps_status["step3"] = s3 > 0
 
-            # Step 4: TTS history
+            # Step 4: Check speech outputs
             s4 = db.execute(
-                "SELECT COUNT(*) FROM tts_history WHERE project_id=?",
+                "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name IN ('step4_speech_doc','step4_speech_analysis','step4_speech_comprehensive')",
                 (pid,)
             ).fetchone()[0]
+            if s4 == 0:
+                s4 = db.execute(
+                    "SELECT COUNT(*) FROM tts_history WHERE project_id=?",
+                    (pid,)
+                ).fetchone()[0]
             steps_status["step4"] = s4 > 0
 
             r["steps_status"] = steps_status
@@ -8563,8 +8568,8 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
             for sub_key in ("raw_video", "raw_text", "raw_file",
                             "step1_video", "step1_text", "step1_file",
                             "step2_sop", "step2_daoshuyi", "step2_yanxi",
-                            "step3_col1", "step3_col2", "step3_col3",
-                            "step4_speech_script"):
+                            "step3_sop_doc", "step3_dao_ppt", "step3_yan_ppt",
+                            "step4_speech_doc", "step4_speech_analysis", "step4_speech_comprehensive"):
                 cnt = db.execute(
                     "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name=?",
                     (pid, sub_key)

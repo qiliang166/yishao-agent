@@ -29,8 +29,14 @@ const STEP_DEFS = [
 const SUB_STEP_NAMES: Record<string, string> = {
   'video': 'step1_video', 'text': 'step1_text', 'file': 'step1_file',
   'sop': 'step2_sop', 'dao': 'step2_daoshuyi', 'yanxi': 'step2_yanxi',
-  'doc-ppt': 'step3_col1', 'analysis-ppt': 'step3_col2', 'comprehensive-ppt': 'step3_col3',
-  'speech-script': 'step4_speech_script',
+  'doc-ppt': 'step3_sop_doc', 'analysis-ppt': 'step3_dao_ppt', 'comprehensive-ppt': 'step3_yan_ppt',
+}
+
+// Step 4 speech step names per source (matching ProjectPage.tsx)
+const STEP4_SPEECH_NAMES: Record<string, string> = {
+  'sop': 'step4_speech_doc',
+  'dao': 'step4_speech_analysis',
+  'yanxi': 'step4_speech_comprehensive',
 }
 
 // Raw source keys for Step 1 radio availability (input box must have content)
@@ -412,7 +418,10 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                   )
                                 })}
                                 {step4Src && def.subs.map((sub, i) => {
-                                  const hasData = subHasData(p, def.key, sub)
+                                  const hasData = (() => {
+                                    const name = STEP4_SPEECH_NAMES[step4Src] || ''
+                                    return name ? !!(p.sub_steps?.[name]) : false
+                                  })()
                                   const checked = curSubs.includes(sub)
                                   return (
                                     <label key={sub} style={{

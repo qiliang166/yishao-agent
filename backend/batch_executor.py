@@ -193,10 +193,15 @@ def _get_provider_model(db, workspace_id: str, step_name: str = "_model_s2_sop")
 
     if not model:
         row = db.execute(
-            "SELECT model FROM llm_providers WHERE is_enabled=1 ORDER BY created_at LIMIT 1"
+            "SELECT models FROM llm_providers WHERE is_enabled=1 ORDER BY created_at LIMIT 1"
         ).fetchone()
-        if row:
-            model = row[0]
+        if row and row[0]:
+            try:
+                models_list = json.loads(row[0])
+                if models_list:
+                    model = models_list[0]
+            except Exception:
+                pass
 
     if not provider_id:
         row = db.execute(
@@ -428,9 +433,9 @@ async def _execute_project(item: dict, job: BatchJob):
             _log(item, "开始第三步·课件输出")
 
             _step3_map = {
-                "doc-ppt": {"col": "col3", "step2": "sop", "step_name": "step3_col1", "label": "文档课件", "stage_type": "sop"},
-                "analysis-ppt": {"col": "col4", "step2": "dao", "step_name": "step3_col2", "label": "分析PPT", "stage_type": "daoPpt"},
-                "comprehensive-ppt": {"col": "col5", "step2": "yanxi", "step_name": "step3_col3", "label": "综合PPT", "stage_type": "yanxiPpt"},
+                "doc-ppt": {"col": "col3", "step2": "sop", "step_name": "step3_sop_doc", "label": "文档课件", "stage_type": "sop"},
+                "analysis-ppt": {"col": "col4", "step2": "dao", "step_name": "step3_dao_ppt", "label": "分析PPT", "stage_type": "daoPpt"},
+                "comprehensive-ppt": {"col": "col5", "step2": "yanxi", "step_name": "step3_yan_ppt", "label": "综合PPT", "stage_type": "yanxiPpt"},
             }
 
             for sub in step3_subs_flat:
@@ -614,13 +619,17 @@ async def _execute_project(item: dict, job: BatchJob):
                 prompt = cfg.get("prompt") or "请根据以下内容生成演讲稿，风格亲切自然。"
                 skill = cfg.get("skill") or ""
 
+                # Map source to speech step name (matching ProjectPage.tsx)
+                _step4_speech_names = {"sop": "step4_speech_doc", "dao": "step4_speech_analysis", "yanxi": "step4_speech_comprehensive"}
+                step4_speech_name = _step4_speech_names.get(source_sub, "step4_speech_doc")
+
                 for sub in subs:
                     if sub == "speech-script":
                         label = "演讲文案"
 
                         existing = db.execute(
-                            "SELECT content FROM step_results WHERE project_id=? AND step_name='step4_speech_script'",
-                            (project_id,)
+                            "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                            (project_id, step4_speech_name)
                         ).fetchone()
                         if existing and existing[0]:
                             _log(item, f"  {label} 已有结果，跳过")
@@ -645,7 +654,7 @@ async def _execute_project(item: dict, job: BatchJob):
                             )
                             db.execute(
                                 "INSERT OR REPLACE INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
-                                (project_id, "step4_speech_script", result, "markdown"))
+                                (project_id, step4_speech_name, result, "markdown"))
                             db.commit()
                             speech_source = result
                             _log(item, f"  ✓ {label} 生成完成 ({len(result)}字)")
