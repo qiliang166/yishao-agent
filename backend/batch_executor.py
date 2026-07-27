@@ -184,7 +184,12 @@ def _get_provider_model(db, workspace_id: str, items: list[dict]) -> tuple:
             (workspace_id,)
         ).fetchone()
         if row:
-            model = row[0]
+            combined = row[0]
+            # Format may be "provider_id:model" or just "model"
+            if ":" in combined:
+                provider_id, model = combined.split(":", 1)
+            else:
+                model = combined
     except Exception:
         pass
 
