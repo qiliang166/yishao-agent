@@ -159,15 +159,15 @@ def get_project_active_batch(project_id: str) -> dict | None:
             ).fetchall()
             for br in batch_rows:
                 row = db.execute(
-                    "SELECT project_id, project_name, status FROM batch_job_items WHERE batch_id=? AND project_id=? AND status NOT IN ('completed','failed')",
+                    "SELECT project_id, status FROM batch_job_items WHERE batch_id=? AND project_id=? AND status NOT IN ('completed','failed')",
                     (br[0], project_id),
                 ).fetchone()
                 if row:
                     return {
                         "batch_id": br[0],
                         "batch_status": br[1],
-                        "project_status": row[2],
-                        "project_name": row[1],
+                        "project_status": row[1],
+                        "project_name": "",
                         "total_projects": br[2] or 0,
                     }
         finally:
