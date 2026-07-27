@@ -8707,7 +8707,7 @@ def api_batch_status(batch_id: str):
 
 
 @app.get("/api/batch/active")
-def api_batch_active():
+def api_batch_active(user=require_perm("project.view_own")):
     """List active (pending/running) batches."""
     from batch.scheduler import get_active_batches
     return {"batches": get_active_batches()}
