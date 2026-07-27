@@ -153,7 +153,7 @@ def get_project_active_batch(project_id: str) -> dict | None:
         db = get_db()
         try:
             batch_rows = db.execute(
-                "SELECT id, status, total_count FROM batch_jobs WHERE status IN ('pending','running')"
+                "SELECT id, status, total_count FROM batch_jobs WHERE status IN ('pending','running','stopped')"
             ).fetchall()
             for br in batch_rows:
                 row = db.execute(
