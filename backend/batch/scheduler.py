@@ -646,11 +646,23 @@ def _execute_project(item: dict, job: BatchJob):
                 if row and row[0]:
                     existing_step4[tab] = row[0]
 
-        # Template for step3
-        tmpl_row = db.execute(
+        # Per-tab template: read saved selection from step_results, fall back to DB default
+        _tmpl_step_keys = {"sop": "_tmpl_step3_sop", "dao": "_tmpl_step3_dao_ppt", "yanxi": "_tmpl_step3_yan_ppt"}
+        _tmpl_default_row = db.execute(
             "SELECT id FROM templates WHERE type='style' AND enabled=1 ORDER BY is_default DESC LIMIT 1"
         ).fetchone()
-        template_id = tmpl_row[0] if tmpl_row else ""
+        _tmpl_default_id = _tmpl_default_row[0] if _tmpl_default_row else ""
+        _per_tab_template: dict[str, str] = {}
+        for tab in all_tabs:
+            key = _tmpl_step_keys.get(tab, "")
+            if key:
+                row = db.execute(
+                    "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                    (project_id, key),
+                ).fetchone()
+                _per_tab_template[tab] = row[0] if row and row[0] else _tmpl_default_id
+            else:
+                _per_tab_template[tab] = _tmpl_default_id
 
         # ── Build tab pipeline tasks ──
         tab_tasks: dict[str, dict] = {}
@@ -714,7 +726,7 @@ def _execute_project(item: dict, job: BatchJob):
                             "info": s3_info,
                             "provider_id": provider_id,
                             "model": model,
-                            "template_id": template_id,
+                            "template_id": _per_tab_template.get(tab, _tmpl_default_id),
                             "col_prompt": col_prompt,
                         }
             else:
