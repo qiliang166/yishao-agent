@@ -78,6 +78,8 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [catFilter, setCatFilter] = useState('')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set())
   // selectedSteps: { [projectId]: { [stepKey]: string[] } }
@@ -136,12 +138,19 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
     projects.filter(p => p.category_name).map(p => [p.category_name, p.category_id])
   ).entries()).map(([name, id]) => ({ id, name }))
 
+  // Reset page when filters change
+  useEffect(() => { setPage(1) }, [search, catFilter, pageSize])
+
   // Filter
   const filtered = projects.filter(p => {
     if (search && !p.name.includes(search)) return false
     if (catFilter && p.category_id !== catFilter) return false
     return true
   })
+  const effectivePageSize = pageSize || filtered.length
+  const totalPages = Math.max(1, Math.ceil(filtered.length / effectivePageSize))
+  const safePage = Math.min(page, totalPages)
+  const paged = filtered.slice((safePage - 1) * effectivePageSize, safePage * effectivePageSize)
 
   const toggleExpand = (pid: string) => {
     setExpanded(prev => {
@@ -388,7 +397,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
         <p style={{ padding: 20, color: 'var(--text-secondary)', fontSize: 12 }}>加载中...</p>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          {filtered.map(p => {
+          {paged.map(p => {
             const isExpanded = expanded.has(p.id)
             const isSelected = selectedProjects.has(p.id)
             const projSteps = selectedSteps[p.id] || {}
@@ -549,6 +558,25 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
               暂无项目
             </div>
           )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {filtered.length > 20 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
+          <button className="btn" style={{ padding: '4px 12px', fontSize: 11 }}
+            disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>上一页</button>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            {safePage} / {totalPages}（共 {filtered.length} 个项目）
+          </span>
+          <button className="btn" style={{ padding: '4px 12px', fontSize: 11 }}
+            disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>下一页</button>
+          <select className="form-input" style={{ fontSize: 11, width: 70, marginLeft: 8 }}
+            value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
+            <option value={20}>20条</option>
+            <option value={50}>50条</option>
+            <option value={0}>全部</option>
+          </select>
         </div>
       )}
 
