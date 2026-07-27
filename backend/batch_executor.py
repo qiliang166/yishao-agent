@@ -506,27 +506,27 @@ async def _execute_project(item: dict, job: BatchJob):
 
         # ── Step 4: Speech Generation ──
         # Payload format: ["4", sourceSub, [subs]]
-        #   sourceSub: "doc-ppt" | "analysis-ppt" | "comprehensive-ppt"
+        #   sourceSub: "sop" | "dao" | "yanxi"  (Step 2 document types)
         #   subs: ["speech-script"]
         step4_entries = [s for s in steps_list if s[0] == "4"]
-        _step3_to_source = {"doc-ppt": "step3_col1", "analysis-ppt": "step3_col2", "comprehensive-ppt": "step3_col3"}
+        _step2_to_source = {"sop": "step2_sop", "dao": "step2_daoshuyi", "yanxi": "step2_yanxi"}
 
         if step4_entries:
             _log(item, "开始第四步·演讲课件")
 
             for entry in step4_entries:
-                source_sub = entry[1]   # e.g. "doc-ppt"
+                source_sub = entry[1]   # e.g. "sop"
                 subs = entry[2]          # e.g. ["speech-script"]
 
-                # Fetch the corresponding Step 3 output as speech source
-                step3_name = _step3_to_source.get(source_sub, "step3_col1")
-                step3_row = db.execute(
+                # Fetch the corresponding Step 2 document as speech source
+                step2_name = _step2_to_source.get(source_sub, "step2_sop")
+                step2_row = db.execute(
                     "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
-                    (project_id, step3_name)
+                    (project_id, step2_name)
                 ).fetchone()
-                speech_source = step3_row[0] if step3_row else raw_text
+                speech_source = step2_row[0] if step2_row else raw_text
 
-                source_label = {"doc-ppt": "文档演讲", "analysis-ppt": "分析演讲", "comprehensive-ppt": "综合演讲"}.get(source_sub, source_sub)
+                source_label = {"sop": "文档演讲", "dao": "分析演讲", "yanxi": "综合演讲"}.get(source_sub, source_sub)
                 _log(item, f"  演讲来源: {source_label}")
 
                 for sub in subs:

@@ -45,11 +45,11 @@ const STEP2_TO_STEP3: Record<string, string> = {
   'yanxi': 'comprehensive-ppt',
 }
 
-// Step 3 subs for Step 4 source selector
-const STEP3_SUBS = [
-  { key: 'doc-ppt', label: '文档演讲' },
-  { key: 'analysis-ppt', label: '分析演讲' },
-  { key: 'comprehensive-ppt', label: '综合演讲' },
+// Step 2 subs for Step 4 source selector (speech based on documents, not PPTs)
+const STEP4_SOURCES = [
+  { key: 'sop', label: '文档演讲' },
+  { key: 'dao', label: '分析演讲' },
+  { key: 'yanxi', label: '综合演讲' },
 ]
 
 interface BatchStatus {
@@ -77,7 +77,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   // selectedSteps: { [projectId]: { [stepKey]: string[] } }
   // For step1: array has exactly one element (the selected source)
   const [selectedSteps, setSelectedSteps] = useState<Record<string, Record<string, string[]>>>({})
-  // step4Source: { [projectId]: string } — which step3 output to use as source
+  // step4Source: { [projectId]: string } — which step2 doc to use as speech source
   const [step4Source, setStep4Source] = useState<Record<string, string>>({})
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
@@ -391,23 +391,23 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                 <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
                                   选择课件来源：
                                 </span>
-                                {STEP3_SUBS.filter(s3 => {
-                                  const step3Subs = projSteps['step3'] || []
-                                  return step3Subs.includes(s3.key)
-                                }).map(s3 => {
-                                  const s3HasData = subHasData(p, 'step3', s3.key)
+                                {STEP4_SOURCES.filter(s2 => {
+                                  const step2Subs = projSteps['step2'] || []
+                                  return step2Subs.includes(s2.key)
+                                }).map(s2 => {
+                                  const s2HasData = subHasData(p, 'step2', s2.key)
                                   return (
-                                    <label key={s3.key} style={{
+                                    <label key={s2.key} style={{
                                       marginRight: 12, fontSize: 10, cursor: 'pointer',
-                                      color: step4Src === s3.key ? 'var(--primary)' : 'var(--text-secondary)',
-                                      fontWeight: step4Src === s3.key ? 600 : 400,
+                                      color: step4Src === s2.key ? 'var(--primary)' : 'var(--text-secondary)',
+                                      fontWeight: step4Src === s2.key ? 600 : 400,
                                     }}>
                                       <input type="radio" name={`step4src-${p.id}`}
-                                        checked={step4Src === s3.key}
-                                        onChange={() => setStep4SourceSub(p.id, s3.key)}
+                                        checked={step4Src === s2.key}
+                                        onChange={() => setStep4SourceSub(p.id, s2.key)}
                                         style={{ marginRight: 3 }} />
-                                      {s3.label}
-                                      {s3HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}>✓</span>}
+                                      {s2.label}
+                                      {s2HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}>✓</span>}
                                     </label>
                                   )
                                 })}
