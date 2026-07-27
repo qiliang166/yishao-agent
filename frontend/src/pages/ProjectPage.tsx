@@ -2311,6 +2311,7 @@ export default function ProjectPage() {
     <div className="pipeline-area">
       {/* ═══ Project Header ═══ */}
       <div className="proj-header-bar">
+        <button className="btn btn-ghost btn-sm" onClick={() => navigate(`/workspace/${workspaceIdRef.current}`)}>← 返回</button>
         {editName ? (
           <span style={{ display: 'flex', gap: 2, alignItems: 'center' }}
             onClick={e => e.stopPropagation()}>
