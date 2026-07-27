@@ -8613,6 +8613,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
     project_steps = req.get("project_steps", {})
     start_time = req.get("start_time", "")
     end_time = req.get("end_time", "")
+    template_ids = req.get("template_ids", {})
 
     if not project_steps:
         raise HTTPException(400, "未选择任何项目")
@@ -8663,6 +8664,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
                     "project_id": pid,
                     "project_name": proj[1],
                     "steps": step_data.get("steps", []) if isinstance(step_data, dict) else step_data,
+                    "template_ids": template_ids,
                 }
                 if isinstance(step_data, dict) and step_data.get("step2_sources"):
                     item["step2_sources"] = step_data["step2_sources"]

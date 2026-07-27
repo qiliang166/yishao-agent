@@ -91,6 +91,13 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   const [conflictMsg, setConflictMsg] = useState('')
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Template selectors for batch (applied to all projects uniformly)
+  const [batchTemplateSop, setBatchTemplateSop] = useState('')
+  const [batchTemplateDao, setBatchTemplateDao] = useState('')
+  const [batchTemplateYanxi, setBatchTemplateYanxi] = useState('')
+  const [sopTemplates, setSopTemplates] = useState<Array<{id: string, name: string, isDefault: boolean}>>([])
+  const [daoTemplates, setDaoTemplates] = useState<Array<{id: string, name: string, isDefault: boolean}>>([])
+  const [yanxiTemplates, setYanxiTemplates] = useState<Array<{id: string, name: string, isDefault: boolean}>>([])
 
   // Load projects
   useEffect(() => {
@@ -99,6 +106,25 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [workspaceId, refreshKey])
+
+  // Load templates for batch-wide template selectors
+  useEffect(() => {
+    api.listTemplatesForStage('sop').then((items: any[]) => {
+      setSopTemplates(items)
+      const def = items.find((t: any) => t.isDefault) || items[0]
+      if (def) setBatchTemplateSop(def.id)
+    }).catch(() => {})
+    api.listTemplatesForStage('daoPpt').then((items: any[]) => {
+      setDaoTemplates(items)
+      const def = items.find((t: any) => t.isDefault) || items[0]
+      if (def) setBatchTemplateDao(def.id)
+    }).catch(() => {})
+    api.listTemplatesForStage('yanxiPpt').then((items: any[]) => {
+      setYanxiTemplates(items)
+      const def = items.find((t: any) => t.isDefault) || items[0]
+      if (def) setBatchTemplateYanxi(def.id)
+    }).catch(() => {})
+  }, [])
 
   // Cleanup polling
   useEffect(() => {
@@ -269,7 +295,11 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
     setBatchStatus(null)
     setConflictMsg('')
     try {
-      const resp = await api.batchExecute(payload, startTime, endTime, workspaceId)
+      const templateIds: Record<string, string> = {}
+      if (batchTemplateSop) templateIds['sop'] = batchTemplateSop
+      if (batchTemplateDao) templateIds['dao'] = batchTemplateDao
+      if (batchTemplateYanxi) templateIds['yanxi'] = batchTemplateYanxi
+      const resp = await api.batchExecute(payload, startTime, endTime, workspaceId, templateIds)
       if (resp.conflicts && resp.conflicts.length > 0) {
         setConflictMsg('以下项目已在其他批次中执行：' + resp.conflicts.join('、'))
         if (!resp.batch_id) {
@@ -507,6 +537,39 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
           )}
         </div>
       )}
+
+      {/* Template Config (applied to all projects) */}
+      <div style={{
+        display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px',
+        background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
+        border: '1px solid var(--border)', flexWrap: 'wrap',
+      }}>
+        <span style={{ fontSize: 12, fontWeight: 600 }}>课件模板</span>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+          标准课件
+          <select className="form-input" style={{ fontSize: 12, width: 160 }}
+            value={batchTemplateSop} onChange={e => setBatchTemplateSop(e.target.value)}>
+            {sopTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+          分析PPT
+          <select className="form-input" style={{ fontSize: 12, width: 160 }}
+            value={batchTemplateDao} onChange={e => setBatchTemplateDao(e.target.value)}>
+            {daoTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+          综合PPT
+          <select className="form-input" style={{ fontSize: 12, width: 160 }}
+            value={batchTemplateYanxi} onChange={e => setBatchTemplateYanxi(e.target.value)}>
+            {yanxiTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+          （对所有选中项目统一生效）
+        </span>
+      </div>
 
       {/* Time Window Config */}
       <div style={{

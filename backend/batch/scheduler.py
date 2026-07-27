@@ -313,6 +313,8 @@ def start_batch(batch_id: str, workspace_id: str, start_time: str, end_time: str
             "project_id": it["project_id"],
             "project_name": it.get("project_name", ""),
             "steps": it.get("steps", []),
+            "step2_sources": it.get("step2_sources", {}),
+            "template_ids": it.get("template_ids", {}),
             "status": "pending",
             "logs": [],
         } for it in items]
@@ -646,23 +648,28 @@ def _execute_project(item: dict, job: BatchJob):
                 if row and row[0]:
                     existing_step4[tab] = row[0]
 
-        # Per-tab template: read saved selection from step_results, fall back to DB default
+        # Per-tab template priority:
+        # 1. template_ids from batch request (set once for all projects in batch UI)
+        # 2. saved selection from step_results (_tmpl_step3_*)
+        # 3. DB default
         _tmpl_step_keys = {"sop": "_tmpl_step3_sop", "dao": "_tmpl_step3_dao_ppt", "yanxi": "_tmpl_step3_yan_ppt"}
         _tmpl_default_row = db.execute(
             "SELECT id FROM templates WHERE type='style' AND enabled=1 ORDER BY is_default DESC LIMIT 1"
         ).fetchone()
         _tmpl_default_id = _tmpl_default_row[0] if _tmpl_default_row else ""
+        _batch_template_ids: dict[str, str] = item.get("template_ids", {}) or {}
         _per_tab_template: dict[str, str] = {}
         for tab in all_tabs:
-            key = _tmpl_step_keys.get(tab, "")
-            if key:
-                row = db.execute(
-                    "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
-                    (project_id, key),
-                ).fetchone()
-                _per_tab_template[tab] = row[0] if row and row[0] else _tmpl_default_id
-            else:
-                _per_tab_template[tab] = _tmpl_default_id
+            tid = _batch_template_ids.get(tab, "")
+            if not tid:
+                key = _tmpl_step_keys.get(tab, "")
+                if key:
+                    row = db.execute(
+                        "SELECT content FROM step_results WHERE project_id=? AND step_name=?",
+                        (project_id, key),
+                    ).fetchone()
+                    tid = row[0] if row and row[0] else ""
+            _per_tab_template[tab] = tid or _tmpl_default_id
 
         # ── Build tab pipeline tasks ──
         tab_tasks: dict[str, dict] = {}

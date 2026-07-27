@@ -943,8 +943,8 @@ export const api = {
     const qs = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''
     return request(`/api/batch/projects-status${qs}`).then(d => d.projects || [])
   },
-  batchExecute: (projectSteps: Record<string, any>, startTime: string, endTime: string, workspaceId?: string) =>
-    request('/api/batch/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_steps: projectSteps, start_time: startTime, end_time: endTime, workspace_id: workspaceId || '' }) }),
+  batchExecute: (projectSteps: Record<string, any>, startTime: string, endTime: string, workspaceId?: string, templateIds?: Record<string, string>) =>
+    request('/api/batch/execute', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_steps: projectSteps, start_time: startTime, end_time: endTime, workspace_id: workspaceId || '', template_ids: templateIds || {} }) }),
   batchStatus: (batchId: string) =>
     request(`/api/batch/status/${batchId}`),
   batchCancel: (batchId: string) =>
