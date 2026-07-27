@@ -139,6 +139,8 @@ def get_project_active_batch(project_id: str) -> dict | None:
     """Check if a project is in any active batch. Returns batch info or None."""
     with _batch_lock:
         for batch_id, job in list(_active_batches.items()):
+            if job.status == "stopped":
+                continue
             for item in job.items:
                 if item.get("project_id") == project_id and item.get("status") not in ("completed", "failed"):
                     return {
@@ -153,7 +155,7 @@ def get_project_active_batch(project_id: str) -> dict | None:
         db = get_db()
         try:
             batch_rows = db.execute(
-                "SELECT id, status, total_count FROM batch_jobs WHERE status IN ('pending','running','stopped')"
+                "SELECT id, status, total_count FROM batch_jobs WHERE status IN ('pending','running')"
             ).fetchall()
             for br in batch_rows:
                 row = db.execute(
