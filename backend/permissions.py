@@ -13,6 +13,11 @@ def require_perm(permission: str):
         # Rule 3: admin always view_all
         if user.get("user_type") == "admin":
             perms.add("project.view_all")
+        # "all" implies "own"
+        if "project.view_all" in perms:
+            perms.add("project.view_own")
+        if "project.edit_all" in perms:
+            perms.add("project.edit_own")
         # Rule 5: role.manage → member.manage
         if "role.manage" in perms:
             perms.add("member.manage")
