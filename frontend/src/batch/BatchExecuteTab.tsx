@@ -368,16 +368,16 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
         <input className="form-input" type="text" placeholder="搜索项目名称..."
-          style={{ width: 200, fontSize: 12 }}
+          style={{ width: 200, fontSize: 10 }}
           value={search} onChange={e => setSearch(e.target.value)} />
         {categories.length > 0 && (
-          <select className="form-input" style={{ width: 130, fontSize: 12 }}
+          <select className="form-input" style={{ width: 130, fontSize: 10 }}
             value={catFilter} onChange={e => setCatFilter(e.target.value)}>
             <option value="">全部分类</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         )}
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
           已选 <strong style={{ color: 'var(--primary)' }}>{selectedProjects.size}</strong> 个项目
         </span>
       </div>
@@ -385,7 +385,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       {/* Conflict warning */}
       {conflictMsg && (
         <div style={{
-          marginBottom: 12, padding: '8px 14px', borderRadius: 6, fontSize: 12,
+          marginBottom: 12, padding: '8px 14px', borderRadius: 6, fontSize: 10,
           background: '#fff7e6', border: '1px solid #faad14', color: '#d48806',
         }}>
           {conflictMsg}
@@ -394,7 +394,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
 
       {/* Project List */}
       {loading ? (
-        <p style={{ padding: 20, color: 'var(--text-secondary)', fontSize: 12 }}>加载中...</p>
+        <p style={{ padding: 20, color: 'var(--text-secondary)', fontSize: 10 }}>加载中...</p>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
           {paged.map(p => {
@@ -408,7 +408,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                 {/* Project Row */}
                 <div style={{
                   display: 'flex', alignItems: 'center', padding: '8px 12px',
-                  fontSize: 12, cursor: 'pointer', background: isExpanded ? 'var(--bg-hover)' : undefined,
+                  fontSize: 10, cursor: 'pointer', background: isExpanded ? 'var(--bg-hover)' : undefined,
                 }} onClick={() => toggleExpand(p.id)}>
                   <div style={{ width: 36, flexShrink: 0 }} onClick={e => { e.stopPropagation(); toggleProject(p.id) }}>
                     <input type="checkbox" checked={isSelected} onChange={() => {}} />
@@ -446,12 +446,12 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                       return (
                         <div key={def.key} style={{
                           padding: '6px 12px 6px 48px',
-                          borderBottom: '1px solid var(--border)', fontSize: 11,
+                          borderBottom: '1px solid var(--border)', fontSize: 10,
                           background: 'var(--bg-hover)',
                         }}>
                           <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
                             <span style={{
-                              fontWeight: 600, minWidth: 110, fontSize: 11,
+                              fontWeight: 600, minWidth: 110, fontSize: 10,
                               color: locked ? 'var(--text-secondary)' : 'var(--text-primary)',
                             }}>
                               {def.label}
@@ -554,7 +554,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
             )
           })}
           {filtered.length === 0 && (
-            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>
+            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 10 }}>
               暂无项目
             </div>
           )}
@@ -564,14 +564,14 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       {/* Pagination */}
       {filtered.length > 20 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
-          <button className="btn" style={{ padding: '4px 12px', fontSize: 11 }}
+          <button className="btn" style={{ padding: '4px 12px', fontSize: 10 }}
             disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>上一页</button>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
             {safePage} / {totalPages}（共 {filtered.length} 个项目）
           </span>
-          <button className="btn" style={{ padding: '4px 12px', fontSize: 11 }}
+          <button className="btn" style={{ padding: '4px 12px', fontSize: 10 }}
             disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>下一页</button>
-          <select className="form-input" style={{ fontSize: 11, width: 70, marginLeft: 8 }}
+          <select className="form-input" style={{ fontSize: 10, width: 70, marginLeft: 8 }}
             value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
             <option value={20}>20条</option>
             <option value={50}>50条</option>
@@ -586,29 +586,29 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
         background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
         border: '1px solid var(--border)', flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>课件模板</span>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 10, fontWeight: 600 }}>课件模板</span>
+        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
           标准课件
-          <select className="form-input" style={{ fontSize: 12, width: 160 }}
+          <select className="form-input" style={{ fontSize: 10, width: 160 }}
             value={batchTemplateSop} onChange={e => setBatchTemplateSop(e.target.value)}>
             {sopTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </label>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
           分析PPT
-          <select className="form-input" style={{ fontSize: 12, width: 160 }}
+          <select className="form-input" style={{ fontSize: 10, width: 160 }}
             value={batchTemplateDao} onChange={e => setBatchTemplateDao(e.target.value)}>
             {daoTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </label>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
+        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
           综合PPT
-          <select className="form-input" style={{ fontSize: 12, width: 160 }}
+          <select className="form-input" style={{ fontSize: 10, width: 160 }}
             value={batchTemplateYanxi} onChange={e => setBatchTemplateYanxi(e.target.value)}>
             {yanxiTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
         </label>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
           （对所有选中项目统一生效）
         </span>
       </div>
@@ -619,25 +619,25 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
         background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
         border: '1px solid var(--border)', flexWrap: 'wrap',
       }}>
-        <span style={{ fontSize: 12, fontWeight: 600 }}>执行时间窗口</span>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 10, fontWeight: 600 }}>执行时间窗口</span>
+        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           开始
-          <input type="datetime-local" className="form-input" style={{ fontSize: 12, width: 200 }}
+          <input type="datetime-local" className="form-input" style={{ fontSize: 10, width: 200 }}
             value={startTime} onChange={e => setStartTime(e.target.value)} />
         </label>
-        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
           结束
-          <input type="datetime-local" className="form-input" style={{ fontSize: 12, width: 200 }}
+          <input type="datetime-local" className="form-input" style={{ fontSize: 10, width: 200 }}
             value={endTime} onChange={e => setEndTime(e.target.value)} />
         </label>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
           （到达结束时间自动停止）
         </span>
       </div>
 
       {/* Execute Button */}
       <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
           将执行 <strong style={{ color: 'var(--primary)' }}>{selectedProjects.size}</strong> 个项目，
           共 <strong style={{ color: 'var(--primary)' }}>{totalSteps()}</strong> 个步骤
         </span>
@@ -657,10 +657,10 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
           <div style={{
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
             padding: '10px 14px', borderBottom: '1px solid var(--border)',
-            fontSize: 12, fontWeight: 600,
+            fontSize: 10, fontWeight: 600,
           }}>
             <span>执行日志</span>
-            <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-secondary)' }}>
+            <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-secondary)' }}>
               批次 #{batchStatus.batch_id} · {batchStatus.status === 'running' ? '运行中' : batchStatus.status}
             </span>
           </div>
@@ -672,7 +672,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
           </div>
           <div style={{
             maxHeight: 250, overflow: 'auto', padding: '10px 14px',
-            fontFamily: 'monospace', fontSize: 11, lineHeight: 1.8,
+            fontFamily: 'monospace', fontSize: 10, lineHeight: 1.8,
             background: '#1e1e1e', color: '#d4d4d4',
           }}>
             {batchStatus.items.map((item, i) => (
