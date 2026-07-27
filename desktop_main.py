@@ -33,6 +33,7 @@ try:
 
     import webbrowser
     from backend.app import app
+    from backend.batch.scheduler import init as batch_init
     import uvicorn
 except Exception as e:
     _log_error(f'Import error: {e}\n{traceback.format_exc()}')
@@ -50,6 +51,7 @@ def main():
             _cfg.setdefault("use_colors", False)
 
         port = 8766
+        batch_init(port)
         import threading
         def _open_browser():
             import time

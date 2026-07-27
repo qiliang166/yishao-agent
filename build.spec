@@ -86,6 +86,8 @@ a = Analysis(
         'backend.services.video_service',
         'backend.services.image_service',
         'backend.services.cosyvoice_service',
+        'backend.batch',
+        'backend.batch.scheduler',
         'backend.services.verify_ppt_output',
         # WebSocket
         'websockets',

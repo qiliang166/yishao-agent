@@ -72,6 +72,7 @@ if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 
 $dirs = @(
     "$distDir\backend",
+    "$distDir\backend\batch",
     "$distDir\backend\data\audio",
     "$distDir\backend\data\exports",
     "$distDir\backend\data\logos",
@@ -93,6 +94,9 @@ Copy-Item "$root\backend\routers\*.py" "$distDir\backend\routers\" -ErrorAction 
 
 # Copy services
 Copy-Item "$root\backend\services\*.py" "$distDir\backend\services\" -ErrorAction SilentlyContinue
+
+# Copy batch
+Copy-Item "$root\backend\batch\*.py" "$distDir\backend\batch\" -ErrorAction SilentlyContinue
 
 # Copy ffmpeg static binary for Linux
 Copy-Item "$root\backend\ffmpeg" "$distDir\backend\ffmpeg" -Force -ErrorAction SilentlyContinue

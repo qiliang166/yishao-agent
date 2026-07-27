@@ -2,6 +2,17 @@
 
 ## 2026-07-27
 
+- fix: batch executor step names aligned to ProjectPage.tsx
+
+## 2026-07-27
+
+- fix: batch_executor reads original pipeline configs, zero hardcoded prompts
+- fix: batch executor model name — split provider_id:model format from _model_s2_sop
+- fix: Step 4 speech source — use Step 2 documents, not Step 3 PPTs
+- fix: Step 2→3 cascade filter + Step 1 radio disabled logic + raw/step1 cross-check
+
+## 2026-07-27
+
 - feat: Step 4 批量执行简化 — 删除演讲口播，演讲稿单选来源
 
 ## 2026-07-27

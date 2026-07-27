@@ -200,6 +200,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+async def startup_batch_scheduler():
+    import os as _os
+    from batch.scheduler import init as batch_init
+    port = int(_os.environ.get("PORT", "8766"))
+    batch_init(port)
+    print(f"[batch-scheduler] Initialized on port {port}")
+
 app.include_router(prompts_router)
 app.include_router(users_router)
 app.include_router(prompt_studio_router)
@@ -8613,7 +8622,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
     workspace_id = req.get("workspace_id", "")
 
     # Check for project conflicts in active batches
-    from batch_executor import _active_batches
+    from batch.scheduler import _active_batches
     conflicts = []
     for bid, job in _active_batches.items():
         if job.status in ("pending", "running"):
@@ -8647,21 +8656,24 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
     db = get_db()
     items = []
     try:
-        for pid, steps in project_steps.items():
+        for pid, step_data in project_steps.items():
             proj = db.execute("SELECT id, name FROM projects WHERE id=?", (pid,)).fetchone()
             if proj:
-                items.append({
+                item = {
                     "project_id": pid,
                     "project_name": proj[1],
-                    "steps": steps,
-                })
+                    "steps": step_data.get("steps", []) if isinstance(step_data, dict) else step_data,
+                }
+                if isinstance(step_data, dict) and step_data.get("step2_sources"):
+                    item["step2_sources"] = step_data["step2_sources"]
+                items.append(item)
     finally:
         db.close()
 
     if not items:
         raise HTTPException(400, "未找到有效项目")
 
-    from batch_executor import start_batch
+    from batch.scheduler import start_batch
     job = start_batch(batch_id, workspace_id, start_time, end_time, items)
 
     resp = {"batch_id": batch_id, "status": job.status}
@@ -8673,7 +8685,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
 @app.get("/api/batch/status/{batch_id}")
 def api_batch_status(batch_id: str):
     """Get batch execution status and logs."""
-    from batch_executor import get_batch_status
+    from batch.scheduler import get_batch_status
     status = get_batch_status(batch_id)
     if not status:
         raise HTTPException(404, "批次不存在")
@@ -8683,7 +8695,7 @@ def api_batch_status(batch_id: str):
 @app.post("/api/batch/cancel/{batch_id}")
 def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
     """Cancel a pending/running batch."""
-    from batch_executor import cancel_batch
+    from batch.scheduler import cancel_batch
     if cancel_batch(batch_id):
         return {"status": "cancelled"}
     raise HTTPException(400, "无法取消该批次")
@@ -8719,5 +8731,7 @@ if os.path.isdir(FRONTEND_DIST):
 
 if __name__ == "__main__":
     import uvicorn
+    from batch.scheduler import init as batch_init
     port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
+    batch_init(port)
     uvicorn.run(app, host="0.0.0.0", port=port)

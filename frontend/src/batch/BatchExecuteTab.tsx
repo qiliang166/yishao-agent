@@ -209,6 +209,18 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
     for (const pid of selectedProjects) {
       const steps: any[] = []
       const projSteps = selectedSteps[pid] || {}
+
+      // Step 1 radio selection → Step 2 data source
+      const step1Subs: string[] = projSteps['step1'] || []
+      const step1Source = step1Subs.length > 0 ? step1Subs[0] : ''
+      const step2_sources: Record<string, string> = {}
+      if (step1Source) {
+        const step2Subs: string[] = projSteps['step2'] || []
+        for (const sub of step2Subs) {
+          step2_sources[sub] = step1Source
+        }
+      }
+
       for (const def of STEP_DEFS) {
         if (def.key === 'step1') {
           const subs = projSteps[def.key]
@@ -229,7 +241,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
         }
       }
       if (steps.length > 0) {
-        payload[pid] = steps
+        payload[pid] = { steps, step2_sources }
       }
     }
     return payload
