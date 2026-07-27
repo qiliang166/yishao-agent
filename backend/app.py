@@ -207,6 +207,18 @@ async def startup_batch_scheduler():
     from batch.scheduler import init as batch_init
     port = int(_os.environ.get("PORT", "8766"))
     batch_init(port)
+    # Mark any batches that were "running" before restart as stopped (thread killed)
+    try:
+        from database import get_db
+        db = get_db()
+        try:
+            db.execute("UPDATE batch_jobs SET status='stopped' WHERE status='running'")
+            db.execute("UPDATE batch_job_items SET status='stopped' WHERE status='running'")
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        pass
     print(f"[batch-scheduler] Initialized on port {port}")
 
 app.include_router(prompts_router)

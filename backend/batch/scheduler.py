@@ -148,6 +148,30 @@ def get_project_active_batch(project_id: str) -> dict | None:
                         "project_name": item.get("project_name", ""),
                         "total_projects": job.total_count,
                     }
+    # Fallback: check DB for batches that may have survived a server restart
+    try:
+        db = get_db()
+        try:
+            batch_rows = db.execute(
+                "SELECT id, status, total_count FROM batch_jobs WHERE status IN ('pending','running')"
+            ).fetchall()
+            for br in batch_rows:
+                row = db.execute(
+                    "SELECT project_id, project_name, status FROM batch_job_items WHERE batch_id=? AND project_id=? AND status NOT IN ('completed','failed')",
+                    (br[0], project_id),
+                ).fetchone()
+                if row:
+                    return {
+                        "batch_id": br[0],
+                        "batch_status": br[1],
+                        "project_status": row[2],
+                        "project_name": row[1],
+                        "total_projects": br[2] or 0,
+                    }
+        finally:
+            db.close()
+    except Exception:
+        pass
     return None
 
 
