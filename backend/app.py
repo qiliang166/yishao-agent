@@ -8631,6 +8631,8 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
         raise HTTPException(400, "未选择任何项目")
     if not start_time or not end_time:
         raise HTTPException(400, "请设置开始和结束时间")
+    if end_time <= start_time:
+        raise HTTPException(400, "结束时间必须晚于开始时间")
 
     workspace_id = req.get("workspace_id", "")
 
