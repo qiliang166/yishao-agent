@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
+import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
   workspaceId?: string
@@ -13,6 +14,8 @@ interface ProjectStatus {
   category_name: string
   author_id: string
   author_name: string
+  created_by: string
+  created_by_name: string
   status: string
   steps_status: { step1: boolean; step2: boolean; step3: boolean; step4: boolean; [key: string]: boolean }
   sub_steps?: Record<string, boolean>
@@ -95,6 +98,9 @@ const countBatchSteps = (items: Array<{ steps?: any[] }>) => {
 const STEP_LABEL: Record<string, string> = { '1': '素材输入', '2': '文档生成', '3': '课件输出', '4': '演讲课件' }
 
 export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) => {
+  const { user } = useAuth()
+  const isCurrentUserAdmin = user?.user_type === 'admin'
+  const currentUserId = user?.user_id || ''
   const [projects, setProjects] = useState<ProjectStatus[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -472,12 +478,20 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                       display: 'flex', alignItems: 'center', padding: '8px 12px',
                       fontSize: 10, cursor: 'pointer', background: isExpanded ? 'var(--bg-hover)' : undefined,
                     }} onClick={() => toggleExpand(p.id)}>
-                      <div style={{ width: 36, flexShrink: 0 }} onClick={e => { e.stopPropagation(); toggleProject(p.id) }}>
-                        <input type="checkbox" checked={isSelected} onChange={() => {}} />
+                      <div style={{ width: 36, flexShrink: 0 }} onClick={e => {
+                        e.stopPropagation()
+                        const canSelect = isCurrentUserAdmin || p.created_by === currentUserId || !p.created_by
+                        if (canSelect) toggleProject(p.id)
+                      }}>
+                        <input type="checkbox" checked={isSelected}
+                          disabled={!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId}
+                          title={(!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId) ? '非您创建的项目' : ''}
+                          onChange={() => {}} />
                       </div>
                       <div style={{ flex: 1, fontWeight: 500 }}>{p.name}</div>
                       <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.category_name || '—'}</div>
                       <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.author_name || '—'}</div>
+                      <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.created_by_name || '—'}</div>
                       <div style={{ width: 140, display: 'flex', gap: 4, alignItems: 'center' }}>
                         {STEP_DEFS.map(def => {
                           const done = ss[def.key]

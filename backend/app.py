@@ -8612,6 +8612,10 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
             auth = db.execute("SELECT name FROM authors WHERE id=?", (r.get("author_id",""),)).fetchone()
             r["author_name"] = auth[0] if auth else ""
 
+            # Creator name
+            creator = db.execute("SELECT display_name FROM users WHERE id=?", (r.get("created_by",""),)).fetchone()
+            r["created_by_name"] = creator[0] if creator else ""
+
             result.append(r)
 
         return {"projects": result}
@@ -8676,14 +8680,25 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
 
     # Build items list
     uid = user.get("user_id", user.get("sub", ""))
+    is_admin = user.get("user_type") == "admin" or (user.get("sub") == "admin" and "user_type" not in user)
     db = get_db()
     items = []
+    skipped = []
     try:
         for pid, step_data in project_steps.items():
-            proj = db.execute(
-                "SELECT id, name FROM projects WHERE id=? AND (created_by=? OR created_by IS NULL OR created_by='')",
-                (pid, uid),
-            ).fetchone()
+            if is_admin:
+                proj = db.execute(
+                    "SELECT id, name FROM projects WHERE id=?", (pid,)
+                ).fetchone()
+            else:
+                proj = db.execute(
+                    "SELECT id, name FROM projects WHERE id=? AND (created_by=? OR created_by IS NULL OR created_by='')",
+                    (pid, uid),
+                ).fetchone()
+                if not proj:
+                    exists = db.execute("SELECT name FROM projects WHERE id=?", (pid,)).fetchone()
+                    skipped.append(f"{exists[0] if exists else pid}（非您创建）")
+                    continue
             if proj:
                 item = {
                     "project_id": pid,
@@ -8698,7 +8713,8 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
         db.close()
 
     if not items:
-        raise HTTPException(400, "未找到有效项目")
+        detail = "；".join(skipped) if skipped else "未找到有效项目"
+        raise HTTPException(400, f"没有可执行的项目：{detail}")
 
     from batch.scheduler import start_batch
     job = start_batch(batch_id, workspace_id, start_time, end_time, items, created_by=uid)
@@ -8737,7 +8753,7 @@ def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
     if not is_admin:
         uid = user.get("user_id", user.get("sub", ""))
         batch_owner = status.get("created_by", "")
-        if batch_owner and batch_owner != uid:
+        if not batch_owner or batch_owner != uid:
             raise HTTPException(403, "只能取消自己创建的批次")
     if cancel_batch(batch_id):
         return {"status": "cancelled"}
