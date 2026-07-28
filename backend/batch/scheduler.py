@@ -224,7 +224,7 @@ def _update_db(job: BatchJob):
         finally:
             db.close()
     except Exception as e:
-        print(f"[batch] _update_db error: {e}")
+        print(f"[batch] _update_db error: {type(e).__name__}")
 
 
 def _update_item_db(batch_id: str, item: dict):

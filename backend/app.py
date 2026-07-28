@@ -8672,7 +8672,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
     try:
         for pid, step_data in project_steps.items():
             proj = db.execute(
-                "SELECT id, name FROM projects WHERE id=? AND (author_id=? OR author_id='')",
+                "SELECT id, name FROM projects WHERE id=? AND (created_by=? OR created_by IS NULL OR created_by='')",
                 (pid, uid),
             ).fetchone()
             if proj:
