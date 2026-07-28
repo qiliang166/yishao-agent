@@ -2,6 +2,11 @@
 
 ## 2026-07-28
 
+- fix: get_batch_status DB fallback 返回 id 而非 batch_id，前端 .slice() 崩溃
+- build: server zip (d1fa533 — 批量摘要卡片 + workspace隔离)
+
+## 2026-07-28
+
 - feat: 批量处理活跃批次摘要卡片 + workspace隔离 + owner校验
 
 ## 2026-07-28
