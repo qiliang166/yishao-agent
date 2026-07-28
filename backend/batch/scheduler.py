@@ -438,6 +438,22 @@ def cancel_batch(batch_id: str) -> bool:
                 job.status = "cancelled"
                 _update_db(job)
             return True
+    # Fallback: check DB for batches that survived a server restart
+    try:
+        db = get_db()
+        try:
+            row = db.execute(
+                "SELECT status FROM batch_jobs WHERE id=? AND status IN ('pending','running')",
+                (batch_id,)
+            ).fetchone()
+            if row:
+                db.execute("UPDATE batch_jobs SET status='cancelled' WHERE id=?", (batch_id,))
+                db.commit()
+                return True
+        finally:
+            db.close()
+    except Exception:
+        pass
     return False
 
 
