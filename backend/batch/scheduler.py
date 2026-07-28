@@ -440,12 +440,15 @@ def cancel_batch(batch_id: str) -> bool:
     return False
 
 
-def get_active_batches() -> list[dict]:
-    """Return list of active (pending/running/stopped) batches. Checks memory first, then DB."""
+def get_active_batches(workspace_id: str = "") -> list[dict]:
+    """Return list of active (pending/running/stopped) batches. Checks memory first, then DB.
+    When workspace_id is provided, only returns batches for that workspace."""
     result = []
     with _batch_lock:
         for job in _active_batches.values():
             if job.status in ("pending", "running", "stopped"):
+                if workspace_id and job.workspace_id != workspace_id:
+                    continue
                 result.append({"batch_id": job.batch_id, "status": job.status,
                                "total_count": job.total_count,
                                "completed_count": job.completed_count,
@@ -456,9 +459,15 @@ def get_active_batches() -> list[dict]:
     try:
         db = get_db()
         try:
-            rows = db.execute(
-                "SELECT id, status, total_count, completed_count, failed_count FROM batch_jobs WHERE status IN ('pending','running','stopped') ORDER BY created_at DESC"
-            ).fetchall()
+            if workspace_id:
+                rows = db.execute(
+                    "SELECT id, status, total_count, completed_count, failed_count FROM batch_jobs WHERE status IN ('pending','running','stopped') AND workspace_id=? ORDER BY created_at DESC",
+                    (workspace_id,)
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    "SELECT id, status, total_count, completed_count, failed_count FROM batch_jobs WHERE status IN ('pending','running','stopped') ORDER BY created_at DESC"
+                ).fetchall()
             for r in rows:
                 result.append({"batch_id": r[0], "status": r[1], "total_count": r[2] or 0,
                                "completed_count": r[3] or 0, "failed_count": r[4] or 0})

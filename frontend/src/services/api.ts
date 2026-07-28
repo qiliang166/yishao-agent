@@ -951,8 +951,8 @@ export const api = {
     request(`/api/batch/cancel/${batchId}`, { method: 'POST' }),
   projectBatchStatus: (projectId: string) =>
     request(`/api/batch/project-batch/${projectId}`),
-  batchActive: () =>
-    request('/api/batch/active').then(d => d.batches),
+  batchActive: (workspaceId?: string) =>
+    request(`/api/batch/active${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ''}`).then(d => d.batches),
 
   // Downloads
   getDownloadInfo: () => request('/api/download/info'),

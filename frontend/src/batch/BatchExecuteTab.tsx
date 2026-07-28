@@ -25,7 +25,7 @@ const STEP_DEFS = [
   { key: 'step4', label: '第四步·演讲课件', subs: ['speech-script'], subLabels: ['生成演讲稿'] },
 ]
 
-// Sub-TAB → step_results step_name mapping for status check
+// Sub-TAB -> step_results step_name mapping for status check
 const SUB_STEP_NAMES: Record<string, string> = {
   'video': 'step1_video', 'text': 'step1_text', 'file': 'step1_file',
   'sop': 'step2_sop', 'dao': 'step2_daoshuyi', 'yanxi': 'step2_yanxi',
@@ -44,7 +44,7 @@ const RAW_SOURCE_KEYS: Record<string, string> = {
   'video': 'raw_video', 'text': 'raw_text', 'file': 'raw_file',
 }
 
-// Step 2 → Step 3 1:1 mapping
+// Step 2 -> Step 3 1:1 mapping
 const STEP2_TO_STEP3: Record<string, string> = {
   'sop': 'doc-ppt',
   'dao': 'analysis-ppt',
@@ -64,6 +64,8 @@ interface BatchStatus {
   total_count: number
   completed_count: number
   failed_count: number
+  start_time?: string
+  end_time?: string
   items: Array<{
     project_id: string
     project_name: string
@@ -72,6 +74,25 @@ interface BatchStatus {
     logs: string[]
   }>
 }
+
+// Format ISO datetime string for display
+const fmtTime = (ts?: string) => {
+  if (!ts) return '—'
+  const s = ts.replace('T', ' ').replace('Z', '')
+  return s.length >= 16 ? s.slice(0, 16) : s
+}
+
+// Count total steps across all items in a batch
+const countBatchSteps = (items: Array<{ steps?: any[] }>) => {
+  let n = 0
+  for (const it of items) {
+    n += (it.steps?.length || 0)
+  }
+  return n
+}
+
+// Map step key to readable label
+const STEP_LABEL: Record<string, string> = { '1': '素材输入', '2': '文档生成', '3': '课件输出', '4': '演讲课件' }
 
 export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) => {
   const [projects, setProjects] = useState<ProjectStatus[]>([])
@@ -82,10 +103,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   const [pageSize, setPageSize] = useState(20)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [selectedProjects, setSelectedProjects] = useState<Set<string>>(new Set())
-  // selectedSteps: { [projectId]: { [stepKey]: string[] } }
-  // For step1: array has exactly one element (the selected source)
   const [selectedSteps, setSelectedSteps] = useState<Record<string, Record<string, string[]>>>({})
-  // step4Source: { [projectId]: string } — which step2 doc to use as speech source
   const [step4Source, setStep4Source] = useState<Record<string, string>>({})
   const [startTime, setStartTime] = useState('')
   const [endTime, setEndTime] = useState('')
@@ -93,7 +111,6 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   const [conflictMsg, setConflictMsg] = useState('')
   const [batchStatus, setBatchStatus] = useState<BatchStatus | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Template selectors for batch (applied to all projects uniformly)
   const [batchTemplateSop, setBatchTemplateSop] = useState('')
   const [batchTemplateDao, setBatchTemplateDao] = useState('')
   const [batchTemplateYanxi, setBatchTemplateYanxi] = useState('')
@@ -174,7 +191,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
     })
   }
 
-  // Step 1: radio single-select — set value directly
+  // Step 1: radio single-select -- set value directly
   const setStep1Sub = (pid: string, sub: string) => {
     setSelectedSteps(prev => {
       const projSteps = { ...(prev[pid] || {}) }
@@ -227,9 +244,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       const name = SUB_STEP_NAMES[sub]
       if (name && p.sub_steps[name] !== undefined) return p.sub_steps[name]
     }
-    // Fallback: use steps_status
     if (stepKey === 'step1' && p.steps_status.step1) {
-      // For step1, check if the specific source type has data
       if (p.sub_steps) {
         const name = SUB_STEP_NAMES[sub]
         if (name) return !!p.sub_steps[name]
@@ -245,7 +260,6 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       const steps: any[] = []
       const projSteps = selectedSteps[pid] || {}
 
-      // Step 1 radio selection → Step 2 data source
       const step1Subs: string[] = projSteps['step1'] || []
       const step1Source = step1Subs.length > 0 ? step1Subs[0] : ''
       const step2_sources: Record<string, string> = {}
@@ -314,7 +328,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
 
   // Auto-detect running batch on mount (e.g. user navigated away and came back)
   useEffect(() => {
-    api.batchActive().then((batches: Array<{batch_id: string, status: string}>) => {
+    api.batchActive(workspaceId).then((batches: Array<{batch_id: string, status: string}>) => {
       if (batches && batches.length > 0) {
         startPolling(batches[0].batch_id)
       }
@@ -353,6 +367,10 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
     if (!batchStatus) return
     try {
       await api.batchCancel(batchStatus.batch_id)
+      // Clear status so form reappears for re-configuration
+      setBatchStatus(null)
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      setExecuting(false)
     } catch (err: any) {
       alert('取消失败: ' + (err.message || err))
     }
@@ -362,6 +380,47 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   const progress = batchStatus && batchStatus.total_count > 0
     ? Math.round((batchStatus.completed_count + batchStatus.failed_count) / batchStatus.total_count * 100)
     : 0
+
+  // ---- Batch summary card (shown when a batch is active instead of the form) ----
+  const renderBatchSummary = () => {
+    if (!batchStatus) return null
+    const statusLabel: Record<string, string> = {
+      pending: '⏳ 等待执行', running: '▶ 运行中', completed: '✓ 已完成',
+      cancelled: '✕ 已取消', stopped: '⊘ 已停止', failed: '✕ 失败',
+    }
+    return (
+      <div className="card" style={{ marginTop: 16, padding: '14px 18px' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
+          📋 批次 #{batchStatus.batch_id.slice(0, 12)}...
+        </div>
+        <div style={{ fontSize: 11, lineHeight: 2 }}>
+          <div>状态：<strong>{statusLabel[batchStatus.status] || batchStatus.status}</strong></div>
+          <div>时间：{fmtTime(batchStatus.start_time)} → {fmtTime(batchStatus.end_time)}</div>
+          <div style={{ marginTop: 6 }}>
+            项目清单（{batchStatus.total_count} 个）：
+          </div>
+        </div>
+        <div style={{ marginTop: 4, fontSize: 10, lineHeight: 1.8, color: 'var(--text-secondary)' }}>
+          {(batchStatus.items || []).map((it, i) => (
+            <div key={i}>
+              {i + 1}. {it.project_name}
+              <span style={{ marginLeft: 8, fontSize: 9 }}>
+                → {it.steps?.length || 0} 个步骤
+                {it.steps?.length > 0 && (
+                  <span style={{ fontSize: 9, color: 'var(--text-tertiary, #999)' }}>
+                    {' '}（{it.steps.map((s: any[]) => STEP_LABEL[s[0]] || s[0]).join('、')}）
+                  </span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 8, fontSize: 10, fontWeight: 500 }}>
+          共 {batchStatus.total_count} 个项目，{countBatchSteps(batchStatus.items || [])} 个步骤
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div>
@@ -392,255 +451,267 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
         </div>
       )}
 
-      {/* Project List */}
-      {loading ? (
-        <p style={{ padding: 20, color: 'var(--text-secondary)', fontSize: 10 }}>加载中...</p>
-      ) : (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          {paged.map(p => {
-            const isExpanded = expanded.has(p.id)
-            const isSelected = selectedProjects.has(p.id)
-            const projSteps = selectedSteps[p.id] || {}
-            const ss = p.steps_status
+      {/* Project List — hidden when a batch is active */}
+      {!isActive && (
+        <>
+          {loading ? (
+            <p style={{ padding: 20, color: 'var(--text-secondary)', fontSize: 10 }}>加载中...</p>
+          ) : (
+            <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+              {paged.map(p => {
+                const isExpanded = expanded.has(p.id)
+                const isSelected = selectedProjects.has(p.id)
+                const projSteps = selectedSteps[p.id] || {}
+                const ss = p.steps_status
 
-            return (
-              <div key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                {/* Project Row */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', padding: '8px 12px',
-                  fontSize: 10, cursor: 'pointer', background: isExpanded ? 'var(--bg-hover)' : undefined,
-                }} onClick={() => toggleExpand(p.id)}>
-                  <div style={{ width: 36, flexShrink: 0 }} onClick={e => { e.stopPropagation(); toggleProject(p.id) }}>
-                    <input type="checkbox" checked={isSelected} onChange={() => {}} />
-                  </div>
-                  <div style={{ flex: 1, fontWeight: 500 }}>{p.name}</div>
-                  <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.category_name || '—'}</div>
-                  <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.author_name || '—'}</div>
-                  <div style={{ width: 140, display: 'flex', gap: 4, alignItems: 'center' }}>
-                    {STEP_DEFS.map(def => {
-                      const done = ss[def.key]
-                      return (
-                        <span key={def.key} style={{
-                          width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
-                          background: done ? 'var(--success)' : 'var(--border)',
-                        }} title={`${def.label}: ${done ? '已完成' : '未完成'}`} />
-                      )
-                    })}
-                  </div>
-                  <div style={{ width: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>
-                    {isExpanded ? '▲' : '▼'}
-                  </div>
-                </div>
+                return (
+                  <div key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                    {/* Project Row */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', padding: '8px 12px',
+                      fontSize: 10, cursor: 'pointer', background: isExpanded ? 'var(--bg-hover)' : undefined,
+                    }} onClick={() => toggleExpand(p.id)}>
+                      <div style={{ width: 36, flexShrink: 0 }} onClick={e => { e.stopPropagation(); toggleProject(p.id) }}>
+                        <input type="checkbox" checked={isSelected} onChange={() => {}} />
+                      </div>
+                      <div style={{ flex: 1, fontWeight: 500 }}>{p.name}</div>
+                      <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.category_name || '—'}</div>
+                      <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.author_name || '—'}</div>
+                      <div style={{ width: 140, display: 'flex', gap: 4, alignItems: 'center' }}>
+                        {STEP_DEFS.map(def => {
+                          const done = ss[def.key]
+                          return (
+                            <span key={def.key} style={{
+                              width: 8, height: 8, borderRadius: '50%', display: 'inline-block',
+                              background: done ? 'var(--success)' : 'var(--border)',
+                            }} title={`${def.label}: ${done ? '已完成' : '未完成'}`} />
+                          )
+                        })}
+                      </div>
+                      <div style={{ width: 30, textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        {isExpanded ? '▲' : '▼'}
+                      </div>
+                    </div>
 
-                {/* Expanded Step Selection */}
-                {isExpanded && (
-                  <div>
-                    {STEP_DEFS.map((def, si) => {
-                      const prevCompleted = si > 0 && ss[STEP_DEFS[si - 1].key]
-                      const locked = si > 0 && !prevCompleted && !stepHasSelection(p.id, STEP_DEFS[si - 1].key)
-                      const curSubs = projSteps[def.key] || []
-                      const isStep1 = def.key === 'step1'
-                      const isStep4 = def.key === 'step4'
-                      const step4Src = step4Source[p.id] || ''
+                    {/* Expanded Step Selection */}
+                    {isExpanded && (
+                      <div>
+                        {STEP_DEFS.map((def, si) => {
+                          const prevCompleted = si > 0 && ss[STEP_DEFS[si - 1].key]
+                          const locked = si > 0 && !prevCompleted && !stepHasSelection(p.id, STEP_DEFS[si - 1].key)
+                          const curSubs = projSteps[def.key] || []
+                          const isStep1 = def.key === 'step1'
+                          const isStep4 = def.key === 'step4'
+                          const step4Src = step4Source[p.id] || ''
 
-                      return (
-                        <div key={def.key} style={{
-                          padding: '6px 12px 6px 48px',
-                          borderBottom: '1px solid var(--border)', fontSize: 10,
-                          background: 'var(--bg-hover)',
-                        }}>
-                          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-                            <span style={{
-                              fontWeight: 600, minWidth: 110, fontSize: 10,
-                              color: locked ? 'var(--text-secondary)' : 'var(--text-primary)',
+                          return (
+                            <div key={def.key} style={{
+                              padding: '6px 12px 6px 48px',
+                              borderBottom: '1px solid var(--border)', fontSize: 10,
+                              background: 'var(--bg-hover)',
                             }}>
-                              {def.label}
-                            </span>
-                            {isStep4 && !locked ? (
-                              /* Step 4: Source selector + generate checkbox */
-                              <>
-                                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-                                  选择课件来源：
+                              <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span style={{
+                                  fontWeight: 600, minWidth: 110, fontSize: 10,
+                                  color: locked ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                }}>
+                                  {def.label}
                                 </span>
-                                {STEP4_SOURCES.filter(s2 => {
-                                  const step2Subs = projSteps['step2'] || []
-                                  return step2Subs.includes(s2.key)
-                                }).map(s2 => {
-                                  const s2HasData = subHasData(p, 'step2', s2.key)
-                                  return (
-                                    <label key={s2.key} style={{
-                                      marginRight: 12, fontSize: 10, cursor: 'pointer',
-                                      color: step4Src === s2.key ? 'var(--primary)' : 'var(--text-secondary)',
-                                      fontWeight: step4Src === s2.key ? 600 : 400,
-                                    }}>
-                                      <input type="radio" name={`step4src-${p.id}`}
-                                        checked={step4Src === s2.key}
-                                        onChange={() => setStep4SourceSub(p.id, s2.key)}
-                                        style={{ marginRight: 3 }} />
-                                      {s2.label}
-                                      {s2HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}>✓</span>}
-                                    </label>
-                                  )
-                                })}
-                                {step4Src && def.subs.map((sub, i) => {
-                                  const hasData = (() => {
-                                    const name = STEP4_SPEECH_NAMES[step4Src] || ''
-                                    return name ? !!(p.sub_steps?.[name]) : false
-                                  })()
-                                  const checked = curSubs.includes(sub)
-                                  return (
-                                    <label key={sub} style={{
-                                      display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
-                                      color: 'var(--text-primary)', fontSize: 10,
-                                    }}>
-                                      <input type="checkbox" checked={checked}
-                                        onChange={() => toggleStepSub(p.id, def.key, sub)} />
-                                      {def.subLabels[i]}
-                                      {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据">✓</span>}
-                                    </label>
-                                  )
-                                })}
-                              </>
-                            ) : (
-                              !isStep4 && def.subs.filter(sub => {
-                                // Step 3: only show subs matching Step 2 selections
-                                if (def.key !== 'step3') return true
-                                const step2Subs = projSteps['step2'] || []
-                                const step2Key = Object.entries(STEP2_TO_STEP3).find(([, v]) => v === sub)?.[0]
-                                return step2Key ? step2Subs.includes(step2Key) : true
-                              }).map((sub, i) => {
-                                const hasData = subHasData(p, def.key, sub)
-                                const checked = curSubs.includes(sub)
-                                const inputType = isStep1 ? 'radio' : 'checkbox'
-                                const rawKey: string = isStep1 ? (RAW_SOURCE_KEYS[sub] || '') : ''
-                                const rawMissing: boolean = isStep1 && !!rawKey && !!(p.sub_steps && p.sub_steps[rawKey] === false)
-                                const step1Disabled: boolean = locked || (rawMissing && !hasData)
-                                return (
-                                  <label key={sub} style={{
-                                    display: 'flex', alignItems: 'center', gap: 4, cursor: step1Disabled ? 'not-allowed' : 'pointer',
-                                    color: step1Disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
-                                    opacity: step1Disabled ? 0.5 : 1,
-                                  }}>
-                                    <input type={inputType} checked={checked}
-                                      name={isStep1 ? `step1-${p.id}` : undefined}
-                                      disabled={step1Disabled}
-                                      onChange={() => {
-                                        if (isStep1) setStep1Sub(p.id, sub)
-                                        else toggleStepSub(p.id, def.key, sub)
-                                      }} />
-                                    {def.subLabels[i]}
-                                    {rawMissing && !hasData && (
-                                      <span style={{ color: 'var(--text-secondary)', fontSize: 9, marginLeft: 2 }}>(无内容)</span>
-                                    )}
-                                    {hasData && (
-                                      <span style={{ color: 'var(--success)', fontSize: 10, marginLeft: 2 }} title="已有数据">✓</span>
-                                    )}
-                                  </label>
-                                )
-                              })
-                            )}
-                            {locked && (
-                              <span style={{ color: 'var(--text-secondary)', marginLeft: 'auto', fontSize: 10 }}>
-                                🔒 需上一步勾选
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    })}
+                                {isStep4 && !locked ? (
+                                  <>
+                                    <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                                      选择课件来源：
+                                    </span>
+                                    {STEP4_SOURCES.filter(s2 => {
+                                      const step2Subs = projSteps['step2'] || []
+                                      return step2Subs.includes(s2.key)
+                                    }).map(s2 => {
+                                      const s2HasData = subHasData(p, 'step2', s2.key)
+                                      return (
+                                        <label key={s2.key} style={{
+                                          marginRight: 12, fontSize: 10, cursor: 'pointer',
+                                          color: step4Src === s2.key ? 'var(--primary)' : 'var(--text-secondary)',
+                                          fontWeight: step4Src === s2.key ? 600 : 400,
+                                        }}>
+                                          <input type="radio" name={`step4src-${p.id}`}
+                                            checked={step4Src === s2.key}
+                                            onChange={() => setStep4SourceSub(p.id, s2.key)}
+                                            style={{ marginRight: 3 }} />
+                                          {s2.label}
+                                          {s2HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}>✓</span>}
+                                        </label>
+                                      )
+                                    })}
+                                    {step4Src && def.subs.map((sub, i) => {
+                                      const hasData = (() => {
+                                        const name = STEP4_SPEECH_NAMES[step4Src] || ''
+                                        return name ? !!(p.sub_steps?.[name]) : false
+                                      })()
+                                      const checked = curSubs.includes(sub)
+                                      return (
+                                        <label key={sub} style={{
+                                          display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
+                                          color: 'var(--text-primary)', fontSize: 10,
+                                        }}>
+                                          <input type="checkbox" checked={checked}
+                                            onChange={() => toggleStepSub(p.id, def.key, sub)} />
+                                          {def.subLabels[i]}
+                                          {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据">✓</span>}
+                                        </label>
+                                      )
+                                    })}
+                                  </>
+                                ) : (
+                                  !isStep4 && def.subs.filter(sub => {
+                                    if (def.key !== 'step3') return true
+                                    const step2Subs = projSteps['step2'] || []
+                                    const step2Key = Object.entries(STEP2_TO_STEP3).find(([, v]) => v === sub)?.[0]
+                                    return step2Key ? step2Subs.includes(step2Key) : true
+                                  }).map((sub, i) => {
+                                    const hasData = subHasData(p, def.key, sub)
+                                    const checked = curSubs.includes(sub)
+                                    const inputType = isStep1 ? 'radio' : 'checkbox'
+                                    const rawKey: string = isStep1 ? (RAW_SOURCE_KEYS[sub] || '') : ''
+                                    const rawMissing: boolean = isStep1 && !!rawKey && !!(p.sub_steps && p.sub_steps[rawKey] === false)
+                                    const step1Disabled: boolean = locked || (rawMissing && !hasData)
+                                    return (
+                                      <label key={sub} style={{
+                                        display: 'flex', alignItems: 'center', gap: 4, cursor: step1Disabled ? 'not-allowed' : 'pointer',
+                                        color: step1Disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                        opacity: step1Disabled ? 0.5 : 1,
+                                      }}>
+                                        <input type={inputType} checked={checked}
+                                          name={isStep1 ? `step1-${p.id}` : undefined}
+                                          disabled={step1Disabled}
+                                          onChange={() => {
+                                            if (isStep1) setStep1Sub(p.id, sub)
+                                            else toggleStepSub(p.id, def.key, sub)
+                                          }} />
+                                        {def.subLabels[i]}
+                                        {rawMissing && !hasData && (
+                                          <span style={{ color: 'var(--text-secondary)', fontSize: 9, marginLeft: 2 }}>(无内容)</span>
+                                        )}
+                                        {hasData && (
+                                          <span style={{ color: 'var(--success)', fontSize: 10, marginLeft: 2 }} title="已有数据">✓</span>
+                                        )}
+                                      </label>
+                                    )
+                                  })
+                                )}
+                                {locked && (
+                                  <span style={{ color: 'var(--text-secondary)', marginLeft: 'auto', fontSize: 10 }}>
+                                    🔒 需上一步勾选
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            )
-          })}
-          {filtered.length === 0 && (
-            <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 10 }}>
-              暂无项目
+                )
+              })}
+              {filtered.length === 0 && (
+                <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 10 }}>
+                  暂无项目
+                </div>
+              )}
             </div>
           )}
-        </div>
+
+          {/* Pagination */}
+          {filtered.length > 20 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <button className="btn" style={{ padding: '4px 12px', fontSize: 10 }}
+                disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>上一页</button>
+              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                {safePage} / {totalPages}（共 {filtered.length} 个项目）
+              </span>
+              <button className="btn" style={{ padding: '4px 12px', fontSize: 10 }}
+                disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>下一页</button>
+              <select className="form-input" style={{ fontSize: 10, width: 70, marginLeft: 8 }}
+                value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
+                <option value={20}>20条</option>
+                <option value={50}>50条</option>
+                <option value={0}>全部</option>
+              </select>
+            </div>
+          )}
+
+          {/* Template Config (applied to all projects) */}
+          <div style={{
+            display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px',
+            background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
+            border: '1px solid var(--border)', flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 600 }}>课件模板</span>
+            <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+              标准课件
+              <select className="form-input" style={{ fontSize: 10, width: 160 }}
+                value={batchTemplateSop} onChange={e => setBatchTemplateSop(e.target.value)}>
+                {sopTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+              分析PPT
+              <select className="form-input" style={{ fontSize: 10, width: 160 }}
+                value={batchTemplateDao} onChange={e => setBatchTemplateDao(e.target.value)}>
+                {daoTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+            <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
+              综合PPT
+              <select className="form-input" style={{ fontSize: 10, width: 160 }}
+                value={batchTemplateYanxi} onChange={e => setBatchTemplateYanxi(e.target.value)}>
+                {yanxiTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </label>
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+              （对所有选中项目统一生效）
+            </span>
+          </div>
+
+          {/* Time Window Config */}
+          <div style={{
+            display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px',
+            background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
+            border: '1px solid var(--border)', flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 600 }}>执行时间窗口</span>
+            <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              开始
+              <input type="datetime-local" className="form-input" style={{ fontSize: 10, width: 200 }}
+                value={startTime} onChange={e => setStartTime(e.target.value)} />
+            </label>
+            <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              结束
+              <input type="datetime-local" className="form-input" style={{ fontSize: 10, width: 200 }}
+                value={endTime} onChange={e => setEndTime(e.target.value)} />
+            </label>
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+              （到达结束时间自动停止）
+            </span>
+          </div>
+        </>
       )}
 
-      {/* Pagination */}
-      {filtered.length > 20 && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 12 }}>
-          <button className="btn" style={{ padding: '4px 12px', fontSize: 10 }}
-            disabled={safePage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>上一页</button>
-          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-            {safePage} / {totalPages}（共 {filtered.length} 个项目）
-          </span>
-          <button className="btn" style={{ padding: '4px 12px', fontSize: 10 }}
-            disabled={safePage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>下一页</button>
-          <select className="form-input" style={{ fontSize: 10, width: 70, marginLeft: 8 }}
-            value={pageSize} onChange={e => setPageSize(Number(e.target.value))}>
-            <option value={20}>20条</option>
-            <option value={50}>50条</option>
-            <option value={0}>全部</option>
-          </select>
-        </div>
-      )}
+      {/* Batch summary — shown when a batch is active */}
+      {isActive && renderBatchSummary()}
 
-      {/* Template Config (applied to all projects) */}
-      <div style={{
-        display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px',
-        background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
-        border: '1px solid var(--border)', flexWrap: 'wrap',
-      }}>
-        <span style={{ fontSize: 10, fontWeight: 600 }}>课件模板</span>
-        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
-          标准课件
-          <select className="form-input" style={{ fontSize: 10, width: 160 }}
-            value={batchTemplateSop} onChange={e => setBatchTemplateSop(e.target.value)}>
-            {sopTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </label>
-        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
-          分析PPT
-          <select className="form-input" style={{ fontSize: 10, width: 160 }}
-            value={batchTemplateDao} onChange={e => setBatchTemplateDao(e.target.value)}>
-            {daoTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </label>
-        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 4 }}>
-          综合PPT
-          <select className="form-input" style={{ fontSize: 10, width: 160 }}
-            value={batchTemplateYanxi} onChange={e => setBatchTemplateYanxi(e.target.value)}>
-            {yanxiTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        </label>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-          （对所有选中项目统一生效）
-        </span>
-      </div>
-
-      {/* Time Window Config */}
-      <div style={{
-        display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px',
-        background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
-        border: '1px solid var(--border)', flexWrap: 'wrap',
-      }}>
-        <span style={{ fontSize: 10, fontWeight: 600 }}>执行时间窗口</span>
-        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-          开始
-          <input type="datetime-local" className="form-input" style={{ fontSize: 10, width: 200 }}
-            value={startTime} onChange={e => setStartTime(e.target.value)} />
-        </label>
-        <label style={{ fontSize: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-          结束
-          <input type="datetime-local" className="form-input" style={{ fontSize: 10, width: 200 }}
-            value={endTime} onChange={e => setEndTime(e.target.value)} />
-        </label>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-          （到达结束时间自动停止）
-        </span>
-      </div>
-
-      {/* Execute Button */}
+      {/* Execute / Cancel bar */}
       <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end', alignItems: 'center' }}>
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
-          将执行 <strong style={{ color: 'var(--primary)' }}>{selectedProjects.size}</strong> 个项目，
-          共 <strong style={{ color: 'var(--primary)' }}>{totalSteps()}</strong> 个步骤
-        </span>
+        {isActive ? (
+          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+            批次包含 <strong style={{ color: 'var(--primary)' }}>{batchStatus?.total_count || 0}</strong> 个项目，
+            共 <strong style={{ color: 'var(--primary)' }}>{countBatchSteps(batchStatus?.items || [])}</strong> 个步骤
+          </span>
+        ) : (
+          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+            将执行 <strong style={{ color: 'var(--primary)' }}>{selectedProjects.size}</strong> 个项目，
+            共 <strong style={{ color: 'var(--primary)' }}>{totalSteps()}</strong> 个步骤
+          </span>
+        )}
         {isActive ? (
           <button className="btn btn-outline btn-sm" onClick={handleCancel}>取消执行</button>
         ) : (

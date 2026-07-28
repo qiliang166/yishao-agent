@@ -8666,11 +8666,12 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
     batch_id = f"batch-{uuid.uuid4().hex[:8]}"
 
     # Build items list
+    uid = user.get("user_id", user.get("sub", ""))
     db = get_db()
     items = []
     try:
         for pid, step_data in project_steps.items():
-            proj = db.execute("SELECT id, name FROM projects WHERE id=?", (pid,)).fetchone()
+            proj = db.execute("SELECT id, name FROM projects WHERE id=? AND author_id=?", (pid, uid)).fetchone()
             if proj:
                 item = {
                     "project_id": pid,
@@ -8707,10 +8708,10 @@ def api_batch_status(batch_id: str):
 
 
 @app.get("/api/batch/active")
-def api_batch_active(user=require_perm("project.view_own")):
-    """List active (pending/running) batches."""
+def api_batch_active(workspace_id: str = "", user=require_perm("project.view_own")):
+    """List active (pending/running) batches, optionally filtered by workspace."""
     from batch.scheduler import get_active_batches
-    return {"batches": get_active_batches()}
+    return {"batches": get_active_batches(workspace_id)}
 
 
 @app.post("/api/batch/cancel/{batch_id}")
