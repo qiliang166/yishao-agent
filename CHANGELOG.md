@@ -1,5 +1,72 @@
 ﻿# 更新日志
 
+## 2026-07-28
+
+- feat: 电子成册内容选择器增加分类筛选 + 项目列表显示作者/文件数/积分
+
+## 2026-07-28
+
+- fix: useState 放在组件外部导致 React 初始化崩溃，移入组件内部
+- feat: 项目管理列表50/100/全部分页 + 右键新窗口打开
+
+## 2026-07-28
+
+- feat: 工作区顶部增加←返回按钮，导航回项目卡片列表
+- fix: require_perm 中 project.view_all 隐含 view_own，修复批量预警403静默失败
+- fix: get_project_active_batch 移除不存在的 project_name 列，修复运行中批量不显示预警
+- fix: stopped批量项目不显示'正在执行'预警，允许手动编辑
+- style: 批量管理字号缩小，对齐主站列表风格
+
+## 2026-07-27
+
+- feat: 批量管理分页(20/50/全部) + stopped状态项目预警
+- fix: get_project_active_batch DB回退也查stopped状态
+
+## 2026-07-27
+
+- fix: batch crash保护 + stopped状态显示, 演讲稿/排版配置只读工作区
+
+## 2026-07-27
+
+- fix: Step4 演讲稿 temperature 0.7→0.3 + 去掉内容截断，与手动一致
+- fix: add auth to /api/batch/active endpoint
+
+## 2026-07-27
+
+- fix: 项目批量状态检测加DB回退 + 重启时清理遗留running状态
+
+## 2026-07-27
+
+- feat: 批量页自动检测运行中的批次
+
+## 2026-07-27
+
+- feat: 批量执行界面添加课件模板选择器
+
+## 2026-07-27
+
+- fix: 批量执行器按 tab 独立读取用户保存的模板选择
+
+## 2026-07-27
+
+- fix: add verify_project_access to batch status endpoint
+
+## 2026-07-27
+
+- fix: add project existence check to batch status endpoint
+
+## 2026-07-27
+
+- feat: batch execution warning on project detail page
+
+## 2026-07-27
+
+- fix: totalSteps NaN — payload[pid] is {steps,step2_sources} not array
+
+## 2026-07-27
+
+- refactor: batch scheduler — HTTP dispatcher with per-tab parallel pipelines
+
 ## 2026-07-27
 
 - fix: batch executor step names aligned to ProjectPage.tsx
