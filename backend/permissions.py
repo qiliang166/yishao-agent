@@ -42,6 +42,8 @@ def check_ownership(resource_created_by: str | None, user: dict,
     uid = user.get("user_id", user.get("sub", ""))
     if resource_created_by == uid and uid:
         return
+    if user.get("user_type") == "admin":
+        return
     # Legacy JWT from old POST /api/login only has {"sub":"admin"} — treat as admin
     if "user_type" not in user and user.get("sub") == "admin":
         return
