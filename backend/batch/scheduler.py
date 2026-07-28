@@ -473,7 +473,8 @@ def get_active_batches(workspace_id: str = "") -> list[dict]:
                 result.append({"batch_id": job.batch_id, "status": job.status,
                                "total_count": job.total_count,
                                "completed_count": job.completed_count,
-                               "failed_count": job.failed_count})
+                               "failed_count": job.failed_count,
+                               "created_by": job.created_by})
     if result:
         return result
     # Fallback: check DB for batches not yet completed/cancelled
@@ -482,16 +483,17 @@ def get_active_batches(workspace_id: str = "") -> list[dict]:
         try:
             if workspace_id:
                 rows = db.execute(
-                    "SELECT id, status, total_count, completed_count, failed_count FROM batch_jobs WHERE status IN ('pending','running','stopped') AND workspace_id=? ORDER BY created_at DESC",
+                    "SELECT id, status, total_count, completed_count, failed_count, created_by FROM batch_jobs WHERE status IN ('pending','running','stopped') AND workspace_id=? ORDER BY created_at DESC",
                     (workspace_id,)
                 ).fetchall()
             else:
                 rows = db.execute(
-                    "SELECT id, status, total_count, completed_count, failed_count FROM batch_jobs WHERE status IN ('pending','running','stopped') ORDER BY created_at DESC"
+                    "SELECT id, status, total_count, completed_count, failed_count, created_by FROM batch_jobs WHERE status IN ('pending','running','stopped') ORDER BY created_at DESC"
                 ).fetchall()
             for r in rows:
                 result.append({"batch_id": r[0], "status": r[1], "total_count": r[2] or 0,
-                               "completed_count": r[3] or 0, "failed_count": r[4] or 0})
+                               "completed_count": r[3] or 0, "failed_count": r[4] or 0,
+                               "created_by": r[5] if len(r) > 5 else ""})
         finally:
             db.close()
     except Exception:

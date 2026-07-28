@@ -8640,12 +8640,11 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
 
     workspace_id = req.get("workspace_id", "")
 
-    # One active batch per workspace
+    # One active batch per user per workspace
     from batch.scheduler import get_active_batches
-    existing = get_active_batches(workspace_id)
-    if existing:
-        bid = existing[0]["batch_id"]
-        raise HTTPException(409, f"该工作区已有正在执行的批次 (#{bid[:12]}...)，请等待完成或取消后再提交")
+    user_batches = [b for b in get_active_batches(workspace_id) if b.get("created_by", "") == uid]
+    if user_batches:
+        raise HTTPException(409, "您已有正在执行的批次，请等待完成或取消后再提交")
 
     # Check for project conflicts in active batches
     from batch.scheduler import _active_batches
@@ -8737,9 +8736,14 @@ def api_batch_status(batch_id: str):
 
 @app.get("/api/batch/active")
 def api_batch_active(workspace_id: str = "", user=require_perm("project.view_own")):
-    """List active (pending/running) batches, optionally filtered by workspace."""
+    """List active (pending/running) batches. Non-admins only see their own."""
     from batch.scheduler import get_active_batches
-    return {"batches": get_active_batches(workspace_id)}
+    batches = get_active_batches(workspace_id)
+    is_admin = user.get("user_type") == "admin" or (user.get("sub") == "admin" and "user_type" not in user)
+    if not is_admin:
+        uid = user.get("user_id", user.get("sub", ""))
+        batches = [b for b in batches if b.get("created_by", "") == uid]
+    return {"batches": batches}
 
 
 @app.post("/api/batch/cancel/{batch_id}")
