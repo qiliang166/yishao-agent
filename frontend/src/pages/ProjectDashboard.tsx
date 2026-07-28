@@ -618,6 +618,12 @@ export default function ProjectDashboard() {
                     padding: '1px 6px', borderRadius: 3, marginLeft: 2, whiteSpace: 'nowrap',
                   }}>✍ {p.author_name}</span>
                 )}
+                {p.created_by_name && (
+                  <span style={{
+                    fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
+                    padding: '1px 6px', borderRadius: 3, marginLeft: 2, whiteSpace: 'nowrap',
+                  }}>👤 {p.created_by_name}</span>
+                )}
                 {p.copied_from_project_id && (
                   <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 4 }} title="从其他明细复制">📋</span>
                 )}

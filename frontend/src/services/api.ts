@@ -135,6 +135,7 @@ export interface Project {
   category_name?: string
   author_name?: string
   created_by?: string
+  created_by_name?: string
   created_at: string
   updated_at: string
 }
