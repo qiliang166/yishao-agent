@@ -1031,10 +1031,12 @@ def list_projects(page: int = 1, page_size: int = 50, workspace_id: str = "", re
         cat_map = {c["id"]: c["name"] for c in db.execute("SELECT id, name FROM project_categories").fetchall()}
         auth_map = {a["id"]: a["name"] for a in db.execute("SELECT id, name FROM authors").fetchall()}
         ws_map = {w["id"]: w["name"] for w in db.execute("SELECT id, name FROM workspaces").fetchall()}
+        user_map = {u["id"]: u["display_name"] for u in db.execute("SELECT id, display_name FROM users").fetchall()}
         for p in projects:
             p["category_name"] = cat_map.get(p.get("category_id") or "", "")
             p["author_name"] = auth_map.get(p.get("author_id") or "", "")
             p["workspace_name"] = ws_map.get(p.get("workspace_id") or "", "")
+            p["created_by_name"] = user_map.get(p.get("created_by") or "", "")
         return {"projects": projects, "total": total, "page": page, "page_size": page_size}
     finally:
         db.close()
