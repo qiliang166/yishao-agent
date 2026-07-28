@@ -405,6 +405,7 @@ def get_batch_status(batch_id: str) -> dict | None:
             if not row:
                 return None
             row = dict(row)
+            row["batch_id"] = row.pop("id", row.get("batch_id", ""))
             items_rows = db.execute(
                 "SELECT * FROM batch_job_items WHERE batch_id=? ORDER BY id", (batch_id,)
             ).fetchall()
