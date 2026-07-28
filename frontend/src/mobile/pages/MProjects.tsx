@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { api } from '../../services/api'
 import type { Project } from '../../services/api'
 import { MTopBar, mToast } from '../MobileApp'
@@ -8,7 +8,6 @@ const PAGE_SIZE = 20
 
 export default function MProjects() {
   const { wid } = useParams<{ wid: string }>()
-  const navigate = useNavigate()
   const [wsName, setWsName] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -63,7 +62,7 @@ export default function MProjects() {
         ) : (
           <>
             {projects.map(p => (
-              <div key={p.id} className="m-card" onClick={() => navigate(`/project/${p.id}`)}>
+              <Link key={p.id} className="m-card" to={`/project/${p.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                 <div className="m-card-body">
                   <div className="m-card-name">{p.name}</div>
                   <div className="m-card-desc">
@@ -75,7 +74,7 @@ export default function MProjects() {
                   {statusLabel(p.status)}
                 </span>
                 <span className="m-card-arrow">›</span>
-              </div>
+              </Link>
             ))}
             {totalPages > 1 && (
               <div className="m-pager">

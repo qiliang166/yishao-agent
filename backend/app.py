@@ -976,7 +976,7 @@ def copy_seed_configs_to_workspace(workspace_id: str, user=require_perm("project
 # ── Projects ──
 
 @app.get("/api/projects")
-def list_projects(page: int = 1, page_size: int = 20, workspace_id: str = "", request: Request = None):
+def list_projects(page: int = 1, page_size: int = 50, workspace_id: str = "", request: Request = None):
     db = get_db()
     try:
         user = getattr(request.state, "user", None) if request else None

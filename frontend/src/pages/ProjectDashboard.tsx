@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { api, Project } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
@@ -8,7 +8,7 @@ import HelpButton from '../components/HelpButton'
 import { BatchDialog } from '../batch/BatchDialog'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 
-const PAGE_SIZE = 20
+const [pageSize, setPageSize] = useState(50)
 
 export default function ProjectDashboard() {
   const { wid } = useParams<{ wid: string }>()
@@ -107,7 +107,7 @@ export default function ProjectDashboard() {
   const loadProjects = (p: number) => {
     if (!wid) return
     setLoading(true)
-    api.listProjects(p, PAGE_SIZE, wid)
+    api.listProjects(p, pageSize, wid)
       .then(data => {
         setProjects(data.projects)
         setTotal(data.total)
@@ -119,9 +119,9 @@ export default function ProjectDashboard() {
       })
   }
 
-  useEffect(() => { if (wid) loadProjects(page) }, [page, wid])
+  useEffect(() => { if (wid) loadProjects(page) }, [page, pageSize, wid])
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
   const openCreateDialog = async () => {
     setShowCreate(true)
@@ -595,7 +595,7 @@ export default function ProjectDashboard() {
                   style={{ cursor: 'pointer', fontSize: 10, minWidth: 16, textAlign: 'center', userSelect: 'none', color: expandedProject === p.id ? 'var(--accent)' : 'var(--text-secondary)' }}>
                   {expandedProject === p.id ? '▼' : '▶'}
                 </span>
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 28, textAlign: 'center' }}>{(page - 1) * PAGE_SIZE + i + 1}</span>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', minWidth: 28, textAlign: 'center' }}>{(page - 1) * pageSize + i + 1}</span>
                 <input type="checkbox"
                   checked={selected.has(p.id)}
                   onChange={() => toggleSelect(p.id)}
@@ -604,8 +604,7 @@ export default function ProjectDashboard() {
                 {p.project_code && (
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginRight: 4 }}>{p.project_code}</span>
                 )}
-                <span className="pc-name" style={{ cursor: 'pointer' }}
-                  onClick={() => navigate(projectUrl(p.id))}>{p.name}</span>
+                <Link className="pc-name" to={projectUrl(p.id)} style={{ cursor: 'pointer' }}>{p.name}</Link>
                 {p.category_name && (
                   <span style={{
                     fontSize: 10, color: 'var(--primary)', background: 'var(--primary-light, rgba(59,130,246,0.12))',
@@ -887,6 +886,12 @@ export default function ProjectDashboard() {
               </span>
               <button className="btn btn-outline btn-sm" disabled={page >= totalPages}
                 onClick={() => setPage(p => p + 1)}>下一页</button>
+              <select value={pageSize} onChange={e => { setPageSize(Number(e.target.value)); setPage(1) }}
+                style={{ padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 4, fontSize: 12, background: 'var(--card)' }}>
+                <option value={50}>50条</option>
+                <option value={100}>100条</option>
+                <option value={9999}>全部</option>
+              </select>
             </div>
           )}
           <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 11 }}>
