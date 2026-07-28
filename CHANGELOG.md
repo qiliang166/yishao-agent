@@ -1,5 +1,73 @@
 ﻿# 更新日志
 
+## 2026-07-29
+
+- fix: saveStep await API调用，失败时弹错误提示
+- chore: build_version for 1294b7c
+- fix: 14个编辑端点补check_ownership，内容管理员只能编辑自己项目
+- chore: build_version for b005fb4
+- fix: check_ownership 移除 user_type==admin 绕过，普通管理员仅能编辑自己项目
+- fix: Stage1 清空后可保存空内容，去掉保存按钮空文本禁用限制
+- chore: build_version for f6fad00
+- revert: check_ownership 恢复 user_type=="admin" 绕过，编辑权限由 require_perm 入口控制
+- chore: build_version for beddfc3
+- feat: 项目卡片显示创建者姓名(created_by_name)
+- fix: check_ownership 移除 user_type=="admin" 绕过，恢复按 project.edit_all 权限判断
+- fix: batch summary only shows current user's own batch, not others
+- fix: disable step selectors for unselectable projects in batch execute
+- fix: frontend checkbox uses project.edit_all instead of user_type==admin
+- fix: move uid definition before its first use in api_batch_execute
+- fix: use project.edit_all permission instead of user_type==admin for batch endpoints
+- debug: add diagnostic logging to create_project + api_batch_active
+- debug: add diagnostic logging to api_batch_active
+
+## 2026-07-29
+
+- feat: project list shows active batch status, in-batch projects disabled
+
+## 2026-07-29
+
+- fix: per-user batch exclusion instead of per-workspace, non-admins see own batches
+
+## 2026-07-29
+
+- fix: per-user batch exclusion instead of per-workspace, non-admins see own batches
+
+## 2026-07-29
+
+- fix: type error in disabled prop
+- fix: batch execute admin bypass + cancel fail-closed + show project creator
+
+## 2026-07-29
+
+- feat: workspace batch mutual exclusion + cancel ownership check
+
+## 2026-07-28
+
+- fix: get_project_active_batch 不再把已完成批次/已跳过项目视为活跃
+
+## 2026-07-28
+
+- fix: toast → alert（项目使用 alert 而非 toast 组件）
+- fix: 批量执行拒绝 end_time <= start_time 的时间窗口
+
+## 2026-07-28
+
+- fix: created_by 而非 author_id 校验项目归属 + 错误日志防泄露
+
+## 2026-07-28
+
+- fix: author_id 校验兼容历史项目（空author_id也放行）
+
+## 2026-07-28
+
+- fix: start_batch 同步写DB防丢失 + _update_db 加错误日志
+
+## 2026-07-28
+
+- fix: cancel_batch 增加 DB fallback，服务器重启后也能取消批次
+- build: server zip (ee35acd — DB fallback batch_id 修复)
+
 ## 2026-07-28
 
 - fix: get_batch_status DB fallback 返回 id 而非 batch_id，前端 .slice() 崩溃
