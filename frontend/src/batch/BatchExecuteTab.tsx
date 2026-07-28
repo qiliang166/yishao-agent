@@ -469,6 +469,8 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
               {paged.map(p => {
                 const isExpanded = expanded.has(p.id)
                 const isSelected = selectedProjects.has(p.id)
+                const isInBatch = !!p.active_batch
+                const canSelect = !isInBatch && (isCurrentUserAdmin || p.created_by === currentUserId || !p.created_by)
                 const projSteps = selectedSteps[p.id] || {}
                 const ss = p.steps_status
 
@@ -481,13 +483,11 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                     }} onClick={() => toggleExpand(p.id)}>
                       <div style={{ width: 36, flexShrink: 0 }} onClick={e => {
                         e.stopPropagation()
-                        const isInBatch = !!p.active_batch
-                        const canSelect = !isInBatch && (isCurrentUserAdmin || p.created_by === currentUserId || !p.created_by)
                         if (canSelect) toggleProject(p.id)
                       }}>
                         <input type="checkbox" checked={isSelected}
-                          disabled={!!p.active_batch || !!(!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId)}
-                          title={p.active_batch ? '正在批量执行中' : (!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId) ? '非您创建的项目' : ''}
+                          disabled={!canSelect}
+                          title={isInBatch ? '正在批量执行中' : !canSelect ? '非您创建的项目' : ''}
                           onChange={() => {}} />
                       </div>
                       <div style={{ flex: 1, fontWeight: 500 }}>{p.name}</div>
@@ -558,12 +558,14 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                       const s2HasData = subHasData(p, 'step2', s2.key)
                                       return (
                                         <label key={s2.key} style={{
-                                          marginRight: 12, fontSize: 10, cursor: 'pointer',
-                                          color: step4Src === s2.key ? 'var(--primary)' : 'var(--text-secondary)',
+                                          marginRight: 12, fontSize: 10, cursor: !canSelect ? 'not-allowed' : 'pointer',
+                                          color: !canSelect ? 'var(--text-secondary)' : (step4Src === s2.key ? 'var(--primary)' : 'var(--text-secondary)'),
                                           fontWeight: step4Src === s2.key ? 600 : 400,
+                                          opacity: !canSelect ? 0.5 : 1,
                                         }}>
                                           <input type="radio" name={`step4src-${p.id}`}
                                             checked={step4Src === s2.key}
+                                            disabled={!canSelect}
                                             onChange={() => setStep4SourceSub(p.id, s2.key)}
                                             style={{ marginRight: 3 }} />
                                           {s2.label}
@@ -579,10 +581,12 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                       const checked = curSubs.includes(sub)
                                       return (
                                         <label key={sub} style={{
-                                          display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer',
-                                          color: 'var(--text-primary)', fontSize: 10,
+                                          display: 'flex', alignItems: 'center', gap: 4, cursor: !canSelect ? 'not-allowed' : 'pointer',
+                                          color: !canSelect ? 'var(--text-secondary)' : 'var(--text-primary)', fontSize: 10,
+                                          opacity: !canSelect ? 0.5 : 1,
                                         }}>
                                           <input type="checkbox" checked={checked}
+                                            disabled={!canSelect}
                                             onChange={() => toggleStepSub(p.id, def.key, sub)} />
                                           {def.subLabels[i]}
                                           {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据">✓</span>}
@@ -605,13 +609,13 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                     const step1Disabled: boolean = locked || (rawMissing && !hasData)
                                     return (
                                       <label key={sub} style={{
-                                        display: 'flex', alignItems: 'center', gap: 4, cursor: step1Disabled ? 'not-allowed' : 'pointer',
-                                        color: step1Disabled ? 'var(--text-secondary)' : 'var(--text-primary)',
-                                        opacity: step1Disabled ? 0.5 : 1,
+                                        display: 'flex', alignItems: 'center', gap: 4, cursor: (!canSelect || step1Disabled) ? 'not-allowed' : 'pointer',
+                                        color: (!canSelect || step1Disabled) ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                        opacity: (!canSelect || step1Disabled) ? 0.5 : 1,
                                       }}>
                                         <input type={inputType} checked={checked}
                                           name={isStep1 ? `step1-${p.id}` : undefined}
-                                          disabled={step1Disabled}
+                                          disabled={!canSelect || step1Disabled}
                                           onChange={() => {
                                             if (isStep1) setStep1Sub(p.id, sub)
                                             else toggleStepSub(p.id, def.key, sub)
