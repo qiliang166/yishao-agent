@@ -19,6 +19,7 @@ interface ProjectStatus {
   status: string
   steps_status: { step1: boolean; step2: boolean; step3: boolean; step4: boolean; [key: string]: boolean }
   sub_steps?: Record<string, boolean>
+  active_batch?: { batch_id: string; batch_status: string; project_status: string } | null
 }
 
 const STEP_DEFS = [
@@ -480,18 +481,31 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                     }} onClick={() => toggleExpand(p.id)}>
                       <div style={{ width: 36, flexShrink: 0 }} onClick={e => {
                         e.stopPropagation()
-                        const canSelect = isCurrentUserAdmin || p.created_by === currentUserId || !p.created_by
+                        const isInBatch = !!p.active_batch
+                        const canSelect = !isInBatch && (isCurrentUserAdmin || p.created_by === currentUserId || !p.created_by)
                         if (canSelect) toggleProject(p.id)
                       }}>
                         <input type="checkbox" checked={isSelected}
-                          disabled={!!(!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId)}
-                          title={(!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId) ? '非您创建的项目' : ''}
+                          disabled={!!p.active_batch || !!(!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId)}
+                          title={p.active_batch ? '正在批量执行中' : (!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId) ? '非您创建的项目' : ''}
                           onChange={() => {}} />
                       </div>
                       <div style={{ flex: 1, fontWeight: 500 }}>{p.name}</div>
                       <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.category_name || '—'}</div>
                       <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.author_name || '—'}</div>
                       <div style={{ width: 80, color: 'var(--text-secondary)' }}>{p.created_by_name || '—'}</div>
+                      <div style={{ width: 90, fontSize: 9 }}>
+                        {p.active_batch ? (
+                          <span style={{
+                            display: 'inline-block', padding: '1px 6px', borderRadius: 3,
+                            background: p.active_batch.batch_status === 'running' ? '#e6f7ff' : '#fff7e6',
+                            color: p.active_batch.batch_status === 'running' ? '#1890ff' : '#fa8c16',
+                            border: `1px solid ${p.active_batch.batch_status === 'running' ? '#91d5ff' : '#ffd591'}`,
+                          }}>
+                            {p.active_batch.batch_status === 'running' ? '执行中' : '等待中'}
+                          </span>
+                        ) : <span style={{ color: 'var(--text-tertiary)' }}>—</span>}
+                      </div>
                       <div style={{ width: 140, display: 'flex', gap: 4, alignItems: 'center' }}>
                         {STEP_DEFS.map(def => {
                           const done = ss[def.key]

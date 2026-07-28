@@ -8539,6 +8539,10 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
                 "ORDER BY p.created_at DESC"
             ).fetchall()
 
+        # Build active batch lookup once for all projects
+        from batch.scheduler import _get_active_project_map
+        active_map = _get_active_project_map()
+
         result = []
         for r in rows:
             r = dict(r)
@@ -8615,6 +8619,9 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
             # Creator name
             creator = db.execute("SELECT display_name FROM users WHERE id=?", (r.get("created_by",""),)).fetchone()
             r["created_by_name"] = creator[0] if creator else ""
+
+            # Mark if this project is in an active batch (by any user)
+            r["active_batch"] = active_map.get(pid)
 
             result.append(r)
 
@@ -8695,8 +8702,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
                     (pid, uid),
                 ).fetchone()
                 if not proj:
-                    exists = db.execute("SELECT name FROM projects WHERE id=?", (pid,)).fetchone()
-                    skipped.append(f"{exists[0] if exists else pid}（非您创建）")
+                    skipped.append(f"{pid}（非您创建）")
                     continue
             if proj:
                 item = {

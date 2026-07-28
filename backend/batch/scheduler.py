@@ -179,6 +179,23 @@ def get_project_active_batch(project_id: str) -> dict | None:
     return None
 
 
+def _get_active_project_map() -> dict[str, dict]:
+    """Build {project_id: {batch_id, batch_status, project_status}} in one pass over active batches."""
+    result = {}
+    with _batch_lock:
+        for batch_id, job in _active_batches.items():
+            if job.status not in ("pending", "running"):
+                continue
+            for item in job.items:
+                if item.get("status") not in ("completed", "failed", "skipped"):
+                    result[item["project_id"]] = {
+                        "batch_id": batch_id,
+                        "batch_status": job.status,
+                        "project_status": item.get("status", "unknown"),
+                    }
+    return result
+
+
 # ── Time helpers ──
 
 
