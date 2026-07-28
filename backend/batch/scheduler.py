@@ -223,8 +223,8 @@ def _update_db(job: BatchJob):
             db.commit()
         finally:
             db.close()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[batch] _update_db error: {e}")
 
 
 def _update_item_db(batch_id: str, item: dict):
@@ -250,8 +250,8 @@ def _update_item_db(batch_id: str, item: dict):
             db.commit()
         finally:
             db.close()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[batch] _update_item_db error: {e}")
 
 
 # ── Config loading ──
@@ -333,6 +333,8 @@ def start_batch(batch_id: str, workspace_id: str, start_time: str, end_time: str
             "logs": [],
         } for it in items]
         _active_batches[batch_id] = job
+        # Persist to DB synchronously before returning — so batch survives server restart
+        _update_db(job)
 
     job._thread = threading.Thread(target=_run_batch, args=(job,), daemon=True)
     job._thread.start()
