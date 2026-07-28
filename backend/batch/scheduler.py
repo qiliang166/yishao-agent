@@ -99,11 +99,12 @@ def _call_no_timeout(method: str, path: str, json_data: dict = None):
 
 
 class BatchJob:
-    def __init__(self, batch_id: str, workspace_id: str, start_time: str, end_time: str):
+    def __init__(self, batch_id: str, workspace_id: str, start_time: str, end_time: str, created_by: str = ""):
         self.batch_id = batch_id
         self.workspace_id = workspace_id
         self.start_time = start_time
         self.end_time = end_time
+        self.created_by = created_by
         self.status = "pending"
         self.total_count = 0
         self.completed_count = 0
@@ -122,6 +123,7 @@ class BatchJob:
             "total_count": self.total_count,
             "completed_count": self.completed_count,
             "failed_count": self.failed_count,
+            "created_by": self.created_by,
             "items": [
                 {
                     "project_id": it["project_id"],
@@ -215,10 +217,10 @@ def _update_db(job: BatchJob):
                 )
             else:
                 db.execute(
-                    "INSERT INTO batch_jobs (id, workspace_id, start_time, end_time, status, total_count, completed_count, failed_count) "
-                    "VALUES (?,?,?,?,?,?,?,?)",
+                    "INSERT INTO batch_jobs (id, workspace_id, start_time, end_time, status, total_count, completed_count, failed_count, created_by) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
                     (job.batch_id, job.workspace_id, job.start_time, job.end_time, job.status,
-                     job.total_count, job.completed_count, job.failed_count),
+                     job.total_count, job.completed_count, job.failed_count, job.created_by),
                 )
             db.commit()
         finally:
@@ -317,11 +319,11 @@ def _get_provider_model(db, workspace_id: str, step_name: str = "_model_s2_sop")
 
 
 def start_batch(batch_id: str, workspace_id: str, start_time: str, end_time: str,
-                items: list[dict]) -> BatchJob:
+                items: list[dict], created_by: str = "") -> BatchJob:
     with _batch_lock:
         if batch_id in _active_batches:
             return _active_batches[batch_id]
-        job = BatchJob(batch_id, workspace_id, start_time, end_time)
+        job = BatchJob(batch_id, workspace_id, start_time, end_time, created_by)
         job.total_count = len(items)
         job.items = [{
             "project_id": it["project_id"],

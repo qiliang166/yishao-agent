@@ -1731,6 +1731,14 @@ def _migrate_v1_create_tables(conn):
         except Exception as e:
             print(f"[DB] Warning: could not add created_by to {tbl}: {e}")
 
+    # Add created_by to batch_jobs for cancel ownership tracking
+    try:
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(batch_jobs)").fetchall()]
+        if "created_by" not in cols:
+            conn.execute("ALTER TABLE batch_jobs ADD COLUMN created_by TEXT DEFAULT ''")
+    except Exception as e:
+        print(f"[DB] Warning: could not add created_by to batch_jobs: {e}")
+
 def _migrate_v1_seed_roles(conn):
     """Insert 4 system roles with their permissions."""
     import uuid as _uuid

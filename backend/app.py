@@ -8636,6 +8636,13 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
 
     workspace_id = req.get("workspace_id", "")
 
+    # One active batch per workspace
+    from batch.scheduler import get_active_batches
+    existing = get_active_batches(workspace_id)
+    if existing:
+        bid = existing[0]["batch_id"]
+        raise HTTPException(409, f"该工作区已有正在执行的批次 (#{bid[:12]}...)，请等待完成或取消后再提交")
+
     # Check for project conflicts in active batches
     from batch.scheduler import _active_batches
     conflicts = []
@@ -8694,7 +8701,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
         raise HTTPException(400, "未找到有效项目")
 
     from batch.scheduler import start_batch
-    job = start_batch(batch_id, workspace_id, start_time, end_time, items)
+    job = start_batch(batch_id, workspace_id, start_time, end_time, items, created_by=uid)
 
     resp = {"batch_id": batch_id, "status": job.status}
     if conflicts:
@@ -8721,8 +8728,17 @@ def api_batch_active(workspace_id: str = "", user=require_perm("project.view_own
 
 @app.post("/api/batch/cancel/{batch_id}")
 def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
-    """Cancel a pending/running batch."""
-    from batch.scheduler import cancel_batch
+    """Cancel a pending/running batch. Only batch creator or admin can cancel."""
+    from batch.scheduler import cancel_batch, get_batch_status
+    status = get_batch_status(batch_id)
+    if not status:
+        raise HTTPException(404, "批次不存在")
+    is_admin = user.get("user_type") == "admin" or (user.get("sub") == "admin" and "user_type" not in user)
+    if not is_admin:
+        uid = user.get("user_id", user.get("sub", ""))
+        batch_owner = status.get("created_by", "")
+        if batch_owner and batch_owner != uid:
+            raise HTTPException(403, "只能取消自己创建的批次")
     if cancel_batch(batch_id):
         return {"status": "cancelled"}
     raise HTTPException(400, "无法取消该批次")
