@@ -336,7 +336,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   }, [])
 
   const handleExecute = async () => {
-    if (endTime <= startTime) { toast('结束时间必须晚于开始时间', 'error'); return }
+    if (endTime <= startTime) { alert('结束时间必须晚于开始时间'); return }
     const payload = buildStepsPayload()
     if (Object.keys(payload).length === 0) return
     setExecuting(true)
