@@ -8746,9 +8746,13 @@ def api_batch_active(workspace_id: str = "", user=require_perm("project.view_own
     from batch.scheduler import get_active_batches
     batches = get_active_batches(workspace_id)
     is_admin = user.get("user_type") == "admin" or (user.get("sub") == "admin" and "user_type" not in user)
+    uid = user.get("user_id", user.get("sub", ""))
+    print(f"[DEBUG api_batch_active] user_type={user.get('user_type')}, sub={user.get('sub')}, uid={uid}, is_admin={is_admin}, ws={workspace_id}")
+    for b in batches:
+        print(f"[DEBUG api_batch_active] BEFORE FILTER: batch={b.get('batch_id','?')[:16]}, created_by='{b.get('created_by','')}', status={b.get('status')}")
     if not is_admin:
-        uid = user.get("user_id", user.get("sub", ""))
         batches = [b for b in batches if b.get("created_by", "") == uid]
+    print(f"[DEBUG api_batch_active] AFTER FILTER: {len(batches)} batches")
     return {"batches": batches}
 
 
