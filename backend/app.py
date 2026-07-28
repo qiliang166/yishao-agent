@@ -8649,6 +8649,7 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
 
     # One active batch per user per workspace
     from batch.scheduler import get_active_batches
+    uid = user.get("user_id", user.get("sub", ""))
     user_batches = [b for b in get_active_batches(workspace_id) if b.get("created_by", "") == uid]
     if user_batches:
         raise HTTPException(409, "您已有正在执行的批次，请等待完成或取消后再提交")
@@ -8685,7 +8686,6 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
     batch_id = f"batch-{uuid.uuid4().hex[:8]}"
 
     # Build items list
-    uid = user.get("user_id", user.get("sub", ""))
     is_super_admin = "project.edit_all" in user.get("permissions", [])
     db = get_db()
     items = []
