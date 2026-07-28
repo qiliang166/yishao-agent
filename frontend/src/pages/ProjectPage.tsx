@@ -1237,12 +1237,16 @@ export default function ProjectPage() {
   }, [id])
 
   // Save step helper
-  const saveStep = useCallback((stepName: string, content: string) => {
+  const saveStep = useCallback(async (stepName: string, content: string) => {
     if (!id) return
-    api.saveStep(id, stepName, content)
-    setSteps(prev => ({ ...prev, [stepName]: content }))
-    setSavedSteps(prev => ({ ...prev, [stepName]: content }))
-  }, [id])
+    try {
+      await api.saveStep(id, stepName, content)
+      setSteps(prev => ({ ...prev, [stepName]: content }))
+      setSavedSteps(prev => ({ ...prev, [stepName]: content }))
+    } catch (e: any) {
+      modal.toast(`保存失败: ${e?.message || e}`, 'error')
+    }
+  }, [id, modal])
 
   const step1Key = () => sub === '1a' ? 'step1_video' : sub === '1b' ? 'step1_text' : 'step1_file'
 
