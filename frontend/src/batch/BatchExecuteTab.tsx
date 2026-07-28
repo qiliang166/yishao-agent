@@ -335,9 +335,11 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
 
   // Auto-detect running batch on mount (e.g. user navigated away and came back)
   useEffect(() => {
-    api.batchActive(workspaceId).then((batches: Array<{batch_id: string, status: string}>) => {
+    api.batchActive(workspaceId).then((batches: Array<{batch_id: string, status: string, created_by?: string}>) => {
       if (batches && batches.length > 0) {
-        startPolling(batches[0].batch_id)
+        // Only show MY own batch in the summary card, not other users' batches
+        const myBatch = batches.find(b => b.created_by === currentUserId) || null
+        if (myBatch) startPolling(myBatch.batch_id)
       }
     }).catch(() => {})
   }, [])
