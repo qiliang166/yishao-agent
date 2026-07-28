@@ -2710,8 +2710,8 @@ export default function ProjectPage() {
                     <CanEdit perm={canGenerate1}>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                       <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>🗑 清空</button>
-                      <button className={`btn btn-primary btn-sm ${getSaveBtnClass(videoText, 'video_text')}`} disabled={!videoText.trim()}
-                        onClick={() => { if (id && videoText.trim()) { saveStep('video_text', videoText); saveStep('raw_video', videoText); flashSave() } }}>{getSaveBtnLabel(videoText, 'video_text')}</button>
+                      <button className={`btn btn-primary btn-sm ${getSaveBtnClass(videoText, 'video_text')}`}
+                        onClick={() => { if (id) { saveStep('video_text', videoText); saveStep('raw_video', videoText); flashSave() } }}>{getSaveBtnLabel(videoText, 'video_text')}</button>
                     </div>
                     </CanEdit>
                   </div>
@@ -2729,8 +2729,8 @@ export default function ProjectPage() {
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                     <CanEdit>
                       <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
-                      <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'raw_text')}`} disabled={!textInput.trim()}
-                        onClick={() => { if (id && textInput.trim()) { saveStep('raw_text', textInput); flashSave() } }}>{getSaveBtnLabel(textInput, 'raw_text')}</button>
+                      <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'raw_text')}`}
+                        onClick={() => { if (id) { saveStep('raw_text', textInput); flashSave() } }}>{getSaveBtnLabel(textInput, 'raw_text')}</button>
                     </CanEdit>
                     <CanEdit perm={canGenerate1}>
                     <button className="btn btn-primary btn-sm"
@@ -2793,8 +2793,8 @@ export default function ProjectPage() {
                   <CanEdit perm={canGenerate1}>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setFileText('')}>🗑 清空</button>
-                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(fileText, 'raw_file')}`} disabled={!fileText.trim()}
-                      onClick={() => { if (id && fileText.trim()) { saveStep('raw_file', fileText); flashSave() } }}>{getSaveBtnLabel(fileText, 'raw_file')}</button>
+                    <button className={`btn btn-primary btn-sm ${getSaveBtnClass(fileText, 'raw_file')}`}
+                      onClick={() => { if (id) { saveStep('raw_file', fileText); flashSave() } }}>{getSaveBtnLabel(fileText, 'raw_file')}</button>
                   </div>
                   </CanEdit>
                 </div>
