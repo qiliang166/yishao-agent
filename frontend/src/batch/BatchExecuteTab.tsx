@@ -484,7 +484,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                         if (canSelect) toggleProject(p.id)
                       }}>
                         <input type="checkbox" checked={isSelected}
-                          disabled={!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId}
+                          disabled={!!(!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId)}
                           title={(!isCurrentUserAdmin && p.created_by && p.created_by !== currentUserId) ? '非您创建的项目' : ''}
                           onChange={() => {}} />
                       </div>
