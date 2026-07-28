@@ -1358,9 +1358,11 @@ export const api = {
     request(`/api/booklets/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   deleteBooklet: (id: string) =>
     request(`/api/booklets/${id}`, { method: 'DELETE' }),
-  bookletAvailableContent: (bookType: string, workspaceId?: string) => {
-    const qs = workspaceId ? `&workspace_id=${encodeURIComponent(workspaceId)}` : ''
-    return request(`/api/booklets/available-content?book_type=${encodeURIComponent(bookType)}${qs}`)
+  bookletAvailableContent: (bookType: string, workspaceId?: string, categoryId?: string) => {
+    const params = [`book_type=${encodeURIComponent(bookType)}`]
+    if (workspaceId) params.push(`workspace_id=${encodeURIComponent(workspaceId)}`)
+    if (categoryId) params.push(`category_id=${encodeURIComponent(categoryId)}`)
+    return request(`/api/booklets/available-content?${params.join('&')}`)
   },
   bookletContentItem: (projectId: string, sourceType: string, sourceKey: string) =>
     request(`/api/booklets/content-item?project_id=${encodeURIComponent(projectId)}&source_type=${encodeURIComponent(sourceType)}&source_key=${encodeURIComponent(sourceKey)}`)

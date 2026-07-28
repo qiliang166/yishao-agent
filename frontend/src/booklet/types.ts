@@ -74,6 +74,8 @@ export interface ContentItem {
 export interface ContentProject {
   id: string
   name: string
+  author?: string
+  point_cost?: number
   items: ContentItem[]
 }
 

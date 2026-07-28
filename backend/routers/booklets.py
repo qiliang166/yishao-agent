@@ -818,7 +818,7 @@ class BookletRenderBody(BaseModel):
 
 
 @router.get("/available-content")
-def available_content(request: Request, book_type: str = "a4", workspace_id: str = ""):
+def available_content(request: Request, book_type: str = "a4", workspace_id: str = "", category_id: str = ""):
     user = _require_user(request)
     if book_type not in VALID_BOOK_TYPES:
         raise HTTPException(400, f"册子类型非法: {book_type}")
@@ -845,11 +845,31 @@ def available_content(request: Request, book_type: str = "a4", workspace_id: str
             ).fetchall()
             return {"workspaces": [{"id": r["id"], "name": r["name"]} for r in rows]}
 
-        # 明细及内容项树
-        proj_rows = db.execute(
-            "SELECT id, name FROM projects WHERE workspace_id=? ORDER BY updated_at DESC",
+        # 分类列表
+        cat_rows = db.execute(
+            "SELECT id, name FROM project_categories WHERE workspace_id=? ORDER BY sort_order, created_at",
             (workspace_id,),
         ).fetchall()
+        categories = [{"id": c["id"], "name": c["name"]} for c in cat_rows]
+
+        # 明细及内容项树
+        proj_sql = "SELECT id, name, created_by, point_cost_deci FROM projects WHERE workspace_id=?"
+        proj_params: list = [workspace_id]
+        if category_id:
+            proj_sql += " AND category_id=?"
+            proj_params.append(category_id)
+        proj_sql += " ORDER BY updated_at DESC"
+        proj_rows = db.execute(proj_sql, tuple(proj_params)).fetchall()
+        # 作者名映射
+        author_ids = {p["created_by"] for p in proj_rows if p["created_by"]}
+        author_map = {}
+        if author_ids:
+            marks = ",".join("?" * len(author_ids))
+            ur = db.execute(
+                f"SELECT id, display_name FROM users WHERE id IN ({marks})",
+                tuple(author_ids),
+            ).fetchall()
+            author_map = {u["id"]: u["display_name"] for u in ur}
         labels = _workspace_labels(db, workspace_id)
         projects = []
         for p in proj_rows:
@@ -881,8 +901,13 @@ def available_content(request: Request, book_type: str = "a4", workspace_id: str
                     "label": labels.get(col_id, default_label),
                     "available": has_file,
                 })
-            projects.append({"id": p["id"], "name": p["name"], "items": items})
-        return {"projects": projects}
+            projects.append({
+                "id": p["id"], "name": p["name"],
+                "author": author_map.get(p["created_by"], "") if p["created_by"] else "",
+                "point_cost": p["point_cost_deci"] or 0,
+                "items": items,
+            })
+        return {"projects": projects, "categories": categories}
     finally:
         db.close()
 

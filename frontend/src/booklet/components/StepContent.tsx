@@ -14,6 +14,8 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
   const { toast } = useModal()
   const [workspaces, setWorkspaces] = useState<{ id: string; name: string }[]>([])
   const [wsId, setWsId] = useState('')
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([])
+  const [categoryId, setCategoryId] = useState('')
   const [projects, setProjects] = useState<ContentProject[]>([])
   const [loadingTree, setLoadingTree] = useState(false)
   const [addingKey, setAddingKey] = useState('')
@@ -36,11 +38,14 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
   useEffect(() => {
     if (!wsId) return
     setLoadingTree(true)
-    api.bookletAvailableContent(draft.book_type, wsId)
-      .then(d => { if (d?.projects != null) setProjects(d.projects) })
+    api.bookletAvailableContent(draft.book_type, wsId, categoryId || undefined)
+      .then(d => {
+        if (d?.projects != null) setProjects(d.projects)
+        if (d?.categories != null) setCategories(d.categories)
+      })
       .catch((e: any) => toast(`加载明细失败: ${e?.message || e}`, 'error'))
       .finally(() => setLoadingTree(false))
-  }, [wsId])
+  }, [wsId, categoryId])
 
   const chapterKey = (projectId: string, sourceKey: string) => `${projectId}::${sourceKey}`
   const isAdded = (projectId: string, sourceKey: string) =>
@@ -150,25 +155,49 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
         <div className="card" style={{ flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column' }}>
           <div className="card-title" style={{ flexShrink: 0 }}>📂 从工作区调取内容</div>
           <div className="card-hint" style={{ flexShrink: 0 }}>勾选要装进册子的内容，可跨明细、跨工作区多选。</div>
-          <select className="form-input" value={wsId} onChange={e => setWsId(e.target.value)} style={{ flexShrink: 0 }} disabled={readonly}>
+          <select className="form-input" value={wsId} onChange={e => { setWsId(e.target.value); setCategoryId('') }} style={{ flexShrink: 0 }} disabled={readonly}>
             {workspaces.length === 0 && <option value="">（无可用工作区）</option>}
             {workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
+          {categories.length > 0 && (
+            <select className="form-input" value={categoryId} onChange={e => setCategoryId(e.target.value)}
+              style={{ flexShrink: 0, marginTop: 6 }} disabled={readonly}>
+              <option value="">全部分类</option>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          )}
           <div style={{ marginTop: 10, flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {loadingTree ? (
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: 10 }}>加载中...</div>
             ) : projects.length === 0 ? (
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: 10 }}>该工作区暂无可调取的明细</div>
-            ) : projects.map(p => (
-              <div key={p.id} style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 4 }}>📋 {p.name}</div>
+            ) : projects.map((p, idx) => {
+                const availCount = p.items.filter(i => i.available).length
+                const points = (p.point_cost || 0) / 10
+                return (
+              <div key={p.id} style={{ marginBottom: 8 }}>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px',
+                  borderBottom: '1px solid var(--border)',
+                }}>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)', flexShrink: 0, width: 18, textAlign: 'right', userSelect: 'none' }}>{idx + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span title={p.name} style={{ fontSize: 12, fontWeight: 500 }}>{p.name}</span>
+                    <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 6 }}>
+                      {[p.author, availCount > 0 ? `${availCount} 个文件` : ''].filter(Boolean).join(' · ')}
+                    </span>
+                  </div>
+                  {points > 0 && (
+                    <span style={{ fontSize: 10, color: 'var(--warning)', flexShrink: 0 }}>{points.toFixed(1)} 积分</span>
+                  )}
+                </div>
                 {p.items.map(item => {
                   const added = isAdded(p.id, item.source_key)
                   const busy = addingKey === chapterKey(p.id, item.source_key)
                   return (
                     <label key={item.source_type + item.source_key + item.label}
                       style={{
-                        display: 'flex', alignItems: 'center', gap: 6, padding: '3px 4px 3px 16px',
+                        display: 'flex', alignItems: 'center', gap: 6, padding: '3px 4px 3px 24px',
                         fontSize: 12, cursor: readonly || !item.available ? 'not-allowed' : 'pointer',
                         opacity: item.available ? 1 : 0.45,
                       }}>
@@ -181,7 +210,7 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
                   )
                 })}
               </div>
-            ))}
+            )})}
           </div>
         </div>
 
