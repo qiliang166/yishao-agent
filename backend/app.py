@@ -1546,6 +1546,11 @@ async def api_download_selected(project_id: str, request: Request):
 def api_delete_project_file(project_id: str, filename: str, user=require_perm("project.edit_own")):
     """Delete a single file from project storage."""
     verify_project_access(project_id, user)
+    _chk_db = get_db()
+    _chk_row = _chk_db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if _chk_row:
+        check_ownership(_chk_row["created_by"], user)
+    _chk_db.close()
     path = resolve_project_storage(project_id, auto_create=False)
     filepath = os.path.join(path, filename)
     if not os.path.exists(filepath):
@@ -1855,6 +1860,11 @@ def api_list_project_directories(project_id: str, subdir: str = "", request: Req
 @app.post("/api/projects/{project_id}/save-file")
 def api_save_file_to_project(project_id: str, req: dict, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
+    _chk_db = get_db()
+    _chk_row = _chk_db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if _chk_row:
+        check_ownership(_chk_row["created_by"], user)
+    _chk_db.close()
     """Save content to a file. If target_dir is provided (absolute path), use it directly.
     Otherwise resolve relative to the project's storage directory."""
     filename = req.get("filename", "document.txt")
@@ -1989,6 +1999,9 @@ def get_steps(project_id: str, request: Request):
 def save_step(project_id: str, step_name: str, req: StepResultSave, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         existing = db.execute(
             "SELECT id FROM step_results WHERE project_id = ? AND step_name = ?",
@@ -2051,6 +2064,9 @@ def list_materials(project_id: str, request: Request):
 def add_material(project_id: str, req: SourceMaterialCreate, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         mat_id = f"sm-{project_id}-{uuid.uuid4().hex[:8]}"
         db.execute(
@@ -2074,6 +2090,9 @@ async def upload_material(project_id: str, file: UploadFile = File(...), user=re
     result = parse_bytes(data, file.filename or "unknown")
 
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         mat_id = f"sm-{project_id}-{uuid.uuid4().hex[:8]}"
         source_type = os.path.splitext(file.filename or "")[1].lower().lstrip(".")
@@ -2097,6 +2116,9 @@ async def upload_material(project_id: str, file: UploadFile = File(...), user=re
 def delete_material(project_id: str, material_id: str, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         db.execute("DELETE FROM source_materials WHERE id = ? AND project_id = ?",
                    (material_id, project_id))
@@ -2110,6 +2132,9 @@ def delete_material(project_id: str, material_id: str, user=require_perm("projec
 def update_material(project_id: str, material_id: str, req: SourceMaterialUpdate, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         existing = db.execute("SELECT id FROM source_materials WHERE id = ? AND project_id = ?",
                               (material_id, project_id)).fetchone()
@@ -2162,6 +2187,9 @@ def list_project_items(project_id: str, output_mode: str = "", request: Request 
 def create_project_item(project_id: str, req: ProjectItemCreate, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         item_id = f"pi-{project_id}-{uuid.uuid4().hex[:8]}"
         db.execute(
@@ -2181,6 +2209,9 @@ def create_project_item(project_id: str, req: ProjectItemCreate, user=require_pe
 def update_project_item(project_id: str, item_id: str, req: ProjectItemUpdate, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         existing = db.execute("SELECT id FROM project_items WHERE id = ? AND project_id = ?",
                               (item_id, project_id)).fetchone()
@@ -2209,6 +2240,9 @@ def update_project_item(project_id: str, item_id: str, req: ProjectItemUpdate, u
 def delete_project_item(project_id: str, item_id: str, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         db.execute("DELETE FROM project_item_results WHERE project_item_id = ?", (item_id,))
         db.execute("DELETE FROM project_items WHERE id = ? AND project_id = ?",
@@ -2225,6 +2259,9 @@ def copy_project_items(project_id: str, source_project_id: str, user=require_per
     verify_project_access(source_project_id, user)
     """Copy all project_items from source project to target project."""
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         source_items = db.execute(
             "SELECT * FROM project_items WHERE project_id = ? ORDER BY sort_order",
@@ -2257,6 +2294,11 @@ def init_project_items_from_factory(project_id: str, user=require_perm("project.
     """Initialize project_items from global factory configs for an existing project.
     Skips items that already exist (based on standard ID pattern).
     """
+    _chk_db = get_db()
+    _chk_row = _chk_db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if _chk_row:
+        check_ownership(_chk_row["created_by"], user)
+    _chk_db.close()
     _init_project_items_from_factory(project_id)
     return {"ok": True}
 
@@ -2282,6 +2324,9 @@ def list_item_results(project_id: str, item_id: str, request: Request):
 def save_item_result(project_id: str, item_id: str, req: ProjectItemResultSave, user=require_perm("project.edit_own")):
     verify_project_access(project_id, user)
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         existing = db.execute(
             "SELECT id FROM project_items WHERE id = ? AND project_id = ?",
@@ -2307,6 +2352,9 @@ def copy_project(project_id: str, user=require_perm("project.create")):
     verify_project_access(project_id, user)
     """Copy a project and all its items (the project IS the template)."""
     db = get_db()
+    proj_owner = db.execute("SELECT created_by FROM projects WHERE id=?", (project_id,)).fetchone()
+    if proj_owner:
+        check_ownership(proj_owner["created_by"], user)
     try:
         src = db.execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
         if not src:
