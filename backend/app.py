@@ -1165,9 +1165,11 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         ).fetchone()[0]
         project_code = f"KH{today}-{today_count + 1:04d}"
 
+        uid = user.get("sub", "")
+        print(f"[DEBUG create_project] user.sub={uid}, user.user_type={user.get('user_type')}, username={user.get('username')}")
         db.execute(
             "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable, category_id, author_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, user["sub"],
+            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, uid,
              req.point_cost_deci if req.point_cost_deci is not None else 5,
              req.is_downloadable if req.is_downloadable is not None else 0,
              req.category_id or "", req.author_id or ""))
