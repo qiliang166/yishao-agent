@@ -1165,11 +1165,9 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         ).fetchone()[0]
         project_code = f"KH{today}-{today_count + 1:04d}"
 
-        uid = user.get("sub", "")
-        print(f"[DEBUG create_project] user.sub={uid}, user.user_type={user.get('user_type')}, username={user.get('username')}")
         db.execute(
             "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable, category_id, author_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, uid,
+            (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, user["sub"],
              req.point_cost_deci if req.point_cost_deci is not None else 5,
              req.is_downloadable if req.is_downloadable is not None else 0,
              req.category_id or "", req.author_id or ""))
@@ -8688,13 +8686,13 @@ def api_batch_execute(req: dict, user=require_perm("project.edit_own")):
 
     # Build items list
     uid = user.get("user_id", user.get("sub", ""))
-    is_admin = user.get("user_type") == "admin" or (user.get("sub") == "admin" and "user_type" not in user)
+    is_super_admin = "project.edit_all" in user.get("permissions", [])
     db = get_db()
     items = []
     skipped = []
     try:
         for pid, step_data in project_steps.items():
-            if is_admin:
+            if is_super_admin:
                 proj = db.execute(
                     "SELECT id, name FROM projects WHERE id=?", (pid,)
                 ).fetchone()
@@ -8747,14 +8745,10 @@ def api_batch_active(workspace_id: str = "", user=require_perm("project.view_own
     """List active (pending/running) batches. Non-admins only see their own."""
     from batch.scheduler import get_active_batches
     batches = get_active_batches(workspace_id)
-    is_admin = user.get("user_type") == "admin" or (user.get("sub") == "admin" and "user_type" not in user)
-    uid = user.get("user_id", user.get("sub", ""))
-    print(f"[DEBUG api_batch_active] user_type={user.get('user_type')}, sub={user.get('sub')}, uid={uid}, is_admin={is_admin}, ws={workspace_id}")
-    for b in batches:
-        print(f"[DEBUG api_batch_active] BEFORE FILTER: batch={b.get('batch_id','?')[:16]}, created_by='{b.get('created_by','')}', status={b.get('status')}")
-    if not is_admin:
+    is_super_admin = "project.edit_all" in user.get("permissions", [])
+    if not is_super_admin:
+        uid = user.get("user_id", user.get("sub", ""))
         batches = [b for b in batches if b.get("created_by", "") == uid]
-    print(f"[DEBUG api_batch_active] AFTER FILTER: {len(batches)} batches")
     return {"batches": batches}
 
 
@@ -8765,8 +8759,8 @@ def api_batch_cancel(batch_id: str, user=require_perm("project.edit_own")):
     status = get_batch_status(batch_id)
     if not status:
         raise HTTPException(404, "批次不存在")
-    is_admin = user.get("user_type") == "admin" or (user.get("sub") == "admin" and "user_type" not in user)
-    if not is_admin:
+    is_super_admin = "project.edit_all" in user.get("permissions", [])
+    if not is_super_admin:
         uid = user.get("user_id", user.get("sub", ""))
         batch_owner = status.get("created_by", "")
         if not batch_owner or batch_owner != uid:
