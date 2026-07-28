@@ -8,10 +8,11 @@ import HelpButton from '../components/HelpButton'
 import { BatchDialog } from '../batch/BatchDialog'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 
-const [pageSize, setPageSize] = useState(50)
+const DEFAULT_PAGE_SIZE = 50
 
 export default function ProjectDashboard() {
   const { wid } = useParams<{ wid: string }>()
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const modal = useModal()
   const canCreate = usePermission('project.create')
   const canEditOwn = usePermission('project.edit_own')
