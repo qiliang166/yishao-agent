@@ -100,7 +100,7 @@ const STEP_LABEL: Record<string, string> = { '1': '素材输入', '2': '文档�
 
 export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) => {
   const { user } = useAuth()
-  const isCurrentUserAdmin = user?.user_type === 'admin'
+  const isCurrentUserAdmin = user?.permissions?.includes('project.edit_all') || false
   const currentUserId = user?.user_id || ''
   const [projects, setProjects] = useState<ProjectStatus[]>([])
   const [loading, setLoading] = useState(true)
