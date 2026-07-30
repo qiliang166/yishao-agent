@@ -126,6 +126,23 @@ body {
 }
 .bk-nav button:hover { background: rgba(255,255,255,0.2); }
 
+	/* === 页眉页脚（绝对定位在页边距区内，不占内容流，不影响拆页检测） === */
+	.bk-page-header {
+	  position: absolute; top: 0; left: 20mm; right: 20mm; height: 16mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 10pt; color: rgba(var(--text-rgb), 0.5);
+	  border-bottom: 1px solid rgba(var(--text-rgb), 0.1);
+	  z-index: 1; pointer-events: none;
+	}
+	.bk-page-header.no-divider { border-bottom: none; }
+	.bk-page-header-logo { height: 11mm; width: auto; vertical-align: middle; margin-right: 3mm; }
+	.bk-page-footer {
+	  position: absolute; bottom: 0; left: 20mm; right: 20mm; height: 14mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 9pt; color: rgba(var(--text-rgb), 0.4);
+	  z-index: 1; pointer-events: none;
+	}
+
 /* ═══ 打印：A4 分页（全页输出，不受翻页状态影响） ═══ */
 @page {
   size: A4;
@@ -314,9 +331,14 @@ window.__BK_RDY = 0;
       cont.removeAttribute('id');
       cont.classList.remove('bk-chapter');
       cont.style.display = 'flex'; cont.style.visibility = 'hidden'; /* 供本轮继续测量，restore 时清除 */
+      // 复制页眉页脚到续页
+      var hdr = s.querySelector(':scope > .bk-page-header');
+      var ftr = s.querySelector(':scope > .bk-page-footer');
+      if (hdr) cont.appendChild(hdr.cloneNode(true));
       var inner = document.createElement('div'); inner.className = 'bk-sheet-inner';
       var prose = document.createElement('div'); prose.className = 'bk-prose';
       inner.appendChild(prose); cont.appendChild(inner);
+      if (ftr) cont.appendChild(ftr.cloneNode(true));
       s.parentNode.insertBefore(cont, s.nextSibling);
       return { section: cont, prose: prose };
     },
@@ -412,6 +434,21 @@ window.__BK_PROSE_ARRANGE = {{PROSE_ARRANGE}};
   window.addEventListener('resize', fit);
   fit();
   show(0);
+})();
+</script>
+
+<script>
+/* ═══ 页脚页码填充（拆页/编排完成后注入当前页与总页数） ═══ */
+(function defer() {
+  if (window.__BK_RDY < 2) return requestAnimationFrame(defer);
+  var sheets = document.querySelectorAll('.bk-sheet');
+  var total = sheets.length;
+  sheets.forEach(function(s, i) {
+    var cur = s.querySelector('.bk-page-cur');
+    var tot = s.querySelector('.bk-page-total');
+    if (cur) cur.textContent = i + 1;
+    if (tot) tot.textContent = total;
+  });
 })();
 </script>
 

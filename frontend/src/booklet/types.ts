@@ -24,6 +24,18 @@ export interface Chapter {
   prose_page_order?: number[]
 }
 
+export interface PageHeaderFooter {
+  enabled?: boolean
+  header_left?: string
+  header_center?: string
+  header_right?: string
+  header_logo_url?: string
+  footer_left?: string
+  footer_center?: string
+  footer_right?: string
+  show_divider?: boolean
+}
+
 export interface Cover {
   logo_url?: string
   org?: string
@@ -35,6 +47,7 @@ export interface Cover {
   desk_none?: boolean
   render_mode?: 'paged' | 'flow' | 'standard'
   hidden_fixed?: string[]
+  page_hf?: PageHeaderFooter
 }
 
 export interface BookletSummary {

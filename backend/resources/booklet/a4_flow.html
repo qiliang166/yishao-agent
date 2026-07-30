@@ -114,6 +114,23 @@ body {
 .bk-vi .bk-back-brand { color: #ffffff; }
 .bk-vi .bk-back .bk-vi-decor { display: block; position: absolute; right: -110px; top: -110px; width: 320px; height: 320px; }
 
+	/* === 页眉页脚（绝对定位在页边距区内，不占内容流） === */
+	.bk-page-header {
+	  position: absolute; top: 0; left: 20mm; right: 20mm; height: 16mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 10pt; color: rgba(var(--text-rgb), 0.5);
+	  border-bottom: 1px solid rgba(var(--text-rgb), 0.1);
+	  z-index: 1; pointer-events: none;
+	}
+	.bk-page-header.no-divider { border-bottom: none; }
+	.bk-page-header-logo { height: 11mm; width: auto; vertical-align: middle; margin-right: 3mm; }
+	.bk-page-footer {
+	  position: absolute; bottom: 0; left: 20mm; right: 20mm; height: 14mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 9pt; color: rgba(var(--text-rgb), 0.4);
+	  z-index: 1; pointer-events: none;
+	}
+
 /* ═══ 打印：连续内容自然分页 ═══ */
 @page {
   size: A4;
@@ -202,6 +219,20 @@ body {
   <div class="bk-back-band"></div>
 </section>
 <!--/BK:BACK-->
+
+<script>
+/* ═══ 页脚页码填充（网页式无拆页，DOM 就绪后直接注入） ═══ */
+(function() {
+  var sheets = document.querySelectorAll('.bk-sheet');
+  var total = sheets.length;
+  sheets.forEach(function(s, i) {
+    var cur = s.querySelector('.bk-page-cur');
+    var tot = s.querySelector('.bk-page-total');
+    if (cur) cur.textContent = i + 1;
+    if (tot) tot.textContent = total;
+  });
+})();
+</script>
 
 </body>
 </html>

@@ -362,6 +362,30 @@ def _load_branding_pair() -> tuple:
     return copyright_str, signature_str
 
 
+def _load_brand_settings() -> dict:
+    """Load brand_name, branding_slogan, branding_copyright, branding_signature from settings table."""
+    db = get_db()
+    result = {"_brand_name": "", "_brand_slogan": "", "_brand_copyright": "", "_brand_signature": ""}
+    try:
+        rows = db.execute(
+            "SELECT key, value FROM settings WHERE key IN ('brand_name', 'branding_slogan', 'branding_copyright', 'branding_signature')"
+        ).fetchall()
+        for r in rows:
+            if r["key"] == "brand_name" and r["value"]:
+                result["_brand_name"] = r["value"]
+            elif r["key"] == "branding_slogan" and r["value"]:
+                result["_brand_slogan"] = r["value"]
+            elif r["key"] == "branding_copyright" and r["value"]:
+                result["_brand_copyright"] = r["value"]
+            elif r["key"] == "branding_signature" and r["value"]:
+                result["_brand_signature"] = r["value"]
+    except Exception:
+        pass
+    finally:
+        db.close()
+    return result
+
+
 _LOGO_MEDIA = {
     ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
     ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
@@ -560,6 +584,32 @@ def _first_chapter_is_html(chapters: list) -> bool:
     return not is_prose
 
 
+def _resolve_hf_var(text: str, booklet: dict, chapter_title: str) -> str:
+    """Replace {书名} {章节} {日期} {应用名称} {口号} {版权} {签名} tokens in header/footer text."""
+    if not text:
+        return ""
+    cover = booklet.get("cover") or {}
+    text = text.replace("{书名}", booklet.get("title", ""))
+    text = text.replace("{章节}", chapter_title)
+    text = text.replace("{日期}", cover.get("date_text", ""))
+    text = text.replace("{应用名称}", booklet.get("_brand_name", ""))
+    text = text.replace("{口号}", booklet.get("_brand_slogan", ""))
+    text = text.replace("{版权}", booklet.get("_brand_copyright", ""))
+    text = text.replace("{签名}", booklet.get("_brand_signature", ""))
+    return text
+
+
+def _resolve_footer_right(text: str, booklet: dict, chapter_title: str) -> str:
+    """Resolve footer_right: text vars escaped, {页码}/{总页数} → unescaped <span> for JS fill-in."""
+    if not text:
+        text = "{页码} / {总页数}"
+    text = _resolve_hf_var(text, booklet, chapter_title)
+    text = html_lib.escape(text)
+    text = text.replace("{页码}", '<span class="bk-page-cur"></span>')
+    text = text.replace("{总页数}", '<span class="bk-page-total"></span>')
+    return text
+
+
 def render_booklet(booklet: dict, theme: dict) -> str:
     """把草稿装配为自包含单文件 HTML 电子书。
 
@@ -588,6 +638,9 @@ def render_booklet(booklet: dict, theme: dict) -> str:
         template = _BK_FIXED_RE[key].sub("", template)
 
     brand_copyright, brand_signature = _load_branding_pair()
+
+    # 注入全局品牌设置供页眉页脚变量使用
+    booklet.update(_load_brand_settings())
 
     logo_uri = _logo_data_uri(cover.get("logo_url", ""))
     logo_html = f'<img class="bk-cover-logo" src="{logo_uri}" alt="logo">' if logo_uri else ""
@@ -641,8 +694,26 @@ def render_booklet(booklet: dict, theme: dict) -> str:
                 arrange = _prose_arrange_of(ch)
                 if arrange:
                     prose_arrange[anchor] = arrange
+                # 页眉页脚 HTML（不启用则空字符串，不影响现有输出）
+                hf_html = ""
+                page_hf = cover.get("page_hf") or {}
+                if page_hf.get("enabled"):
+                    hl = _esc(_resolve_hf_var(page_hf.get("header_left", "{书名}"), booklet, title))
+                    hc = _esc(_resolve_hf_var(page_hf.get("header_center", ""), booklet, title))
+                    hr = _esc(_resolve_hf_var(page_hf.get("header_right", "{章节}"), booklet, title))
+                    fl = _esc(_resolve_hf_var(page_hf.get("footer_left", ""), booklet, title))
+                    fc = _esc(_resolve_hf_var(page_hf.get("footer_center", ""), booklet, title))
+                    fr = _resolve_footer_right(page_hf.get("footer_right", ""), booklet, title)
+                    hf_logo_html = ""
+                    if page_hf.get("header_logo_url"):
+                        hf_logo_html = f'<img class="bk-page-header-logo" src="{_esc(page_hf["header_logo_url"])}" alt="">'
+                    div_cls = "bk-page-header" if page_hf.get("show_divider", True) else "bk-page-header no-divider"
+                    hf_html = f'<div class="{div_cls}"><span>{hf_logo_html}{hl}</span><span>{hc}</span><span>{hr}</span></div>'
+                    hf_html += f'<div class="bk-page-footer"><span>{fl}</span><span>{fc}</span><span>{fr}</span></div>'
                 chapter_parts.append(
-                    f'<section class="bk-sheet bk-chapter" id="{anchor}" data-bk-prose="{anchor}"{bg_style}><div class="bk-sheet-inner">'
+                    f'<section class="bk-sheet bk-chapter" id="{anchor}" data-bk-prose="{anchor}"{bg_style}>'
+                    f'{hf_html}'
+                    f'<div class="bk-sheet-inner">'
                     f'<div class="bk-chapter-head"><div class="bk-chapter-no">第 {i} 章</div>'
                     f'<div class="bk-chapter-title">{title}</div>'
                     f'<div class="bk-chapter-src">{src_line}</div></div>'
@@ -972,6 +1043,7 @@ class CoverPreviewReq(BaseModel):
     theme_colors: dict = {}
     desk_none: bool = False
     vi_mode: bool = False  # a4 且第一章为 HTML 课件（本端点拿不到章节，由前端算好传入）
+    page_hf: dict = {}     # 页眉页脚配置
 
 
 @router.post("/cover-preview")
@@ -996,6 +1068,7 @@ def cover_preview(data: CoverPreviewReq, request: Request):
             "theme_colors": data.theme_colors,
             "desk_none": data.desk_none,
             "render_mode": "standard",
+            "page_hf": data.page_hf,
         },
         "chapters": [{
             "id": "_cover_preview_dummy",

@@ -1377,7 +1377,7 @@ export const api = {
     book_type: string; title: string; subtitle: string; author: string;
     org: string; date_text: string; flyleaf_text: string; back_cover_text: string;
     logo_url: string; theme_id: string; theme_colors: Record<string, string>;
-    desk_none: boolean; vi_mode: boolean;
+    desk_none: boolean; vi_mode: boolean; page_hf?: Record<string, any>;
   }) =>
     request('/api/booklets/cover-preview', {
       method: 'POST',
