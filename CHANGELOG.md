@@ -1,5 +1,18 @@
 ﻿# 更新日志
 
+## 2026-07-31
+
+- feat: 视频提取支持本地上传，上传/下载结果完全一致（同一ASR管道）
+
+## 2026-07-31
+
+- fix: 项目明细搜索同时匹配project_code编号，不局限于名称
+- fix: 网页式页眉LOGO压正文 — :has()替代+选择器绕过footer阻断
+
+## 2026-07-30
+
+- chore: build stamp for c03ab9d (booklet header/footer feature)
+
 ## 2026-07-30
 
 - feat: 电子成册文本页可配置页眉页脚（LOGO+三栏+全局变量+页码）

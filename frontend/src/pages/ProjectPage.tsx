@@ -928,6 +928,10 @@ export default function ProjectPage() {
       setSteps(prev => ({ ...prev, ...map }))
       setSavedSteps(prev => ({ ...prev, ...map }))
       setVideoText(map['raw_video'] || map['video_text'] || '')
+      // Load existing video files so player works after refresh
+      api.listProjectVideos(id).then((vids: any) => {
+        if (vids.videos?.length > 0) setVideoPath(vids.videos[0].path)
+      }).catch(() => {})
       setTextInput(map['raw_text'] || '')
       setFileText(map['raw_file'] || '')
       // Restore saved split segments
@@ -2628,7 +2632,7 @@ export default function ProjectPage() {
               {mode1 === 'link' && <>
                 <div className="card">
                   <div className="card-title">📺 视频提取<HelpButton location="project-stage-1a" /></div>
-                  <div className="card-hint">粘贴视频链接 → 下载 + 语音识别 → 提取内容在下方编辑</div>
+                  <div className="card-hint">粘贴视频链接或上传本地文件 → 下载 + 语音识别 → 提取内容在下方编辑</div>
                   <input className="form-input" placeholder="粘贴视频链接（支持抖音/B站/YouTube等）"
                     value={videoUrl} onChange={e => setVideoUrl(e.target.value)} style={{ marginBottom: 6 }} />
                   <div className="form-row" style={{ gap: 6, marginBottom: 6 }}>
@@ -2659,38 +2663,36 @@ export default function ProjectPage() {
                       ))}
                     </select>
                   </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
                   <CanEdit perm={canGenerate1}>
-                  <button className="btn btn-primary btn-sm w-full"
+                  <button className="btn btn-primary btn-sm" style={{ flex: 1 }}
                     onClick={handleVideoDownload} disabled={dlStatus === 'downloading'}>
                     ▶ 下载并识别
                   </button>
                   </CanEdit>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 }}>或</span>
-                    <div style={{ flex: 1, borderTop: '1px solid var(--border)' }} />
-                  </div>
                   <CanEdit perm={canGenerate1}>
                   <input ref={videoFileRef} type="file" accept=".mp4,.mkv,.webm,.avi,.mov,.flv" style={{ display: 'none' }}
                     onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoUpload(f); e.target.value = '' }} />
-                  <button className="btn btn-ghost btn-sm w-full"
+                  <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
                     disabled={dlStatus === 'downloading'}
                     onClick={() => videoFileRef.current?.click()}>
-                    📁 上传视频文件
+                    📁 上传视频
                   </button>
                   </CanEdit>
+                  </div>
                   <div className="card-hint" style={{ marginTop: 4 }}>支持 mp4 / mkv / webm / avi / mov / flv，上传后将自动语音识别</div>
                   {(dlStatus && dlStatus !== 'done' && dlStatus !== 'failed' && !dlStatus.startsWith('error')) && (
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 4 }}>⏳ {dlMessage || '正在处理...'} {dlPercent}%</div>
-                      <div style={{ background: 'var(--border)', height: 6, borderRadius: 3 }}>
-                        <div style={{ width: Math.max(dlPercent, 2) + '%', height: '100%', background: 'var(--primary)', borderRadius: 3, transition: 'width .3s' }} />
+                    <div style={{ marginTop: 2, marginBottom: 2 }}>
+                      <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 2 }}>⏳ {dlMessage || '正在处理...'} {dlPercent}%</div>
+                      <div style={{ background: 'var(--border)', height: 4, borderRadius: 2 }}>
+                        <div style={{ width: Math.max(dlPercent, 2) + '%', height: '100%', background: 'var(--primary)', borderRadius: 2, transition: 'width .3s' }} />
                       </div>
                     </div>
                   )}
-                  {dlStatus === 'done' && <div className="form-hint" style={{ color: 'var(--success)' }}>✅ 下载完成</div>}
+                  {dlStatus === 'done' && <div className="form-hint" style={{ color: 'var(--success)' }}>✅ 处理完成</div>}
                   {dlStatus === 'failed' && <div className="form-hint" style={{ color: 'var(--warning)' }}>❌ 下载失败</div>}
                   {dlStatus.startsWith('error') && <div className="form-hint" style={{ color: 'var(--warning)' }}>{dlStatus}</div>}
-                  <button className="btn btn-ghost btn-sm w-full" style={{ marginTop: 4 }}
+                  <button className="btn btn-ghost btn-sm w-full" style={{ marginTop: 6 }}
                     onClick={async () => {
                       if (!videoPath && id) {
                         try {
