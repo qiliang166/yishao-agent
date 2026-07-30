@@ -500,7 +500,7 @@ export default function ProjectDashboard() {
   }, {})
 
   const filtered = projects.filter(p =>
-    (!search || p.name.toLowerCase().includes(search.toLowerCase())) &&
+    (!search || p.name.toLowerCase().includes(search.toLowerCase()) || (p as any).project_code?.toLowerCase().includes(search.toLowerCase())) &&
     (!catFilter || (p as any).category_id === catFilter)
   )
 
