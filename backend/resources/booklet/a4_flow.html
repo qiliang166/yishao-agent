@@ -130,6 +130,13 @@ body {
 	  font-size: 9pt; color: rgba(var(--text-rgb), 0.4);
 	  z-index: 1; pointer-events: none;
 	}
+	/* 页眉页脚占位：网页式 inner padding 仅 40px，需为绝对定位的页眉/页脚留出空间 */
+	.bk-sheet:has(.bk-page-header) .bk-sheet-inner {
+	  padding-top: calc(16mm + 8px);
+	}
+	.bk-sheet:has(.bk-page-footer) .bk-sheet-inner {
+	  padding-bottom: calc(14mm + 8px);
+	}
 
 /* ═══ 打印：连续内容自然分页 ═══ */
 @page {
