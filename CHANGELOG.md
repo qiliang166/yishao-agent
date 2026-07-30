@@ -2,6 +2,10 @@
 
 ## 2026-07-31
 
+- fix: split video card into input + action cards so buttons stay visible
+
+## 2026-07-31
+
 - fix: compact video upload UI — side-by-side buttons, load video on mount
 
 ## 2026-07-31
