@@ -1,5 +1,10 @@
 ﻿# 更新日志
 
+## 2026-07-30
+
+- feat: 电子成册文本页可配置页眉页脚（LOGO+三栏+全局变量+页码）
+- chore: build stamp for 5ff274d (saveStep await + check_ownership)
+
 ## 2026-07-29
 
 - fix: saveStep await API调用，失败时弹错误提示
