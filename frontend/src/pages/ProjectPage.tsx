@@ -2680,19 +2680,20 @@ export default function ProjectPage() {
                   </button>
                   </CanEdit>
                   </div>
-                  <div className="card-hint" style={{ marginTop: 4 }}>支持 mp4 / mkv / webm / avi / mov / flv，上传后将自动语音识别</div>
+                </div>
+                <div className="card">
                   {(dlStatus && dlStatus !== 'done' && dlStatus !== 'failed' && !dlStatus.startsWith('error')) && (
-                    <div style={{ marginTop: 2, marginBottom: 2 }}>
+                    <div style={{ marginBottom: 6 }}>
                       <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 2 }}>⏳ {dlMessage || '正在处理...'} {dlPercent}%</div>
                       <div style={{ background: 'var(--border)', height: 4, borderRadius: 2 }}>
                         <div style={{ width: Math.max(dlPercent, 2) + '%', height: '100%', background: 'var(--primary)', borderRadius: 2, transition: 'width .3s' }} />
                       </div>
                     </div>
                   )}
-                  {dlStatus === 'done' && <div className="form-hint" style={{ color: 'var(--success)' }}>✅ 处理完成</div>}
-                  {dlStatus === 'failed' && <div className="form-hint" style={{ color: 'var(--warning)' }}>❌ 下载失败</div>}
-                  {dlStatus.startsWith('error') && <div className="form-hint" style={{ color: 'var(--warning)' }}>{dlStatus}</div>}
-                  <button className="btn btn-ghost btn-sm w-full" style={{ marginTop: 6 }}
+                  {dlStatus === 'done' && <div className="form-hint" style={{ color: 'var(--success)', marginBottom: 6 }}>✅ 处理完成</div>}
+                  {dlStatus === 'failed' && <div className="form-hint" style={{ color: 'var(--warning)', marginBottom: 6 }}>❌ 下载失败</div>}
+                  {dlStatus.startsWith('error') && <div className="form-hint" style={{ color: 'var(--warning)', marginBottom: 6 }}>{dlStatus}</div>}
+                  <button className="btn btn-ghost btn-sm w-full"
                     onClick={async () => {
                       if (!videoPath && id) {
                         try {

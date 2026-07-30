@@ -2,6 +2,10 @@
 
 ## 2026-07-31
 
+- fix: compact video upload UI — side-by-side buttons, load video on mount
+
+## 2026-07-31
+
 - feat: 视频提取支持本地上传，上传/下载结果完全一致（同一ASR管道）
 
 ## 2026-07-31
