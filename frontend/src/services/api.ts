@@ -297,6 +297,17 @@ export const api = {
   downloadVideo: (url: string, cookiesPath?: string, projectId?: string, asrModel?: string, asrProviderId?: string) => request('/api/video/download', {
     method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({url, cookies_path: cookiesPath || null, project_id: projectId || null, asr_model: asrModel || 'fun-asr', asr_provider_id: asrProviderId || null}),
   }),
+  uploadVideo: async (file: File, projectId?: string, asrModel?: string, asrProviderId?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (projectId) formData.append('project_id', projectId)
+    if (asrModel) formData.append('asr_model', asrModel)
+    if (asrProviderId) formData.append('asr_provider_id', asrProviderId)
+    const res = await fetch('/api/video/upload', { method: 'POST', body: formData, headers: getAuthHeaders() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Upload failed')
+    return data as { task_id: string }
+  },
   uploadCookies: async (file: File) => {
     const formData = new FormData()
     formData.append('file', file)

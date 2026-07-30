@@ -3496,7 +3496,7 @@ def list_templates_for_stage(stage_type: str):
 
 # ── Video ──
 
-from services.video_service import download_video, get_progress
+from services.video_service import download_video, upload_video, get_progress
 
 
 class VideoDownloadRequest(BaseModel):
@@ -3526,6 +3526,28 @@ async def api_upload_cookies(file: UploadFile = File(...), user=require_perm("st
 def api_download_video(req: VideoDownloadRequest, user=require_perm("stage1.generate")):
     result = download_video(req.url, req.cookies_path, req.project_id, req.asr_model or "fun-asr", req.asr_provider_id)
     return result
+
+
+@app.post("/api/video/upload")
+def api_upload_video(file: UploadFile = File(...), project_id: str = Form(""), asr_model: str = Form("fun-asr"), asr_provider_id: str = Form(""), user=require_perm("stage1.generate")):
+    """Upload a video file, then run the same ASR pipeline as download."""
+    import tempfile
+    import shutil
+    try:
+        # Save uploaded file to a temp location first
+        suffix = os.path.splitext(file.filename or "video.mp4")[1] or ".mp4"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp_path = tmp.name
+        result = upload_video(tmp_path, file.filename or "video.mp4", project_id, asr_model, asr_provider_id)
+        return result
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
 
 
 @app.get("/api/video/progress/{task_id}")
@@ -8646,7 +8668,7 @@ def api_batch_projects_status(workspace_id: str = "", user=require_perm("project
                             "step3_sop_doc", "step3_dao_ppt", "step3_yan_ppt",
                             "step4_speech_doc", "step4_speech_analysis", "step4_speech_comprehensive"):
                 cnt = db.execute(
-                    "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name=?",
+                    "SELECT COUNT(*) FROM step_results WHERE project_id=? AND step_name=? AND content IS NOT NULL AND content != ''",
                     (pid, sub_key)
                 ).fetchone()[0]
                 sub_steps[sub_key] = cnt > 0

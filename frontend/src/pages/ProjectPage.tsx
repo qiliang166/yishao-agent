@@ -657,8 +657,10 @@ export default function ProjectPage() {
   const [asrModels, setAsrModels] = useState<string[]>([])
   const [videoUrl, setVideoUrl] = useState('')
   const [asrModel, setAsrModel] = useState('fun-asr')
+  const videoFileRef = useRef<HTMLInputElement>(null)
   const [dlStatus, setDlStatus] = useState('')
   const [dlPercent, setDlPercent] = useState(0)
+  const [dlMessage, setDlMessage] = useState('')
   const [dlTaskId, setDlTaskId] = useState('')
   const [videoPath, setVideoPath] = useState('')
   const [textInput, setTextInput] = useState('')
@@ -808,6 +810,7 @@ export default function ProjectPage() {
   const [splitGenerating, setSplitGenerating] = useState(false)
   const [splitMode, setSplitMode] = useState<'newline' | 'chars'>('chars')
   const [splitMaxChunk, setSplitMaxChunk] = useState(290)
+  const [selectedHistoryIds, setSelectedHistoryIds] = useState<Set<number>>(new Set())
   const segmentsLoaded = useRef(false)
 
   // Auto-save splitSegments to step_results whenever they change
@@ -1407,10 +1410,19 @@ export default function ProjectPage() {
       pollProgress(result.task_id)
     } catch (e: any) { setDlStatus('error: ' + e.message) }
   }
+  const handleVideoUpload = async (file: File) => {
+    setDlStatus('downloading'); setDlPercent(0)
+    try {
+      const result: any = await api.uploadVideo(file, id, asrModel, asrProviderId)
+      setDlTaskId(result.task_id)
+      pollProgress(result.task_id)
+    } catch (e: any) { setDlStatus('error: ' + e.message) }
+  }
   const pollProgress = async (taskId: string) => {
     const poll = async () => {
       const p: any = await api.getVideoProgress(taskId)
       setDlPercent(p.percent); setDlStatus(p.status)
+      if (p.text) setDlMessage(p.text)
       if (p.text) setVideoText(p.text)
       if (p.subtitle_text) setSourceSubtitle(p.subtitle_text)
       if (p.asr_text) setSourceAsr(p.asr_text)
@@ -1420,7 +1432,7 @@ export default function ProjectPage() {
       if (p.video_path) setVideoPath(p.video_path)
       if (p.status === 'completed') {
         setDlStatus('done')
-        modal.toast('✅ 视频下载完成', 'success')
+        modal.toast('✅ 视频处理完成', 'success')
         const rawText = p.merged_text || p.asr_text || p.text || ''
         if (rawText && id) {
           api.saveStep(id, 'raw_video', rawText)
@@ -1945,9 +1957,9 @@ export default function ProjectPage() {
       setPlayingVoiceId('')
       setPlayingHistoryIdx(null)
     }
-    a.play().catch(() => {
+    a.play().catch((err: any) => {
       stopAudio()
-      modal.toast('播放失败：浏览器可能阻止了音频自动播放', 'error')
+      modal.toast(`播放失败: ${err?.message || '未知错误'}`, 'error')
     })
   }
 
@@ -2071,14 +2083,25 @@ export default function ProjectPage() {
   const loadTtsHistory = () => {
     if (id) {
       api.listTtsHistory(id).then((data: any) => {
-        setTtsHistory(data.map((r: any) => ({
+        const newHistory = data.map((r: any) => ({
           id: r.id,
           voice: r.voice_name || '默认音色',
           audioUrl: `/api/audio/${r.audio_path}${r.project_id ? `?project_id=${r.project_id}` : ''}`,
           audioPath: r.audio_path,
           filename: r.name || '演讲.mp3',
           time: new Date(r.created_at + 'Z').toLocaleString('zh-CN'),
-        })))
+        }))
+        setTtsHistory(newHistory)
+        const validPaths = new Set(newHistory.map((h: any) => h.audioUrl.split('?')[0].split('/').pop()))
+        setSplitSegments(prev => prev.map(s => {
+          if (s.audioUrl) {
+            const segFile = s.audioUrl.split('?')[0].split('/').pop()
+            if (!validPaths.has(segFile)) {
+              return { ...s, audioUrl: undefined }
+            }
+          }
+          return s
+        }))
       }).catch(() => {})
     }
   }
@@ -2642,9 +2665,23 @@ export default function ProjectPage() {
                     ▶ 下载并识别
                   </button>
                   </CanEdit>
-                  {dlStatus === 'downloading' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', flexShrink: 0 }}>或</span>
+                    <div style={{ flex: 1, borderTop: '1px solid var(--border)' }} />
+                  </div>
+                  <CanEdit perm={canGenerate1}>
+                  <input ref={videoFileRef} type="file" accept=".mp4,.mkv,.webm,.avi,.mov,.flv" style={{ display: 'none' }}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleVideoUpload(f); e.target.value = '' }} />
+                  <button className="btn btn-ghost btn-sm w-full"
+                    disabled={dlStatus === 'downloading'}
+                    onClick={() => videoFileRef.current?.click()}>
+                    📁 上传视频文件
+                  </button>
+                  </CanEdit>
+                  <div className="card-hint" style={{ marginTop: 4 }}>支持 mp4 / mkv / webm / avi / mov / flv，上传后将自动语音识别</div>
+                  {(dlStatus && dlStatus !== 'done' && dlStatus !== 'failed' && !dlStatus.startsWith('error')) && (
                     <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 4 }}>⏳ 正在下载... {dlPercent}%</div>
+                      <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 4 }}>⏳ {dlMessage || '正在处理...'} {dlPercent}%</div>
                       <div style={{ background: 'var(--border)', height: 6, borderRadius: 3 }}>
                         <div style={{ width: Math.max(dlPercent, 2) + '%', height: '100%', background: 'var(--primary)', borderRadius: 3, transition: 'width .3s' }} />
                       </div>
@@ -4663,8 +4700,18 @@ export default function ProjectPage() {
                           </div>
                         ) : (
                           <>
-                            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
-                              共 {splitSegments.length} 段 · 已选 {selectedSegments.size} 段
+                            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>共 {splitSegments.length} 段 · 已选 {selectedSegments.size} 段</span>
+                              <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 6px' }}
+                                onClick={() => {
+                                  if (selectedSegments.size === splitSegments.length) {
+                                    setSelectedSegments(new Set())
+                                  } else {
+                                    setSelectedSegments(new Set(splitSegments.map(s => s.index)))
+                                  }
+                                }}>
+                                {selectedSegments.size === splitSegments.length ? '取消全选' : '全选'}
+                              </button>
                             </div>
                             <div style={{ flex: 1, overflow: 'auto', marginBottom: 8 }}>
                               {splitSegments.map(seg => (
@@ -4695,18 +4742,12 @@ export default function ProjectPage() {
                                         }} />
                                     </div>
                                     <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignItems: 'center' }}>
-                                      {seg.audioUrl ? (
-                                        <button type="button" className="btn btn-ghost btn-sm"
-                                          style={{ fontSize: 9, padding: '0 3px' }}
-                                          onClick={e => { e.stopPropagation(); playAudio(seg.audioUrl!) }}>▶</button>
-                                      ) : (
-                                        <button type="button" className="btn btn-ghost btn-sm"
-                                          style={{ fontSize: 9, padding: '0 3px', color: 'var(--primary)' }}
-                                          disabled={splitGenerating}
-                                          onClick={e => { e.stopPropagation(); synthesizeSegment(seg.index) }}>
-                                          {splitGenerating ? '⏳' : '合成'}
-                                        </button>
-                                      )}
+                                      <button type="button" className="btn btn-ghost btn-sm"
+                                        style={{ fontSize: 9, padding: '0 3px', color: 'var(--primary)' }}
+                                        disabled={splitGenerating}
+                                        onClick={e => { e.stopPropagation(); synthesizeSegment(seg.index) }}>
+                                        {splitGenerating ? '⏳' : '合成'}
+                                      </button>
                                       <button type="button" className="btn btn-ghost btn-sm"
                                         style={{ fontSize: 9, padding: '0 2px', color: 'var(--text-secondary)' }}
                                         title="上移"
@@ -4741,7 +4782,39 @@ export default function ProjectPage() {
                   </div>
                   {/* 合成列表 */}
                   <div style={{ padding: 10, overflow: 'auto' }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>合成列表</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>合成列表</span>
+                      {ttsHistory.length > 0 && (
+                        <span style={{ fontSize: 10 }}>
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 6px' }}
+                            onClick={() => {
+                              if (selectedHistoryIds.size === ttsHistory.length) {
+                                setSelectedHistoryIds(new Set())
+                              } else {
+                                setSelectedHistoryIds(new Set(ttsHistory.map(h => h.id)))
+                              }
+                            }}>
+                            {selectedHistoryIds.size === ttsHistory.length ? '取消全选' : '全选'}
+                          </button>
+                          {selectedHistoryIds.size > 0 && (
+                            <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)', padding: '0 6px', marginLeft: 4 }}
+                              onClick={() => {
+                                const n = selectedHistoryIds.size
+                                if (confirm(`确定删除选中的 ${n} 条合成记录？`)) {
+                                  const deletedUrls = new Set(ttsHistory.filter(h => selectedHistoryIds.has(h.id)).map(h => h.audioUrl))
+                                  Promise.all([...selectedHistoryIds].map(id => api.deleteTtsHistory(id))).then(() => {
+                                    setSelectedHistoryIds(new Set())
+                                    setSplitSegments(prev => prev.map(s => s.audioUrl && deletedUrls.has(s.audioUrl) ? { ...s, audioUrl: undefined } : s))
+                                    loadTtsHistory()
+                                  })
+                                }
+                              }}>
+                              删除选中 ({selectedHistoryIds.size})
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </div>
                     {ttsHistory.length === 0 ? (
                       <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>暂无合成记录</div>
                     ) : (
@@ -4771,7 +4844,18 @@ export default function ProjectPage() {
                             </div>
                           ) : (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                              <span style={{ color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{h.filename}</span>
+                              <span style={{ color: 'var(--text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                <input type="checkbox" checked={selectedHistoryIds.has(h.id)} readOnly
+                                  style={{ marginRight: 6, verticalAlign: 'middle', cursor: 'pointer' }}
+                                  onClick={e => {
+                                    e.stopPropagation()
+                                    const next = new Set(selectedHistoryIds)
+                                    if (next.has(h.id)) next.delete(h.id)
+                                    else next.add(h.id)
+                                    setSelectedHistoryIds(next)
+                                  }} />
+                                {h.filename}
+                              </span>
                               <div style={{ display: 'flex', gap: 2, flexShrink: 0, marginLeft: 6 }}>
                                 {h.audioUrl && (
                                   playingHistoryIdx === i ? (
@@ -4790,7 +4874,7 @@ export default function ProjectPage() {
                                 </CanEdit>
                                 <CanEdit perm={canGenerate4}>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)', padding: '0 4px' }}
-                                  onClick={() => { if (confirm('确定删除此合成记录？')) { api.deleteTtsHistory(h.id).then(() => loadTtsHistory()) } }}>✕</button>
+                                  onClick={() => { if (confirm('确定删除此合成记录？')) { api.deleteTtsHistory(h.id).then(() => { setSplitSegments(prev => prev.map(s => s.audioUrl === h.audioUrl ? { ...s, audioUrl: undefined } : s)); loadTtsHistory() }) } }}>✕</button>
                                 </CanEdit>
                               </div>
                             </div>

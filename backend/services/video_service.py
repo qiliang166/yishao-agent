@@ -289,6 +289,100 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
     return {"task_id": task_id}
 
 
+def upload_video(file_path: str, filename: str, project_id: str = None, asr_model: str = "fun-asr", asr_provider_id: str = None) -> dict:
+    """Accept an uploaded video file, run the same ASR pipeline as download_video."""
+    task_id = uuid.uuid4().hex[:8]
+    _progress[task_id] = {"status": "starting", "progress": 0, "message": "准备处理...", "project_id": project_id}
+
+    def _run():
+        try:
+            task_dir = os.path.join(VIDEO_DIR, task_id)
+            os.makedirs(task_dir, exist_ok=True)
+
+            _progress[task_id] = {"status": "processing", "progress": 10, "message": "保存上传文件..."}
+
+            # Sanitize filename and move to task_dir
+            safe_name = _sanitize_filename(os.path.splitext(filename)[0]) or "upload"
+            ext = os.path.splitext(filename)[1] or ".mp4"
+            video_path = os.path.join(task_dir, safe_name + ext)
+            if os.path.exists(video_path):
+                os.remove(video_path)
+            # Copy uploaded file (keep original in case it's a temp file)
+            import shutil
+            shutil.copy2(file_path, video_path)
+
+            # Validate file is actual video
+            file_size = os.path.getsize(video_path)
+            if file_size < 100 * 1024:
+                _progress[task_id] = {"status": "error", "progress": 0, "message": f"上传失败：文件过小 ({file_size} bytes)，请检查文件是否为有效视频。"}
+                return
+
+            _progress[task_id] = {"status": "processing", "progress": 30, "message": "检查视频编码..."}
+
+            # Transcode to H.264 if needed (same as download)
+            video_path = _transcode_to_h264(video_path, task_dir)
+
+            # Run ASR transcription (same as download)
+            asr_text = ""
+            if video_path:
+                _progress[task_id] = {"status": "processing", "progress": 50, "message": "语音识别中..."}
+                asr_text = _transcribe_audio(video_path, task_dir, asr_model, asr_provider_id)
+                if asr_text and not asr_text.startswith("["):
+                    asr_txt_path = os.path.join(task_dir, "transcription.txt")
+                    with open(asr_txt_path, "w", encoding="utf-8") as f:
+                        f.write(asr_text)
+
+            # Rename video to project name and copy to project folder (same as download)
+            if project_id and video_path:
+                try:
+                    import sqlite3
+                    db_dir = os.path.join(BASE_DIR, "data")
+                    db = sqlite3.connect(os.path.join(db_dir, "yishao.db"))
+                    db.row_factory = sqlite3.Row
+                    proj = db.execute(
+                        "SELECT name, storage_path FROM projects WHERE id = ?",
+                        (project_id,)
+                    ).fetchone()
+                    db.close()
+                    if proj:
+                        ext_final = os.path.splitext(video_path)[1] or ".mp4"
+                        proj_name = _sanitize_filename(proj["name"])
+                        new_name = proj_name + ext_final
+                        new_path = os.path.join(task_dir, new_name)
+                        if os.path.exists(new_path):
+                            os.remove(new_path)
+                        os.rename(video_path, new_path)
+                        video_path = new_path
+                        # Copy to project storage folder
+                        if proj["storage_path"]:
+                            os.makedirs(proj["storage_path"], exist_ok=True)
+                            dest = os.path.join(proj["storage_path"], new_name)
+                            if os.path.exists(dest):
+                                os.remove(dest)
+                            shutil.copy2(video_path, dest)
+                            video_path = dest
+                except Exception:
+                    import traceback
+                    traceback.print_exc()
+
+            _progress[task_id] = {
+                "status": "done",
+                "progress": 100,
+                "message": "完成",
+                "video_path": video_path,
+                "subtitle_text": "",
+                "asr_text": asr_text,
+                "merged_text": asr_text,  # no subtitles to merge, use asr directly
+                "task_dir": task_dir,
+            }
+        except Exception as e:
+            _progress[task_id] = {"status": "error", "progress": 0, "message": str(e)}
+
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
+    return {"task_id": task_id}
+
+
 def get_progress(task_id: str) -> dict:
     """Poll download progress."""
     if task_id not in _progress:
