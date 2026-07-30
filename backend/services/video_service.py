@@ -233,7 +233,7 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                 _progress[task_id] = {"status": "processing", "progress": 92, "message": "检查视频编码兼容性..."}
                 video_path = _transcode_to_h264(video_path, task_dir)
 
-            # Rename video to project name and copy to project folder if requested
+            # Rename video to project name and copy to project folder
             if project_id and video_path:
                 try:
                     import sqlite3
@@ -242,13 +242,12 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                     db = sqlite3.connect(os.path.join(db_dir, "yishao.db"))
                     db.row_factory = sqlite3.Row
                     proj = db.execute(
-                        "SELECT name, storage_path FROM projects WHERE id = ?",
+                        "SELECT name FROM projects WHERE id = ?",
                         (project_id,)
                     ).fetchone()
                     db.close()
                     if proj:
                         ext = os.path.splitext(video_path)[1] or ".mp4"
-                        # Rename in task_dir to project name
                         proj_name = _sanitize_filename(proj["name"])
                         new_name = proj_name + ext
                         new_path = os.path.join(task_dir, new_name)
@@ -256,14 +255,14 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                             os.remove(new_path)
                         os.rename(video_path, new_path)
                         video_path = new_path
-                        # Copy to project storage folder
-                        if proj["storage_path"]:
-                            os.makedirs(proj["storage_path"], exist_ok=True)
-                            dest = os.path.join(proj["storage_path"], new_name)
-                            if os.path.exists(dest):
-                                os.remove(dest)
-                            shutil.copy2(video_path, dest)
-                            video_path = dest
+                        # Copy to project storage folder (use resolve_project_storage for correct path)
+                        from app import resolve_project_storage
+                        storage_path = resolve_project_storage(project_id, auto_create=True)
+                        dest = os.path.join(storage_path, new_name)
+                        if os.path.exists(dest):
+                            os.remove(dest)
+                        shutil.copy2(video_path, dest)
+                        video_path = dest
                 except Exception:
                     import traceback
                     traceback.print_exc()
@@ -332,7 +331,7 @@ def upload_video(file_path: str, filename: str, project_id: str = None, asr_mode
                     with open(asr_txt_path, "w", encoding="utf-8") as f:
                         f.write(asr_text)
 
-            # Rename video to project name and copy to project folder (same as download)
+            # Rename video to project name and copy to project folder
             if project_id and video_path:
                 try:
                     import sqlite3
@@ -340,7 +339,7 @@ def upload_video(file_path: str, filename: str, project_id: str = None, asr_mode
                     db = sqlite3.connect(os.path.join(db_dir, "yishao.db"))
                     db.row_factory = sqlite3.Row
                     proj = db.execute(
-                        "SELECT name, storage_path FROM projects WHERE id = ?",
+                        "SELECT name FROM projects WHERE id = ?",
                         (project_id,)
                     ).fetchone()
                     db.close()
@@ -353,14 +352,14 @@ def upload_video(file_path: str, filename: str, project_id: str = None, asr_mode
                             os.remove(new_path)
                         os.rename(video_path, new_path)
                         video_path = new_path
-                        # Copy to project storage folder
-                        if proj["storage_path"]:
-                            os.makedirs(proj["storage_path"], exist_ok=True)
-                            dest = os.path.join(proj["storage_path"], new_name)
-                            if os.path.exists(dest):
-                                os.remove(dest)
-                            shutil.copy2(video_path, dest)
-                            video_path = dest
+                        # Copy to project storage folder (use resolve_project_storage for correct path)
+                        from app import resolve_project_storage
+                        storage_path = resolve_project_storage(project_id, auto_create=True)
+                        dest = os.path.join(storage_path, new_name)
+                        if os.path.exists(dest):
+                            os.remove(dest)
+                        shutil.copy2(video_path, dest)
+                        video_path = dest
                 except Exception:
                     import traceback
                     traceback.print_exc()
