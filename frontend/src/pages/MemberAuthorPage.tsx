@@ -37,6 +37,7 @@ export default function MemberAuthorPage() {
   const [applying, setApplying] = useState(false)
 
   // Contract agreement
+  const [contractEnabled, setContractEnabled] = useState(false)
   const [contractTemplate, setContractTemplate] = useState('')
   const [agreedContract, setAgreedContract] = useState(false)
 
@@ -71,6 +72,17 @@ export default function MemberAuthorPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Load contract enabled flag on mount
+  useEffect(() => {
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        const s = data.settings || {}
+        setContractEnabled(s.author_contract_enabled === '1')
+      })
+      .catch(() => {})
+  }, [])
 
   // Load contract template when apply form opens
   useEffect(() => {
@@ -124,8 +136,14 @@ export default function MemberAuthorPage() {
       {/* Not yet applied */}
       {!author && !showApply && (
         <div style={{ textAlign: 'center', padding: 60, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 15, marginBottom: 24 }}>你还没有申请成为签约作者</p>
-          <button className="btn btn-primary" onClick={() => setShowApply(true)}>申请成为签约作者</button>
+          {contractEnabled ? (
+            <>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 15, marginBottom: 24 }}>你还没有申请成为签约作者</p>
+              <button className="btn btn-primary" onClick={() => setShowApply(true)}>申请成为签约作者</button>
+            </>
+          ) : (
+            <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>签约功能暂未开放</p>
+          )}
         </div>
       )}
 
@@ -151,22 +169,24 @@ export default function MemberAuthorPage() {
               <textarea className="form-input" rows={2} value={applyNote} onChange={e => setApplyNote(e.target.value)} placeholder="补充说明（可选）" />
             </div>
             {/* Contract notice */}
-            {contractTemplate && (
-              <div style={{
-                border: '1px solid var(--border)', borderRadius: 8, padding: 12,
-                background: 'var(--bg-secondary)', maxHeight: 200, overflowY: 'auto',
-              }}>
-                <div className="prev-md" style={{ fontSize: 12, lineHeight: 1.7 }}
-                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(contractTemplate) as string) }} />
-              </div>
+            {contractEnabled && contractTemplate && (
+              <>
+                <div style={{
+                  border: '1px solid var(--border)', borderRadius: 8, padding: 12,
+                  background: 'var(--bg-secondary)', maxHeight: 200, overflowY: 'auto',
+                }}>
+                  <div className="prev-md" style={{ fontSize: 12, lineHeight: 1.7 }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(contractTemplate) as string) }} />
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={agreedContract} onChange={e => setAgreedContract(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                  <span>我已阅读并同意签约须知</span>
+                </label>
+              </>
             )}
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
-              <input type="checkbox" checked={agreedContract} onChange={e => setAgreedContract(e.target.checked)}
-                style={{ width: 16, height: 16, cursor: 'pointer' }} />
-              <span>我已阅读并同意签约须知</span>
-            </label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" disabled={applying || !agreedContract} onClick={handleApply}>{applying ? '提交中...' : '提交申请'}</button>
+              <button className="btn btn-primary" disabled={applying || (contractEnabled && !agreedContract)} onClick={handleApply}>{applying ? '提交中...' : '提交申请'}</button>
               <button className="btn btn-ghost" onClick={() => { setShowApply(false); setAgreedContract(false) }}>取消</button>
             </div>
           </div>

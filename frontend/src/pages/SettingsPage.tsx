@@ -117,6 +117,7 @@ function SettingsPage() {
   const [pointsPerYuan, setPointsPerYuan] = useState('1.0')
   const [newUserPointsDeci, setNewUserPointsDeci] = useState('5')
   const [authorContractTemplate, setAuthorContractTemplate] = useState('')
+  const [authorContractEnabled, setAuthorContractEnabled] = useState(false)
 
   const [adminPasswordEnabled, setAdminPasswordEnabled] = useState(true)
 
@@ -180,6 +181,7 @@ function SettingsPage() {
       if (s.points_per_yuan) setPointsPerYuan(s.points_per_yuan)
       if (s.new_user_points_deci) setNewUserPointsDeci(s.new_user_points_deci)
       if (s.author_contract_template) setAuthorContractTemplate(s.author_contract_template)
+      setAuthorContractEnabled(s.author_contract_enabled === '1')
       setAdminPasswordEnabled(s.admin_password_enabled !== '0')
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
@@ -309,6 +311,7 @@ function SettingsPage() {
         }),
         points_per_yuan: pointsPerYuan,
         new_user_points_deci: newUserPointsDeci,
+        author_contract_enabled: authorContractEnabled ? '1' : '0',
         author_contract_template: authorContractTemplate,
       })
       const fallback = (await api.getVersion()).app || ''
@@ -677,6 +680,19 @@ function SettingsPage() {
 
           <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
             <h3>签约作者设置</h3>
+            <div className="settings-row">
+              <label>签约须知功能</label>
+              <button
+                className={authorContractEnabled ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
+                onClick={() => setAuthorContractEnabled(!authorContractEnabled)}
+                style={{ minWidth: 80 }}
+              >
+                {authorContractEnabled ? '已开启' : '已关闭'}
+              </button>
+              <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                {authorContractEnabled ? '会员可申请签约作者（需阅读并同意签约须知）' : '关闭签约作者申请入口（已签约作者不受影响）'}
+              </span>
+            </div>
             <div className="settings-row" style={{ alignItems: 'flex-start' }}>
               <label>签约须知</label>
               <textarea className="form-textarea" rows={8} value={authorContractTemplate}
