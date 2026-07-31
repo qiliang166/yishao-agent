@@ -1,0 +1,87 @@
+# 封面 — 开场页，全屏视觉冲击，含主标题+副标题，建立权威感与专业度
+
+## HTML 模板（必须照抄结构，只替换内容）
+
+```html
+<div style="width:1280px;height:720px;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--primary) 0%,var(--secondary) 100%);font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;">
+
+  <!-- 第1层：背景层 -->
+  <div style="position:absolute;inset:0;background:linear-gradient(to bottom right,rgba(0,0,0,0.2),rgba(0,0,0,0.5));"></div>
+
+  <!-- 第2层：装饰层（光晕与几何图形） -->
+  <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+      </pattern>
+      <radialGradient id="glow1" cx="80%" cy="20%" r="50%">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.08)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+      <radialGradient id="glow2" cx="10%" cy="85%" r="45%">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.06)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#grid)"/>
+    <circle cx="1020" cy="150" r="280" fill="url(#glow1)"/>
+    <circle cx="150" cy="600" r="250" fill="url(#glow2)"/>
+    <!-- 装饰性抽象几何图形 -->
+    <circle cx="1100" cy="550" r="80" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.5"/>
+    <circle cx="200" cy="180" r="120" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+  </svg>
+
+  <!-- 第3层：顶部 accent 色条 -->
+  <div style="position:absolute;top:0;left:0;width:100%;height:4px;background:var(--accent);z-index:5;"></div>
+
+  <!-- 第4层：结构层 + 内容层（居中标题区） -->
+  <div style="position:absolute;top:50%;left:80px;transform:translateY(-55%);max-width:800px;z-index:2;">
+
+    <!-- 装饰性顶部短线 -->
+    <div style="width:60px;height:4px;background:var(--accent);margin-bottom:30px;border-radius:2px;"></div>
+
+    <!-- 主标题 -->
+    <h1 style="font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:64px;font-weight:700;letter-spacing:-1px;line-height:1.15;color:#ffffff;margin:0 0 24px 0;">{{TITLE}}</h1>
+
+    <!-- 副标题 -->
+    <p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:22px;font-weight:400;letter-spacing:0.5px;line-height:1.4;color:rgba(255,255,255,0.8);margin:0 0 24px 0;">{{SUBTITLE}}</p>
+
+    <!-- 概要（一句话摘要，≤150字） -->
+    <p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:16px;font-weight:400;line-height:1.7;color:rgba(255,255,255,0.7);margin:0 0 32px 0;max-width:680px;">{{SUMMARY}}</p>
+
+    <!-- 装饰性底部短线 -->
+    <div style="width:40px;height:3px;background:rgba(255,255,255,0.5);margin-bottom:40px;border-radius:2px;"></div>
+
+    <!-- 日期/作者信息 -->
+    <p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:16px;font-weight:500;letter-spacing:1px;color:rgba(255,255,255,0.6);margin:0;text-transform:uppercase;">{{META_INFO}}</p>
+  </div>
+
+  <!-- 第5层：标识层（右下角品牌标识） -->
+  <div style="position:absolute;bottom:40px;right:60px;z-index:3;display:flex;align-items:center;gap:12px;">
+    <div style="width:28px;height:28px;border-radius:50%;background:var(--accent);opacity:0.6;"></div>
+    <span style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:rgba(255,255,255,0.5);letter-spacing:1px;">{{BRAND}}</span>
+  </div>
+
+</div>
+```
+
+## 内容占位符
+
+| 占位符 | 说明 | 来源 |
+|--------|------|------|
+| `{{TITLE}}` | 主标题 | heading |
+| `{{SUBTITLE}}` | 副标题（2-3 个特征词/短语，≤20 字） | subtitle |
+| `{{SUMMARY}}` | 概要（一句话概括，≤150 字） | summary |
+| `{{META_INFO}}` | 日期/作者/机构信息 | key_points[0] 或 kicker |
+| `{{BRAND}}` | 品牌标识文字 | notes 或固定机构名 |
+
+## 必须遵守
+
+- **绝对禁止**修改任何 CSS 颜色值 — 所有 `var(--xxx)` 必须原样保留
+- **绝对禁止**修改布局尺寸（width/height/left/top/inset/font-size）
+- **绝对禁止**添加或删除装饰元素（SVG circle/pattern/gradient）
+- **绝对禁止**修改背景渐变方向和色标
+- 只能替换 `{{PLACEHOLDER}}` 占位符为实际文字内容
+- 占位符文字长度建议：主标题 ≤20 字，副标题 ≤20 字（2-3 特征词），概要 ≤150 字
+- 封面文字必须在深色背景上可读 — 文字颜色已设为 `#ffffff`（唯一合法的硬编码 hex）
+- 禁止添加卡片容器、页头、页尾

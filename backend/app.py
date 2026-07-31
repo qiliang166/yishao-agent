@@ -1938,8 +1938,12 @@ async def api_upload_recipe_file(file: UploadFile = File(...), user=Depends(get_
             max_mb = max(1, int(float(row["value"])))
     finally:
         db.close()
+    # Restrict to safe extensions
+    ALLOWED = {'.pdf', '.jpg', '.jpeg', '.png', '.txt', '.md', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.mp4', '.zip'}
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED:
+        raise HTTPException(400, f"不支持的文件类型: {ext}，允许: {', '.join(sorted(ALLOWED))}")
     import uuid as _uuid
-    ext = os.path.splitext(file.filename or "")[1] or ".txt"
     safe_name = f"recipe-{_uuid.uuid4().hex[:12]}{ext}"
     save_dir = os.path.join(os.path.dirname(__file__), "data", "downloads")
     os.makedirs(save_dir, exist_ok=True)
@@ -9469,7 +9473,17 @@ if os.path.isdir(FRONTEND_DIST):
 
     DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "downloads")
     if os.path.isdir(DOWNLOADS_DIR):
-        app.mount("/api/downloads", StaticFiles(directory=DOWNLOADS_DIR), name="downloads")
+        @app.get("/api/downloads/{filename:path}")
+        async def serve_download(filename: str):
+            from starlette.responses import FileResponse
+            import mimetypes
+            file_path = os.path.join(DOWNLOADS_DIR, filename)
+            if not os.path.isfile(file_path):
+                raise HTTPException(404)
+            real = os.path.realpath(file_path)
+            if not real.startswith(os.path.realpath(DOWNLOADS_DIR)):
+                raise HTTPException(403)
+            return FileResponse(real, filename=filename, headers={"Content-Disposition": "attachment"})
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":

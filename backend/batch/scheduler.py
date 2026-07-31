@@ -298,7 +298,7 @@ def _get_provider_model(db, workspace_id: str, step_name: str = "_model_s2_sop")
     try:
         row = db.execute(
             "SELECT content FROM step_results WHERE project_id IN "
-            "(SELECT id FROM projects WHERE workspace_id=?) AND step_name=? LIMIT 1",
+            "(SELECT id FROM projects WHERE workspace_id=?) AND step_name=? ORDER BY updated_at DESC LIMIT 1",
             (workspace_id, step_name),
         ).fetchone()
         if row and row[0]:

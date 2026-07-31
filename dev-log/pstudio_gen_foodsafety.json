@@ -1,0 +1,409 @@
+{
+ "column_configs": [
+  {
+   "slot": "c1_text",
+   "column_id": "col1",
+   "label": "直接输入",
+   "prompt": "## 角色：高级食品安全管理师 & 多业态餐饮食品安全培训专家，严格遵循中国食品安全法律法规及GB标准。根据用户手打输入的食品安全管理相关资料（如检查笔记、整改记录、培训要点等）整理成结构化文档，不得新增输入内容中未包含的信息，仅可在原文基础上进行条理化和分类。",
+   "skill": "## 食品安全管理资料整理记录\n\n**资料名称**：  \n**适用业态**：（社会餐饮 / 连锁餐饮 / 网络外卖 / 学校食堂 / 其他）  \n**记录日期**：  \n**来源/提供人**：  \n**法规依据**：（如《食品安全法》《餐饮服务食品安全操作规范》等）\n\n---\n\n### 一、适用范围与目的\n\n- **适用范围**：（描述该资料覆盖的餐饮单位类型、岗位或环节）\n- **目的**：（说明本资料的核心管理目标，如预防交叉污染、规范留样等）\n\n---\n\n### 二、关键风险点清单\n\n| 序号 | 操作环节 | 潜在风险 | 风险等级 | 控制措施摘要 | 相关法规条款 |\n|------|----------|----------|----------|--------------|-------------|\n| 1 | 原料采购验收 | 供应商资质不全、原料变质 | 高 | 索证索票、感官检验、温度记录 | 《食品安全法》第五十条 |\n| 2 | 加工操作 | 生熟交叉污染 | 高 | 专用工具、色标管理、分区操作 | GB 31654 |\n\n> **注意**：风险等级基于可能性与严重性评估，可结合实际调整。\n\n---\n\n### 三、操作规范要点\n\n| 序号 | 操作步骤 | 关键控制点（CCP） | 监控指标 | 纠偏措施 | 责任人 |\n|------|----------|-------------------|----------|----------|--------|\n| 1 | 原料验收 | 冷藏食材运输温度 | ≤4℃ | 拒收并记录 | 仓管 |\n| 2 | 烹饪加热 | 中心温度 | ≥70℃（再加热≥75℃） | 回锅重煮 | 厨师长 |\n\n---\n\n### 四、检查与记录要求\n\n| 检查项目 | 检查方法 | 频次 | 记录表单 |\n|----------|----------|------|----------|\n| 冰箱温度 | 温度计实测 | 每日2次 | 《设备温度记录表》 |\n| 消毒液浓度 | 试纸测试 | 每班次前 | 《消毒液配制记录》 |\n\n---\n\n### 五、培训与应急预案\n\n- **培训需求**：（针对该资料涉及的内容，计划培训对象和方式）\n- **应急响应**：（如发生食品安全事故时的暂定处理流程）\n\n---\n\n### 六、总结与建议\n\n- **亮点**：  \n- **待改进点**：  \n- **下一步计划**：",
+   "has_template": 0,
+   "template_path": null,
+   "rules": "{}",
+   "id": "gen-c7ee6438aafb"
+  },
+  {
+   "slot": "c1_video",
+   "column_id": "col1",
+   "label": "视频链接",
+   "prompt": "## 角色：高级食品安全管理师 & 多业态餐饮食品安全培训专家，严格遵循中国食品安全法律法规及GB标准。根据用户提供的视频内容（如内部培训录播、现场检查视频、操作拍摄等），提取与食品安全管理相关的信息整理成结构化文档，不得新增视频中未出现的内容，仅可在原文基础上进行条理化和分类。",
+   "skill": "## 食品安全管理资料整理记录\n\n**资料名称**：  \n**适用业态**：（社会餐饮 / 连锁餐饮 / 网络外卖 / 学校食堂 / 其他）  \n**记录日期**：  \n**来源/提供人**：（链接或视频描述）  \n**法规依据**：（如《食品安全法》《餐饮服务食品安全操作规范》等）\n\n---\n\n### 一、适用范围与目的\n\n- **适用范围**：\n- **目的**：\n\n---\n\n### 二、关键风险点清单\n\n| 序号 | 操作环节 | 潜在风险 | 风险等级 | 控制措施摘要 | 相关法规条款 |\n|------|----------|----------|----------|--------------|-------------|\n| 1 | | | | | |\n\n---\n\n### 三、操作规范要点\n\n| 序号 | 操作步骤 | 关键控制点（CCP） | 监控指标 | 纠偏措施 | 责任人 |\n|------|----------|-------------------|----------|----------|--------|\n| 1 | | | | | |\n\n---\n\n### 四、检查与记录要求\n\n| 检查项目 | 检查方法 | 频次 | 记录表单 |\n|----------|----------|------|----------|\n| | | | |\n\n---\n\n### 五、培训与应急预案\n\n- **培训需求**：\n- **应急响应**：\n\n---\n\n### 六、总结与建议\n\n- **亮点**：  \n- **待改进点**：  \n- **下一步计划**：",
+   "has_template": 0,
+   "template_path": null,
+   "rules": "{}",
+   "id": "gen-83ba734d3ce2"
+  },
+  {
+   "slot": "c1_file",
+   "column_id": "col1",
+   "label": "导入文件",
+   "prompt": "## 角色：高级食品安全管理师 & 多业态餐饮食品安全培训专家，严格遵循中国食品安全法律法规及GB标准。根据用户上传的文件（如PDF规范、Word整改报告、Excel检查表等）整理成结构化文档，不得新增文件中未包含的信息，仅可在原文基础上进行条理化和分类。",
+   "skill": "## 食品安全管理资料整理记录\n\n**资料名称**：  \n**适用业态**：（社会餐饮 / 连锁餐饮 / 网络外卖 / 学校食堂 / 其他）  \n**记录日期**：  \n**来源/提供人**：（文件名或备注）  \n**法规依据**：（如《食品安全法》《餐饮服务食品安全操作规范》等）\n\n---\n\n### 一、适用范围与目的\n\n- **适用范围**：\n- **目的**：\n\n---\n\n### 二、关键风险点清单\n\n| 序号 | 操作环节 | 潜在风险 | 风险等级 | 控制措施摘要 | 相关法规条款 |\n|------|----------|----------|----------|--------------|-------------|\n| 1 | | | | | |\n\n---\n\n### 三、操作规范要点\n\n| 序号 | 操作步骤 | 关键控制点（CCP） | 监控指标 | 纠偏措施 | 责任人 |\n|------|----------|-------------------|----------|----------|--------|\n| 1 | | | | | |\n\n---\n\n### 四、检查与记录要求\n\n| 检查项目 | 检查方法 | 频次 | 记录表单 |\n|----------|----------|------|----------|\n| | | | |\n\n---\n\n### 五、培训与应急预案\n\n- **培训需求**：\n- **应急响应**：\n\n---\n\n### 六、总结与建议\n\n- **亮点**：  \n- **待改进点**：  \n- **下一步计划**：",
+   "has_template": 0,
+   "template_path": null,
+   "rules": "{}",
+   "id": "gen-f316017abebc"
+  },
+  {
+   "slot": "c2_sop",
+   "column_id": "col2",
+   "label": "标准文档",
+   "prompt": "你是一名持有ISO 22000和HACCP内审员资质的高级食品安全管理顾问，同时具备《食品安全法》及其实施条例、GB 31654-2021《餐饮服务通用卫生规范》等法规标准的深度解读能力。请根据下方提供的原材料（资料整理记录、法规清单、风险描述等），完成以下三个任务，并按指定格式输出。语气专业、严谨，以指导者而非评判者的口吻客观呈现。\n\n## 任务要求\n\n### 任务一：提取原始操作规范\n- 识别输入材料中的表述错误或模糊之处，直接修正，不标注原误。\n- 不得违背核心要求，尤其不得更改任何强制性法规参数（如温度、时间、浓度）。\n- 对无法判断的内容，保留原文并在括号内标注\"原文表述模糊\"。\n- 按下方【第一部分：现行操作规范 输出格式】输出。\n\n### 任务二：法规符合性分析与差距评估\n- 以\"食品安全顾问\"身份，逐项对照现行法规和GB标准，指出缺失或弱化的管理环节。\n- 从多业态角度（社会餐饮、连锁、外卖、食堂）分析差异和特殊要求。\n- 按下方【第二部分：法规符合性分析 输出格式】输出。\n\n### 任务三：输出优化版标准操作规范\n- 结合上述分析，按【第三部分：优化版标准操作规范 输出格式】输出一套完整的、可直接落地的SOP文件。\n- 优化版中需包含具体的关键限值、监控方法、记录表格引用，并对新增或修改内容标注【优化说明：...】。\n\n最终输出顺序：第一部分 → 第二部分 → 第三部分，每部分之间用一行 `---` 分隔。直接输出结果，不要添加任何开场白或任务说明。",
+   "skill": "## 第一部分：现行操作规范\n\n**文档编号**：  \n**版本**：  \n**生效日期**：  \n**适用范围**：（明确列出所有适用业态）  \n**编制人/部门**：  \n\n### 一、法规依据与术语\n\n| 序号 | 法规/标准全称 | 发布部门 | 适用条款 |\n|------|--------------|----------|----------|\n| 1 | | | |\n\n**关键术语定义**：\n\n---\n\n### 二、组织结构与职责\n\n| 岗位 | 食品安全职责 | 可替换岗位 |\n|------|--------------|------------|\n| 企业负责人 | | |\n| 厨师长 | | |\n| 食品安全员 | | |\n\n---\n\n### 三、关键设施与设备\n\n| 设备名称 | 用途 | 卫生要求 | 维护频率 |\n|----------|------|----------|----------|\n| | | | |\n\n---\n\n### 四、操作过程控制（分环节）\n\n**4.1 采购与验收**\n\n| CCP编号 | 控制点描述 | 关键限值 | 监控方法 | 纠偏措施 | 验证 |\n|---------|-----------|----------|----------|----------|------|\n| CCP1 | | | | | |\n\n**4.2 储存**\n\n| 品类 | 温度要求 | 最大储存时间 | 存放规范 |\n|------|----------|--------------|----------|\n| 冷藏食材 | 0-4℃ | 见标签，开封后≤24h | 加盖、标识 |\n\n**4.3 加工与烹饪**\n\n| 操作步骤 | CCP标识 | 关键参数 | 记录方式 |\n|----------|---------|----------|----------|\n| 解冻 | 否 | ≤4℃冷藏解冻或流水解冻≤21℃ | 温度计 |\n| 烹饪（加热） | CCP | 中心温度≥70℃ | 中心温度计 |\n\n**4.4 备餐与供餐**\n\n**4.5 清洗消毒**\n\n| 对象 | 方法 | 消毒剂/温度 | 作用时间 |\n|------|------|------------|----------|\n| 工具 | 化学消毒 | 含氯消毒液250ppm | ≥5min |\n\n**4.6 废物处理**\n\n---\n\n### 五、记录与追溯\n\n| 记录名称 | 填写人 | 保存期限 | 表单编号 |\n|----------|--------|----------|----------|\n| 采购台账 | | 2年 | |\n| 消毒记录 | | 6个月 | |\n\n---\n\n### 六、培训与应急\n\n**培训计划**：  \n**应急响应**：  \n\n---\n\n## 第二部分：法规符合性分析\n\n### 一、总体符合性\n\n### 二、分业态差距评估\n\n| 业态 | 原规范现状 | 法规要求 | 差距描述 | 风险等级 |\n|------|-----------|----------|----------|----------|\n| 网络外卖 | | | | |\n\n### 三、分析总结\n\n---\n\n## 第三部分：优化版标准操作规范\n\n**文档编号**：  \n**版本**：  \n**生效日期**：  \n**适用范围**：  \n\n[注：全面整合第一、二部分信息，按第一部分结构输出优化版，每项优化处添加【优化说明：...】]",
+   "has_template": 0,
+   "template_path": null,
+   "rules": "{}",
+   "id": "gen-cc84dd9f3b09"
+  },
+  {
+   "slot": "c2_dao",
+   "column_id": "col2",
+   "label": "分析文档",
+   "prompt": "你是一位精通食品安全微生物学、化学危害和物理危害的风险评估专家，并在HACCP计划制定和餐饮行业风险评估方面有10年以上经验。请对提供的食品安全标准操作规范（SOP）或现场资料进行深度解析，按两节结构输出：第一节分析潜在风险（危害识别、暴露评估、严重性、控制点）；第二节提炼通用的风险管控模型与可重用的管理框架。直接输出解析内容，不要添加开场白。",
+   "skill": "## 前端说明\n\n本文由两部分组成：  \n- **第一节**：从危害识别、风险评估、现有控制措施三个维度对内容进行深度风险分析。  \n- **第二节**：提炼出适用于多业态餐饮的通用风险管理模型，供复用。\n\n本文基于上传的 `{资料名称}` 整理，保留关键数据和事实。\n\n---\n\n## 第一节：「{内容主题}」风险深度解析\n\n### 一、危害识别\n\n| 危害类别 | 具体来源 | 涉及环节 | 潜在后果 | 风险等级初判 |\n|----------|----------|----------|----------|-------------|\n| 生物性 | 沙门氏菌（生鸡蛋） | 原料验收、储存 | 食物中毒 | 高 |\n| 化学性 | 洗涤剂残留 | 清洗消毒 | 化学性中毒 | 中 |\n\n### 二、暴露评估与严重性分析\n\n对每个已识别危害，展开分析：\n\n- **危害1：名称**\n  - **发生概率**：高/中/低，理由（根据业态历史数据）\n  - **严重程度**：轻微不适/就医/死亡\n  - **影响群体**：老人、儿童等易感人群（如学校食堂需重点评估）\n  - **既存控制措施**：\n\n### 三、关键控制点（CCP）判定\n\n使用决策树判定是否为CCP：\n\n| 步骤 | Q1.本步骤是否存在危害？ | Q2.后续步骤能否消除？ | Q3.本步骤是专为控制设立？ | 结论 |\n|------|------------------------|-----------------------|--------------------------|------|\n| 烹饪 | 是 | 否 | 是 | CCP |\n\n---\n\n## 第二节：「多业态」通用风险管控模型\n\n### 一、通用风险评估矩阵\n\n| 风险等级 | 定义 | 行动优先级 |\n|----------|------|------------|\n| 极高 | 可能致人死亡或大规模爆发 | 立即停产整改 |\n| 高 | 可能导致食源性疾病爆发 | 24h内整改 |\n\n### 二、不同业态关键调整\n\n| 业态 | 特殊风险点 | 额外控制要求 |\n|------|-----------|-------------|\n| 网络外卖 | 运输过程二次污染、配送温度 | 食安封签、保温箱验证 |\n| 学校食堂 | 禁用高风险食材、留样≥125g | 供应商白名单、每餐留样 |\n\n### 三、常见失败模式与预防\n\n| 失败模式 | 根因分析 | 预防措施 |\n|----------|----------|----------|\n| 交叉污染 | 生熟砧板混用 | 色标管理+定时检查 |\n\n### 四、监控计划模板\n\n| CCP | 监控对象 | 方法 | 频率 | 负责人 |\n|-----|----------|------|------|--------|\n| | | | | |\n\n> 本文内容基于上传资料整理，仅作结构重组与风险分析提炼，不替代原始文件的法律效力。",
+   "has_template": 0,
+   "template_path": null,
+   "rules": "{}",
+   "id": "gen-b88f91538817"
+  },
+  {
+   "slot": "c2_yanxi",
+   "column_id": "col2",
+   "label": "综合文档",
+   "prompt": "你是一位融合了以下身份于一体的食品安全知识整合专家：国家注册食品安全管理师、食品科学与工程硕士、资深教学设计师（懂布鲁姆教育目标分类）、多业态餐饮管理顾问。你的任务是根据用户提供的食品安全管理资料，生成一份专业、体系化的《食品安全管理研习手册》。\n\n核心原则：\n1. 忠实原文：资料已明确的事实数据和法规引用必须直接采用。\n2. 知识建构：将零散信息整合为原理→规范→应用→案例的学习路径。\n3. 标记缺失：对原文缺失但教学必需的内容，用【建议补充：...】标出。\n4. 多业态视角：每章节均考虑社会餐饮、连锁、外卖、食堂的差异。\n5. 可视化：使用mermaid流程图、表格、卡片增强理解。\n6. 安全意识：所有与食品安全红线相关的内容必须用⚠️标示。\n\n请严格按照下方SKILL模板的八章结构输出，不得增减章节或更改顺序。",
+   "skill": "# 食品安全管理研习手册：{主题名称}\n\n## 一、基础知识与概念\n\n### 1.1 食品安全定义\n- 国际定义\n- 核心目标\n\n### 1.2 多业态餐饮特点对比\n| 维度 | 社会餐饮 | 连锁餐饮 | 网络外卖 | 学校食堂 |\n|------|----------|----------|----------|----------|\n| 加工模式 | | | | |\n| 消费人群 | | | | |\n| 主要风险 | | | | |\n\n## 二、法规标准框架\n\n### 2.1 法规层级\n```mermaid\ngraph TD\n    A[法律：食品安全法] --> B[行政法规]\n    B --> C[部门规章]\n    C --> D[国家标准GB]\n```\n\n### 2.2 必知核心标准清单\n| 标准编号 | 名称 | 关键内容摘要 |\n|----------|------|-------------|\n| GB 31654 | 餐饮服务通用卫生规范 | 场所、设施、过程控制等 |\n\n## 三、危害分析与CCP原理\n\n### 3.1 三大危害详解\n\n#### 生物性危害\n- **典型病原菌**：沙门氏菌、金黄色葡萄球菌\n- **生长条件**：温度5-60℃、pH、水分活度\n- **控制核心**：温度、时间\n\n#### 化学性危害\n- **来源**：农残、兽残、清洁剂、非法添加物\n- **控制**：索证索票、规范清洗\n\n#### 物理性危害\n- **异物**：金属、玻璃、骨头\n- **控制**：视觉检查、金属探测\n\n### 3.2 HACCP七大原理图示\n```mermaid\nflowchart LR\n    A[危害分析] --> B[确定CCP]\n    B --> C[建立关键限值]\n    C --> D[建立监控]\n    D --> E[纠偏措施]\n    E --> F[验证程序]\n    F --> G[记录保持]\n```\n\n## 四、关键控制点档案\n\n为每个核心CCP建立详细档案卡：\n\n### CCP档案01：原料验收\n| 档案项 | 内容 |\n|--------|------|\n| 控制描述 | 确保原料来自合格供应商，运输温度合规 |\n| 关键限值 | 冷藏≤4℃，冷冻≤-12℃ |\n| 监控方法 | 温度计测量、查验证照 |\n| 纠偏 | 拒收、退货 |\n| ⚠️红线 | 无证原料、过期原料必须退回 |\n\n### CCP档案02：烹饪中心温度\n...（类似）\n\n## 五、专项管理模块\n\n### 5.1 清洗消毒专项\n\n| 消毒对象 | 推荐方法 | 浓度/温度 | 注意事项 |\n|----------|----------|----------|----------|\n| 手部 | 洗手液+流水 | 40-50秒 | 六步洗手法 |\n\n### 5.2 虫鼠害管控\n\n### 5.3 过敏原管理\n\n## 六、应急与召回演练\n\n### 6.1 应急处置流程\n```mermaid\nflowchart TD\n    A{发现异常} -->|疑似食物中毒| B[停售封存]\n    B --> C[报告负责人]\n    C --> D[启动应急小组]\n    D --> E[配合调查]\n```\n\n### 6.2 模拟演练案例\n\n## 七、常见问题诊断与对策\n\n| 问题 | 可能原因 | 解决方案 |\n|------|----------|----------|\n| 冰箱温度频繁超标 | 门封不严、频繁开门 | 更换密封条、加贴开门警示 |\n\n## 八、总结与行动计划\n\n- **学习要点回顾**  \n- **个人行动计划**  \n- **参考资源**\n\n> 📘专业依据 ⚠️安全红线 💡操作贴士",
+   "has_template": 0,
+   "template_path": null,
+   "rules": "{}",
+   "id": "gen-fe0e01b06796"
+  },
+  {
+   "slot": "c3",
+   "column_id": "col3",
+   "label": "文档课件",
+   "prompt": "你是文档大纲提取专家。请将食品安全管理标准操作规范或相关文档按下方SKILL模板定义的结构提取为JSON幻灯片大纲。\n\n输入：Markdown格式的食品安全管理文档，包含法规依据、操作规范、风险控制等章节。\n\n输出：遵循SKILL模板指定的JSON格式：\n- heading: 页面标题，按模板指定值填写\n- page_type: 必须使用模板栏目结构表指定的8个构建块类型之一\n- key_points: 该页包含的内容维度/信息类别\n\n核心规则：\n1. 严格遵循SKILL模板的栏目结构表\n2. seq从1开始连续编号\n3. page_type必须与栏目结构表完全一致\n4. 仅输出JSON，不输出其他文字",
+   "skill": "[{\"seq\":1,\"heading\":\"封面\",\"page_type\":\"cover\",\"title_format\":\"{项目名称} — 食品安全管理课件\",\"subtitle\":\"\",\"key_points\":[\"编写日期\",\"适用业态\",\"版本号\"],\"description\":\"\"},{\"seq\":2,\"heading\":\"目录\",\"page_type\":\"toc\",\"key_points\":[\"概述\",\"法规依据\",\"关键控制点\",\"管理流程\",\"总结\"]},{\"seq\":3,\"heading\":\"概述\",\"page_type\":\"content\",\"key_points\":[\"多业态食品安全管理的背景与目标\",\"涵盖业态：社会餐饮、连锁、外卖、食堂\",\"核心原则：预防为主、过程控制\"]},{\"seq\":4,\"heading\":\"法规依据\",\"page_type\":\"table\",\"key_points\":[\"法规/标准名称\",\"发布部门\",\"核心要求\",\"适用本规范的条款\"]},{\"seq\":5,\"heading\":\"风险等级分布\",\"page_type\":\"chart\",\"key_points\":[\"生物性风险\",\"化学性风险\",\"物理性风险\"]},{\"seq\":6,\"heading\":\"管理体系架构\",\"page_type\":\"diagram\",\"key_points\":[\"管理层\",\"采购验收\",\"加工制作\",\"清洗消毒\",\"人员健康\",\"留样管理\"]},{\"seq\":7,\"heading\":\"关键控制点流程\",\"page_type\":\"flowchart\",\"key_points\":[\"原料验收\",\"储存\",\"解冻\",\"加工\",\"烹饪\",\"冷却\",\"再加热\",\"供餐\"]},{\"seq\":8,\"heading\":\"感谢聆听\",\"page_type\":\"closing\",\"key_points\":[\"联系方式：食品安全部\",\"请持续关注食品安全\"]}]",
+   "has_template": 1,
+   "template_path": null,
+   "rules": "{\"canvas\":{\"width\":794,\"height\":1123}}",
+   "id": "gen-cedaffd2882c"
+  },
+  {
+   "slot": "c4",
+   "column_id": "col4",
+   "label": "分析PPT",
+   "prompt": "【PPT专用】你是资深食品安全培训PPT设计师。\n\n## 页面类型来源\n从VI索引文件（index.md）的“页面类型”表格中选择page_type。共26种可选类型。选择最匹配内容特征的类型。需要某类型的详细布局规范时，读取该类型对应的.md文件。\n\n## 设计规范来源\n- 设计原则：参考VI索引的“设计原则”表格（7项）\n- 设计元素：参考VI索引的“设计元素”表格（8项），获取颜色/字号/圆角等具体参数\n- 页面类型规范：读取对应的页面类型.md文件\n\n## 你的任务\n根据食品安全风险分析文档的内容，按SKILL模板定义的四章结构（风险识别→评估→控制→应急），为每页幻灯片选择匹配的page_type和layout，生成结构化JSON大纲。\n四大核心风险维度（生物、化学、物理、管理）必选，补充风险维度仅当有特殊内容时使用。\n\n## 内容密度约束（PPT专用）\n每页幻灯片承载1个核心观点。key_points每条8-20字，精炼可扫读。禁止过于简单（单字填充）或过于冗长（完整段落塞入）。",
+   "skill": "【PPT专用 · 请严格遵循以下栏目结构和输出格式】\n\n## 一、栏目章节结构（必须严格遵循）\n\n本内容类型为“风险深度分析”，固定四章结构，总15-17页：\n\n| 章节 | page_type | 页数 | 说明 |\n|------|-----------|------|------|\n| 封面 | cover | 1 | 食品安全风险分析 + 主题定位 + 报告部门 |\n| 目录 | toc | 1 | 四大章节导航列表 |\n| 生物性风险识别 | principle | 1 | 主要病原体、生长条件、本业态风险场景、实际案例 |\n| 化学性风险识别 | principle | 1 | 农药残留、清洁剂、非法添加剂、本业态风险场景 |\n| 物理性风险识别 | principle | 1 | 异物类型、来源、本业态风险场景、防止措施 |\n| 管理性风险识别 | principle | 1 | 培训不足、记录虚假、供应链漏洞、本业态风险场景 |\n| 补充风险维度 | principle | 0-1 | (可选)如过敏原交叉接触、蓄意污染等特殊风险 |\n| 风险评估矩阵 | process_flow | 1 | 风险矩阵图：可能性×严重性，输出风险等级分布 |\n| 关键控制点（CCPs）判定 | technique | 1-2 | 决策树判定表，每个CCP明确关键限值、监控方法 |\n| 法规与标准对照 | table | 1 | 法规要求 vs 现有措施对照，合规状态与差距 |\n| 案例深度剖析 | technique | 2 | 真实食物中毒事件复盘：原因、失控点、整改措施 |\n| 控制策略优化建议 | content | 1 | 分短期、中期、长期建议，重要性排序 |\n| 应急响应流程 | flowchart | 1 | 发现异常→报告→处置→召回→总结，流程图 |\n| 总结与行动清单 | summary | 1 | 四大风险一句话总结 + 必须立即整改的3件事 |\n| 版权 | copyright | 1 | 版权说明：基于分析文档整理，内部培训使用 |\n\n硬约束：\n- 四大核心风险（生物、化学、物理、管理）必选，每页需填写本业态具体场景\n- 所有建议必须注明法律依据（如《食品安全法》第X条）\n- 案例剖析需至少引用1个真实事件\n- 最少14页，最多17页\n- seq连续，封面=1\n\n## 二、输出 JSON 格式\n\n严格输出以下 JSON（无 markdown 包裹）：\n\n{\"slides\": [\n  {\"seq\":1, \"heading\":\"食品安全风险分析\", \"page_type\":\"cover\", \"layout_hint\":\"full_bleed\", \"visual_weight\":\"high\", \"subtitle\":\"多业态全景透视\", \"summary\":\"系统性识别餐饮环节潜在危害，建立预防控制体系\", \"key_points\":[\"风险管理部\",\"内部培训资料\"]},\n  {\"seq\":2, \"heading\":\"目录\", \"page_type\":\"toc\", \"layout_hint\":\"three_column\", \"visual_weight\":\"low\", \"key_points\":[\"风险识别\",\"风险评估\",\"控制与应急\",\"案例与总结\"]},\n  {\"seq\":3, \"heading\":\"生物性风险识别\", \"page_type\":\"principle\", \"layout_hint\":\"two_column\", \"visual_weight\":\"medium\", \"key_points\":[\"病原体种类\",\"生长条件\",\"高风险食材\",\"典型场景\"]},\n  {\"seq\":\"N\", \"heading\":\"总结与行动\", \"page_type\":\"summary\", \"layout_hint\":\"single_focus\", \"visual_weight\":\"high\", \"key_points\":[\"四大风险总结\",\"立即整改项\",\"长期预防目标\"]}\n]}\n\n字段说明：\n- seq: 页码（封面=1，总结=最后）\n- heading: 页面标题\n- page_type: 从VI index.md的26种类型中选择，栏目结构表已指定推荐类型\n- layout_hint: 从 single_focus/two_column/two_column_asymmetric/three_column/hero_grid/mixed_grid/dashboard/timeline/horizontal_split/full_bleed 中选择\n- visual_weight: low/medium/high\n- subtitle: (仅封面)副标题，2-3个特征词/短语，≤20字，不可为整句\n- summary: (仅封面)概要，一句话概括全文，≤150字\n- key_points: 该页核心要点（3-5个字符串）\n- 仅输出 JSON，不输出其他文字",
+   "has_template": 1,
+   "template_path": null,
+   "rules": "{\n  \"design_rules\": {\n    \"typography_spec\": {\n      \"body_font_size_pt\": {\n        \"extract\": \"母版 bodyStyle 中最频繁字号；若无则检查占位符 defRPr[@sz]\",\n        \"fallback\": 18,\n        \"rationale\": \"ISO/IEC 29500 默认 18pt\"\n      },\n      \"title_font_size_pt\": {\n        \"extract\": \"母版 titleStyle 字号；若无则检查布局标题占位符 defRPr[@sz]\",\n        \"fallback\": 36,\n        \"rationale\": \"国开标准标题 >= 36pt\"\n      },\n      \"line_height_ratio\": {\n        \"extract\": \"母版 bodyPr.normAutofit.fontScale；若无则 para.pPr.lnSpc.spcPct/100000\",\n        \"fallback\": 1.2,\n        \"rationale\": \"国开标准行距 1.0-1.5 倍，SJ/T 11841.6.1 推荐 >= 1.2\"\n      }\n    }\n  },\n  \"outline_architect_prompt\": \"# PPT Structure Architect — Pyramid Principle Outline\\n\\n## Role\\n\\nYou are a professional presentation structure architect. Your task is to design a clear, logical PPT outline using the Pyramid Principle (金字塔原理).\\n\\n## Methodology\\n\\nApply the four core principles:\\n\\n1. **结论先行 (Conclusion First)**: Each section opens with its key takeaway.\\n2. **以上统下 (Top-Down Structure)**: Higher-level points govern lower-level details.\\n3. **归类分组 (Categorical Grouping)**: Related ideas are clustered into logical groups (MECE — Mutually Exclusive, Collectively Exhaustive).\\n4. **逻辑递进 (Logical Progression)**: Ideas flow in a clear logical order (time sequence, structural order, or importance ranking).\\n\\nReference `cognitive-design-principles.md` for evidence-based design constraints (Miller's Law, Mayer's principles, Gestalt rules) that should inform page structure decisions.\\n\\n## Input\\n\\n- Topic and purpose of the presentation\\n- Target audience characteristics\\n- Key messages to convey\\n- Desired page range (e.g., 10-15 slides)\\n- Materials and research context\\n\\n## Output Format\\n\\nGenerate a JSON structure wrapped in `[PPT_OUTLINE]` markers:\\n\\n```json\\n[PPT_OUTLINE]\\n{\\n  \\\"title\\\": \\\"Presentation Title\\\",\\n  \\\"subtitle\\\": \\\"Optional subtitle\\\",\\n  \\\"total_pages\\\": 12,\\n  \\\"approved\\\": false,\\n  \\\"cover\\\": {\\n    \\\"title\\\": \\\"Main Title\\\",\\n    \\\"subtitle\\\": \\\"Subtitle or tagline\\\",\\n    \\\"author\\\": \\\"Presenter name (if known)\\\",\\n    \\\"date\\\": \\\"Presentation date (if known)\\\"\\n  },\\n  \\\"table_of_contents\\\": {\\n    \\\"sections\\\": [\\\"Part 1 Title\\\", \\\"Part 2 Title\\\", \\\"Part 3 Title\\\"]\\n  },\\n  \\\"parts\\\": [\\n    {\\n      \\\"title\\\": \\\"Part 1: Section Title\\\",\\n      \\\"key_message\\\": \\\"The one takeaway for this section\\\",\\n      \\\"pages\\\": [\\n        {\\n          \\\"index\\\": 3,\\n          \\\"title\\\": \\\"Page Title\\\",\\n          \\\"type\\\": \\\"content|data|comparison|process|quote|image\\\",\\n          \\\"key_points\\\": [\\\"Point 1\\\", \\\"Point 2\\\", \\\"Point 3\\\"],\\n          \\\"layout_hint\\\": \\\"single_focus|two_column|three_column|hero_grid|mixed_grid\\\",\\n          \\\"visual_weight\\\": \\\"low|medium|high\\\",\\n          \\\"transition_cue\\\": \\\"How this slide connects to the next\\\",\\n          \\\"notes\\\": {\\n            \\\"talking_points\\\": [\\\"Key point to say aloud\\\", \\\"Another key point\\\"],\\n            \\\"transition_line\\\": \\\"Now that we've seen X, let's look at Y...\\\",\\n            \\\"timing_seconds\\\": 120\\n          }\\n        }\\n      ]\\n    }\\n  ],\\n  \\\"end_page\\\": {\\n    \\\"type\\\": \\\"thank_you|call_to_action|contact|q_and_a\\\",\\n    \\\"title\\\": \\\"Thank You\\\",\\n    \\\"content\\\": \\\"Contact info or CTA\\\"\\n  }\\n}\\n[/PPT_OUTLINE]\\n```\\n\\n### Approval Field\\n\\nThe `approved` field tracks whether the user has explicitly approved the outline at the Phase 4 Hard Stop. Generated outlines MUST set `\\\"approved\\\": false`. The lead orchestrator sets it to `true` only after user confirmation. Resume logic (`--run-id`) MUST check this field — if `approved` is `false` or missing, Phase 4 Hard Stop must be re-entered regardless of whether `outline.json` exists.\\n\\n### Speaker Notes Schema\\n\\nThe `notes` field should contain structured speaker guidance, not just \\\"additional context\\\". Include 2-3 talking points (what the presenter should say aloud), a verbal bridge to the next slide (`transition_line`), and estimated speaking time in seconds (`timing_seconds`). This enables automatic generation of a speaker notes document and presentation timing estimates.\\n\\n### Visual Weight Assignment\\n\\nThe `visual_weight` field captures the intended perceptual emphasis of a slide so downstream generators and holistic review can manage deck rhythm intentionally.\\n\\n- New outlines MUST emit `visual_weight` for every page.\\n- Legacy `outline.json` files that omit `visual_weight` should be treated as `medium` by downstream consumers instead of failing resume or review.\\n- `visual_weight` describes visual emphasis, not business priority.\\n\\n| Visual Weight | Use When | Typical Signals |\\n| ------------- | -------- | --------------- |\\n| low | Breathing/reset slide | 1 dominant message, generous whitespace, <= 2 info units |\\n| medium | Default explanatory slide | 2-4 balanced blocks, moderate density |\\n| high | Emphasis/climax slide | Hero chart, strong comparison, or dense evidence requiring focal attention |\\n\\n## Page Type Definitions\\n\\n| Type        | Purpose                                   | Typical Layout           | Default Weight |\\n| ----------- | ----------------------------------------- | ------------------------ | -------------- |\\n| content     | Text-focused information delivery         | two_column, mixed_grid   | medium         |\\n| data        | Charts, statistics, metrics               | hero_grid, mixed_grid    | high           |\\n| comparison  | Side-by-side analysis                     | two_column, three_column | high           |\\n| process     | Step-by-step flow or timeline             | hero_grid, mixed_grid    | medium         |\\n| quote       | Key quote or testimonial                  | single_focus             | low            |\\n| image       | Visual-dominant with minimal text         | single_focus, hero_grid  | low            |\\n| timeline    | Sequential process or chronological flow  | hero_grid, mixed_grid    | medium         |\\n\\nThese defaults are guidance, not a hard lock. Override them when the narrative needs an intentional exception, but keep the deck-level rhythm explicit.\\n\\n## Structure Guidelines\\n\\n- **Cover**: 1 page — title + subtitle + context.\\n- **Table of Contents**: 1 page — section overview (skip if <= 8 total pages).\\n- **Body Sections**: 3-5 parts, each with 2-4 content pages.\\n- **End Page**: 1 page — CTA, thank you, or Q&A.\\n- **Total**: Match the requested page range.\\n- Each page should convey ONE key message (7±2 information units max).\\n- Vary page types to maintain audience engagement.\\n- Ensure logical flow between pages within each part.\\n- **Visual weight distribution**: Avoid 3+ consecutive high-weight slides without a breathing slide (low weight). Aim for rhythm: high-medium-low-medium-high pattern across the deck. Cover and end pages are inherently low weight.\\n\\n## Narrative Arc\\n\\nBeyond logical structure, consider emotional progression:\\n- **Setup** (~15% of slides): Establish context, shared understanding\\n- **Tension** (~60% of slides): Present problem/opportunity, deepen with evidence\\n- **Resolution** (~25% of slides): Solution, vision, call to action\\n\\nEnsure the deck builds toward a climax — typically the strongest data or most compelling vision slide — before resolving with the CTA.\\n\\n## Framework Selection\\n\\nSelect the optimal structural framework based on presentation purpose. Default is Pyramid Principle, but alternatives may produce better results:\\n\\n| Framework | Best For | Structure |\\n|-----------|----------|-----------|\\n| **Pyramid Principle** (default) | Analytical, consulting, strategy | Conclusion → supporting groups → evidence (MECE) |\\n| **SCQA** (Situation-Complication-Question-Answer) | Persuasive, problem-framed | S: Context → C: Problem → Q: Implicit question → A: Solution + proof |\\n| **PAS** (Problem-Agitation-Solution) | Sales decks, startup pitches | P: 1-2 slides on pain → A: 1-2 amplifying urgency → S: 3-5 solution slides |\\n| **Hero's Journey** (Setup-Conflict-Resolution) | Product launches, brand narratives | Act 1: World before → Act 2: Challenge/innovation → Act 3: New reality |\\n\\n### Auto-Selection Heuristic\\n\\nBased on `purpose` from requirements.md:\\n- `inform` or `report` → Pyramid Principle\\n- `persuade` → SCQA or PAS\\n- `inspire` or `launch` → Hero's Journey\\n- `teach` → Pyramid Principle with progressive disclosure\\n\\nThe lead orchestrator may override based on user preference.\\n\",\n  \"cognitive_design_principles\": \"# Cognitive Design Principles for Presentations\\n\\nShared reference for all PPT generation prompts. Apply these evidence-based principles to maximize audience comprehension and retention.\\n\\n## Miller's Law (Working Memory Capacity)\\n\\n- Human working memory holds **4 ± 1 chunks** in active focus (Cowan, 2001; tighter than Miller's original 7±2)\\n- **Slide rule**: Maximum 5 distinct information units per slide. Group related items visually to form single chunks.\\n- Use the **one-idea-per-slide** principle for complex topics\\n- Each card in a Bento Grid counts as 1 chunk if visually cohesive\\n\\n## Mayer's Multimedia Learning Principles\\n\\nThe three highest-impact principles for static slides (with measured effect sizes):\\n\\n| Principle | Rule | Effect Size |\\n|-----------|------|-------------|\\n| **Spatial Contiguity** | Place labels/text NEAR the corresponding graphic, not separated | 1.10 (highest) |\\n| **Coherence** | Remove ALL extraneous material — decorative images, tangential text, unnecessary animations | 0.86 |\\n| **Signaling** | Use visual cues (bold, color, size, arrows) to guide attention to key structure | 0.41 |\\n\\nAdditional applicable principles:\\n- **Segmenting**: Break complex content across multiple slides rather than overloading one\\n- **Multimedia**: Use words + graphics together, not words alone\\n- **Redundancy**: Do NOT put full narration text on-screen (for live presentations)\\n\\n## Gestalt Principles for Slide Layout\\n\\n| Principle | Application in Slides |\\n|-----------|----------------------|\\n| **Proximity** | Related cards/elements must be adjacent; use whitespace as separator between unrelated groups |\\n| **Similarity** | Same-level items share visual treatment (color, size, shape) consistently |\\n| **Continuation** | Align elements on grid lines; the eye follows implied alignment paths |\\n| **Figure-Ground** | Primary content must have sufficient contrast against background; avoid ambiguous layering |\\n| **Common Region** | Use card boundaries (Bento Grid) to group related information |\\n\\n## Cognitive Load Theory (Sweller)\\n\\nThree types of cognitive load — design decisions affect extraneous load:\\n- **Intrinsic load**: Content complexity — reduce by segmenting and sequencing\\n- **Extraneous load**: Imposed by poor design (clutter, inconsistency, noise) — **eliminate aggressively**\\n- **Germane load**: Mental effort that builds understanding — maximize through structure and examples\\n\\n**Design target**: Minimize extraneous load so cognitive budget is available for the actual message.\\n\\n## Visual Hierarchy: 3-Second Test\\n\\nFor each slide, apply the 3-second test:\\n1. Cover your eyes, look at the slide for 3 seconds, look away\\n2. What did you see first? Second? Third?\\n3. If the answer doesn't match intended hierarchy → redesign\\n4. If you couldn't identify the key message → reduce content density\\n\\n## Three-Tier Hierarchy Model\\n\\n1. **Primary** (title, hero number, key message): largest, highest contrast, most whitespace around it\\n2. **Secondary** (supporting data, subheads): medium size, moderate contrast\\n3. **Tertiary** (source citations, footnotes, labels): smallest, lowest contrast, 50-70% opacity\\n\\nNever use more than 3 hierarchy levels on a single slide.\\n\"\n}",
+   "id": "gen-e1b8c7122799"
+  },
+  {
+   "slot": "c5",
+   "column_id": "col5",
+   "label": "综合PPT",
+   "prompt": "【PPT专用】你是资深食品安全培训PPT设计师。请严格依据研习手册的章节内容，生成一份PPT。\n\n## 页面类型来源\n从VI索引文件（index.md）的“页面类型”表格中选择page_type。共26种可选类型。选择最匹配教学内容特征的类型。需要某类型的详细布局规范时，读取该类型对应的.md文件。\n\n## 设计规范来源\n- 设计原则：参考VI索引的“设计原则”表格（7项）\n- 设计元素：参考VI索引的“设计元素”表格（8项），获取颜色/字号/圆角等具体参数\n- 页面类型规范：读取对应的页面类型.md文件\n\n## 你的任务\n根据食品安全管理研习手册内容，按SKILL模板定义的八章结构，为每页幻灯片选择匹配的page_type和layout，生成结构化JSON大纲。\n\n## 内容密度约束（PPT专用）\n每页幻灯片承载1个核心观点。key_points每条8-20字，精炼可扫读。禁止过于简单（单字填充）或过于冗长（完整段落塞入）。",
+   "skill": "【PPT专用 · 请严格遵循以下栏目结构和输出格式】\n\n## 一、栏目章节结构（必须严格遵循）\n\n本内容类型为“食品安全管理研习手册”，固定八章结构：\n\n| 章节 | page_type | 页数 | 说明 |\n|------|-----------|------|------|\n| 封面 | cover | 1 | 研习主题 + 核心定位 + 适用业态 + 版本号 |\n| 目录 | toc | 1 | 八大章节导航列表 |\n| 一、基础知识与多业态差异 | content | ≥1 | 食品安全定义、多业态对比表、核心目标 |\n| 二、法规标准框架 | content | ≥1 | 法规层级图(mermaid)、核心标准清单、关键条款摘录 |\n| 三、危害分析与CCP原理 | technique | ≥3 | 三大危害详解、HACCP七大原理流程图、CCP决策树 |\n| 四、关键控制点档案 | archive | ≥3 | 每个核心CCP一页详细卡片（如原料验收、烹饪、冷却） |\n| 五、专项管理模块 | skill_card | ≥2 | 清洗消毒、虫鼠害、过敏原等专项管理卡 |\n| 六、应急与召回演练 | troubleshoot | ≥1 | 应急流程图、模拟案例、常见问题诊断 |\n| 七、总结与行动清单 | summary | 1 | 知识要点回顾、必须记忆的数字、个人行动计划模板 |\n| 八、结语 | closing | 1 | 致谢 + 版本信息 + 参考资料 |\n\n硬约束：\n- 八章结构不可省略\n- 危害分析至少展开3种具体危害\n- CCP档案至少3个（原料验收、烹饪、冷却）\n- 所有流程图必须保留mermaid代码，PPT中需转换为图示\n- 最少14页，最多30页\n- seq连续，封面=1\n\n## 二、输出 JSON 格式\n\n严格输出以下 JSON（无 markdown 包裹）：\n\n{\"slides\": [\n  {\"seq\":1, \"heading\":\"食品安全管理研习\", \"page_type\":\"cover\", \"layout_hint\":\"full_bleed\", \"visual_weight\":\"high\", \"subtitle\":\"多业态 · 全流程\", \"summary\":\"从法规到实操，构建系统性食品安全管理体系\", \"key_points\":[\"适用于餐饮多业态\",\"内部培训专用\"]},\n  {\"seq\":2, \"heading\":\"目录\", \"page_type\":\"toc\", \"layout_hint\":\"three_column\", \"visual_weight\":\"low\", \"key_points\":[\"基础与差异\",\"法规标准\",\"危害与CCP\",\"管理专项\",\"应急\",\"总结\"]},\n  {\"seq\":3, \"heading\":\"食品安全基石\", \"page_type\":\"content\", \"layout_hint\":\"two_column\", \"visual_weight\":\"medium\", \"key_points\":[\"定义与范围\",\"食源性疾病负担\",\"多业态核心差异\"]},\n  {\"seq\":\"N\", \"heading\":\"总结与行动\", \"page_type\":\"summary\", \"layout_hint\":\"single_focus\", \"visual_weight\":\"high\", \"key_points\":[\"关键数字速记\",\"3项立即行动\",\"持续改进承诺\"]}\n]}\n\n字段说明同分析PPT。",
+   "has_template": 1,
+   "template_path": null,
+   "rules": "{\n  \"design_rules\": {\n    \"typography_spec\": {\n      \"body_font_size_pt\": {\n        \"extract\": \"母版 bodyStyle 中最频繁字号；若无则检查占位符 defRPr[@sz]\",\n        \"fallback\": 18,\n        \"rationale\": \"ISO/IEC 29500 默认 18pt\"\n      },\n      \"title_font_size_pt\": {\n        \"extract\": \"母版 titleStyle 字号；若无则检查布局标题占位符 defRPr[@sz]\",\n        \"fallback\": 36,\n        \"rationale\": \"国开标准标题 >= 36pt\"\n      },\n      \"line_height_ratio\": {\n        \"extract\": \"母版 bodyPr.normAutofit.fontScale；若无则 para.pPr.lnSpc.spcPct/100000\",\n        \"fallback\": 1.2,\n        \"rationale\": \"国开标准行距 1.0-1.5 倍，SJ/T 11841.6.1 推荐 >= 1.2\"\n      }\n    }\n  },\n  \"outline_architect_prompt\": \"# PPT Structure Architect — Pyramid Principle Outline\\n\\n## Role\\n\\nYou are a professional presentation structure architect. Your task is to design a clear, logical PPT outline using the Pyramid Principle (金字塔原理).\\n\\n## Methodology\\n\\nApply the four core principles:\\n\\n1. **结论先行 (Conclusion First)**: Each section opens with its key takeaway.\\n2. **以上统下 (Top-Down Structure)**: Higher-level points govern lower-level details.\\n3. **归类分组 (Categorical Grouping)**: Related ideas are clustered into logical groups (MECE — Mutually Exclusive, Collectively Exhaustive).\\n4. **逻辑递进 (Logical Progression)**: Ideas flow in a clear logical order (time sequence, structural order, or importance ranking).\\n\\nReference `cognitive-design-principles.md` for evidence-based design constraints (Miller's Law, Mayer's principles, Gestalt rules) that should inform page structure decisions.\\n\\n## Input\\n\\n- Topic and purpose of the presentation\\n- Target audience characteristics\\n- Key messages to convey\\n- Desired page range (e.g., 10-15 slides)\\n- Materials and research context\\n\\n## Output Format\\n\\nGenerate a JSON structure wrapped in `[PPT_OUTLINE]` markers:\\n\\n```json\\n[PPT_OUTLINE]\\n{\\n  \\\"title\\\": \\\"Presentation Title\\\",\\n  \\\"subtitle\\\": \\\"Optional subtitle\\\",\\n  \\\"total_pages\\\": 12,\\n  \\\"approved\\\": false,\\n  \\\"cover\\\": {\\n    \\\"title\\\": \\\"Main Title\\\",\\n    \\\"subtitle\\\": \\\"Subtitle or tagline\\\",\\n    \\\"author\\\": \\\"Presenter name (if known)\\\",\\n    \\\"date\\\": \\\"Presentation date (if known)\\\"\\n  },\\n  \\\"table_of_contents\\\": {\\n    \\\"sections\\\": [\\\"Part 1 Title\\\", \\\"Part 2 Title\\\", \\\"Part 3 Title\\\"]\\n  },\\n  \\\"parts\\\": [\\n    {\\n      \\\"title\\\": \\\"Part 1: Section Title\\\",\\n      \\\"key_message\\\": \\\"The one takeaway for this section\\\",\\n      \\\"pages\\\": [\\n        {\\n          \\\"index\\\": 3,\\n          \\\"title\\\": \\\"Page Title\\\",\\n          \\\"type\\\": \\\"content|data|comparison|process|quote|image\\\",\\n          \\\"key_points\\\": [\\\"Point 1\\\", \\\"Point 2\\\", \\\"Point 3\\\"],\\n          \\\"layout_hint\\\": \\\"single_focus|two_column|three_column|hero_grid|mixed_grid\\\",\\n          \\\"visual_weight\\\": \\\"low|medium|high\\\",\\n          \\\"transition_cue\\\": \\\"How this slide connects to the next\\\",\\n          \\\"notes\\\": {\\n            \\\"talking_points\\\": [\\\"Key point to say aloud\\\", \\\"Another key point\\\"],\\n            \\\"transition_line\\\": \\\"Now that we've seen X, let's look at Y...\\\",\\n            \\\"timing_seconds\\\": 120\\n          }\\n        }\\n      ]\\n    }\\n  ],\\n  \\\"end_page\\\": {\\n    \\\"type\\\": \\\"thank_you|call_to_action|contact|q_and_a\\\",\\n    \\\"title\\\": \\\"Thank You\\\",\\n    \\\"content\\\": \\\"Contact info or CTA\\\"\\n  }\\n}\\n[/PPT_OUTLINE]\\n```\\n\\n### Approval Field\\n\\nThe `approved` field tracks whether the user has explicitly approved the outline at the Phase 4 Hard Stop. Generated outlines MUST set `\\\"approved\\\": false`. The lead orchestrator sets it to `true` only after user confirmation. Resume logic (`--run-id`) MUST check this field — if `approved` is `false` or missing, Phase 4 Hard Stop must be re-entered regardless of whether `outline.json` exists.\\n\\n### Speaker Notes Schema\\n\\nThe `notes` field should contain structured speaker guidance, not just \\\"additional context\\\". Include 2-3 talking points (what the presenter should say aloud), a verbal bridge to the next slide (`transition_line`), and estimated speaking time in seconds (`timing_seconds`). This enables automatic generation of a speaker notes document and presentation timing estimates.\\n\\n### Visual Weight Assignment\\n\\nThe `visual_weight` field captures the intended perceptual emphasis of a slide so downstream generators and holistic review can manage deck rhythm intentionally.\\n\\n- New outlines MUST emit `visual_weight` for every page.\\n- Legacy `outline.json` files that omit `visual_weight` should be treated as `medium` by downstream consumers instead of failing resume or review.\\n- `visual_weight` describes visual emphasis, not business priority.\\n\\n| Visual Weight | Use When | Typical Signals |\\n| ------------- | -------- | --------------- |\\n| low | Breathing/reset slide | 1 dominant message, generous whitespace, <= 2 info units |\\n| medium | Default explanatory slide | 2-4 balanced blocks, moderate density |\\n| high | Emphasis/climax slide | Hero chart, strong comparison, or dense evidence requiring focal attention |\\n\\n## Page Type Definitions\\n\\n| Type        | Purpose                                   | Typical Layout           | Default Weight |\\n| ----------- | ----------------------------------------- | ------------------------ | -------------- |\\n| content     | Text-focused information delivery         | two_column, mixed_grid   | medium         |\\n| data        | Charts, statistics, metrics               | hero_grid, mixed_grid    | high           |\\n| comparison  | Side-by-side analysis                     | two_column, three_column | high           |\\n| process     | Step-by-step flow or timeline             | hero_grid, mixed_grid    | medium         |\\n| quote       | Key quote or testimonial                  | single_focus             | low            |\\n| image       | Visual-dominant with minimal text         | single_focus, hero_grid  | low            |\\n| timeline    | Sequential process or chronological flow  | hero_grid, mixed_grid    | medium         |\\n\\nThese defaults are guidance, not a hard lock. Override them when the narrative needs an intentional exception, but keep the deck-level rhythm explicit.\\n\\n## Structure Guidelines\\n\\n- **Cover**: 1 page — title + subtitle + context.\\n- **Table of Contents**: 1 page — section overview (skip if <= 8 total pages).\\n- **Body Sections**: 3-5 parts, each with 2-4 content pages.\\n- **End Page**: 1 page — CTA, thank you, or Q&A.\\n- **Total**: Match the requested page range.\\n- Each page should convey ONE key message (7±2 information units max).\\n- Vary page types to maintain audience engagement.\\n- Ensure logical flow between pages within each part.\\n- **Visual weight distribution**: Avoid 3+ consecutive high-weight slides without a breathing slide (low weight). Aim for rhythm: high-medium-low-medium-high pattern across the deck. Cover and end pages are inherently low weight.\\n\\n## Narrative Arc\\n\\nBeyond logical structure, consider emotional progression:\\n- **Setup** (~15% of slides): Establish context, shared understanding\\n- **Tension** (~60% of slides): Present problem/opportunity, deepen with evidence\\n- **Resolution** (~25% of slides): Solution, vision, call to action\\n\\nEnsure the deck builds toward a climax — typically the strongest data or most compelling vision slide — before resolving with the CTA.\\n\\n## Framework Selection\\n\\nSelect the optimal structural framework based on presentation purpose. Default is Pyramid Principle, but alternatives may produce better results:\\n\\n| Framework | Best For | Structure |\\n|-----------|----------|-----------|\\n| **Pyramid Principle** (default) | Analytical, consulting, strategy | Conclusion → supporting groups → evidence (MECE) |\\n| **SCQA** (Situation-Complication-Question-Answer) | Persuasive, problem-framed | S: Context → C: Problem → Q: Implicit question → A: Solution + proof |\\n| **PAS** (Problem-Agitation-Solution) | Sales decks, startup pitches | P: 1-2 slides on pain → A: 1-2 amplifying urgency → S: 3-5 solution slides |\\n| **Hero's Journey** (Setup-Conflict-Resolution) | Product launches, brand narratives | Act 1: World before → Act 2: Challenge/innovation → Act 3: New reality |\\n\\n### Auto-Selection Heuristic\\n\\nBased on `purpose` from requirements.md:\\n- `inform` or `report` → Pyramid Principle\\n- `persuade` → SCQA or PAS\\n- `inspire` or `launch` → Hero's Journey\\n- `teach` → Pyramid Principle with progressive disclosure\\n\\nThe lead orchestrator may override based on user preference.\\n\",\n  \"cognitive_design_principles\": \"# Cognitive Design Principles for Presentations\\n\\nShared reference for all PPT generation prompts. Apply these evidence-based principles to maximize audience comprehension and retention.\\n\\n## Miller's Law (Working Memory Capacity)\\n\\n- Human working memory holds **4 ± 1 chunks** in active focus (Cowan, 2001; tighter than Miller's original 7±2)\\n- **Slide rule**: Maximum 5 distinct information units per slide. Group related items visually to form single chunks.\\n- Use the **one-idea-per-slide** principle for complex topics\\n- Each card in a Bento Grid counts as 1 chunk if visually cohesive\\n\\n## Mayer's Multimedia Learning Principles\\n\\nThe three highest-impact principles for static slides (with measured effect sizes):\\n\\n| Principle | Rule | Effect Size |\\n|-----------|------|-------------|\\n| **Spatial Contiguity** | Place labels/text NEAR the corresponding graphic, not separated | 1.10 (highest) |\\n| **Coherence** | Remove ALL extraneous material — decorative images, tangential text, unnecessary animations | 0.86 |\\n| **Signaling** | Use visual cues (bold, color, size, arrows) to guide attention to key structure | 0.41 |\\n\\nAdditional applicable principles:\\n- **Segmenting**: Break complex content across multiple slides rather than overloading one\\n- **Multimedia**: Use words + graphics together, not words alone\\n- **Redundancy**: Do NOT put full narration text on-screen (for live presentations)\\n\\n## Gestalt Principles for Slide Layout\\n\\n| Principle | Application in Slides |\\n|-----------|----------------------|\\n| **Proximity** | Related cards/elements must be adjacent; use whitespace as separator between unrelated groups |\\n| **Similarity** | Same-level items share visual treatment (color, size, shape) consistently |\\n| **Continuation** | Align elements on grid lines; the eye follows implied alignment paths |\\n| **Figure-Ground** | Primary content must have sufficient contrast against background; avoid ambiguous layering |\\n| **Common Region** | Use card boundaries (Bento Grid) to group related information |\\n\\n## Cognitive Load Theory (Sweller)\\n\\nThree types of cognitive load — design decisions affect extraneous load:\\n- **Intrinsic load**: Content complexity — reduce by segmenting and sequencing\\n- **Extraneous load**: Imposed by poor design (clutter, inconsistency, noise) — **eliminate aggressively**\\n- **Germane load**: Mental effort that builds understanding — maximize through structure and examples\\n\\n**Design target**: Minimize extraneous load so cognitive budget is available for the actual message.\\n\\n## Visual Hierarchy: 3-Second Test\\n\\nFor each slide, apply the 3-second test:\\n1. Cover your eyes, look at the slide for 3 seconds, look away\\n2. What did you see first? Second? Third?\\n3. If the answer doesn't match intended hierarchy → redesign\\n4. If you couldn't identify the key message → reduce content density\\n\\n## Three-Tier Hierarchy Model\\n\\n1. **Primary** (title, hero number, key message): largest, highest contrast, most whitespace around it\\n2. **Secondary** (supporting data, subheads): medium size, moderate contrast\\n3. **Tertiary** (source citations, footnotes, labels): smallest, lowest contrast, 50-70% opacity\\n\\nNever use more than 3 hierarchy levels on a single slide.\\n\"\n}",
+   "id": "gen-871aa1c42a45"
+  }
+ ],
+ "speech_configs": [
+  {
+   "label": "文档演讲",
+   "prompt": "你是一名经验丰富的食品安全培训讲师，即将就标准操作规范（SOP）向餐饮从业人员（厨师、仓管、食品安全员）进行培训演讲。请根据提供的标准文档，生成一份正式、条理清晰的演讲脚本，时长控制在15-20分钟。语言需专业但避免过多学术术语，多使用实际工作场景举例。",
+   "skill": "## 演讲脚本结构\n1. **开场白** (2分钟): 问候与自我介绍，点明今天我们将系统学习本店的食品安全操作规范，这直接关系到顾客健康和企业存亡。\n2. **法规依据与重要性** (2分钟): 简要说明遵循了哪些国家法规，违规后果。\n3. **核心操作流程讲解** (10分钟): 将SOP中最关键的5-7个控制点逐一展开，每个点包含：\n   - 这是什么环节（如原料验收）\n   - 必须做到什么（关键限值）\n   - 为什么重要（背后原理，如沙门氏菌在室温下每20分钟繁殖一倍）\n   - 现场怎么做（具体操作和记录方法）\n4. **互动提问与场景演练** (3分钟): 提出2-3个常见违规场景，请学员判断并给出纠正措施。\n5. **总结与行动** (2分钟): 强调“食品安全无小事”，公布后续检查计划，结束。\n\n注意：在每个CCP讲解时用⚠️符号强调安全红线，如“中心温度低于70℃绝对不行”。",
+   "id": "gen-99af8d634f16"
+  },
+  {
+   "label": "分析演讲",
+   "prompt": "你是一名食品安全风险评估专家，需要就一份风险分析报告向餐饮企业管理者或监管人员做深度解析演讲。请根据分析文档生成一份逻辑严密的演讲脚本，时长约25分钟。",
+   "skill": "## 演讲脚本结构\n1. **引言** (2分钟): 简述分析背景，说明风险分析不是挑刺，而是科学预防的基础。\n2. **风险全景识别** (5分钟): 用图表展示目前面临的三大类风险（生物/化学/物理）在各业态中的权重，讲清每个风险的代表性危害。\n3. **评估方法与定级** (5分钟): 解释我们如何用矩阵评估风险和设定优先级，用本企业实际例子定级。\n4. **关键控制点剖析** (8分钟): 选取2-3个CCP，深入分析失控的根源和可能爆发的场景，引用真实案例（如某校食堂未烧熟扁豆导致中毒）。\n5. **整改建议与成本效益** (3分钟): 提出具体控制措施，并简单说明投入产出比（如投资温度计避免一次事故的赔偿）。\n6. **结论与展望** (2分钟): 强调持续改进，鼓励从“被动合规”转向“主动预防”。\n\n注意：使用数据说话，每个结论都应有数据或法规支撑。",
+   "id": "gen-4bebd52dcc21"
+  },
+  {
+   "label": "综合演讲",
+   "prompt": "你是一名综合性食品安全培训师，任务是根据研习手册内容对餐饮企业全体员工进行半天（约3小时）的培训演讲。请生成详细的讲解脚本，涵盖手册全部章节的核心内容，要求深入浅出，穿插小组讨论和现场演示。",
+   "skill": "## 演讲脚本结构\n总时长建议分配：\n- 第一小时：基础与法规（第一章+第二章）\n- 第二小时：危害原理与CCP（第三章+第四章）\n- 第三小时：管理模块与应急演练（第五至七章）\n\n每个部分脚本格式：\n**章节标题** (X分钟)\n1. 导入：通过提问或案例引起兴趣（如“大家知道细菌在室温下多久能翻倍吗？”）\n2. 内容讲解：对照PPT，以讲故事方式传递知识，避免念稿。\n3. 互动环节：小组讨论、角色扮演或实物演示（如测中心温度、洗手步骤）。\n4. 过渡：承上启下。\n\n**结尾总结** (10分钟): 全体回顾关键数字（如CCP温度、消毒浓度），签署安全承诺墙，颁发培训证书模拟。\n\n注意：全程多用“我们”代替“你们”，营造共同学习氛围；对文化程度较低的清洁工等岗位需额外采用图解和简单语言。",
+   "id": "gen-a82e9ce87691"
+  }
+ ],
+ "tts_configs": [
+  {
+   "label": "文档语音",
+   "prompt": "请以专业、沉稳、权威的男声朗读，语速中等偏慢（约190字/分钟），关键词如“必须”“禁止”加重语气并稍作停顿，段落之间停顿1秒。整体风格类似政府公告或企业正式通报，清晰有力。",
+   "skill": "voice_style: authoritative_announcement\nspeaker_profile: male, middle-aged\nprosody: rate=\"90%\" pitch=\"-2st\"\nemphasis: rule_emphasize(\"必须\", \"禁止\", \"不得\", \"关键控制点\")\npause: after_paragraph=\"800ms\" after_heading=\"1200ms\"",
+   "id": "gen-7312b2683486"
+  },
+  {
+   "label": "分析语音",
+   "prompt": "请以冷静、客观、条理清晰的男声或女声朗读，语速稍慢（约180字/分钟），突出数字和逻辑关系。在念到百分比、温度等数据时放慢速度，使用降调收尾。整体风格如科研报告讲解。",
+   "skill": "voice_style: technical_presentation\nspeaker_profile: gender_neutral, calm\nprosody: rate=\"85%\" pitch=\"0st\"\nemphasis: rule_emphasize(\"℃\", \"mg/kg\", \"log\", \"概率\")\npause: after_number=\"200ms\" after_risk_judgement=\"500ms\"",
+   "id": "gen-9cafacc9aea6"
+  },
+  {
+   "label": "综合语音",
+   "prompt": "请以温和、亲切、富有启发性的声音朗读，语速适中（约200字/分钟），适时使用升调表示提问，降调表示重点。加入少许鼓励感，适合培训教学场景。",
+   "skill": "voice_style: engaging_teacher\nspeaker_profile: female or friendly male\nprosody: rate=\"100%\" pitch=\"+1st\"\nemphasis: rule_emphasize(\"请记住\",\"关键点\",\"下一步\")\npause: after_question=\"600ms\" after_example=\"400ms\"",
+   "id": "gen-c5f74884e64c"
+  }
+ ],
+ "core_prompt_configs": [
+  {
+   "prompt_key": "always/language",
+   "category": "always",
+   "label": "语言与术语规范",
+   "content": "所有生成文字必须使用简体中文。专业术语首次出现时标注全称及英文缩写，如“危害分析与关键控制点（HACCP）”。语言风格应专业但不晦涩，适合高中文化程度以上的餐饮从业人员理解。禁止使用生僻网络梗或过于口语化的表达。",
+   "stage": "stage3-html",
+   "id": "gen-4931152ddf80"
+  },
+  {
+   "prompt_key": "always/safety_emphasis",
+   "category": "always",
+   "label": "安全红线强调",
+   "content": "涉及直接导致食源性疾病的操作、温度、时间、浓度等关键参数，必须使用⚠️符号进行强烈视觉提示。并在备注中说明违规后果（如法律处罚、中毒事故）。所有呈现给学员的关键限值需用红色或加粗突出。",
+   "stage": "stage3-html",
+   "id": "gen-b9de61776c67"
+  },
+  {
+   "prompt_key": "always/audience_adaptation",
+   "category": "always",
+   "label": "受众适配",
+   "content": "内容需面向多业态餐饮从业人员：社会餐饮后厨员工、连锁店值班经理、外卖打包员、学校食堂厨师及管理员。举例时应覆盖不同业态场景，如社会餐饮的原料采购、外卖的打包封签、学校食堂的留样等。",
+   "stage": "stage3-html",
+   "id": "gen-d88f69eb31c6"
+  },
+  {
+   "prompt_key": "always/regulation_citation",
+   "category": "always",
+   "label": "法规引用规范",
+   "content": "当引用《中华人民共和国食品安全法》及其它GB标准时，必须给出具体条款编号。如“根据GB 31654-2021第5.2.1要求，接触食品的工具使用后进行清洗消毒。”法规名称首次出现时加书名号。",
+   "stage": "stage3-html",
+   "id": "gen-920277a777ad"
+  },
+  {
+   "prompt_key": "always/data_visualization",
+   "category": "always",
+   "label": "数据可视化偏好",
+   "content": "温度、时间、浓度等数字信息必须配以可视化图表或进度条，避免纯文本数字。如使用温度计图标加红色刻度表示危险区。表格中数字右对齐，文字左对齐。",
+   "stage": "stage3-html",
+   "id": "gen-554b186865b5"
+  },
+  {
+   "prompt_key": "always/color_code",
+   "category": "always",
+   "label": "颜色编码",
+   "content": "使用色彩增强理解：绿色代表安全/合格（中心温度>70℃），黄色代表警示/注意（5-60℃危险带），红色代表禁止/高危（<5℃或>60℃但未达标）。图示中搭配对应颜色标记。",
+   "stage": "stage3-html",
+   "id": "gen-2f6c85edfc2c"
+  },
+  {
+   "prompt_key": "by_type/cover",
+   "category": "by_type",
+   "label": "封面页生成规则",
+   "content": "封面页一律采用全幅背景图，图片为食品安全相关元素（如干净的厨房、检测仪器）。标题区居中，主标题字号≥36pt，副标题≤24pt。下方放置日期、编制部门、版本号，字号12pt。整体色调以深蓝或绿色为主，传达安全、信赖感。",
+   "stage": "stage3-html",
+   "id": "gen-fd0d70ba4c4a"
+  },
+  {
+   "prompt_key": "by_type/toc",
+   "category": "by_type",
+   "label": "目录页生成规则",
+   "content": "目录采用三点式布局（左侧图标，章节标题，右侧页码）。章节数量不超过8项，每个条目一行，颜色与封面协调。点击可交互（电子版），但生成静态图时不显示超链接。",
+   "stage": "stage3-html",
+   "id": "gen-108215546bca"
+  },
+  {
+   "prompt_key": "by_type/content",
+   "category": "by_type",
+   "label": "内容页生成规则",
+   "content": "通用内容页使用“标题-要点-图示”三段式。标题提炼为10字以内的总结；要点以项目符号列出，每条≤20字；右侧或下方配示意图/照片。每页总信息单元≤5。",
+   "stage": "stage3-html",
+   "id": "gen-0a12e3e8bc04"
+  },
+  {
+   "prompt_key": "by_type/table",
+   "category": "by_type",
+   "label": "表格页生成规则",
+   "content": "表格用于对照或清单。标题行使用深色背景白色字，数据行隔行变色提高可读性。关键数据用粗体标示。食品安全类表格首列常为“控制点/危害”，末列为“法规依据/纠偏”。",
+   "stage": "stage3-html",
+   "id": "gen-3616ba4ba5d9"
+  },
+  {
+   "prompt_key": "by_type/chart",
+   "category": "by_type",
+   "label": "图表页生成规则",
+   "content": "饼图、柱状图适用于风险分布、抽检合格率。图表底部需注明数据来源和时间。饼图扇区标注百分比和名称，避免图例分离。使用绿色-黄色-红色渐变表示风险高低。",
+   "stage": "stage3-html",
+   "id": "gen-bda52855a297"
+  },
+  {
+   "prompt_key": "by_type/diagram",
+   "category": "by_type",
+   "label": "示意图页生成规则",
+   "content": "示意图用于展示组织结构、设施布局等。使用矩形圆角+连接线。每个模块内文字居中，大小统一。必要的标注用引出线+文字框。颜色区分功能区域，例如原料区（绿）、加工区（橙）、清洁区（蓝）。",
+   "stage": "stage3-html",
+   "id": "gen-bda815b1243f"
+  },
+  {
+   "prompt_key": "by_type/flowchart",
+   "category": "by_type",
+   "label": "流程图页生成规则",
+   "content": "流程图展示从采购到供餐的完整流。使用标准流程图符号：起止符（椭圆）、处理（矩形）、判断（菱形）。每个步骤框内标注关键参数（温度/时间）。关键控制点（CCP）节点用红色边框强调。",
+   "stage": "stage3-html",
+   "id": "gen-8e8954dd6978"
+  },
+  {
+   "prompt_key": "by_type/closing",
+   "category": "by_type",
+   "label": "结尾页生成规则",
+   "content": "结尾页以简洁为主，中央显示“感谢聆听”或“安全始于细节”等标语。下方放置联系方式、食品安全举报电话。背景图可采用清洁的餐桌或笑脸符号。",
+   "stage": "stage3-html",
+   "id": "gen-8ffe17466ae9"
+  },
+  {
+   "prompt_key": "by_type/principle",
+   "category": "by_type",
+   "label": "原理页生成规则",
+   "content": "原理页用于解释“为什么”。采用左右分栏：左侧列出原理名称与核心概念（如“温度对细菌生长的影响”），右侧显示科学曲线或图片。底部留白处给出“在我们的厨房里这意味着什么”一句总结。",
+   "stage": "stage3-html",
+   "id": "gen-cb8ec45d3e91"
+  },
+  {
+   "prompt_key": "by_type/technique",
+   "category": "by_type",
+   "label": "技法/方法页生成规则",
+   "content": "展示操作方法或检查技巧。使用步骤编号+手绘风格图标，每步配一张实物照片或简笔画。强调手法细节，如“温度计探针插入食物最厚处”。对易错操作给出对比图（正确 vs 错误）。",
+   "stage": "stage3-html",
+   "id": "gen-8f99a3dfa465"
+  },
+  {
+   "prompt_key": "by_type/process_flow",
+   "category": "by_type",
+   "label": "流程步骤页生成规则",
+   "content": "类似于流程图，但更侧重于管理流程。可使用横向时间轴展示关键节点的先后顺序。每个节点包含动词语态（如“验收→存储→解冻”），下方标注CCP标记和责任人。",
+   "stage": "stage3-html",
+   "id": "gen-811e9cc849b5"
+  },
+  {
+   "prompt_key": "by_type/troubleshoot",
+   "category": "by_type",
+   "label": "故障诊断页生成规则",
+   "content": "采用“问题-原因-解决”三栏表，左侧问题用红色感叹号图标，中间常见原因列表，右侧解决方案链接到具体操作页。适用于冰箱故障、洗碗机消毒失效等场景。",
+   "stage": "stage3-html",
+   "id": "gen-b9b433260d85"
+  },
+  {
+   "prompt_key": "by_type/comparison",
+   "category": "by_type",
+   "label": "对比页生成规则",
+   "content": "并排展示两种体系或方案，如“传统管理 vs HACCP管理”。使用左右对称布局，中间分割线。不同点用不同底色区分，相同点用统一浅灰。底部给出选择建议。",
+   "stage": "stage3-html",
+   "id": "gen-7eb467ddb62a"
+  },
+  {
+   "prompt_key": "by_type/summary",
+   "category": "by_type",
+   "label": "总结页生成规则",
+   "content": "总结页放置3-5条本次培训最核心的“要记住的数字”或“行动项”。使用大号数字卡片式设计，每张卡片包含数字+单位+简短说明。背景干净，视觉焦点集中在数字上。",
+   "stage": "stage3-html",
+   "id": "gen-897b50611e61"
+  },
+  {
+   "prompt_key": "by_type/copyright",
+   "category": "by_type",
+   "label": "版权页生成规则",
+   "content": "底部居中显示版权声明：“本课件基于内部资料整理，仅供学员学习使用，不得外传。” 附加编制日期和版本。字号10pt，灰色。",
+   "stage": "stage3-html",
+   "id": "gen-61790f511bc5"
+  },
+  {
+   "prompt_key": "by_feature/case_study",
+   "category": "by_feature",
+   "label": "案例分析模块",
+   "content": "当页面上需要展示真实案例时，使用带阴影的卡片。左侧放置事件概要（时间、地点、后果），右侧展开教训与改进措施。图片区域若涉及敏感信息需用模糊处理。标题用“案例警示：xxx”。",
+   "stage": "stage3-html",
+   "id": "gen-76797e57c3c9"
+  },
+  {
+   "prompt_key": "by_feature/risk_matrix",
+   "category": "by_feature",
+   "label": "风险矩阵模块",
+   "content": "生成5x5风险矩阵网格，纵轴为可能性（极低-极高），横轴为严重性（可忽略-灾难性）。将识别出的危害置入矩阵内，高风险区（红）、中风险区（黄）、低风险区（绿）。每个危害点旁标注唯一的代码。",
+   "stage": "stage3-html",
+   "id": "gen-05f5eb77499b"
+  },
+  {
+   "prompt_key": "by_feature/ccp_card",
+   "category": "by_feature",
+   "label": "CCP卡片模块",
+   "content": "每个CCP生成独立信息卡：上方大号CCP编号和名称，中间关键限值（数字突出），下方监控方法、纠偏措施、验证。卡片边框色根据风险等级变化（高=红，中=橙）。",
+   "stage": "stage3-html",
+   "id": "gen-c85cef3a85f2"
+  },
+  {
+   "prompt_key": "by_feature/mermaid_support",
+   "category": "by_feature",
+   "label": "Mermaid图表转换",
+   "content": "当源代码包含mermaid代码块时，将其转换为可视化流程图或思维导图。但需在输出中保留原始mermaid代码注释供二开使用。转换时保持节点文字与连接逻辑完全一致。CCP节点用菱形。",
+   "stage": "stage3-html",
+   "id": "gen-99bc7d737e08"
+  },
+  {
+   "prompt_key": "by_layout/single_focus",
+   "category": "by_layout",
+   "label": "单焦点布局",
+   "content": "页面中央仅放置一个核心元素（如大数字、一句口号），大量留白，无任何干扰信息。用于封面、结尾或高潮强调。",
+   "stage": "stage3-html",
+   "id": "gen-78a3ee8dcc93"
+  },
+  {
+   "prompt_key": "by_layout/two_column",
+   "category": "by_layout",
+   "label": "双栏布局",
+   "content": "左右或上下分割，左侧文字说明，右侧图示/表格。用于原理讲解或对比。栏宽比推荐6:4或5:5。",
+   "stage": "stage3-html",
+   "id": "gen-7f84032a6d6b"
+  },
+  {
+   "prompt_key": "by_layout/three_column",
+   "category": "by_layout",
+   "label": "三栏布局",
+   "content": "并排三个卡片，每个包含小图标、标题和简短描述。用于展示三种危害类型、三个核心原则或三个动作步骤。",
+   "stage": "stage3-html",
+   "id": "gen-ca315659161b"
+  },
+  {
+   "prompt_key": "by_layout/timeline",
+   "category": "by_layout",
+   "label": "时间轴布局",
+   "content": "垂直或水平时间线，每个节点有事件名+时间。用于操作顺序或应急响应流程。节点用圆点表示，已完成节点填充实心。",
+   "stage": "stage3-html",
+   "id": "gen-7e153c46792e"
+  },
+  {
+   "prompt_key": "by_layout/full_bleed",
+   "category": "by_layout",
+   "label": "全幅出血布局",
+   "content": "图片或图形铺满整个幻灯片，文字叠加在半透明色块上。用于封面或营造氛围的过渡页。食品安全主题图多选新鲜食材、洁净厨房。",
+   "stage": "stage3-html",
+   "id": "gen-1a64e7a56357"
+  },
+  {
+   "prompt_key": "stage1/outline_tone",
+   "category": "root",
+   "label": "阶段1产出基调",
+   "content": "在stage1-outline阶段，输出必须保持原文信息不新增，仅重组归类。语言客观，使用整理记录式口吻，不要添加“我们建议”等主观词。",
+   "stage": "stage1-outline",
+   "id": "gen-27021fbb7ee6"
+  },
+  {
+   "prompt_key": "stage2/doc_professionalism",
+   "category": "root",
+   "label": "阶段2文档专业度",
+   "content": "生成的三个文档必须达到可直接用于监管或认证审核的水平。引用法规需准确到条款，表格结构清晰，术语一致。",
+   "stage": "stage2-structure",
+   "id": "gen-f1679e989b38"
+  },
+  {
+   "prompt_key": "root/system_prompt",
+   "category": "root",
+   "label": "系统总则",
+   "content": "你是一位专精于多业态餐饮食品安全管理的AI系统。你集成了内容整理、风险评估、教学设计、PPT设计多项能力。所有产出必须符合中国法律法规，基于最佳实践。",
+   "stage": "stage3-html",
+   "id": "gen-2b4e8f87ba31"
+  }
+ ]
+}

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>批量导入/执行 — 对话框布局预览</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; display: flex; justify-content: center; padding: 40px; }
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
+.dialog { width: 900px; max-height: 85vh; background: #fff; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.15); display: flex; flex-direction: column; overflow: hidden; }
+.dialog-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #e8e8e8; }
+.dialog-header h3 { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+.dialog-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #999; padding: 4px 8px; border-radius: 4px; }
+.dialog-close:hover { background: #f5f5f5; color: #333; }
+
+/* Tabs */
+.tabs { display: flex; border-bottom: 1px solid #e8e8e8; padding: 0 20px; gap: 0; }
+.tab { padding: 10px 20px; font-size: 13px; color: #666; cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; user-select: none; }
+.tab:hover { color: #1a73e8; }
+.tab.active { color: #1a73e8; border-bottom-color: #1a73e8; font-weight: 600; }
+
+/* Body */
+.dialog-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+/* ── TAB 1: 批量导入 ── */
+.import-steps { display: flex; gap: 16px; align-items: stretch; }
+.import-step { flex: 1; border: 1px solid #e8e8e8; border-radius: 6px; padding: 16px; text-align: center; }
+.import-step .step-num { width: 28px; height: 28px; border-radius: 50%; background: #e8f0fe; color: #1a73e8; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.import-step h4 { font-size: 13px; margin-bottom: 4px; color: #333; }
+.import-step p { font-size: 11px; color: #999; line-height: 1.5; }
+.import-arrow { display: flex; align-items: center; color: #ccc; font-size: 20px; flex-shrink: 0; }
+.btn { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 4px; font-size: 12px; cursor: pointer; border: 1px solid #d9d9d9; background: #fff; color: #333; transition: all .2s; }
+.btn:hover { border-color: #1a73e8; color: #1a73e8; }
+.btn-primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+.btn-primary:hover { background: #1557b0; }
+.btn-primary:disabled { background: #a0c4f0; border-color: #a0c4f0; cursor: not-allowed; }
+
+/* Preview Table */
+.preview-section { margin-top: 20px; }
+.preview-section h4 { font-size: 13px; color: #333; margin-bottom: 10px; }
+.preview-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.preview-table th { background: #fafafa; padding: 8px 10px; text-align: left; border: 1px solid #e8e8e8; font-weight: 600; color: #555; }
+.preview-table td { padding: 6px 10px; border: 1px solid #e8e8e8; color: #333; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-table .col-text { max-width: 200px; }
+.preview-summary { font-size: 12px; color: #666; margin-top: 8px; }
+.preview-summary strong { color: #52c41a; }
+.preview-actions { margin-top: 12px; display: flex; gap: 8px; justify-content: flex-end; }
+
+/* ── TAB 2: 批量执行 ── */
+.exec-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.exec-toolbar input[type="text"] { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; width: 200px; }
+.exec-toolbar select { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; }
+.project-list { border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden; }
+.project-row { display: flex; align-items: center; padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 12px; transition: background .2s; }
+.project-row:hover { background: #fafafa; }
+.project-row:last-child { border-bottom: none; }
+.project-row .col-check { width: 36px; flex-shrink: 0; }
+.project-row .col-name { flex: 1; font-weight: 500; color: #333; }
+.project-row .col-category { width: 80px; color: #666; }
+.project-row .col-author { width: 80px; color: #666; }
+.project-row .col-status { width: 80px; }
+.project-row .col-expand { width: 30px; text-align: center; cursor: pointer; color: #999; font-size: 14px; }
+.status-tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; }
+.status-pending { background: #fff7e6; color: #d48806; }
+.status-done { background: #f6ffed; color: #389e0d; }
+.status-running { background: #e6f7ff; color: #096dd9; }
+
+/* Expanded step selection */
+.step-row { background: #fafbfc; padding: 8px 12px 8px 48px; border-bottom: 1px solid #f0f0f0; display: flex; gap: 24px; align-items: center; font-size: 11px; }
+.step-row label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: #555; }
+.step-row label.disabled { color: #ccc; cursor: not-allowed; }
+.step-row input[type="checkbox"] { transform: scale(1.1); }
+
+/* Time config bar */
+.time-config { display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: #fafbfc; border-radius: 6px; margin-top: 16px; border: 1px solid #e8e8e8; }
+.time-config label { font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; }
+.time-config input[type="datetime-local"] { padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; }
+.exec-actions { margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+
+/* Log panel */
+.log-panel { margin-top: 16px; border: 1px solid #e8e8e8; border-radius: 6px; overflow: hidden; }
+.log-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #fafafa; border-bottom: 1px solid #e8e8e8; font-size: 12px; font-weight: 600; color: #333; }
+.log-body { max-height: 200px; overflow-y: auto; padding: 10px 14px; font-family: "SF Mono", "Consolas", monospace; font-size: 11px; line-height: 1.8; color: #555; background: #1e1e1e; color: #d4d4d4; }
+.log-body .log-time { color: #6a9955; }
+.log-body .log-ok { color: #4ec9b0; }
+.log-body .log-err { color: #f14c4c; }
+.log-body .log-info { color: #9cdcfe; }
+
+.progress-bar { height: 4px; background: #e8e8e8; border-radius: 2px; margin: 10px 14px; overflow: hidden; }
+.progress-bar .fill { height: 100%; background: #1a73e8; border-radius: 2px; transition: width .3s; }
+
+/* Responsive: stack on mobile */
+@media (max-width: 768px) { .dialog { width: 95vw; } .import-steps { flex-direction: column; } .import-arrow { transform: rotate(90deg); } }
+</style>
+</head>
+<body>
+
+<div class="dialog-overlay">
+<div class="dialog">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <h3>批量管理</h3>
+    <button class="dialog-close">&times;</button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active">📥 批量导入明细</div>
+    <div class="tab">⚡ 批量执行</div>
+  </div>
+
+  <!-- Body -->
+  <div class="dialog-body">
+
+    <!-- ═══════════ TAB 1: 批量导入 ═══════════ -->
+    <div>
+      <div class="import-steps">
+        <div class="import-step">
+          <div class="step-num">1</div>
+          <h4>下载模板</h4>
+          <p>下载标准 Excel 模板<br>按格式填写明细数据</p>
+          <button class="btn" style="margin-top:12px">📥 下载模板</button>
+        </div>
+        <div class="import-arrow">→</div>
+        <div class="import-step">
+          <div class="step-num">2</div>
+          <h4>上传 Excel</h4>
+          <p>上传填写好的 Excel 文件<br>系统自动解析预览</p>
+          <input type="file" accept=".xlsx" style="margin-top:12px;font-size:11px;width:100%">
+        </div>
+        <div class="import-arrow">→</div>
+        <div class="import-step">
+          <div class="step-num">3</div>
+          <h4>确认导入</h4>
+          <p>检查预览数据无误后<br>一键创建所有项目</p>
+          <button class="btn btn-primary" style="margin-top:12px" disabled>确认导入 (0条)</button>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div class="preview-section">
+        <h4>📋 数据预览（上传文件后显示）</h4>
+        <table class="preview-table">
+          <thead><tr><th>#</th><th>名称</th><th>分类</th><th>出处作者</th><th>积分</th><th>可下载</th><th class="col-text">第一步文字内容</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td>豆豉辣椒炒皮蛋</td><td>湘菜</td><td>古志辉</td><td>10</td><td>是</td><td class="col-text">皮蛋切丁，大火翻炒，加豆豉调味...</td></tr>
+            <tr><td>2</td><td>咸蛋苦瓜</td><td>客家菜</td><td>—</td><td>5</td><td>是</td><td class="col-text">苦瓜切片焯水，咸蛋碾碎炒香...</td></tr>
+            <tr><td>3</td><td>白切鸡</td><td>粤菜</td><td>—</td><td>0</td><td>否</td><td class="col-text">三黄鸡一只，姜葱蘸料...</td></tr>
+          </tbody>
+        </table>
+        <div class="preview-summary">共解析 <strong>3</strong> 条明细，<strong style="color:#ff4d4f">0</strong> 条异常</div>
+        <div class="preview-actions">
+          <button class="btn btn-primary">确认导入 (3条)</button>
+        </div>
+      </div>
+    </div>
+
+    <hr style="margin: 24px 0; border: none; border-top: 1px dashed #e8e8e8;">
+
+    <!-- ═══════════ TAB 2: 批量执行 ═══════════ -->
+    <div>
+      <!-- 工具栏 -->
+      <div class="exec-toolbar">
+        <input type="text" placeholder="🔍 搜索项目名称...">
+        <select><option>全部分类</option><option>湘菜</option><option>粤菜</option><option>客家菜</option></select>
+        <span style="font-size:11px;color:#999;margin-left:auto">已选 <strong style="color:#1a73e8">2</strong> 个项目</span>
+      </div>
+
+      <!-- 项目列表 -->
+      <div class="project-list">
+        <!-- Row 1 -->
+        <div class="project-row">
+          <div class="col-check"><input type="checkbox" checked></div>
+          <div class="col-name">豆豉辣椒炒皮蛋</div>
+          <div class="col-category">湘菜</div>
+          <div class="col-author">古志辉</div>
+          <div class="col-status"><span class="status-tag status-pending">未开始</span></div>
+          <div class="col-expand">▼</div>
+        </div>
+        <div class="step-row">
+          <span style="font-weight:600;color:#333;min-width:100px;font-size:11px">第一步·素材输入</span>
+          <label><input type="checkbox" checked> 视频提取</label>
+          <label><input type="checkbox" checked> 文字输入</label>
+          <label><input type="checkbox"> 文件提取</label>
+        </div>
+        <div class="step-row">
+          <span style="font-weight:600;color:#333;min-width:100px;font-size:11px">第二步·文档生成</span>
+          <label><input type="checkbox" checked> 标准文档</label>
+          <label><input type="checkbox"> 分析文档</label>
+          <label><input type="checkbox"> 综合文档</label>
+        </div>
+        <div class="step-row">
+          <span style="font-weight:600;color:#333;min-width:100px;font-size:11px">第三步·课件输出</span>
+          <label><input type="checkbox"> 文档课件</label>
+          <label><input type="checkbox" disabled> 分析PPT</label>
+          <label class="disabled"><input type="checkbox" disabled> 综合PPT</label>
+        </div>
+        <div class="step-row">
+          <span style="font-weight:600;color:#999;min-width:100px;font-size:11px">第四步·演讲课件</span>
+          <label class="disabled"><input type="checkbox" disabled> 演讲文案</label>
+          <label class="disabled"><input type="checkbox" disabled> 演讲口播</label>
+        </div>
+        <!-- Row 2 -->
+        <div class="project-row">
+          <div class="col-check"><input type="checkbox" checked></div>
+          <div class="col-name">咸蛋苦瓜</div>
+          <div class="col-category">客家菜</div>
+          <div class="col-author">—</div>
+          <div class="col-status"><span class="status-tag status-pending">未开始</span></div>
+          <div class="col-expand">▶</div>
+        </div>
+        <!-- Row 3 -->
+        <div class="project-row">
+          <div class="col-check"><input type="checkbox"></div>
+          <div class="col-name">白切鸡</div>
+          <div class="col-category">粤菜</div>
+          <div class="col-author">—</div>
+          <div class="col-status"><span class="status-tag status-done">已生成</span></div>
+          <div class="col-expand">▶</div>
+        </div>
+      </div>
+
+      <!-- 时间配置 -->
+      <div class="time-config">
+        <span style="font-size:12px;font-weight:600;color:#333">⏰ 执行时间窗口</span>
+        <label>开始 <input type="datetime-local" value="2026-07-26T20:00"></label>
+        <label>结束 <input type="datetime-local" value="2026-07-26T23:00"></label>
+        <span style="font-size:11px;color:#999">（到达结束时间自动停止）</span>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="exec-actions">
+        <span style="font-size:11px;color:#999">将执行 <strong style="color:#1a73e8">2</strong> 个项目，共 <strong>4</strong> 个步骤</span>
+        <button class="btn btn-primary">▶ 开始执行</button>
+      </div>
+
+      <!-- 执行日志 -->
+      <div class="log-panel">
+        <div class="log-header">
+          <span>📋 执行日志</span>
+          <span style="font-weight:400;font-size:11px;color:#999">批次 #B20260726-001 · 运行中</span>
+        </div>
+        <div class="progress-bar"><div class="fill" style="width:50%"></div></div>
+        <div class="log-body">
+          <div><span class="log-time">20:00:01</span>  <span class="log-info">批次开始，共 2 个项目，时间窗口 20:00-23:00</span></div>
+          <div><span class="log-time">20:00:02</span>  <span class="log-info">→ 豆豉辣椒炒皮蛋 — 开始第一步：素材处理</span></div>
+          <div><span class="log-time">20:00:35</span>  <span class="log-ok">✓ 豆豉辣椒炒皮蛋 — 第一步完成</span></div>
+          <div><span class="log-time">20:00:36</span>  <span class="log-info">→ 豆豉辣椒炒皮蛋 — 开始第二步：文档生成</span></div>
+          <div><span class="log-time">20:02:10</span>  <span class="log-ok">✓ 豆豉辣椒炒皮蛋 — 第二步完成</span></div>
+          <div><span class="log-time">20:02:11</span>  <span class="log-info">→ 咸蛋苦瓜 — 开始第一步：素材处理</span></div>
+          <div><span class="log-time">20:02:45</span>  <span class="log-ok">✓ 咸蛋苦瓜 — 第一步完成（运行中...）</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,33 @@
+D:\YISHAOAGENT\backend\app.py:239: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+C:\Users\17206\.kimi-venv\Lib\site-packages\jwt\api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 28 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+INFO:     Started server process [4476]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8766 (Press CTRL+C to quit)
+[DB] Initialized at D:\YISHAOAGENT\backend\data\yishao.db
+[batch-scheduler] Initialized on port 8766
+INFO:     127.0.0.1:28207 - "GET /api/version HTTP/1.1" 200 OK
+D:\YISHAOAGENT\backend\app.py:542: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "exp": datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
+D:\YISHAOAGENT\backend\app.py:7420: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "expires_at": (datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)).isoformat(),
+INFO:     127.0.0.1:13235 - "POST /api/auth/login HTTP/1.1" 200 OK
+D:\YISHAOAGENT\backend\app.py:2227: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  now = datetime.utcnow().isoformat()
+INFO:     127.0.0.1:43215 - "PUT /api/admin/submissions/sub-99e4dd52/approve HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45364 - "GET /api/projects/proj-7b853194 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32260 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39322 - "GET /api/authors/au-b5bd3297/profile HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43599 - "GET /api/authors/au-b5bd3297/works HTTP/1.1" 200 OK
+D:\YISHAOAGENT\backend\app.py:7567: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  "expires_at": (datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)).isoformat(),
+INFO:     127.0.0.1:42854 - "POST /api/member/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:29714 - "GET /api/member/my-submissions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:17272 - "GET /api/member/my-author-status HTTP/1.1" 200 OK

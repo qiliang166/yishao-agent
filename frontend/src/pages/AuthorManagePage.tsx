@@ -384,8 +384,9 @@ export default function AuthorManagePage() {
                     <th style={{ width: 100 }}>姓名</th>
                     <th>简介</th>
                     <th style={{ width: 75 }}>签约状态</th>
-                    <th style={{ width: 90 }}>积分分成</th>
-                    <th style={{ width: 90 }}>现金分成</th>
+                    <th style={{ width: 85 }}>签约日期</th>
+                    <th style={{ width: 80 }}>积分分成</th>
+                    <th style={{ width: 80 }}>现金分成</th>
                     <th style={{ width: 165 }}>操作</th>
                   </tr>
                 </thead>
@@ -404,6 +405,9 @@ export default function AuthorManagePage() {
                         }}>
                           {contractStatusLabel(a.contract_status || 'none')}
                         </span>
+                      </td>
+                      <td style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                        {a.contract_signed_at ? new Date(a.contract_signed_at).toLocaleDateString('zh-CN') : '—'}
                       </td>
                       <td style={{ fontSize: 12 }}>{a.contract_status === 'active' ? `${((a.revenue_share || 0) * 100).toFixed(0)}%` : '—'}</td>
                       <td style={{ fontSize: 12 }}>{a.contract_status === 'active' ? `${((a.cash_share || 0) * 100).toFixed(0)}%` : '—'}</td>

@@ -2,6 +2,19 @@
 
 ## 2026-08-01
 
+- feat: add toggle to enable/disable author contract application
+
+## 2026-08-01
+
+- feat: add contract agreement checkbox before author application
+
+## 2026-08-01
+
+- fix: auto-create workspace for recipe submissions to satisfy FK constraint
+- feat: signed author + revenue sharing system with admin review
+
+## 2026-08-01
+
 - fix: prevent log container overflow by constraining card parent with overflow:hidden + maxHeight/minHeight on log
 
 ## 2026-07-31

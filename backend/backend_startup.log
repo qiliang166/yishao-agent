@@ -1,32 +1,309 @@
-INFO:     Started server process [12044]
+D:\YISHAOAGENT\backend\app.py:204: DeprecationWarning: 
+        on_event is deprecated, use lifespan event handlers instead.
+
+        Read more about it in the
+        [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+        
+  @app.on_event("startup")
+D:\YISHAOAGENT\backend\venv\Lib\site-packages\jwt\api_jwt.py:147: InsecureKeyLengthWarning: The HMAC key is 28 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+INFO:     Started server process [32216]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8766 (Press CTRL+C to quit)
 [DB] Initialized at D:\YISHAOAGENT\backend\data\yishao.db
-INFO:     127.0.0.1:36899 - "GET /api/version HTTP/1.1" 200 OK
-INFO:     127.0.0.1:27633 - "GET /app/center HTTP/1.1" 200 OK
-INFO:     127.0.0.1:27633 - "GET /assets/index-DgCOs9ak.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43349 - "GET /assets/index-CQD2g755.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:27633 - "GET /api/settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43349 - "GET /api/license/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:16043 - "GET /api/settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:31255 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:27633 - "GET /favicon.ico HTTP/1.1" 200 OK
-INFO:     127.0.0.1:31255 - "GET /api/settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43349 - "GET /api/version HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35904 - "GET /api/settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:16043 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1811 - "GET /api/version HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1820 - "GET /members/pending HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1820 - "GET /assets/index-Ci7-oYdp.js HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1821 - "GET /assets/index-CQD2g755.css HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1820 - "GET /api/settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1821 - "GET /api/license/status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1825 - "GET /api/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1826 - "GET /api/settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1826 - "GET /favicon.ico HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1826 - "GET /api/settings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1825 - "GET /api/version HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1820 - "GET /api/members/pending-upgrades HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1821 - "GET /api/members/pending?page=1&page_size=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:1829 - "GET /api/settings HTTP/1.1" 200 OK
+[batch-scheduler] Initialized on port 8766
+INFO:     127.0.0.1:28089 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:28095 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+[PPT-REQ] 13:17:53 provider=0df96678 model=deepseek-v4-pro content_len=6429 template=style-blueprint has_rules=?
+[PPT-REQ] AI regeneration with content (6429 chars)
+[PPT-DBG] AI check: pid=True model=True style=blueprint rules_empty=False content_len=6429
+[PPT-DBG] Outline input detected: 17 slides, running Structure+HTML
+INFO:     [MONITOR] Structure system prompt: 37927 chars, hex_count=14
+INFO:     127.0.0.1:28096 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:28096 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40987 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40987 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41003 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41003 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41006 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41006 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41012 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41012 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41018 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41018 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41021 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41021 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41026 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41026 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41029 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41029 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41032 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41032 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     Stage 2 structure: 17 slides planned (8 with charts)
+INFO:     Stage 2 HTML: dispatching 17 slides in parallel (workers=3)
+INFO:     Slide 1: code-filled (blueprint/cover), 3218 chars
+INFO:     [DARK-FIX] Slide 2: fixed 5 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     Slide 2: code-filled (blueprint/toc), 2585 chars
+INFO:     Slide 3: cache hit (10574 chars), skipping LLM
+INFO:     Slide 5: cache hit (6423 chars), skipping LLM
+INFO:     Slide 4: cache hit (5729 chars), skipping LLM
+INFO:     Slide 6: cache hit (5612 chars), skipping LLM
+INFO:     Slide 7: cache hit (9070 chars), skipping LLM
+INFO:     Slide 8: cache hit (8513 chars), skipping LLM
+INFO:     Slide 9: cache hit (8532 chars), skipping LLM
+INFO:     127.0.0.1:41041 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41041 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41055 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41055 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50695 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50695 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50710 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50710 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50716 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50716 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50721 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50721 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50731 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50731 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50737 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50737 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50741 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50741 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50747 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50747 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     [DARK-FIX] Slide 11: fixed 6 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     [FONT-FIX] Slide 11: 1 instances fixed
+INFO:     Slide 11: HTML 8409 chars
+INFO:     127.0.0.1:50750 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50750 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     [DARK-FIX] Slide 10: fixed 1 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     Slide 10: HTML 7543 chars
+INFO:     127.0.0.1:50755 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50755 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50755 - "GET /assets/index-DoX286Ql.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50755 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50755 - "GET /timer.worker-a3498ac4.js.map HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50766 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50766 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50781 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50781 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     [HEX-FIX] Slide 12: semantic-matched 7 hex: [('#1f2937', 'background', 'blue-hue (215deg)'), ('#c49639', 'chart_2', 'orange-hue (40deg)'), ('#2b5a8c', 'secondary', 'blue-hue (211deg)'), ('#0f2540', 'background', 'blue-hue (213deg)'), ('#5b8cb8', 'accent', 'blue-hue (208deg)'), ('#d4853e', 'chart_2', 'orange-hue (28deg)'), ('#8bb8de', 'accent', 'blue-hue (207deg)')]
+INFO:     [DARK-FIX] Slide 12: fixed 8 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     [STRIP-VARS] Slide 12: removed 9 local CSS variable overrides (core theme vars must be inherited from :root)
+INFO:     Slide 12: HTML 7105 chars
+INFO:     127.0.0.1:50787 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50787 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50787 - "GET /.well-known/appspecific/com.chrome.devtools.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50787 - "GET /timer.worker-a3498ac4.js.map HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50787 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50798 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3830 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3831 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3843 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3844 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3852 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3853 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     [DARK-FIX] Slide 13: fixed 6 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     Slide 13: HTML 7165 chars
+INFO:     Slide 16: code-filled (blueprint/summary), 3941 chars
+INFO:     Slide 17: code-filled (blueprint/closing), 2261 chars
+INFO:     127.0.0.1:3861 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:3862 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41745 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41746 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41754 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41755 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41760 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41761 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     [HEX-FIX] Slide 14: semantic-matched 9 hex: [('#334155', 'primary', 'blue-hue (215deg)'), ('#d97706', 'chart_2', 'orange-hue (32deg)'), ('#3b82f6', 'accent', 'blue-hue (217deg)'), ('#1e293b', 'background', 'blue-hue (217deg)'), ('#2563eb', 'accent', 'blue-hue (221deg)'), ('#f8fafc', 'text', 'blue-hue (210deg)'), ('#b45309', 'chart_2', 'orange-hue (26deg)'), ('#1e3a8a', 'secondary', 'blue-hue (224deg)')]
+INFO:     [DARK-FIX] Slide 14: fixed 4 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     [CONTRAST-FIX] Slide 14: fixed 4 low-contrast text element(s) (element-level WCAG < 4.5)
+INFO:     [STRIP-VARS] Slide 14: removed 12 local CSS variable overrides (core theme vars must be inherited from :root)
+INFO:     Slide 14: HTML 7663 chars
+INFO:     127.0.0.1:41768 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+[PPT-REQ] 13:23:33 provider=0df96678 model=deepseek-v4-pro content_len=6429 template=style-blueprint has_rules=?
+[PPT-REQ] AI regeneration with content (6429 chars)
+[PPT-DBG] AI check: pid=True model=True style=blueprint rules_empty=False content_len=6429
+[PPT-DBG] Outline input detected: 17 slides, running Structure+HTML
+INFO:     [MONITOR] Structure system prompt: 37927 chars, hex_count=14
+INFO:     127.0.0.1:41775 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41782 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41783 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41789 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41788 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41795 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41794 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41805 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41804 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41815 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41816 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41828 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41829 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41836 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41837 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41907 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41908 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41980 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41981 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42004 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42005 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     Stage 2 structure: 17 slides planned (8 with charts)
+INFO:     Stage 2 HTML: dispatching 17 slides in parallel (workers=3)
+INFO:     Slide 1: code-filled (blueprint/cover), 3218 chars
+INFO:     [DARK-FIX] Slide 2: fixed 5 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     Slide 2: code-filled (blueprint/toc), 2552 chars
+INFO:     Slide 3: cache hit (10574 chars), skipping LLM
+INFO:     Slide 5: cache hit (6423 chars), skipping LLM
+INFO:     Slide 4: cache hit (5729 chars), skipping LLM
+INFO:     Slide 7: cache hit (9070 chars), skipping LLM
+INFO:     Slide 8: cache hit (8513 chars), skipping LLM
+INFO:     Slide 6: cache hit (5612 chars), skipping LLM
+INFO:     Slide 9: cache hit (8532 chars), skipping LLM
+INFO:     Slide 10: cache hit (7543 chars), skipping LLM
+INFO:     Slide 11: cache hit (8409 chars), skipping LLM
+INFO:     Slide 12: cache hit (7105 chars), skipping LLM
+INFO:     Slide 13: cache hit (7165 chars), skipping LLM
+INFO:     Slide 16: code-filled (blueprint/summary), 3941 chars
+INFO:     Slide 14: cache hit (7663 chars), skipping LLM
+INFO:     Slide 17: code-filled (blueprint/closing), 2261 chars
+INFO:     [HEX-FIX] Slide 15: semantic-matched 9 hex: [('#ed8936', 'chart_2', 'orange-hue (27deg)'), ('#1a365d', 'primary', 'blue-hue (215deg)'), ('#2d3748', 'card_bg', 'blue-hue (218deg)'), ('#4299e1', 'accent', 'blue-hue (207deg)'), ('#dd6b20', 'chart_2', 'orange-hue (24deg)'), ('#38a169', 'chart_1', 'green-hue (148deg)'), ('#2b6cb0', 'secondary', 'blue-hue (211deg)'), ('#e53e3e', 'chart_3', 'red-hue (0deg)')]
+INFO:     [DARK-FIX] Slide 15: fixed 3 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     [STRIP-VARS] Slide 15: removed 8 local CSS variable overrides (core theme vars must be inherited from :root)
+WARNING:  Slide 15 attempt 1: \u26d4 ÈÝÆ÷Î¥¹æ(left:40px + fixed width (non-standard margin))£¬ÒÑ·ÏÆú¡£ÖØÐÂÉú³É±ØÐë£ºÄÚÈÝÇøÓÃ left:60px; right:60px »ù×¼ÈÝÆ÷£¬½ûÖ¹ left:180px ºÍ transfo
+INFO:     127.0.0.1:42024 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42025 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42053 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42054 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42074 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42075 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42149 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42150 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42149 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42150 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42163 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42164 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42188 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42189 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42220 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42219 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42237 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42238 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42257 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42258 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42273 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42272 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42288 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42289 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34160 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34159 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34196 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34197 - "GET /api/projects/abaf6198a367/ppt-status HTTP/1.1" 200 OK
+INFO:     [HEX-FIX] Slide 15: exact-matched 2 hex ¡ú {{placeholder}} vars
+INFO:     [HEX-FIX] Slide 15: semantic-matched 9 hex: [('#b7791f', 'chart_2', 'orange-hue (36deg)'), ('#1a365d', 'primary', 'blue-hue (215deg)'), ('#dd6b20', 'chart_2', 'orange-hue (24deg)'), ('#38a169', 'chart_1', 'green-hue (148deg)'), ('#1e293b', 'background', 'blue-hue (217deg)'), ('#e53e3e', 'chart_3', 'red-hue (0deg)'), ('#f8fafc', 'text', 'blue-hue (210deg)'), ('#3182ce', 'accent', 'blue-hue (209deg)')]
+INFO:     [STRIP-VARS] Slide 15: removed 10 local CSS variable overrides (core theme vars must be inherited from :root)
+INFO:     Slide 15: HTML 7699 chars
+INFO:     Stage 2 HTML: 17/17 slides generated in 156.3s
+[PPT-DBG] HTML pipeline: 17 slides with inline HTML
+INFO:     [IMG-DBG] canvas=1280x720 is_portrait=False column_id=col5
+INFO:     [IMG-DBG] _generate_and_replace_images called, 17 slides
+INFO:     [IMG-DBG] Slide 1: has_image_url=False, heading='±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº', hint=''
+INFO:     [IMG-DBG] Slide 2: has_image_url=False, heading='Ä¿Â¼', hint=''
+INFO:     [IMG-DBG] Slide 3: has_image_url=False, heading='·çÎ¶ÓëÖÊµØÔ¤ÖÃ', hint=''
+INFO:     [IMG-DBG] Slide 4: has_image_url=False, heading='Åëâ¿Ô­ÀíÇåµ¥', hint=''
+INFO:     [IMG-DBG] Slide 5: has_image_url=False, heading='SOP×ÜÀÀ', hint=''
+INFO:     [IMG-DBG] Slide 6: has_image_url=False, heading='²½ÖèÒ»£ºÀ­ÓÍ', hint=''
+INFO:     [IMG-DBG] Slide 7: has_image_url=False, heading='²½Öè¶þ£ºëçÖÆ', hint=''
+INFO:     [IMG-DBG] Slide 8: has_image_url=False, heading='²½ÖèÈý£º°ÚÅÌ', hint=''
+INFO:     [IMG-DBG] Slide 9: has_image_url=False, heading='²½ÖèËÄ£ºÕôÖÆÓëÏìÓÍ', hint=''
+INFO:     [IMG-DBG] Slide 10: has_image_url=False, heading='Ê³²Äµµ°¸£º²¨Ê¿¶ÙÁúÏº', hint=''
+INFO:     [IMG-DBG] Slide 11: has_image_url=False, heading='Ê³²Äµµ°¸£º·ÛË¿', hint=''
+INFO:     [IMG-DBG] Slide 12: has_image_url=False, heading='Ê³²Äµµ°¸£º»Æ½·½´', hint=''
+INFO:     [IMG-DBG] Slide 13: has_image_url=False, heading='¼¼·¨¿¨Æ¬£º¶þ¶ÎÊì³É·¨', hint=''
+INFO:     [IMG-DBG] Slide 14: has_image_url=False, heading='¼¼·¨¿¨Æ¬£ºÈýÃ÷ÖÎÊ½·çÎ¶ÉøÍ¸', hint=''
+INFO:     [IMG-DBG] Slide 15: has_image_url=False, heading='¹ÊÕÏÕï¶ÏÓë¸´ÅÌ', hint=''
+INFO:     [IMG-DBG] Slide 16: has_image_url=False, heading='×Ü½á', hint=''
+INFO:     [IMG-DBG] Slide 17: has_image_url=False, heading='½áÓï', hint=''
+INFO:     HTML deck written: D:\YISHAOAGENT\data\output\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº_col5\index.html
+INFO:     Variable-version deck written: D:\YISHAOAGENT\data\output\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº_col5\index_vars.html
+INFO:     Individual slide files saved to D:\YISHAOAGENT\data\output\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº_col5\slides
+INFO:     127.0.0.1:41768 - "POST /api/ppt/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41768 - "PUT /api/projects/abaf6198a367/steps/_ppt_plan_step3_yan_ppt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41768 - "PUT /api/projects/abaf6198a367/steps/_preview_html_step3_yan_ppt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41768 - "GET /api/projects/abaf6198a367/ppt-log HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41768 - "GET /api/exports/%E7%82%B3%E8%83%9C%E8%BE%A3%E8%92%B8%E6%B3%A2%E5%A3%AB%E9%A1%BF%E9%BE%99%E8%99%BE_col5/index.html?_t=1785475677288 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41768 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     [HEX-FIX] Slide 15: exact-matched 1 hex ¡ú {{placeholder}} vars
+INFO:     [HEX-FIX] Slide 15: semantic-matched 9 hex: [('#d97706', 'chart_2', 'orange-hue (32deg)'), ('#1d4ed8', 'secondary', 'blue-hue (224deg)'), ('#1a365d', 'primary', 'blue-hue (215deg)'), ('#b8860b', 'chart_2', 'orange-hue (43deg)'), ('#1e293b', 'background', 'blue-hue (217deg)'), ('#3b82f6', 'accent', 'blue-hue (217deg)'), ('#2563eb', 'accent', 'blue-hue (221deg)'), ('#f8fafc', 'text', 'blue-hue (210deg)')]
+INFO:     [DARK-FIX] Slide 15: fixed 8 dark-on-dark occurrences (bg luminance=30 ¡Ü 128)
+INFO:     [STRIP-VARS] Slide 15: removed 6 local CSS variable overrides (core theme vars must be inherited from :root)
+INFO:     Slide 15: HTML 6911 chars
+INFO:     Stage 2 HTML: 17/17 slides generated in 552.5s
+[PPT-DBG] HTML pipeline: 17 slides with inline HTML
+INFO:     [IMG-DBG] canvas=1280x720 is_portrait=False column_id=col5
+INFO:     [IMG-DBG] _generate_and_replace_images called, 17 slides
+INFO:     [IMG-DBG] Slide 1: has_image_url=False, heading='±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº', hint=''
+INFO:     [IMG-DBG] Slide 2: has_image_url=False, heading='Ä¿Â¼', hint=''
+INFO:     [IMG-DBG] Slide 3: has_image_url=False, heading='·çÎ¶ÓëÖÊµØÔ¤ÖÃ', hint=''
+INFO:     [IMG-DBG] Slide 4: has_image_url=False, heading='Åëâ¿Ô­ÀíÇåµ¥', hint=''
+INFO:     [IMG-DBG] Slide 5: has_image_url=False, heading='SOP×ÜÀÀ', hint=''
+INFO:     [IMG-DBG] Slide 6: has_image_url=False, heading='²½ÖèÒ»£ºÀ­ÓÍ', hint=''
+INFO:     [IMG-DBG] Slide 7: has_image_url=False, heading='²½Öè¶þ£ºëçÖÆ', hint=''
+INFO:     [IMG-DBG] Slide 8: has_image_url=False, heading='²½ÖèÈý£º°ÚÅÌ', hint=''
+INFO:     [IMG-DBG] Slide 9: has_image_url=False, heading='²½ÖèËÄ£ºÕôÖÆÓëÏìÓÍ', hint=''
+INFO:     [IMG-DBG] Slide 10: has_image_url=False, heading='Ê³²Äµµ°¸£º²¨Ê¿¶ÙÁúÏº', hint=''
+INFO:     [IMG-DBG] Slide 11: has_image_url=False, heading='Ê³²Äµµ°¸£º·ÛË¿', hint=''
+INFO:     [IMG-DBG] Slide 12: has_image_url=False, heading='Ê³²Äµµ°¸£º»Æ½·½´', hint=''
+INFO:     [IMG-DBG] Slide 13: has_image_url=False, heading='¼¼·¨¿¨Æ¬£º¶þ¶ÎÊì³É·¨', hint=''
+INFO:     [IMG-DBG] Slide 14: has_image_url=False, heading='¼¼·¨¿¨Æ¬£ºÈýÃ÷ÖÎÊ½·çÎ¶ÉøÍ¸', hint=''
+INFO:     [IMG-DBG] Slide 15: has_image_url=False, heading='¹ÊÕÏÕï¶ÏÓë¸´ÅÌ', hint=''
+INFO:     [IMG-DBG] Slide 16: has_image_url=False, heading='×Ü½á', hint=''
+INFO:     [IMG-DBG] Slide 17: has_image_url=False, heading='½áÓï', hint=''
+INFO:     HTML deck written: D:\YISHAOAGENT\data\output\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº_col5\index.html
+INFO:     Variable-version deck written: D:\YISHAOAGENT\data\output\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº_col5\index_vars.html
+INFO:     Individual slide files saved to D:\YISHAOAGENT\data\output\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº\±þÊ¤À±Õô²¨Ê¿¶ÙÁúÏº_col5\slides
+INFO:     127.0.0.1:4999 - "GET /api/exports/%E7%82%B3%E8%83%9C%E8%BE%A3%E8%92%B8%E6%B3%A2%E5%A3%AB%E9%A1%BF%E9%BE%99%E8%99%BE_col5/index.html?_t=1785476008472 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4999 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5000 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5000 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5000 - "GET /api/workspaces?page=1&page_size=16 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5000 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5000 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5003 - "GET /api/site-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:5003 - "GET /api/site-config HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39488 - "GET /api/workspaces/a2e84773b6e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39489 - "GET /api/workspaces/a2e84773b6e3/categories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39490 - "GET /api/projects?page=1&page_size=50&workspace_id=a2e84773b6e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39491 - "GET /api/authors/options HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39488 - "GET /api/workspaces/a2e84773b6e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39488 - "GET /api/projects/3d1d2b55c9d1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39491 - "GET /api/tts/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39494 - "GET /api/voices HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/projects/3d1d2b55c9d1/steps HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39488 - "GET /api/asr/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39489 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39494 - "GET /api/llm/providers HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39491 - "GET /api/projects/3d1d2b55c9d1/ppt-results HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/projects/3d1d2b55c9d1/tts-history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39490 - "GET /api/ppt/styles HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39494 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39489 - "GET /api/ppt/styles/business/color-schemes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39491 - "GET /api/projects/3d1d2b55c9d1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/voices/clones?provider_id=ea54c0ae HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39490 - "GET /api/projects/3d1d2b55c9d1/videos HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39488 - "GET /api/projects/3d1d2b55c9d1/files HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39491 - "GET /api/templates/for-stage/sop HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/templates/for-stage/daoPpt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39494 - "GET /api/templates/for-stage/yanxiPpt HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39490 - "GET /api/ppt/styles/business/color-schemes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39489 - "PUT /api/projects/3d1d2b55c9d1/steps/_tts_segments HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39488 - "GET /api/batch/project-batch/3d1d2b55c9d1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39494 - "GET /api/authors/options HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/workspaces/a2e84773b6e3/categories HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39490 - "GET /api/ppt/styles/business/color-schemes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39491 - "GET /api/projects/3d1d2b55c9d1/items HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/ppt/styles/business/color-schemes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/ppt/styles/business/color-schemes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39491 - "GET /api/column-configs?workspace_id=a2e84773b6e3 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39492 - "GET /api/ppt/styles/business/color-schemes HTTP/1.1" 200 OK

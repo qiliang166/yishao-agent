@@ -1,0 +1,359 @@
+# 学术严谨 — Academic Scientific Design Tokens
+# 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
+
+color_scheme: academic-blue
+
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "33,33,33"
+  white: "#ffffff"
+
+color_schemes:
+  academic-blue:
+    label: "学术蓝调"
+    primary: "#1565c0"
+    secondary: "#42a5f5"
+    accent: "#ff7043"
+    background: "#fafafa"
+    text: "#212121"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#ff7043"
+      - "#1565c0"
+      - "#2e7d32"
+      - "#7b1fa2"
+      - "#c62828"
+      - "#00838f"
+      - "#ef6c00"
+      - "#4527a0"
+    semantic:
+      positive: "#2e7d32"
+      negative: "#c62828"
+    persona_hint: "学术蓝（#1565c0）+ 暖橙强调（#ff7043）。白底 + Merriweather 衬线标题，窄圆角4px+细边框1px，等宽字体展示数据，严谨而不失温度。"
+  research-green:
+    label: "科研绿调"
+    primary: "#1b5e20"
+    secondary: "#388e3c"
+    accent: "#f9a825"
+    background: "#fafdfa"
+    text: "#212121"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#f9a825"
+      - "#1b5e20"
+      - "#1565c0"
+      - "#7b1fa2"
+      - "#c62828"
+      - "#00838f"
+      - "#ef6c00"
+      - "#37474f"
+    semantic:
+      positive: "#2e7d32"
+      negative: "#c62828"
+    persona_hint: "科研绿（#1b5e20）+ 金色强调（#f9a825），生命科学/生物医学风格。白底+Merriweather衬线标题，窄圆角4px+细边框，严谨学术气质。"
+  data-gray:
+    label: "数据灰调"
+    primary: "#263238"
+    secondary: "#455a64"
+    accent: "#00897b"
+    background: "#fafbfc"
+    text: "#212121"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#00897b"
+      - "#1565c0"
+      - "#f57c00"
+      - "#7b1fa2"
+      - "#c62828"
+      - "#2e7d32"
+      - "#5c6bc0"
+      - "#8d6e63"
+    semantic:
+      positive: "#2e7d32"
+      negative: "#c62828"
+    persona_hint: "数据灰（#263238）+ 青色强调（#00897b），统计学/数据科学风格。白底+Merriweather衬线标题，窄圆角4px+细边框，理性冷静。"
+  medical-red:
+    label: "医学红调"
+    primary: "#b71c1c"
+    secondary: "#e53935"
+    accent: "#1565c0"
+    background: "#fefafa"
+    text: "#212121"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#1565c0"
+      - "#b71c1c"
+      - "#2e7d32"
+      - "#f9a825"
+      - "#7b1fa2"
+      - "#00838f"
+      - "#ef6c00"
+      - "#455a64"
+    semantic:
+      positive: "#2e7d32"
+      negative: "#b71c1c"
+    persona_hint: "医学红（#b71c1c）+ 蓝色强调（#1565c0），医学/临床期刊风格。白底+Merriweather衬线标题，窄圆角4px+细边框，红色仅用于关键信号。"
+  physics-navy:
+    label: "物理学蓝"
+    primary: "#0d2137"
+    secondary: "#1a3a5c"
+    accent: "#e8a838"
+    background: "#f8fafb"
+    text: "#1a202c"
+    card_bg: "#ffffff"
+    chart_colors:
+      - "#e8a838"
+      - "#0d2137"
+      - "#2e7d32"
+      - "#b71c1c"
+      - "#7b1fa2"
+      - "#1565c0"
+      - "#00838f"
+      - "#546e7a"
+    semantic:
+      positive: "#2e7d32"
+      negative: "#b71c1c"
+    persona_hint: "物理学蓝（#0d2137）+ 金色强调（#e8a838），物理/数学期刊风格。白底+Merriweather衬线标题，窄圆角4px+细边框，深邃严谨。"
+
+typography:
+  heading_font: "Merriweather, Georgia, 'PingFang SC', 'Microsoft YaHei', serif"
+  body_font: "Source Sans 3, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  cover_title: { size: "48-56px", weight: 700 }
+  page_title: { size: "32-40px", weight: 700 }
+  card_title: { size: "18-22px", weight: 600 }
+  body: { size: "15-17px", weight: 400 }
+  caption: { size: "12-13px", weight: 400 }
+  line_height: { heading: 1.2-1.3, body: 1.6-1.8 }
+  letter_spacing: { heading: "-0.3~-0.5px" }
+
+card_style:
+  border_radius: 4
+  shadow: "0 2px 8px rgba(0,0,0,0.06)"
+  border: "1px solid rgba({{text_rgb}}, 0.1)"
+  gap: 24
+  left_stripe_width: 3
+
+gradients:
+  hero_bg: "none"
+  card_highlight: "none"
+
+elevation:
+  shadow_sm: "0 1px 3px rgba(0,0,0,0.04)"
+  shadow_md: "0 2px 8px rgba(0,0,0,0.06)"
+  shadow_lg: "0 8px 24px rgba(0,0,0,0.1)"
+
+slide_type_overrides:
+  cover:
+    card_bg: "{{background}}"
+    text: "{{primary}}"
+    heading_scale: 1.3
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "{{background}}"
+    text: "{{primary}}"
+    body_font_style: italic
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "{{card_bg}}"
+    text: "{{primary}}"
+    layout: full_bleed
+  summary:
+    background: "{{card_bg}}"
+    text: "{{primary}}"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "© YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.4-0.5
+  content:
+    background: "{{background}}"
+    layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "1px solid rgba({{text_rgb}}, 0.12)"
+    cell_border: "1px solid rgba({{text_rgb}}, 0.06)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.02-0.04"
+    accent_stripe_height: 4
+
+layout_types:
+  - { id: full_bleed, cards: "1-3", description: "垂直居中", use: "封面/章节/总结" }
+  - { id: three_column, cards: 3, description: "水平等分", use: "并列要点" }
+  - { id: two_column, cards: 2, description: "水平等分", use: "对比分析" }
+  - { id: two_column_asymmetric, cards: 2, description: "左62%+右38%", use: "主次内容" }
+  - { id: dashboard, cards: "3-5", description: "metric+summary", use: "数据总览" }
+  - { id: mixed_grid, cards: "3-4", description: "hero+小卡", use: "核心观点" }
+  - { id: hero_grid, cards: "2-4", description: "左hero+右小卡", use: "论点+数据" }
+  - { id: single_focus, cards: 1, description: "居中大卡", use: "核心结论" }
+  - { id: timeline, cards: "2-5", description: "水平步骤", use: "流程" }
+  - { id: horizontal_split, cards: "3-4", description: "顶hero+底卡", use: "标题+指标" }
+
+card_roles:
+  - { role: hero, visual: "大卡，核心信息", required: [title, body], optional: [chart] }
+  - { role: metric, visual: "居中大数字，顶部短色条", required: [chart], optional: [] }
+  - { role: card_0, visual: "标准卡，圆角4px，1px边框", required: [title or body], optional: [chart] }
+  - { role: card_1, visual: "标准卡，圆角4px，1px边框", required: [title or body], optional: [chart] }
+  - { role: card_2, visual: "标准卡，圆角4px，1px边框", required: [title or body], optional: [chart] }
+  - { role: card_3, visual: "标准卡，圆角4px，1px边框", required: [title or body], optional: [chart] }
+  - { role: card_4, visual: "标准卡，圆角4px，1px边框", required: [title or body], optional: [chart] }
+  - { role: left, visual: "绿色顶条+▲", required: [title,body], optional: [chart], use: "双栏左" }
+  - { role: right, visual: "红色顶条+▼", required: [title,body], optional: [chart], use: "双栏右" }
+  - { role: summary, visual: "全宽浅色卡", required: [title or body], optional: [chart], use: "总结" }
+  - { role: step_N, visual: "圆形编号", required: [title,body], optional: [], use: "步骤" }
+
+decoration:
+  accent_stripe: "3px solid {{accent}}"
+  title_underline: "32×2px {{accent}}"
+  page_dot: "4px {{primary}}"
+  layers: ["背景层", "结构层", "内容层"]
+  types:
+    - { id: type_a, name: "学术论文", description: "窄圆角+细边框+衬线标题，严谨克制" }
+    - { id: type_b, name: "数据报告", description: "图表为主体，暖橙仅用于强调，文字为注解" }
+
+icons:
+  style: "outline"
+  stroke_width: "1.5px"
+  card_size: 18
+  hero_size: 32
+  metric_size: 14
+  color_rule: "跟随chart_color, opacity:0.7"
+
+illustrations:
+  label_align: "text-anchor=middle"
+  label_spacing: "≥22px"
+  guide_spacing: "≥20px"
+  min_stroke: "1px"
+  min_font: "14px"
+
+quality_checklist:
+  - "3层结构完整"
+  - "≥3个SVG元素"
+  - "≥4种chart_color"
+  - "每卡:标题+正文"
+  - "数字→图表形态"
+  - "标题primary色"
+  - "正文text色"
+  - "卡片card_bg色"
+  - "背景background色"
+  - "字体typography token"
+  - "圆角4px"
+  - "阴影elevation token"
+  - "封面/总结无卡片容器"
+  - "禁止大面积暖橙"
+  - "禁止过度装饰"
+
+font_thresholds:
+  slide_title: { min: 28, max: 44 }
+  card_title: { min: 18, max: 32 }
+  body: { min: 14, max: 20 }
+  label: { min: 14, max: 14 }
+  absolute_min: 14
+
+safe_area: { x_min: 40, y_min: 28, y_max: 710 }
+
+visual_richness:
+  min_svg_elements: 3
+  min_colors: 4
+  min_cards: 3
+  min_decorations: 1
+  min_layers: 3
+
+block_types:
+  header:
+    description: "文档头部"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba({{text_rgb}}, 0.5)"
+    border_bottom: "1px solid rgba({{text_rgb}}, 0.08)"
+    columns: "2-4"
+  title:
+    description: "文档主标题"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{primary}}"
+    font_size: "20-24px"
+    font_weight: 700
+    letter_spacing: "1-2px"
+    border_bottom: "2px solid {{accent}}"
+  info_block:
+    description: "键值对信息表"
+    colspan: auto
+    label_bg: "rgba({{text_rgb}}, 0.04)"
+    label_color: "{{primary}}"
+    label_weight: 600
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "1.5px dashed rgba({{text_rgb}}, 0.15)"
+    image_placeholder_radius: 4
+  table_block:
+    description: "多列数据网格"
+    colspan: auto
+    header_bg_default: "{{primary}}"
+    header_bg_alt_0: "{{chart_0}}"
+    header_bg_alt_2: "{{chart_2}}"
+    header_color: "#ffffff"
+    header_weight: 600
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba({{text_rgb}}, 0.02)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "1px solid rgba({{text_rgb}}, 0.08)"
+    header_border_top: "2px solid rgba({{text_rgb}}, 0.1)"
+    header_rotation: "primary → chart_0 → chart_2"
+  text_block:
+    description: "自由段落"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba({{text_rgb}}, 0.08)"
+  list_block:
+    description: "列表"
+    colspan: full
+    number_color: "{{primary}}"
+    number_weight: 600
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba({{text_rgb}}, 0.08)"
+  closing:
+    description: "收束区"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "1.5px solid rgba({{text_rgb}}, 0.1)"
+    layouts: ["center", "split"]
+  footer:
+    description: "底部声明"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba({{text_rgb}}, 0.45)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "1.5px solid rgba({{text_rgb}}, 0.1)"
+    align: center

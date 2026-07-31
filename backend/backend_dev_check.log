@@ -1,0 +1,65 @@
+INFO:     Started server process [7728]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8766 (Press CTRL+C to quit)
+[DB] Initialized at D:\YISHAOAGENT\backend\data\yishao.db
+INFO:     127.0.0.1:22771 - "GET /api/member/preview-file?project_id=fcf32913a82b&filename=%E6%A0%87%E5%87%86%E6%96%87%E6%A1%A3.txt&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZDM5ZGMwNC1hYjNmLTQ4MTgtOGRjMy02ZjNiOTc4MTQwNWIiLCJ1c2VybmFtZSI6InRlc3RtZW1iZXIiLCJ1c2VyX3R5cGUiOiJtZW1iZXIiLCJ0b2tlbl92ZXJzaW9uIjoxLCJleHAiOjE3ODQ0MTA0OTgsInBlcm1pc3Npb25zIjpbXSwicm9sZXMiOltdfQ.aDyCD4oU99tC8w2XJZanpzC7sT6_KTCTmSUR45TUNxk HTTP/1.1" 200 OK
+INFO:     127.0.0.1:22772 - "GET /api/member/preview-file?project_id=fcf32913a82b&filename=x.txt HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:22773 - "GET /api/member/preview-file?project_id=fcf32913a82b&filename=..%2F..%2Fyishao.db&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZDM5ZGMwNC1hYjNmLTQ4MTgtOGRjMy02ZjNiOTc4MTQwNWIiLCJ1c2VybmFtZSI6InRlc3RtZW1iZXIiLCJ1c2VyX3R5cGUiOiJtZW1iZXIiLCJ0b2tlbl92ZXJzaW9uIjoxLCJleHAiOjE3ODQ0MTA0OTgsInBlcm1pc3Npb25zIjpbXSwicm9sZXMiOltdfQ.aDyCD4oU99tC8w2XJZanpzC7sT6_KTCTmSUR45TUNxk HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:22774 - "GET /api/member/preview-file?project_id=fcf32913a82b&filename=nope.txt&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZDM5ZGMwNC1hYjNmLTQ4MTgtOGRjMy02ZjNiOTc4MTQwNWIiLCJ1c2VybmFtZSI6InRlc3RtZW1iZXIiLCJ1c2VyX3R5cGUiOiJtZW1iZXIiLCJ0b2tlbl92ZXJzaW9uIjoxLCJleHAiOjE3ODQ0MTA0OTgsInBlcm1pc3Npb25zIjpbXSwicm9sZXMiOltdfQ.aDyCD4oU99tC8w2XJZanpzC7sT6_KTCTmSUR45TUNxk HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:22777 - "GET /api/member/preview-file?project_id=fcf32913a82b&filename=%E6%A0%87%E5%87%86%E6%96%87%E6%A1%A3.txt&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZDM5ZGMwNC1hYjNmLTQ4MTgtOGRjMy02ZjNiOTc4MTQwNWIiLCJ1c2VybmFtZSI6InRlc3RtZW1iZXIiLCJ1c2VyX3R5cGUiOiJtZW1iZXIiLCJ0b2tlbl92ZXJzaW9uIjoxLCJleHAiOjE3ODQ0MDc1MTMsInBlcm1pc3Npb25zIjpbXSwicm9sZXMiOltdfQ.1-9kWrqn6JrgmWE8XlX4dEcBH-rdiSA_aioahMCe_zc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2245 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2245 - "GET /assets/index-Bu2x5Gwg.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1270 - "GET /assets/index-C5FvQREQ.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1270 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14563 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14563 - "GET /app/downloads HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2805 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1270 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2805 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14563 - "GET /api/license/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2805 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14563 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1270 - "GET /api/member/downloadable-projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1270 - "GET /api/logos/logo_app_icon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1270 - "GET /api/member/preview-file?project_id=65d3d6fc749a&filename=%E4%B8%80%E5%93%81%E9%B2%8D%E9%B1%BC%E7%85%B211_%E6%96%87%E4%BB%B6%E6%8F%90%E5%8F%96_AI%E6%95%B4%E7%90%86.txt&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZDM5ZGMwNC1hYjNmLTQ4MTgtOGRjMy02ZjNiOTc4MTQwNWIiLCJ1c2VybmFtZSI6InRlc3RtZW1iZXIiLCJ1c2VyX3R5cGUiOiJtZW1iZXIiLCJ0b2tlbl92ZXJzaW9uIjoxLCJleHAiOjE3ODQ0MTA1MzcsInBlcm1pc3Npb25zIjpbXSwicm9sZXMiOltdfQ.XPviejK8WLBKjZXGvoFHVPAJYwiJBBlVJvVakh9h28M HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /assets/index-Bu2x5Gwg.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33174 - "GET /assets/index-C5FvQREQ.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /api/license/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33174 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /app/downloads HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /api/license/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33174 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47507 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47507 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34599 - "GET /api/logos/logo_app_icon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33174 - "GET /api/member/downloadable-projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33174 - "GET /api/member/preview-file?project_id=fcf32913a82b&filename=col5_full.html&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZDM5ZGMwNC1hYjNmLTQ4MTgtOGRjMy02ZjNiOTc4MTQwNWIiLCJ1c2VybmFtZSI6InRlc3RtZW1iZXIiLCJ1c2VyX3R5cGUiOiJtZW1iZXIiLCJ0b2tlbl92ZXJzaW9uIjoxLCJleHAiOjE3ODQ0MTA1NzEsInBlcm1pc3Npb25zIjpbXSwicm9sZXMiOltdfQ.AALtZM0EsnbQWCr77BKoFI-VinORKy42k7BgCquJMBA HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33174 - "GET /api/member/preview-file?project_id=4f73b845d736&filename=%E6%B5%8B%E8%AF%95_%E5%88%86%E5%89%B2%E6%AE%B5%E8%90%BD_10.mp3&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZDM5ZGMwNC1hYjNmLTQ4MTgtOGRjMy02ZjNiOTc4MTQwNWIiLCJ1c2VybmFtZSI6InRlc3RtZW1iZXIiLCJ1c2VyX3R5cGUiOiJtZW1iZXIiLCJ0b2tlbl92ZXJzaW9uIjoxLCJleHAiOjE3ODQ0MTA1NzEsInBlcm1pc3Npb25zIjpbXSwicm9sZXMiOltdfQ.AALtZM0EsnbQWCr77BKoFI-VinORKy42k7BgCquJMBA HTTP/1.1" 206 Partial Content
+D:\YISHAOAGENT\backend\app.py:91: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  if datetime.utcnow() > datetime.fromisoformat(expires):
+INFO:     127.0.0.1:36043 - "POST /api/member/can-download HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36043 - "POST /api/member/can-download HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36043 - "GET /api/download/ceshi_%E8%A7%86%E9%A2%91%E6%8F%90%E5%8F%96_AI%E6%95%B4%E7%90%86.txt?project_id=3b71593452b4&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZWRlMmUwMi0zNzRiLTQwOTgtODlhMS1kZWNmMDk3MDUxZGYiLCJ1c2VybmFtZSI6ImNlc2hpMDAxIiwidXNlcl90eXBlIjoibWVtYmVyIiwicGVybWlzc2lvbnMiOlsic3RhZ2UxLnZpZXciLCJzdGFnZTIudmlldyIsInN0YWdlMy52aWV3Iiwic3RhZ2U0LnZpZXciLCJzdGFnZTUudmlldyJdLCJyb2xlcyI6WyJcdThiZDVcdTc1MjhcdTRmMWFcdTU0NTgiXSwidG9rZW5fdmVyc2lvbiI6MywiZXhwIjoxNzg0NDYzMzc1fQ.KyQZk-7d25hyYMfew_u_b4gSQqMUTkPjZaa0Q5A_yJ8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:18010 - "GET /app/downloads HTTP/1.1" 200 OK
+INFO:     127.0.0.1:18010 - "GET /assets/index-Bu2x5Gwg.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32125 - "GET /assets/index-C5FvQREQ.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32125 - "GET /api/license/status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:18010 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:18010 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32125 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:18010 - "GET /api/version HTTP/1.1" 200 OK
+INFO:     127.0.0.1:18010 - "GET /favicon.ico HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32125 - "GET /api/settings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7232 - "GET /api/member/downloadable-projects HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7232 - "GET /api/member/preview-file?project_id=3b71593452b4&filename=ceshi_%E8%A7%86%E9%A2%91%E6%8F%90%E5%8F%96_AI%E6%95%B4%E7%90%86.txt&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZWRlMmUwMi0zNzRiLTQwOTgtODlhMS1kZWNmMDk3MDUxZGYiLCJ1c2VybmFtZSI6ImNlc2hpMDAxIiwidXNlcl90eXBlIjoibWVtYmVyIiwicGVybWlzc2lvbnMiOlsic3RhZ2UxLnZpZXciLCJzdGFnZTIudmlldyIsInN0YWdlMy52aWV3Iiwic3RhZ2U0LnZpZXciLCJzdGFnZTUudmlldyJdLCJyb2xlcyI6WyJcdThiZDVcdTc1MjhcdTRmMWFcdTU0NTgiXSwidG9rZW5fdmVyc2lvbiI6MywiZXhwIjoxNzg0NDYzMzc1fQ.KyQZk-7d25hyYMfew_u_b4gSQqMUTkPjZaa0Q5A_yJ8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7232 - "POST /api/member/can-download HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7232 - "GET /api/download/ceshi_%E8%A7%86%E9%A2%91%E6%8F%90%E5%8F%96_AI%E6%95%B4%E7%90%86.txt?project_id=3b71593452b4&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZWRlMmUwMi0zNzRiLTQwOTgtODlhMS1kZWNmMDk3MDUxZGYiLCJ1c2VybmFtZSI6ImNlc2hpMDAxIiwidXNlcl90eXBlIjoibWVtYmVyIiwicGVybWlzc2lvbnMiOlsic3RhZ2UxLnZpZXciLCJzdGFnZTIudmlldyIsInN0YWdlMy52aWV3Iiwic3RhZ2U0LnZpZXciLCJzdGFnZTUudmlldyJdLCJyb2xlcyI6WyJcdThiZDVcdTc1MjhcdTRmMWFcdTU0NTgiXSwidG9rZW5fdmVyc2lvbiI6MywiZXhwIjoxNzg0NDYzMzc1fQ.KyQZk-7d25hyYMfew_u_b4gSQqMUTkPjZaa0Q5A_yJ8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6260 - "GET /api/member/preview-file?project_id=4f73b845d736&filename=%E6%B5%8B%E8%AF%95_%E5%88%86%E5%89%B2%E6%AE%B5%E8%90%BD_10.mp3&token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZWRlMmUwMi0zNzRiLTQwOTgtODlhMS1kZWNmMDk3MDUxZGYiLCJ1c2VybmFtZSI6ImNlc2hpMDAxIiwidXNlcl90eXBlIjoibWVtYmVyIiwicGVybWlzc2lvbnMiOlsic3RhZ2UxLnZpZXciLCJzdGFnZTIudmlldyIsInN0YWdlMy52aWV3Iiwic3RhZ2U0LnZpZXciLCJzdGFnZTUudmlldyJdLCJyb2xlcyI6WyJcdThiZDVcdTc1MjhcdTRmMWFcdTU0NTgiXSwidG9rZW5fdmVyc2lvbiI6MywiZXhwIjoxNzg0NDYzMzc1fQ.KyQZk-7d25hyYMfew_u_b4gSQqMUTkPjZaa0Q5A_yJ8 HTTP/1.1" 206 Partial Content
+INFO:     127.0.0.1:6260 - "POST /api/member/can-download HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6840 - "GET /api/exports/%E9%B2%8D%E9%B1%BC%E4%B8%80%E5%93%81%E7%85%B2_col4/index.html HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38174 - "GET /api/version HTTP/1.1" 200 OK

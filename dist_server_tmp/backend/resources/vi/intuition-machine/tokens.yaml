@@ -1,0 +1,360 @@
+# 直觉机器 — Intuition Machine Design Tokens
+# 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
+
+color_scheme: hud-neon
+
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "224,224,224"
+  white: "#ffffff"
+
+color_schemes:
+  hud-neon:
+    label: "HUD霓虹"
+    primary: "#00e676"
+    secondary: "#69f0ae"
+    accent: "#ff4081"
+    background: "#0a0a0a"
+    text: "#e0e0e0"
+    card_bg: "#1a1a1a"
+    chart_colors:
+      - "#ff4081"
+      - "#00e676"
+      - "#448aff"
+      - "#ffea00"
+      - "#e040fb"
+      - "#00e5ff"
+      - "#ff6e40"
+      - "#b2ff59"
+    semantic:
+      positive: "#00e676"
+      negative: "#ff4081"
+    persona_hint: "纯黑底（#0a0a0a）+ 霓虹绿（#00e676）+ 热粉（#ff4081）。半透明边框4%透明度模拟HUD界面，Space Grotesk几何感字体，霓虹绿和热粉保持8:2比例。"
+  cyber-amber:
+    label: "赛博琥珀"
+    primary: "#fbbf24"
+    secondary: "#fcd34d"
+    accent: "#06b6d4"
+    background: "#0a0a0a"
+    text: "#e0e0e0"
+    card_bg: "#1a1a1a"
+    chart_colors:
+      - "#06b6d4"
+      - "#fbbf24"
+      - "#ef4444"
+      - "#8b5cf6"
+      - "#10b981"
+      - "#f472b6"
+      - "#60a5fa"
+      - "#fde68a"
+    semantic:
+      positive: "#10b981"
+      negative: "#ef4444"
+    persona_hint: "纯黑底（#0a0a0a）+ 琥珀霓虹（#fbbf24）+ 青色点缀（#06b6d4）。Space Grotesk几何感字体，琥珀和青色保持8:2比例，赛博朋克操作终端风。"
+  synthwave:
+    label: "合成波夜"
+    primary: "#e879f9"
+    secondary: "#f0abfc"
+    accent: "#22d3ee"
+    background: "#0a0810"
+    text: "#e8e0f0"
+    card_bg: "#181420"
+    chart_colors:
+      - "#22d3ee"
+      - "#e879f9"
+      - "#fb923c"
+      - "#fbbf24"
+      - "#34d399"
+      - "#f472b6"
+      - "#60a5fa"
+      - "#fde68a"
+    semantic:
+      positive: "#34d399"
+      negative: "#fb923c"
+    persona_hint: "深紫黑底（#0a0810）+ 粉紫霓虹（#e879f9）+ 青色点缀（#22d3ee）。Space Grotesk几何感字体，80年代合成波美学，霓虹粉紫和青色保持8:2比例。"
+  quantum-blue:
+    label: "量子蓝域"
+    primary: "#60a5fa"
+    secondary: "#93c5fd"
+    accent: "#fb923c"
+    background: "#0a0a0f"
+    text: "#dbeafe"
+    card_bg: "#151525"
+    chart_colors:
+      - "#fb923c"
+      - "#60a5fa"
+      - "#e879f9"
+      - "#fbbf24"
+      - "#34d399"
+      - "#f472b6"
+      - "#22d3ee"
+      - "#fde68a"
+    semantic:
+      positive: "#34d399"
+      negative: "#fb923c"
+    persona_hint: "深蓝黑底（#0a0a0f）+ 量子蓝霓虹（#60a5fa）+ 橙光点缀（#fb923c）。Space Grotesk几何感字体，量子计算终端美学，蓝和橙保持8:2比例。"
+  void-teal:
+    label: "虚空青碧"
+    primary: "#2dd4bf"
+    secondary: "#5eead4"
+    accent: "#c084fc"
+    background: "#0a0a0a"
+    text: "#ccfbf1"
+    card_bg: "#152020"
+    chart_colors:
+      - "#c084fc"
+      - "#2dd4bf"
+      - "#fbbf24"
+      - "#f472b6"
+      - "#60a5fa"
+      - "#fb923c"
+      - "#34d399"
+      - "#fde68a"
+    semantic:
+      positive: "#2dd4bf"
+      negative: "#f472b6"
+    persona_hint: "纯黑底（#0a0a0a）+ 青碧霓虹（#2dd4bf）+ 紫光点缀（#c084fc）。Space Grotesk几何感字体，虚空终端美学，青碧和紫光保持8:2比例。"
+
+typography:
+  heading_font: "Space Grotesk, Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  body_font: "Space Grotesk, Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  cover_title: { size: "48-56px", weight: 700 }
+  page_title: { size: "32-40px", weight: 700 }
+  card_title: { size: "18-22px", weight: 600 }
+  body: { size: "14-16px", weight: 400 }
+  caption: { size: "11-12px", weight: 400 }
+  line_height: { heading: 1.2-1.3, body: 1.6-1.8 }
+  letter_spacing: { heading: "0.5~1px" }
+
+card_style:
+  border_radius: 2
+  shadow: "0 0 12px rgba(0,230,118,0.1)"
+  border: "1px solid rgba(0,230,118,0.15)"
+  gap: 20
+  left_stripe_width: 4
+
+gradients:
+  hero_bg: "linear-gradient(180deg, {{background}} 0%, #0d0d0d 100%)"
+  card_highlight: "linear-gradient(180deg, {{card_bg}} 0%, {{background}} 100%)"
+
+elevation:
+  shadow_sm: "0 0 4px rgba(0,230,118,0.05)"
+  shadow_md: "0 0 12px rgba(0,230,118,0.1)"
+  shadow_lg: "0 0 24px rgba(0,230,118,0.2)"
+
+slide_type_overrides:
+  cover:
+    card_bg: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.3
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "{{card_bg}}"
+    text: "{{primary}}"
+    body_font_style: normal
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "{{primary}}"
+    text: "#ffffff"
+    layout: full_bleed
+  summary:
+    background: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "© YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.4-0.5
+  content:
+    background: "{{background}}"
+    layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "1px solid rgba(0,230,118, 0.1)"
+    cell_border: "1px solid rgba(0,230,118, 0.05)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.04-0.06"
+    accent_stripe_height: 5
+
+layout_types:
+  - { id: full_bleed, cards: "1-3", description: "垂直居中", use: "封面/章节/总结" }
+  - { id: three_column, cards: 3, description: "水平等分", use: "并列要点" }
+  - { id: two_column, cards: 2, description: "水平等分", use: "对比分析" }
+  - { id: two_column_asymmetric, cards: 2, description: "左62%+右38%", use: "主次内容" }
+  - { id: dashboard, cards: "3-5", description: "metric+summary", use: "数据总览" }
+  - { id: mixed_grid, cards: "3-4", description: "hero+小卡", use: "核心观点" }
+  - { id: hero_grid, cards: "2-4", description: "左hero+右小卡", use: "论点+数据" }
+  - { id: single_focus, cards: 1, description: "居中大卡", use: "核心结论" }
+  - { id: timeline, cards: "2-5", description: "水平步骤", use: "流程" }
+  - { id: horizontal_split, cards: "3-4", description: "顶hero+底卡", use: "标题+指标" }
+
+card_roles:
+  - { role: hero, visual: "大卡，霓虹绿发光边框", required: [title, body], optional: [chart] }
+  - { role: metric, visual: "居中大数字，霓虹绿发光", required: [chart], optional: [] }
+  - { role: card_0, visual: "标准卡，霓虹绿边框+发光", required: [title or body], optional: [chart] }
+  - { role: card_1, visual: "标准卡，热粉边框+发光", required: [title or body], optional: [chart] }
+  - { role: card_2, visual: "标准卡，蓝色边框+发光", required: [title or body], optional: [chart] }
+  - { role: card_3, visual: "标准卡，黄色边框+发光", required: [title or body], optional: [chart] }
+  - { role: card_4, visual: "标准卡，紫色边框+发光", required: [title or body], optional: [chart] }
+  - { role: left, visual: "绿色顶条+▲", required: [title,body], optional: [chart], use: "双栏左" }
+  - { role: right, visual: "红色顶条+▼", required: [title,body], optional: [chart], use: "双栏右" }
+  - { role: summary, visual: "全宽半透明卡", required: [title or body], optional: [chart], use: "总结" }
+  - { role: step_N, visual: "方形霓虹编号", required: [title,body], optional: [], use: "步骤" }
+
+decoration:
+  accent_stripe: "4px solid {{primary}}"
+  title_underline: "40×2px {{primary}}"
+  page_dot: "6px {{primary}}"
+  layers: ["背景层", "网格纹理层", "结构层", "内容层", "发光层"]
+  types:
+    - { id: type_a, name: "HUD终端", description: "网格纹理4%+霓虹发光边框+发光阴影" }
+    - { id: type_b, name: "赛博数据", description: "半透明几何+霓虹光效+数据可视化发光" }
+
+icons:
+  style: "outline"
+  stroke_width: "1.5px"
+  card_size: 18
+  hero_size: 32
+  metric_size: 14
+  color_rule: "跟随chart_color, opacity:0.9"
+
+illustrations:
+  label_align: "text-anchor=middle"
+  label_spacing: "≥22px"
+  guide_spacing: "≥20px"
+  min_stroke: "1px"
+  min_font: "14px"
+
+quality_checklist:
+  - "5层结构完整"
+  - "≥3个SVG元素"
+  - "≥4种chart_color"
+  - "≥1个网格装饰"
+  - "每卡:标题+正文"
+  - "数字→图表形态"
+  - "标题primary色"
+  - "正文text色"
+  - "卡片card_bg色"
+  - "背景background色"
+  - "字体typography token"
+  - "圆角2px"
+  - "霓虹发光阴影"
+  - "禁止暖色调"
+  - "禁止衬线字体"
+  - "禁止传统阴影"
+
+font_thresholds:
+  slide_title: { min: 28, max: 44 }
+  card_title: { min: 18, max: 32 }
+  body: { min: 14, max: 20 }
+  label: { min: 14, max: 14 }
+  absolute_min: 14
+
+safe_area: { x_min: 40, y_min: 28, y_max: 710 }
+
+visual_richness:
+  min_svg_elements: 3
+  min_colors: 4
+  min_cards: 3
+  min_decorations: 2
+  min_layers: 5
+
+block_types:
+  header:
+    description: "文档头部"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba({{text_rgb}}, 0.5)"
+    border_bottom: "1px solid rgba(0,230,118, 0.1)"
+    columns: "2-4"
+  title:
+    description: "文档主标题"
+    colspan: full
+    background: "linear-gradient(135deg, rgba(0,230,118,0.15) 0%, rgba(255,64,129,0.1) 100%)"
+    color: "{{primary}}"
+    font_size: "20-24px"
+    font_weight: 700
+    letter_spacing: "2-3px"
+    border_bottom: "2px solid {{primary}}"
+  info_block:
+    description: "键值对信息表"
+    colspan: auto
+    label_bg: "{{card_bg}}"
+    label_color: "{{primary}}"
+    label_weight: 600
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "1.5px dashed rgba(0,230,118, 0.25)"
+    image_placeholder_radius: 4
+  table_block:
+    description: "多列数据网格"
+    colspan: auto
+    header_bg_default: "rgba(0,230,118,0.2)"
+    header_bg_alt_0: "rgba(255,64,129,0.2)"
+    header_bg_alt_2: "rgba(68,138,255,0.2)"
+    header_color: "{{primary}}"
+    header_weight: 600
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba(0,230,118, 0.03)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "1px solid rgba(0,230,118, 0.08)"
+    header_border_top: "2px solid rgba(0,230,118, 0.2)"
+    header_rotation: "primary → chart_0 → chart_2"
+  text_block:
+    description: "自由段落"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba(0,230,118, 0.06)"
+  list_block:
+    description: "列表"
+    colspan: full
+    number_color: "{{primary}}"
+    number_weight: 600
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba(0,230,118, 0.06)"
+  closing:
+    description: "收束区"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "1.5px solid rgba(0,230,118, 0.15)"
+    layouts: ["center", "split"]
+  footer:
+    description: "底部声明"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba({{text_rgb}}, 0.45)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "1.5px solid rgba(0,230,118, 0.12)"
+    align: center

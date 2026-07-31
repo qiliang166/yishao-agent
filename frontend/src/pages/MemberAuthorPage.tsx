@@ -227,6 +227,19 @@ export default function MemberAuthorPage() {
       {/* Active author */}
       {isActive && (
         <>
+          {/* Author info bar */}
+          <div style={{ background: 'var(--card-bg)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, fontSize: 13 }}>
+            <span style={{ fontWeight: 600 }}>{author?.name || '签约作者'}</span>
+            {author?.contract_signed_at && (
+              <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                签约日期: {new Date(author.contract_signed_at).toLocaleDateString('zh-CN')}
+              </span>
+            )}
+            <span style={{
+              fontSize: 11, padding: '2px 8px', borderRadius: 8, fontWeight: 500,
+              background: '#dcfce7', color: '#166534',
+            }}>已签约</span>
+          </div>
           {/* Revenue summary */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 24 }}>
             {[

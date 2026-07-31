@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>食品安全汇编手册</title>
+<style>
+/* ═══ 主题变量（全部经 THEME_CSS_VARS 注入，禁止写死实值） ═══ */
+:root { --book-primary: #1a365d; --book-accent: #e67e22; --book-bg: #ffffff; --book-text: #1a202c; --book-card-bg: #f0f4f8; --book-desk: #1f2937; --book-font: 'PingFang SC','Microsoft YaHei','Noto Sans SC',sans-serif; }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; background: var(--book-desk); }
+body {
+  font-family: var(--book-font);
+  color: var(--book-text);
+  overflow: hidden;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ═══ 翻页式：单页舞台居中，等比缩放（同 ppt 翻页交互） ═══ */
+.bk-stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+.bk-sheet {
+  width: 210mm;
+  height: 297mm;
+  background: var(--book-bg);
+  position: absolute; display: none; overflow: hidden;
+  transform-origin: center center;
+}
+.bk-sheet.bk-active { display: flex; flex-direction: column; }
+.bk-sheet-inner { flex: 1; padding: 22mm 20mm 26mm; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ═══ 封面 ═══ */
+.bk-cover .bk-sheet-inner { align-items: center; text-align: center; }
+.bk-cover-band { width: 100%; height: 8px; background: var(--book-accent); flex-shrink: 0; }
+.bk-cover-logo { margin-top: 26mm; max-height: 30mm; max-width: 70mm; object-fit: contain; }
+.bk-cover-title { margin-top: 22mm; font-size: 34pt; font-weight: 700; color: var(--book-primary); line-height: 1.35; letter-spacing: 0.08em; }
+.bk-cover-subtitle { margin-top: 10mm; font-size: 15pt; color: var(--book-text); opacity: 0.75; letter-spacing: 0.2em; }
+.bk-cover-rule { width: 42mm; height: 2px; background: var(--book-accent); margin: 14mm auto 0; }
+.bk-cover-meta { margin-top: auto; padding-bottom: 8mm; font-size: 12pt; line-height: 2.1; color: var(--book-text); }
+.bk-cover-author { font-size: 14pt; font-weight: 600; color: var(--book-primary); }
+
+/* ═══ 扉页 ═══ */
+.bk-flyleaf .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
+.bk-flyleaf-title { font-size: 20pt; font-weight: 600; color: var(--book-primary); letter-spacing: 0.15em; }
+.bk-flyleaf-text { margin-top: 14mm; font-size: 12pt; line-height: 2.2; max-width: 130mm; white-space: pre-wrap; }
+.bk-flyleaf-info { margin-top: 20mm; font-size: 10.5pt; line-height: 2.2; color: var(--book-text); opacity: 0.8; }
+.bk-flyleaf-brand { margin-top: 12mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
+
+/* ═══ 目录 ═══ */
+.bk-toc-title { font-size: 22pt; font-weight: 700; color: var(--book-primary); text-align: center; letter-spacing: 0.3em; margin-bottom: 14mm; }
+.bk-toc-list { list-style: none; }
+.bk-toc-list li { margin-bottom: 6mm; }
+.bk-toc-list a {
+  display: flex; align-items: baseline; text-decoration: none; color: var(--book-text);
+  font-size: 12.5pt; line-height: 1.7; cursor: pointer;
+}
+.bk-toc-num {
+  flex-shrink: 0; width: 14mm; font-weight: 700; color: var(--book-accent); font-variant-numeric: tabular-nums;
+}
+.bk-toc-label { flex-shrink: 1; }
+.bk-toc-dots { flex: 1; margin: 0 3mm; border-bottom: 1.5px dotted var(--book-text); opacity: 0.35; transform: translateY(-3px); }
+
+/* ═══ 章节正文 ═══ */
+.bk-chapter { page-break-before: always; break-before: page; }
+.bk-chapter-head { border-left: 5px solid var(--book-accent); padding: 2mm 0 2mm 6mm; margin-bottom: 8mm; }
+.bk-chapter-no { font-size: 10.5pt; color: var(--book-accent); font-weight: 600; letter-spacing: 0.2em; }
+.bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--book-primary); margin-top: 1.5mm; line-height: 1.4; }
+.bk-chapter-src { font-size: 9pt; opacity: 0.55; margin-top: 1.5mm; }
+
+.bk-prose { font-size: 11.5pt; line-height: 1.95; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--book-primary); margin: 7mm 0 3.5mm; line-height: 1.5; }
+.bk-prose h1 { font-size: 16pt; } .bk-prose h2 { font-size: 14.5pt; } .bk-prose h3 { font-size: 13pt; } .bk-prose h4 { font-size: 12pt; }
+.bk-prose p { margin: 3mm 0; }
+.bk-prose ul, .bk-prose ol { margin: 3mm 0 3mm 7mm; }
+.bk-prose li { margin: 1.5mm 0; }
+.bk-prose table { border-collapse: collapse; width: 100%; margin: 4mm 0; font-size: 10.5pt; }
+.bk-prose th, .bk-prose td { border: 1px solid var(--book-text); padding: 2mm 3mm; }
+.bk-prose th { background: var(--book-card-bg); color: var(--book-primary); }
+.bk-prose blockquote { border-left: 3px solid var(--book-accent); background: var(--book-card-bg); padding: 3mm 5mm; margin: 4mm 0; }
+.bk-prose code { background: var(--book-card-bg); padding: 0.5mm 1.5mm; border-radius: 2px; font-size: 10pt; }
+.bk-prose pre { background: var(--book-card-bg); padding: 4mm; overflow-x: auto; margin: 4mm 0; }
+.bk-prose img { max-width: 100%; }
+.bk-prose hr { border: none; border-top: 1px solid var(--book-text); opacity: 0.25; margin: 6mm 0; }
+
+/* ═══ 课件嵌入页（iframe 隔离，避免样式互染） ═══ */
+.bk-embed-sheet { padding: 0; align-items: center; justify-content: center; }
+.bk-embed-frame { border: none; width: 794px; height: 1123px; display: block; margin: 0 auto; }
+
+/* ═══ 封底 ═══ */
+.bk-back .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
+.bk-back-band { width: 100%; height: 8px; background: var(--book-primary); flex-shrink: 0; margin-top: auto; }
+.bk-back-text { font-size: 12pt; line-height: 2.4; max-width: 125mm; white-space: pre-wrap; }
+.bk-back-brand { margin-top: 22mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
+
+/* ═══ 控制条 ═══ */
+.bk-nav {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; align-items: center; z-index: 10;
+  background: rgba(0,0,0,0.55); color: #fff; padding: 8px 18px; border-radius: 20px;
+  font-size: 14px; font-family: sans-serif; user-select: none;
+}
+.bk-nav button {
+  background: none; border: 1px solid rgba(255,255,255,0.5); color: #fff;
+  border-radius: 14px; padding: 3px 14px; cursor: pointer; font-size: 14px;
+}
+.bk-nav button:hover { background: rgba(255,255,255,0.2); }
+
+/* ═══ 打印：A4 分页（全页输出，不受翻页状态影响） ═══ */
+@page {
+  size: A4;
+  margin: 0;
+  @bottom-center { content: counter(page) " / " counter(pages); font-size: 8.5pt; color: #888; }
+}
+@media print {
+  html, body { background: none; overflow: visible; height: auto; }
+  .bk-stage { position: static; display: block; }
+  .bk-sheet {
+    display: flex !important; flex-direction: column; position: relative;
+    transform: none !important; width: 100%; height: auto; max-height: 297mm;
+    margin: 0; page-break-after: always; break-after: page;
+  }
+  .bk-sheet:last-of-type { page-break-after: auto; break-after: auto; }
+  .bk-embed-frame { width: 794px; height: 1123px; }
+  .bk-nav { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="bk-stage" id="bkStage">
+
+  <!-- ═══ 封面 ═══ -->
+  <section class="bk-sheet bk-cover bk-active">
+    <div class="bk-cover-band"></div>
+    <div class="bk-sheet-inner">
+      
+      <h1 class="bk-cover-title">食品安全汇编手册</h1>
+      <div class="bk-cover-subtitle">内部培训资料</div>
+      <div class="bk-cover-rule"></div>
+      <div class="bk-cover-meta">
+        <div class="bk-cover-author">张三</div>
+        <div>验收测试单位</div>
+        <div>2026年7月</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 扉页（封面背面/版权编制说明） ═══ -->
+  
+  <section class="bk-sheet bk-flyleaf">
+    <div class="bk-sheet-inner">
+      <div class="bk-flyleaf-title">食品安全汇编手册</div>
+      <div class="bk-flyleaf-text">本手册用于验收测试。</div>
+      <div class="bk-flyleaf-info">
+        编著：张三<br>
+        单位：验收测试单位<br>
+        日期：2026年7月<br>
+        全书共 4 章
+      </div>
+      <div class="bk-flyleaf-brand">智绘教案系统<br>梁其良</div>
+    </div>
+  </section>
+  
+
+  <!-- ═══ 目录 ═══ -->
+  
+  <section class="bk-sheet bk-toc">
+    <div class="bk-sheet-inner">
+      <div class="bk-toc-title">目 录</div>
+      <ul class="bk-toc-list">
+        <li><a href="#bk-ch-1"><span class="bk-toc-num">01</span><span class="bk-toc-label">标准操作规程</span><span class="bk-toc-dots"></span></a></li>
+<li><a href="#bk-ch-2"><span class="bk-toc-num">02</span><span class="bk-toc-label">综合研习文档</span><span class="bk-toc-dots"></span></a></li>
+<li><a href="#bk-ch-3"><span class="bk-toc-num">03</span><span class="bk-toc-label">文档课件</span><span class="bk-toc-dots"></span></a></li>
+<li><a href="#bk-ch-4"><span class="bk-toc-num">04</span><span class="bk-toc-label">自建说明章节</span><span class="bk-toc-dots"></span></a></li>
+      </ul>
+    </div>
+  </section>
+  
+
+  <!-- ═══ 章节正文 ═══ -->
+  <section class="bk-sheet bk-chapter" id="bk-ch-1"><div class="bk-sheet-inner"><div class="bk-chapter-head"><div class="bk-chapter-no">第 1 章</div><div class="bk-chapter-title">标准操作规程</div><div class="bk-chapter-src">来源：食品安全测试1</div></div><div class="bk-prose"><h1>餐饮服务食品安全管理制度</h1>
+<p>**文件编号**：FSMS-P&G-001  </p>
+<p>**版本号**：V2.0  </p>
+<p>**生效日期**：2026年06月01日  </p>
+<p>**适用范围**：☑中央厨房 ☑连锁门店 ☑网络外卖 ☑集体用餐配送  </p>
+<p>**编制部门**：食品安全管理部  </p>
+<p>**编制依据**：《中华人民共和国食品安全法》《餐饮服务食品安全操作规范》《企业落实食品安全主体责任监督管理规定》《网络餐饮服务经营者落实食品安全主体责任监督管理规定》</p>
+<p>---</p>
+<h2>第一章 总则</h2>
+<p>**第一条** 为保障消费者食品安全，落实企业主体责任，依据《中华人民共和国食品安全法》及其实施条例、《餐饮服务食品安全操作规范》、《企业落实食品安全主体责任监督管理规定》、《网络餐饮服务经营者落实食品安全主体责任监督管理规定》等法律法规及规章，结合本企业多业态、多门店运营特点，制定本制度。</p>
+<p>**第二条** 本制度适用于企业内所有餐饮服务相关岗位人员及操作环节，包括但不限于原料采购、运输、验收、贮存、加工制作、分餐配送、餐饮具清洗消毒保洁、餐厨废弃物管理、人员健康管理、食品安全培训考核、风险隐患排查治理、食品安全事故应急处置等。</p>
+<p>**第三条** 企业食品安全管理遵循以下根本原则：预防为主、风险管理、全程控制、社会共治。各部门、各岗位应严格落实本制度要求，确保食品加工经营全过程符合法律法规及食品安全标准。</p>
+<p>---</p>
+<h2>第二章 组织机构与人员职责</h2>
+<p>**第四条** 企业建立三级食品安全责任体系，明确各层级食品安全职责。</p>
+<p>| 角色 | 职责 | 资质要求 |</p>
+<p>|------|------|----------|</p>
+<p>| **企业主要负责人** | 食品安全第一责任人，对企业食品安全工作全面负责；提供资源保障；任命食品安全总监及食品安全员；组织制定并发布食品安全制度文件；参加月调度会议并作出决策。 | — |</p>
+<p>| **食品安全总监**（食品安全管理人员） | 直接负责食品安全管理工作；拟定并推动落实食品安全管理制度；组织开展日管控、周排查、月调度工作；组织从业人员培训考核（≥40小时/年）；管理进货查验及供应商审核档案；配合监管部门监督检查。 | 经监管部门或委托机构培训考核合格，取得电子或纸质证书；企业内部正式任命。 |</p>
+<p>| **食品安全员** | 执行每日食品安全检查（日管控）；检查加工制作过程、专间管理、清洗消毒、人员个人卫生等；如实填写检查记录；发现问题立即报告并采取纠正措施。 | 经培训考核合格，专职或兼职。 |</p>
+<p>| **采购员** | 负责供应商资质审核、索证索票、进货查验记录；维护合格供应商名录；确保采购的食品原料符合要求。 | 培训合格，熟悉索证索票要求。 |</p>
+<p>| **加工制作人员** | 严格执行岗位操作规程（SOP）；遵守专间管理、生熟分开、温控记录等要求；保持个人卫生。 | 持有效健康证明，完成岗前培训。 |</p>
+<p>| **清洗消毒人员** | 负责餐饮具及工用具清洗消毒；按配方配制消毒液，监测消毒参数；维护消毒设备；记录消毒操作。 | 培训合格，掌握消毒剂配比及设备操作方法。 |</p>
+<p>---</p>
+<h2>第三章 过程控制要求</h2>
+<p>### 第一节 原料采购与验收</p>
+<p>**第五条** 采购管理实行供应商准入与动态评价机制。</p>
+<p>| 控制项目 | 要求 | 关键记录 |</p>
+<p>|----------|------|----------|</p>
+<p>| **供应商管理** | 审核供应商营业执照、食品生产经营许可证及相关资质，建立并动态更新《合格供应商名录》。每年至少进行一次综合评价。 | 《供应商审核表》、《合格供应商名录》 |</p>
+<p>| **进货查验** | 每批次原料须查验并留存供货方许可证复印件、产品合格证明文件（检验报告或出厂合格证）；查验食品感官性状、生产日期、保质期、贮存条件；冷链食品须测量并记录中心温度（冷藏0~8℃，冷冻≤-18℃或其他标示条件）。 | 《进货查验记录》（电子或纸质，逐批记录） |</p>
+<p>| **仓储管理** | 分区分类存放，离墙（≥10厘米）、离地（≥15厘米），先进先出；配备温湿度计，冷藏、冷冻库须有温度显示和超限报警装置。 | 《温湿度监控记录》、《出入库台账》 |</p>
+<p>### 第二节 加工制作</p>
+<p>**第六条** 加工过程严格遵守《餐饮服务食品安全操作规范》及企业产品标准操作规程。</p>
+<p>| 操作环节 | 食品安全要求 | 检查重点 |</p>
+<p>|----------|--------------|----------|</p>
+<p>| **粗加工** | 动物性、植物性、水产品分开清洗，清洗池专用并有标识；解冻须在冷藏条件下或使用流动水解冻，严禁反复冻融。 | 水池分类使用、解冻方式、交叉污染风险 |</p>
+<p>| **切配** | 刀具、砧板实施色标管理（红-肉、蓝-水产、绿-蔬菜等），专间专用工具不得移出。 | 工具颜色标识、生熟分开 |</p>
+<p>| **烹制** | 食品中心温度须达到≥70℃；需要再加热的食品，食用前中心温度须≥70℃；油炸食品不得反复使用煎炸油脂。 | 《中心温度记录》、《煎炸油更换记录》 |</p>
+<p>| **专间操作** | 冷食类、生食类、裱花蛋糕、备餐等须在专间内操作；专间使用前紫外灯消毒≥30分钟；空气和操作台定期监测；工器具专用，人员进入须二次更衣、洗手消毒、佩戴口罩。 | 《紫外线消毒记录》、温控监控、人员着装规范 |</p>
+<p>### 第三节 清洗消毒与保洁</p>
+<p>**第七条** 严格执行“除残渣→清洗→消毒→保洁”完整流程。</p>
+<p>| 对象 | 消毒方法 | 参数要求 | 检查方法 |</p>
+<p>|------|----------|----------|----------|</p>
+<p>| **餐饮具** | 热力消毒（煮沸、蒸汽、红外线消毒柜） | 煮沸或蒸汽≥100℃/10分钟；红外线消毒柜≥120℃/15分钟 | 肉眼检查光洁度，定期采用ATP荧光快速检测 |</p>
+<p>| **工用具** | 化学消毒（含氯消毒液浸泡） | 有效氯浓度250mg/L，浸泡≥30分钟；使用前用清水冲净 | 含氯试纸测试消毒液浓度 |</p>
+<p>| **保洁** | 消毒后自然沥干或烘干，放入洁净、密闭的专用保洁柜，严禁使用毛巾擦干 | 保洁柜保持清洁、封闭 | 现场检查保洁柜内清洁度 |</p>
+<p>### 第四节 外卖配送（适用网络餐饮）</p>
+<p>**第八条** 从事网络餐饮服务，须严格遵守市场监管总局相关监督管理规定。</p>
+<p>| 控制项目 | 要求 |</p>
+<p>|----------|------|</p>
+<p>| **入网商户资质** | 必须持有合法有效的营业执照和食品经营许可证；须具有与经营规模相适应的实体经营门店；网络店铺名称应与实体店门头名称一致。 |</p>
+<p>| **无堂食外卖** | 若为无堂食门店，须在平台店铺主页显著位置标明“无堂食外卖”字样。 |</p>
+<p>| **明厨亮灶** | 鼓励实施“互联网+明厨亮灶”，无堂食外卖门店须按行业及平台要求安装并联网明厨亮灶系统，后厨关键点位实时直播。 |</p>
+<p>| **打包与封签** | 须在专用操作区或备餐区完成打包，使用外卖封签或一次性包装袋，确保配送过程不可打开。 |</p>
+<p>| **配送要求** | 严禁在食品操作区以外场所进行任何形式的加工制作；平台配送须符合温度要求（热食保温≥60℃，冷食冷藏≤8℃）。 |</p>
+<p>---</p>
+<h2>第四章 风险管控机制</h2>
+<p>**第九条** 实施“日管控、周排查、月调度”动态风险管理制度。</p>
+<p>| 节点 | 责任人 | 工作内容 | 输出记录 |</p>
+<p>|------|--------|----------|----------|</p>
+<p>| **日管控** | 食品安全员 | 每日至少一次对食品加工全过程、设备设施、人员健康卫生等进行巡查，发现隐患立即纠正并记录。 | 《每日食品安全检查记录》 |</p>
+<p>| **周排查** | 食品安全总监 | 每周对日管控数据、不合格项、投诉等进行分析，组织全面排查，评估风险等级，制定整改方案。 | 《周排查治理报告》 |</p>
+<p>| **月调度** | 企业负责人 | 每月召开食品安全调度会议，听取总监汇报，总结风险趋势，协调解决重大问题，部署下月重点。 | 《月调度会议纪要》 |</p>
+<p>**第十条** 所有记录、报告、纪要须真实、完整、准确，采用电子化管理系统的，时间戳自动生成，不可篡改；采用纸质的，严禁后补、涂改。保存期限自记录生成之日起不少于2年。</p>
+<p>---</p>
+<h2>第五章 应急管理与事故处置</h2>
+<p>**第十一条** 制定《食品安全事故应急预案》，内容包括：</p>
+<p>1. 事故分级与报告流程（2小时内向属地市场监管、卫健部门报告）；</p>
+<p>2. 立即停止生产经营，封存可能导致事故的食品及其原料、工具、设备和现场；</p>
+<p>3. 配合调查处理，如实提供相关资料；</p>
+<p>4. 制定召回计划，对已售出产品按规定实施召回；</p>
+<p>5. 舆情应对与信息发布。</p>
+<p>**第十二条** 每年至少组织一次食品安全事故应急演练，检验预案有效性，并形成《应急演练评估报告》。</p>
+<p>---</p>
+<h2>第六章 监督、考核与持续改进</h2>
+<p>**第十三条** 建立食品安全内部考核指标体系，包括但不限于：进货查验合格率、专间操作规范率、餐饮具消毒合格率、培训完成率、隐患排查整改率等。</p>
+<p>**第十四条** 考核结果与相关部门及人员的绩效、奖惩挂钩。对严格遵守制度、发现重大隐患者给予奖励；对违规操作、瞒报虚报者追究责任并实施处罚。</p>
+<p>**第十五条** 食品安全管理部每年结合法律法规更新、监管要求变化、内部审核结果及消费者反馈，对本制度进行评审与修订，确保其持续适宜和有效。</p>
+<p>---</p>
+<h2>第七章 附则</h2>
+<p>**第十六条** 本制度由企业食品安全管理部负责解释与修订。</p>
+<p>**第十七条** 本制度自2026年06月01日起正式施行，原相关制度同时废止。各门店、部门可根据本制度制定相应实施细则，但不得与本制度相抵触。</p></div></div></section>
+<section class="bk-sheet bk-chapter" id="bk-ch-2"><div class="bk-sheet-inner"><div class="bk-chapter-head"><div class="bk-chapter-no">第 2 章</div><div class="bk-chapter-title">综合研习文档</div><div class="bk-chapter-src">来源：食品安全测试1</div></div><div class="bk-prose"><h1>多业态餐饮食品安全培训研习手册</h1>
+<p>**编制日期**： 2026-03-15</p>
+<p>**适用对象**： ☑连锁餐饮门店  ☑中央厨房  ☑网络外卖商户  ☑食品安全管理员</p>
+<p>**学习时长**： 8学时</p>
+<p>**版本**： V1.0</p>
+<p>---</p>
+<h2>第一章 食品安全法规体系构建</h2>
+<p>### 一、法律法规金字塔</p>
+<p>```mermaid</p>
+<p>graph TD</p>
+<p>    A[《中华人民共和国食品安全法》] --> B[《餐饮服务食品安全操作规范》]</p>
+<p>    B --> C1[《餐饮服务连锁企业落实食品安全主体责任监督管理规定》]</p>
+<p>    B --> C2[《网络餐饮服务经营者落实食品安全主体责任监督管理规定》]</p>
+<p>    C2 --> D[外卖平台新规 总局令第123号 2026.6.1]</p>
+<p>```</p>
+<p>**【内化于心：为什么是这个结构？】**</p>
+<p>这个“金字塔”结构体现了从上到下、从原则到细节的管理逻辑。顶端的《食品安全法》确立了“预防为主、风险管理、全程控制、社会共治”的根本大法原则，是所有行为的最高纲领。中间的《操作规范》将法律要求细化为人、机、料、法、环的全流程操作指南。底部的专项规定则精准“点穴”，分别解决了连锁餐饮的“统一性”风险和网络餐饮“虚拟性”带来的信息不对称、影子厨房等新挑战，从而构建了一个严密且动态响应的法规生命体。这不仅是法规堆砌，更是系统论在食品安全治理中的实践。</p>
+<p>### 二、核心法规要点速查</p>
+<p>| 法规名称 | 核心要求 | 适用范围 | 生效日期 |</p>
+<p>|----------|----------|----------|----------|</p>
+<p>| 《中华人民共和国食品安全法》 | 确立预防为主、风险管理、全程控制、社会共治原则；明确生产经营者是第一责任人 | 所有餐饮服务提供者 | 2015.10.1 |</p>
+<p>| 《餐饮服务食品安全操作规范》 | 场所布局、设施设备、原料采购、加工制作、清洗消毒等全流程操作标准 | 所有餐饮服务提供者 | 2018.10.1 |</p>
+<p>| 网络餐饮主体责任规定（总局令第123号） | 平台审核（实名、每六个月核验）、商户资质（实体门店）、信息公示（无堂食标识） | 网络餐饮服务平台及其入网商户 | 2026.6.1 |</p>
+<p>> ⚠️ **安全红线**：</p>
+<p>> 1. 网络餐饮服务经营者**必须**具有实体经营门店，无实体门店不得入网经营。</p>
+<p>> 2. **严禁**委托其他单位或个人进行加工生产，必须在本店操作区内加工。</p>
+<p>---</p>
+<h2>第二章 食物安全科学基础</h2>
+<p>### 一、微生物生长条件</p>
+<p>理解微生物是战胜微生物的前提。控制它们的生长，不能靠运气，而要靠科学。</p>
+<p>- **温度危险区间**： **5℃-60℃为“危险温度带”**。在此区间内，大多数致病菌会以几何级数快速繁殖。单个细菌在适宜环境下，4小时内可繁殖数千个。</p>
+<p>- **pH值(酸碱度)**：多数病原菌在中性(pH 6.6-7.5)环境生长最佳。这就是为什么发面、发酵不当易导致微生物问题。</p>
+<p>- **水分活度(Aw)**：Aw>0.85 时多数细菌可繁殖。通过干燥、盐渍、糖渍降低Aw，是古老而有效的防腐原理。</p>
+<p>### 二、主要致病菌与防控</p>
+<p>| 致病菌 | 常见来源 | 危害 | 科学防控原理 |</p>
+<p>|--------|----------|------|----------|</p>
+<p>| 沙门氏菌 | 禽肉、禽蛋、生乳 | 细菌侵入肠壁，引发肠胃炎,症状为呕吐、腹泻、发热 | **热致死原理**：充分加热至中心温度≥70℃可灭活。鸡蛋必须清洗表面，防止外壳携带菌污染内容物。 |</p>
+<p>| 金黄色葡萄球菌 | 人员皮肤伤口、鼻腔、咽喉 | 细菌在食物中繁殖后产生耐热肠毒素，引发剧烈呕吐 | **毒素防控原理**：肠毒素耐高温，100℃加热30分钟也无法破坏。**关键在于源头预防**，有化脓性伤口人员绝对禁止接触即食食品。 |</p>
+<p>| 副溶血性弧菌 | 近海海产品(鱼、虾、贝) | 侵入肠壁，引起剧烈腹痛、血水样便 | **渗透压与控制原理**：该菌嗜盐，对淡水敏感。用淡水充分冲洗海产品可降低风险。同时，它不耐热，烹煮至中心温度≥70℃即可杀死。 |</p>
+<p>---</p>
+<h2>第三章 全流程关键控制点（HACCP应用）</h2>
+<p>### 一、流程与CCP识别</p>
+<p>我们用危害分析与关键控制点（HACCP）体系来精准识别流程中的“命门”。</p>
+<p>```mermaid</p>
+<p>flowchart LR</p>
+<p>    A[原料验收] -->|CCP1:索证与温度检测| B[贮存]</p>
+<p>    B --> C[粗加工解冻]</p>
+<p>    C --> D[烹制] -->|CCP2:中心温度≥70℃| E[冷却]</p>
+<p>    E -->|CCP3:2h内从60℃降至5℃| F[再加热/备餐] -->|CCP4:再加热温度≥70℃| G[出餐/配送]</p>
+<p>```</p>
+<p>### 二、关键控制点操作卡</p>
+<p>**CCP1：原料验收 —— 第一道防火墙**</p>
+<p>| 控制项目 | 关键限值 | 监控方法 | 纠偏措施 | 记录 |</p>
+<p>|----------|----------|----------|----------|------|</p>
+<p>| 冷藏原料表面温度 | ≤8℃ | 使用经校准的红外线或探针温度计，测量表面及内部温度 | 拒收，记录在案，并通知供应商 | 《进货查验记录表》 |</p>
+<p>> ⚠️ **安全红线**：不得采购来源不明、无产品合格证明文件、无随货票据的食品原料。采购进口冷链食品，必须查验并留存“四证”（报关单、检疫证明、核酸检测报告、消毒证明）。</p>
+<p>**CCP2：烹制 —— 热杀灭的最后机会**</p>
+<p>| 控制项目 | 关键限值 | 监控方法 | 纠偏措施 |</p>
+<p>|----------|----------|----------|----------|</p>
+<p>| 畜禽肉、水产中心温度 | ≥74℃ | 针式温度计插入最厚部位中心，持续15秒以上读数 | 回炉继续加热至达标；若已售出，从顾客处立即召回。 |</p>
+<p>> ⚠️ **安全红线**：⚠️热食类食品加工中心温度必须超过70℃，尤其是油炸食品，不能仅凭表面颜色判断成熟度，必须确保内部温度达标。反复油炸的应用应严格控制油温和时间，防止产生有害物质。</p>
+<p>**CCP3：冷却 —— 穿越危险区的极速穿越**</p>
+<p>| 控制项目 | 关键限值 | 监控方法 | 纠偏措施 |</p>
+<p>|----------|----------|----------|----------|</p>
+<p>| 烹后冷却时间 | **2小时内**将食品中心温度从60℃降至5℃ | 计时器+探针温度计，每30分钟监测并记录一次中心温度 | 采用速冷柜、冰水浴、分装小份等物理方式加速冷却；若超时未达标，应废弃处理。 |</p>
+<p>---</p>
+<h2>第四章 多业态特别管理要求</h2>
+<p>### 一、网络外卖专项管理 —— 打破“信息黑箱”</p>
+<p>**科学原理：信息不对称理论**</p>
+<p>消费者无法看到加工过程，只能信任平台和商户。我们须通过规则和技术，强制实现信息透明。</p>
+<p>1.  **资质穿透性公示**：</p>
+<p>    *   **要求**：网店名称必须与实体店营业执照名称、门头招牌保持一致。无堂食的外卖商户，必须在店铺主页显著位置标示“无堂食外卖”字样。</p>
+<p>    *   **原理**：消除“文字游戏”，确保消费者对经营模式有最基础的知情权，也是对商户诚信经营的基本约束。</p>
+<p>    *   [建议补充：官方“食安地图”APP中可查验资质真伪，生成动态防伪码]</p>
+<p>2.  **包装封签与温度防护**：</p>
+<p>    *   **要求**：使用一次性“**食安封签**”，确保“一餐一签、拆后即毁”。配送须使用符合储存温度的保温箱。</p>
+<p>    *   **原理**：封签是防物理开启的“法律封印”，是区分商户与骑手责任、保障“最后一公里”安全的物证。</p>
+<p>3.  **平台定期核验与抽查**：</p>
+<p>    *   **要求**：平台对入网商户实名登记，并**每六个月**至少进行一次信息比对核验与实地核查。</p>
+<p>    *   [建议补充：**明确对高风险商户（如无堂食、未实施明厨亮灶）的重点抽查频次（如每月一次）和标准化检查清单**，避免平台裁量权过大。]</p>
+<p>> ⚠️ **安全红线**：平台发现商户资质不符或存在重大食品安全隐患，必须立即下线，并向所在地监管部门报告，不得瞒而不报。</p>
+<p>### 二、连锁企业总部管理</p>
+<p>*   **统一标准**：总部须制定统一的产品配方、采购标准和操作SOP，并发布至所有门店。</p>
+<p>*   **统一培训**：确保所有门店的食品安全管理人员和关键岗位员工接受标准化培训考核，每人每年**不少于40小时**。</p>
+<p>    [建议补充：**其中应明确线下实操或考核不少于8小时，采用“学时+考核通过”双条件，由监管部门颁发电子合格证书。**]</p>
+<p>*   **统一供应链审查**：建立统一的合格供应商名录，对核心原料供应商进行定期审计。</p>
+<p>*   **定期审核与突击检查**：总部品控部门需对各门店定期进行体系审核与“飞行检查”，检查结果与门店绩效考核挂钩。</p>
+<p>---</p>
+<h2>第五章 动态风控：日管控、周排查、月调度</h2>
+<p>**管理原理：PDCA循环**</p>
+<p>这个制度是戴明环（计划-执行-检查-改进）在食品安全管理中的具体化身。不是增加负担，而是为你的风险防范系统装上了持续的引擎。</p>
+<p>### 一、日管控记录表模板（执行—D）</p>
+<p>| 检查项 | 是否合规 | 异常描述 | 处理措施 | 检查人 |</p>
+<p>|--------|----------|----------|----------|--------|</p>
+<p>| 从业人员晨检(无发热、外伤) | ☑/☒ | | | |</p>
+<p>| 进货原料温度（冷藏≤8℃） | ☑/☒ | | | |</p>
+<p>| 烹饪中心温度（≥70℃） | ☑/☒ | | | |</p>
+<p>| 专间紫外线消毒时间（≥30min） | ☑/☒ | | | |</p>
+<p>### 二、周排查报告要点（检查—C）</p>
+<p>*   **任务**：食品安全员汇总本周日管控数据，分析**重复发生**的隐患（如：连续两天消毒记录缺失）。</p>
+<p>*   **目的**：进行原因分析，是员工意识问题、设备故障，还是SOP不合理？并验证上周提出纠正措施的有效性。</p>
+<p>### 三、月调度会议（改进—A）</p>
+<p>*   **主持人**：企业主要负责人（总经理/店长），必须亲自参与听取汇报、调度资源。</p>
+<p>*   **核心议程**：</p>
+<p>    1.  汇报本月重大风险（如：顾客投诉异物、监管部门警告）。</p>
+<p>    2.  分析趋势数据（如：哪种原料退货率最高？）。</p>
+<p>    3.  决定资源配置（如：下个月增加专间消毒的投入，申请一笔设备维修费）。</p>
+<p>*   **输出**：《月调度会议纪要》，各方签字后存档。</p>
+<p>> ⚠️ **安全红线**：日管控、周排查、月调度的所有台账记录，必须**真实、完整**，以纸质或电子形式保存**不少于2年**。严禁为保证记录完美而过后补签、造假，这是刑事追责的严重渎职行为！</p>
+<p>---</p>
+<h2>第六章 应急响应与舆情处理</h2>
+<p>### 食品安全事故处置流程图</p>
+<p>```mermaid</p>
+<p>flowchart TD</p>
+<p>    A[初步判断发生<br>疑似食品安全事故] -->|立即同步| B[1.停止供餐<br>封存引发事故的食品、工具、留样] & C[2.保护现场<br>维持厨房原状]</p>
+<p>    B & C --> D[3.1小时内上报<br>向所在地市场监管部门、卫健委报告]</p>
+<p>    D --> E[4.配合调查取证<br>提供台账、人员信息、流程说明]</p>
+<p>    E --> F[5.配合召回与安抚<br>主动联系消费者，协助救治]</p>
+<p>    F --> G[6.整改与追责<br>深刻复盘，完善体系]</p>
+<p>```</p>
+<p>> ⚠️ **安全红线**：严禁任何形式的**瞒报、谎报、缓报**。隐瞒病情/事故后果极为严重，将依据《食品安全法》第一百三十条规定，从重处以罚款，直至吊销许可证，并对直接责任人处以拘留。</p>
+<p>---</p>
+<h2>第七章 案例警示与反思</h2>
+<p>**【案例一：亚硝酸盐的“致命盐”】**</p>
+<p>*   **事件回顾**：某建筑工地食堂为图便宜与色泽，将工业用亚硝酸盐误作食盐用于烹饪，导致56名工人集体中毒，嘴唇发紫（紫绀），其中1人因呼吸衰竭死亡。</p>
+<p>*   **违反规定**：《餐饮服务食品安全操作规范》明确规定，**亚硝酸盐（钠、钾）等非食用物质严禁在餐饮环节采购、贮存和使用**。</p>
+<p>*   **科学警示**：亚硝酸盐具有强氧化性，能将血红蛋白中的二价铁氧化为三价铁，使其失去携氧能力，导致组织缺氧。这是剧毒，不是一般的防腐剂或调色剂。</p>
+<p>*   **教训**：对化学品的管理必须做到“专库、专人、专账”。严禁使用无标签、来源不明的白色粉末或结晶体。</p>
+<p>**【案例二：外卖“影子厨房”的覆灭】**</p>
+<p>*   **事件回顾**：某外卖平台上一家月销数千单的“脏脏包”网红店，被曝光其实际地址为居民楼一楼，无营业执照，无食品经营许可证，加工环境污水横流，老鼠乱窜。</p>
+<p>*   **违反规定**：该商户违反“网络餐饮必须有实体门店”的规定。平台未尽到入网审核和定期核验义务。</p>
+<p>*   **处罚结果**：该黑作坊被依法取缔关闭。外卖平台因未尽到审查核验义务，被市场监管部门处以顶格罚款，并对相关区域负责人进行约谈。根据2026年6月1日施行的新规，平台将承担更严格的连带责任和信用惩戒。</p>
+<p>*   **教训**：线上的光鲜不能替代线下的合规。平台必须对“证照不符”“幽灵厨房”负有不可推卸的巡查责任。</p>
+<p>---</p>
+<h2>第八章 总结与考核</h2>
+<p>### 学习要点回顾（内化于心）</p>
+<p>*   **法规是底线**：记住，安全不是成本，是不可触的红线。《食品安全法》与第123号令，既是紧箍咒，更是护身符。</p>
+<p>*   **温度是生命线**：记住四个核心温度——**5℃、60℃、70℃、8℃**。掌控了温度，就扼住了微生物的喉咙。</p>
+<p>*   **记录是生命线**：“日管控、周排查、月调度”台账是你履职尽责、免责的证据。真记录，记实事，保存好。</p>
+<p>*   **信息透明是趋势**：无堂食外卖、平台核验、新技术赋能，正在打破所有灰色地带，最终实现“社会共治”。</p>
+<p>### 课后测试</p>
+<p>（请扫码进入线上考核系统答题，满分100分，90分及格，不合格者需重新学习。本测试与监管部门联网，成绩将记入个人食品安全培训档案。）</p>
+<p>1.  **[单选题]** 根据《食品安全法》，餐饮服务提供者的食品安全第一责任人是？（    ）</p>
+<p>    A. 政府监管部门</p>
+<p>    B. 企业主要负责人</p>
+<p>    C. 消费者</p>
+<p>    D. 厨师</p>
+<p>2.  **[填空题]** 在餐饮加工中，为确保杀灭沙门氏菌等致病菌，禽肉制品的中心温度应至少达到______℃，并持续15秒以上。</p>
+<p>3.  **[多选题]** 下列关于台账记录的说法，正确的有？（    ）</p>
+<p>    A. 日管控、周排查、月调度台账应至少保存1年</p>
+<p>    B. 记录必须真实完整，不得事后补签</p>
+<p>    C. 它是证明已履行食品安全管理责任的重要形式</p>
+<p>    D. 电子台账因可篡改性高，不具备法律效力</p>
+<p>4.  **[判断题]** 某外卖商家仅有操作间，无顾客就餐的堂食区域，因此在网络外卖平台上可以不用公示实体门店的现场照片。（    ）</p>
+<p>5.  **[简答题]** 请简述当餐厅发生疑似食物中毒事件后，你作为店长的第一个小时内的应急处置流程。</p>
+<p>---</p>
+<p>> **📘专业参考**：本手册配套法律法规全文与深度解析题库，请扫码查阅。</p>
+<p>> **⚠️安全红线**：手册中所有红线条款均是刚性约束，必须全员逐条牢记，严格遵守。</p>
+<p>> **📖政策原文**：完整法规原文请参阅《中华人民共和国食品安全法》《餐饮服务食品安全操作规范》及《网络餐饮服务经营者落实食品安全主体责任监督管理规定》（总局令第123号）。</p></div></div></section>
+<section class="bk-sheet bk-embed-sheet bk-chapter" id="bk-ch-3"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;1&quot;><div style=&quot;width:794px;height:1123px;display:flex;flex-direction:column;background:var(--primary);font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;color:#ffffff&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;80&quot; cy=&quot;850&quot; fill=&quot;none&quot; opacity=&quot;0.3&quot; r=&quot;180&quot; stroke=&quot;#ffffff&quot; stroke-width=&quot;2.5&quot;></circle>
+</svg>
+<!-- ═══ 顶端金色装饰线 10px ═══ -->
+<div style=&quot;flex-shrink:0;height:10px;background:var(--accent);&quot;></div>
+<!-- ═══ 标题区 480px ═══ -->
+<div style=&quot;flex-shrink:0;height:480px;display:flex;flex-direction:column;justify-content:flex-end;text-align:center;&quot;>
+<div style=&quot;font-size:56px;font-weight:700;color:#ffffff;letter-spacing:3px;padding: 0px 60px;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;&quot;>封面</div>
+<div style=&quot;width:48px;height:4px;background:var(--accent);margin:20px auto 0 auto;&quot;></div>
+<div style=&quot;margin-top:16px;font-size:18px;font-weight:700;color:rgba(255,255,255,0.65);padding-bottom:8px;&quot;>多业态适用，全流程风险防控</div>
+</div>
+<!-- ═══ 信息表区 ═══ -->
+<div style=&quot;flex-shrink:0;padding:48px 0 0 0;text-align:center;&quot;>
+<table style=&quot;margin: 0px auto;border-collapse:collapse;&quot;>
+<tr>
+<td style=&quot;font-size:12px;color:rgba(255,255,255,0.35);padding: 0px 12px 12px 0;text-align:right;white-space:nowrap;&quot;>【标签1】编写日期</td>
+<td style=&quot;font-size:14px;color:rgba(255,255,255,0.6);padding: 0px 0 12px 12px;text-align:left;&quot;>2026年6月1日</td>
+</tr>
+<tr>
+<td style=&quot;font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 12px 0;text-align:right;white-space:nowrap;&quot;>【标签2】适用范围：社会餐饮/连锁/外卖/食堂</td>
+<td style=&quot;font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 12px 12px;text-align:left;&quot;>适用范围：中央厨房、连锁门店、网络外卖、集体用餐配送</td>
+</tr>
+<tr>
+<td style=&quot;font-size:12px;color:rgba(255,255,255,0.35);padding:12px 12px 0 0;text-align:right;white-space:nowrap;&quot;>【标签3】版本号</td>
+<td style=&quot;font-size:14px;color:rgba(255,255,255,0.6);padding:12px 0 0 12px;text-align:left;&quot;>V2.0</td>
+</tr>
+</table>
+</div>
+<!-- ═══ 简述区 flex:1 ═══ -->
+<div style=&quot;flex:1;display:flex;align-items:flex-end;padding: 0px 100px 48px 100px;&quot;>
+<div style=&quot;max-width:594px;margin: 0px auto;font-size:14px;color:rgba(255,255,255,0.5);line-height:1.8;text-align:center;&quot;>本课件围绕《食品安全法》及相关法规，系统讲解企业食品安全责任体系、核心操作规范、网络餐饮新规及风险管控机制，适用于中央厨房、连锁门店、网络外卖及集体用餐配送等多业态餐饮服务提供者。</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-embed-sheet"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;2&quot;><div style=&quot;width:794px;height:1123px;display:flex;flex-direction:column;background:var(--background);font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;z-index:0;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;100&quot; cy=&quot;950&quot; fill=&quot;none&quot; opacity=&quot;0.12&quot; r=&quot;140&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot;></circle>
+</svg>
+<!-- ═══ 页头区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.45);border-bottom:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>目录</div>
+<div style=&quot;flex:1;text-align:left;&quot;>版本 2.0 / 2024.12.20</div>
+<div style=&quot;flex:1;text-align:left;&quot;>2 / 8</div>
+</div>
+<!-- ═══ 内容区 flex:1 ═══ -->
+<div style=&quot;flex:1;position:relative;overflow:hidden;&quot;>
+<div style=&quot;width:100%;height:4px;background:var(--accent);&quot;></div>
+<div style=&quot;padding:60px 80px 40px 80px;&quot;>
+<div style=&quot;font-size:28px;font-weight:700;color:var(--primary);margin-bottom:8px;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;&quot;>目录</div>
+<div style=&quot;width:40px;height:3px;background:var(--accent);margin-bottom:40px;&quot;></div>
+<table style=&quot;width:100%;border-collapse:collapse;font-size:14px;&quot;>
+<tr>
+<td style=&quot;color:var(--text);padding:12px 0;vertical-align:middle;width:48px;&quot;>
+<div style=&quot;width:32px;height:32px;border-radius:50%;background:var(--chart-0);color:var(--text);font-size:14px;font-weight:600;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;align-items:center;justify-content:center;&quot;>01</div>
+</td>
+<td style=&quot;padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(var(--text-rgb),0.15);font-weight:600;font-size:16px;&quot;>食品安全法律法规体系</td>
+<td style=&quot;padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:14px;&quot;>3</td>
+</tr>
+<tr>
+<td style=&quot;color:var(--text);padding:12px 0;vertical-align:middle;width:48px;&quot;>
+<div style=&quot;width:32px;height:32px;border-radius:50%;background:var(--chart-1);color:#ffffff;font-size:14px;font-weight:600;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;align-items:center;justify-content:center;&quot;>02</div>
+</td>
+<td style=&quot;padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(var(--text-rgb),0.15);font-weight:600;font-size:16px;&quot;>核心操作规范</td>
+<td style=&quot;padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:14px;&quot;>4</td>
+</tr>
+<tr>
+<td style=&quot;color:var(--text);padding:12px 0;vertical-align:middle;width:48px;&quot;>
+<div style=&quot;width:32px;height:32px;border-radius:50%;background:var(--chart-2);color:#ffffff;font-size:14px;font-weight:600;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;align-items:center;justify-content:center;&quot;>03</div>
+</td>
+<td style=&quot;padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(var(--text-rgb),0.15);font-weight:600;font-size:16px;&quot;>网络餐饮外卖配送新规</td>
+<td style=&quot;padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:14px;&quot;>5</td>
+</tr>
+<tr>
+<td style=&quot;color:var(--text);padding:12px 0;vertical-align:middle;width:48px;&quot;>
+<div style=&quot;width:32px;height:32px;border-radius:50%;background:var(--chart-3);color:var(--text);font-size:14px;font-weight:600;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;align-items:center;justify-content:center;&quot;>04</div>
+</td>
+<td style=&quot;padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(var(--text-rgb),0.15);font-weight:600;font-size:16px;&quot;>常见风险隐患与应急案例</td>
+<td style=&quot;padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:14px;&quot;>6</td>
+</tr>
+<tr>
+<td style=&quot;color:var(--text);padding:12px 0;vertical-align:middle;width:48px;&quot;>
+<div style=&quot;width:32px;height:32px;border-radius:50%;background:var(--chart-4);color:#ffffff;font-size:14px;font-weight:600;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;display:flex;align-items:center;justify-content:center;&quot;>05</div>
+</td>
+<td style=&quot;padding:12px 0;color:var(--text);vertical-align:middle;border-bottom:1px dotted rgba(var(--text-rgb),0.15);font-weight:600;font-size:16px;&quot;>总结与持续改进建议</td>
+<td style=&quot;padding:12px 0;color:rgba(var(--text-rgb),0.45);text-align:right;vertical-align:middle;width:40px;font-size:14px;&quot;>7</td>
+</tr>
+</table>
+</div>
+</div>
+<!-- ═══ 页尾区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.4);border-top:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:center;&quot;>智绘教案系统</div>
+<div style=&quot;flex:1;text-align:center;&quot;>梁其良</div>
+<div style=&quot;flex:1;text-align:left;&quot;>第 2 页</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-embed-sheet"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;3&quot;><div style=&quot;width:794px;height:1123px;display:flex;flex-direction:column;background:var(--background);font-family:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;100&quot; cy=&quot;950&quot; fill=&quot;none&quot; opacity=&quot;0.12&quot; r=&quot;140&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot;></circle>
+</svg>
+<!-- ═══ 页头区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.45);border-bottom:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>食品安全管理制度</div>
+<div style=&quot;flex:1;text-align:left;&quot;>V1.0 / 2026-01-20</div>
+<div style=&quot;flex:1;text-align:left;&quot;>03 / 08</div>
+</div>
+<!-- ═══ 内容区 flex:1 ═══ -->
+<div style=&quot;flex:1;position:relative;overflow:hidden;&quot;>
+<div style=&quot;width:100%;height:4px;background:var(--accent);&quot;></div>
+<div style=&quot;padding:40px 80px;&quot;>
+<!-- 章节标题 -->
+<div style=&quot;font-size:22px;font-weight:700;color:var(--primary);margin-bottom:6px;&quot;>概述</div>
+<div style=&quot;width:40px;height:3px;background:var(--accent);margin-bottom:28px;&quot;></div>
+<!-- 正文段落 -->
+<div style=&quot;font-size:14px;color:var(--text);line-height:1.9;&quot;>
+<p style=&quot;margin-bottom:14px;&quot;>企业食品安全管理必须坚持“预防为主、风险管理、全程控制、社会共治”十六字方针，将法律要求转化为每日可执行的动作，从源头到餐桌全链条杜绝隐患。</p>
+<p style=&quot;margin-bottom:14px;&quot;>本次培训的核心目的是：增强全体员工的法律意识和主体责任意识，规范从采购、加工到配送每一个操作行为，推动食品安全管理从“凭经验”转向“依制度、靠记录”。</p>
+<p style=&quot;margin-bottom:14px;&quot;>适用范围覆盖所有餐饮服务业态，包括中央厨房的统一加工、连锁门店的现场制售、网络外卖的打包配送以及集体用餐的集中供餐，各业态均须在本制度框架下细化执行细则，确保无死角。</p>
+</div>
+<!-- 要点列表 -->
+<div style=&quot;margin-top:20px;padding:16px 20px;background:var(--card_bg);overflow:hidden;border-radius:4px;border-left:3px solid var(--accent);&quot;>
+<div style=&quot;font-size:14px;font-weight:600;color:var(--primary);margin-bottom:10px;&quot;>要点</div>
+<ul style=&quot;margin: 0px;padding-left:20px;font-size:14px;color:var(--text);line-height:1.8;&quot;>
+<li>食品安全管理核心方针：预防为主、风险管理、全程控制、社会共治</li>
+<li>培训目的：增强法律意识，规范操作行为，提高食品安全管理水平</li>
+<li>适用范围：所有餐饮服务提供者，包括中央厨房、连锁门店、网络外卖、集体用餐配送等业态</li>
+</ul>
+</div>
+</div>
+</div>
+<!-- ═══ 页尾区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.4);border-top:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>智绘教案系统</div>
+<div style=&quot;flex:1;text-align:left;&quot;>梁其良</div>
+<div style=&quot;flex:1;text-align:left;&quot;>Page 03</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-embed-sheet"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;4&quot;><div style=&quot;width:794px;height:1123px;display:flex;flex-direction:column;background:var(--background);font-family:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;100&quot; cy=&quot;950&quot; fill=&quot;none&quot; opacity=&quot;0.12&quot; r=&quot;140&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot;></circle>
+</svg>
+<!-- ═══ 页头区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.45);border-bottom:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>食品安全管理体系要求</div>
+<div style=&quot;flex:1;text-align:left;&quot;>法律法规清单 / 2024-01-01</div>
+<div style=&quot;flex:1;text-align:left;&quot;>4 / 8</div>
+</div>
+<!-- ═══ 内容区 flex:1 ═══ -->
+<div style=&quot;flex:1;position:relative;overflow:hidden;&quot;>
+<div style=&quot;width:100%;height:4px;background:var(--accent);&quot;></div>
+<div style=&quot;padding:40px 60px;&quot;>
+<!-- 章节标题 -->
+<div style=&quot;font-size:22px;font-weight:700;color:var(--primary);margin-bottom:6px;&quot;>法律法规清单</div>
+<div style=&quot;width:40px;height:3px;background:var(--accent);margin-bottom:24px;&quot;></div>
+<!-- 正文介绍 -->
+<div style=&quot;font-size:14px;color:var(--text);line-height:1.8;margin-bottom:28px;&quot;>
+        以下法律法规构成企业食品安全管理的强制底线，任何业态、任何岗位均须严格遵守，违反将面临行政处罚甚至刑事责任。
+      </div>
+<!-- 数据表格 -->
+<table style=&quot;width:674px;margin: 0px auto;border-collapse:collapse;font-size:12px;border:1px solid rgba(var(--text-rgb),0.2);&quot;>
+<thead>
+<tr style=&quot;background:var(--chart-0);color:var(--text);font-size:12px;font-weight:600;&quot;>
+<th style=&quot;white-space:nowrap;padding:10px 12px;text-align:left;border-right:1px solid rgba(var(--text-rgb),0.2);&quot;>法规名称</th>
+<th style=&quot;white-space:nowrap;padding:10px 12px;text-align:left;border-right:1px solid rgba(var(--text-rgb),0.2);&quot;>核心要求</th>
+<th style=&quot;white-space:nowrap;padding:10px 12px;text-align:left;&quot;>适用业态</th>
+</tr>
+</thead>
+<tbody>
+<tr style=&quot;border-bottom:1px solid rgba(var(--text-rgb),0.1);&quot;>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>《中华人民共和国食品安全法》及其实施条例</td>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>确立食品安全全程追溯、召回、自查等基本制度，是最高法律依据。</td>
+<td style=&quot;color:var(--text);padding:8px 12px;&quot;>全部业态</td>
+</tr>
+<tr style=&quot;background:rgba(var(--text-rgb),0.02);border-bottom:1px solid rgba(var(--text-rgb),0.1);&quot;>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>《餐饮服务食品安全操作规范》</td>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>细化加工制作、清洗消毒、温度控制等具体技术要求，是日常操作的直接标准。</td>
+<td style=&quot;color:var(--text);padding:8px 12px;&quot;>全部业态</td>
+</tr>
+<tr style=&quot;border-bottom:1px solid rgba(var(--text-rgb),0.1);&quot;>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>《企业落实食品安全主体责任监督管理规定》</td>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>明确主要负责人、食品安全总监、安全员的职责，建立日管控、周排查、月调度机制。</td>
+<td style=&quot;color:var(--text);padding:8px 12px;&quot;>全部业态</td>
+</tr>
+<tr style=&quot;background:rgba(var(--text-rgb),0.02);border-bottom:1px solid rgba(var(--text-rgb),0.1);&quot;>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>《网络餐饮服务经营者落实食品安全主体责任监督管理规定》</td>
+<td style=&quot;color:var(--text);padding:8px 12px;border-right:1px solid rgba(var(--text-rgb),0.08);&quot;>强制要求外卖商户资质公示、无堂食标注、明厨亮灶联网及外卖封签使用。</td>
+<td style=&quot;color:var(--text);padding:8px 12px;&quot;>网络餐饮</td>
+</tr>
+</tbody>
+</table>
+<!-- 表格注释 -->
+<div style=&quot;font-size:12px;color:rgba(var(--text-rgb),0.55);margin-top:16px;line-height:1.6;&quot;>
+        所有法规对企业全部业态均有约束力，尤其是网络餐饮须叠加执行专项规定。
+      </div>
+</div>
+</div>
+<!-- ═══ 页尾区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.4);border-top:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>智绘教案系统</div>
+<div style=&quot;flex:1;text-align:left;&quot;>梁其良</div>
+<div style=&quot;flex:1;text-align:left;&quot;>Page 4</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-embed-sheet"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;5&quot;><div style=&quot;display:flex; flex-direction:column; width:794px; height:1123px; background:var(--background); font-family:Inter, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; position:relative;&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;100&quot; cy=&quot;950&quot; fill=&quot;none&quot; opacity=&quot;0.12&quot; r=&quot;140&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot;></circle>
+</svg>
+<div style=&quot;width:100%;height:4px;background:var(--accent);flex-shrink:0;&quot;></div>
+<div style=&quot;display:flex;align-items:center;width:100%;height:45px;flex-shrink:0;font-size:12px;color:rgba(var(--text-rgb), 0.6);letter-spacing:0.5px;padding: 0px 60px;box-sizing:border-box;&quot;>
+<div style=&quot;flex:1;text-align:left;&quot;>食品安全管理制度</div>
+<div style=&quot;flex:1;text-align:left;&quot;>V2.1 / 2025-06</div>
+<div style=&quot;flex:1;text-align:left;&quot;>05 / 02</div>
+</div>
+<div style=&quot;flex:1;display:flex;flex-direction:column;padding:32px 60px 24px 60px;box-sizing:border-box;overflow:hidden;&quot;>
+<div style=&quot;width:100%;max-width:674px;margin: 0px auto;&quot;>
+<table style=&quot;width:100%;table-layout:fixed;border-collapse:collapse;&quot;>
+<tr>
+<td colspan=&quot;8&quot; style=&quot;color:var(--text);padding: 0px 0 8px 0;vertical-align:top;&quot;>
+<div style=&quot;font-family:'DM Sans', Inter, 'PingFang SC', 'Microsoft YaHei', sans-serif;font-size:36px;font-weight:700;color:var(--primary);line-height:1.2;letter-spacing:-0.4px;&quot;>食品安全问题分布</div>
+<div style=&quot;width:40px;height:3px;background:var(--accent);margin-top:10px;&quot;></div>
+</td>
+</tr>
+<tr>
+<td colspan=&quot;8&quot; style=&quot;color:var(--text);padding:12px 0 20px 0;vertical-align:top;&quot;>
+<div style=&quot;font-size:16px;color:var(--text);line-height:1.7;letter-spacing:0px;&quot;>餐饮服务环节的食品安全风险高度集中在三类问题：不合格原料、操作卫生恶劣以及非法添加。本制度即围绕这三大风险点建立全面防线。</div>
+</td>
+</tr>
+<tr>
+<td colspan=&quot;8&quot; style=&quot;color:var(--text);padding: 0px 0 6px 0;vertical-align:top;&quot;>
+<div style=&quot;font-size:14px;font-weight:600;color:var(--primary);letter-spacing:0.5px;&quot;>风险类别占比分布</div>
+</td>
+</tr>
+<tr>
+<td colspan=&quot;3&quot; style=&quot;color:var(--text);padding:8px 12px 8px 0;vertical-align:top;&quot;>
+<div style=&quot;border-left:4px solid var(--chart-0);padding-left:12px;&quot;>
+<div style=&quot;font-size:14px;font-weight:600;color:rgba(var(--text-rgb), 0.85);letter-spacing:0.3px;margin-bottom:4px;&quot;>不合格原料</div>
+<div style=&quot;display:flex;align-items:center;height:28px;background:rgba(var(--text-rgb), 0.05);border-radius:4px;overflow:hidden;margin-bottom:6px;&quot;>
+<div style=&quot;width:45%;height:100%;background:var(--chart-0);&quot;></div>
+<div style=&quot;font-size:14px;font-weight:700;color:var(--primary);margin-left:8px;&quot;>45%</div>
+</div>
+<div style=&quot;font-size:12px;color:rgba(var(--text-rgb), 0.6);line-height:1.5;&quot;>通过供应商准入与动态评价、每批次进货查验索证索票、冷链食品中心温度记录等要求，确保只有合格的食品原料才能进入加工环节。</div>
+</div>
+</td>
+<td colspan=&quot;3&quot; style=&quot;color:var(--text);padding:8px 12px 8px 0;vertical-align:top;&quot;>
+<div style=&quot;border-left:4px solid var(--chart-1);padding-left:12px;&quot;>
+<div style=&quot;font-size:14px;font-weight:600;color:rgba(var(--text-rgb), 0.85);letter-spacing:0.3px;margin-bottom:4px;&quot;>卫生恶劣</div>
+<div style=&quot;display:flex;align-items:center;height:28px;background:rgba(var(--text-rgb), 0.05);border-radius:4px;overflow:hidden;margin-bottom:6px;&quot;>
+<div style=&quot;width:35%;height:100%;background:var(--chart-1);&quot;></div>
+<div style=&quot;font-size:14px;font-weight:700;color:var(--chart-1);margin-left:8px;&quot;>35%</div>
+</div>
+<div style=&quot;font-size:12px;color:rgba(var(--text-rgb), 0.6);line-height:1.5;&quot;>通过生熟分开、专间管理、色标工具、规范的清洗消毒保洁流程以及人员健康管理，杜绝交叉污染和环境不洁。</div>
+</div>
+</td>
+<td colspan=&quot;2&quot; style=&quot;color:var(--text);padding:8px 0 8px 0;vertical-align:top;&quot;>
+<div style=&quot;border-left:4px solid var(--chart-2);padding-left:12px;&quot;>
+<div style=&quot;font-size:14px;font-weight:600;color:rgba(var(--text-rgb), 0.85);letter-spacing:0.3px;margin-bottom:4px;&quot;>非法添加</div>
+<div style=&quot;display:flex;align-items:center;height:28px;background:rgba(var(--text-rgb), 0.05);border-radius:4px;overflow:hidden;margin-bottom:6px;&quot;>
+<div style=&quot;width:20%;height:100%;background:var(--chart-2);&quot;></div>
+<div style=&quot;font-size:14px;font-weight:700;color:var(--chart-2);margin-left:8px;&quot;>20%</div>
+</div>
+<div style=&quot;font-size:12px;color:rgba(var(--text-rgb), 0.6);line-height:1.5;&quot;>严禁使用非食品原料，禁止反复使用煎炸油脂，所有加工行为必须在许可场所内完成，外卖配送明确禁止在操作区外加工，从制度和过程上封堵非法添加空间。</div>
+</div>
+</td>
+</tr>
+<tr>
+<td colspan=&quot;8&quot; style=&quot;color:var(--text);padding:16px 0 0 0;vertical-align:top;&quot;>
+<div style=&quot;border-top:1px solid rgba(var(--text-rgb), 0.1);padding-top:12px;&quot;>
+<div style=&quot;font-size:14px;color:rgba(var(--text-rgb), 0.5);line-height:1.6;&quot;>注：该页内容基于制度中对三类主要风险的防范措施提炼，可补充行业通报数据增强说服力。</div>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div style=&quot;display:flex;align-items:center;width:100%;height:45px;flex-shrink:0;font-size:12px;color:rgba(var(--text-rgb), 0.5);letter-spacing:0.5px;padding: 0px 60px;box-sizing:border-box;border-top:1px solid rgba(var(--text-rgb), 0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;&quot;>智绘教案系统</div>
+<div style=&quot;flex:1;text-align:left;&quot;>梁其良</div>
+<div style=&quot;flex:1;text-align:left;&quot;>05 / 02</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-embed-sheet"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;6&quot;><div style=&quot;width:794px;height:1123px;display:flex;flex-direction:column;background:var(--background);font-family:system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;100&quot; cy=&quot;950&quot; fill=&quot;none&quot; opacity=&quot;0.12&quot; r=&quot;140&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot;></circle>
+</svg>
+<!-- ═══ 页头区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.45);border-bottom:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>管理责任体系</div>
+<div style=&quot;flex:1;text-align:left;&quot;>V1.0 / 2024-05-20</div>
+<div style=&quot;flex:1;text-align:left;&quot;>2 / 6</div>
+</div>
+<!-- ═══ 内容区 flex:1 ═══ -->
+<div style=&quot;flex:1;position:relative;overflow:hidden;&quot;>
+<div style=&quot;width:100%;height:4px;background:var(--accent);&quot;></div>
+<div style=&quot;padding:40px 60px;&quot;>
+<!-- 章节标题 -->
+<div style=&quot;font-size:22px;font-weight:700;color:var(--primary);margin-bottom:6px;&quot;>管理责任体系</div>
+<div style=&quot;width:40px;height:3px;background:var(--accent);margin-bottom:24px;&quot;></div>
+<!-- SVG 插图区 -->
+<div style=&quot;width:674px;height:420px;margin: 0px auto;border:1px solid rgba(var(--text-rgb),0.12);border-radius:4px;display:flex;align-items:center;justify-content:center;background:rgba(var(--text-rgb),0.02);overflow:hidden;&quot;>
+<svg style=&quot;width:100%;height:100%;&quot; viewbox=&quot;0 0 674 420&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<defs>
+<marker id=&quot;arrow&quot; markerheight=&quot;6&quot; markerwidth=&quot;6&quot; orient=&quot;auto-start-reverse&quot; refx=&quot;5&quot; refy=&quot;5&quot; viewbox=&quot;0 0 10 10&quot;>
+<path d=&quot;M 0 0 L 10 5 L 0 10 z&quot; fill=&quot;var(--accent)&quot;></path>
+</marker>
+</defs>
+<!-- 顶部标题 -->
+<text fill=&quot;var(--primary)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;20&quot; font-weight=&quot;700&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;40&quot;>食品安全管理责任体系</text>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;13&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;65&quot;>企业主体责任 · 政府监管 · 社会共治</text>
+<!-- 协同连接弧线 -->
+<path d=&quot;M 127 85 Q 337 15 547 85&quot; fill=&quot;none&quot; marker-end=&quot;url(#arrow)&quot; stroke=&quot;var(--accent)&quot; stroke-dasharray=&quot;6,5&quot; stroke-width=&quot;2.5&quot;></path>
+<path d=&quot;M 547 85 Q 337 15 127 85&quot; fill=&quot;none&quot; marker-end=&quot;url(#arrow)&quot; stroke=&quot;var(--accent)&quot; stroke-dasharray=&quot;6,5&quot; stroke-width=&quot;2.5&quot;></path>
+<text fill=&quot;var(--accent)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;12&quot; font-weight=&quot;600&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;45&quot;>立体化责任网络</text>
+<!-- 支柱 1：企业主体责任 -->
+<rect fill=&quot;rgba(var(--chart-0-rgb), 0.05)&quot; height=&quot;310&quot; rx=&quot;12&quot; stroke=&quot;var(--chart-0)&quot; stroke-width=&quot;2&quot; width=&quot;180&quot; x=&quot;37&quot; y=&quot;85&quot;></rect>
+<text fill=&quot;var(--chart-0)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;16&quot; font-weight=&quot;700&quot; text-anchor=&quot;middle&quot; x=&quot;127&quot; y=&quot;115&quot;>企业主体责任</text>
+<!-- 第1层级 -->
+<rect fill=&quot;rgba(var(--chart-0-rgb), 0.15)&quot; height=&quot;65&quot; rx=&quot;6&quot; width=&quot;160&quot; x=&quot;47&quot; y=&quot;135&quot;></rect>
+<text fill=&quot;var(--primary)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;14&quot; font-weight=&quot;600&quot; text-anchor=&quot;middle&quot; x=&quot;127&quot; y=&quot;160&quot;>主要负责人</text>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;127&quot; y=&quot;180&quot;>第一责任人 · 资源保障</text>
+<path d=&quot;M 127 200 L 127 215&quot; marker-end=&quot;url(#arrow)&quot; stroke=&quot;var(--chart-1)&quot; stroke-width=&quot;2&quot;></path>
+<!-- 第2层级 -->
+<rect fill=&quot;rgba(var(--chart-1-rgb), 0.15)&quot; height=&quot;65&quot; rx=&quot;6&quot; width=&quot;160&quot; x=&quot;47&quot; y=&quot;220&quot;></rect>
+<text fill=&quot;var(--primary)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;14&quot; font-weight=&quot;600&quot; text-anchor=&quot;middle&quot; x=&quot;127&quot; y=&quot;245&quot;>食品安全总监</text>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;127&quot; y=&quot;265&quot;>直接管理 · 排查审核</text>
+<path d=&quot;M 127 285 L 127 300&quot; marker-end=&quot;url(#arrow)&quot; stroke=&quot;var(--chart-2)&quot; stroke-width=&quot;2&quot;></path>
+<!-- 第3层级 -->
+<rect fill=&quot;rgba(var(--chart-2-rgb), 0.15)&quot; height=&quot;65&quot; rx=&quot;6&quot; width=&quot;160&quot; x=&quot;47&quot; y=&quot;305&quot;></rect>
+<text fill=&quot;var(--primary)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;14&quot; font-weight=&quot;600&quot; text-anchor=&quot;middle&quot; x=&quot;127&quot; y=&quot;330&quot;>食品安全员</text>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;127&quot; y=&quot;350&quot;>每日检查 · 立即纠正</text>
+<!-- 支柱 2：政府监管 -->
+<rect fill=&quot;rgba(var(--chart-1-rgb), 0.05)&quot; height=&quot;310&quot; rx=&quot;12&quot; stroke=&quot;var(--chart-1)&quot; stroke-width=&quot;2&quot; width=&quot;180&quot; x=&quot;247&quot; y=&quot;85&quot;></rect>
+<text fill=&quot;var(--chart-1)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;16&quot; font-weight=&quot;700&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;115&quot;>政府监管</text>
+<rect fill=&quot;rgba(var(--chart-1-rgb), 0.1)&quot; height=&quot;220&quot; rx=&quot;6&quot; width=&quot;160&quot; x=&quot;257&quot; y=&quot;145&quot;></rect>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;13&quot; font-weight=&quot;600&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;180&quot;>市场监管部门</text>
+<circle cx=&quot;337&quot; cy=&quot;210&quot; fill=&quot;var(--text)&quot; r=&quot;2.5&quot;></circle>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;230&quot;>依法开展监督检查</text>
+<circle cx=&quot;337&quot; cy=&quot;255&quot; fill=&quot;var(--text)&quot; r=&quot;2.5&quot;></circle>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;275&quot;>督促落实主体责任</text>
+<circle cx=&quot;337&quot; cy=&quot;300&quot; fill=&quot;var(--text)&quot; r=&quot;2.5&quot;></circle>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;337&quot; y=&quot;320&quot;>查处违规行为</text>
+<!-- 支柱 3：社会共治 -->
+<rect fill=&quot;rgba(var(--chart-2-rgb), 0.05)&quot; height=&quot;310&quot; rx=&quot;12&quot; stroke=&quot;var(--chart-2)&quot; stroke-width=&quot;2&quot; width=&quot;180&quot; x=&quot;457&quot; y=&quot;85&quot;></rect>
+<text fill=&quot;var(--chart-2)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;16&quot; font-weight=&quot;700&quot; text-anchor=&quot;middle&quot; x=&quot;547&quot; y=&quot;115&quot;>社会共治</text>
+<rect fill=&quot;rgba(var(--chart-2-rgb), 0.1)&quot; height=&quot;220&quot; rx=&quot;6&quot; width=&quot;160&quot; x=&quot;467&quot; y=&quot;145&quot;></rect>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;13&quot; font-weight=&quot;600&quot; text-anchor=&quot;middle&quot; x=&quot;547&quot; y=&quot;180&quot;>多方协同监督</text>
+<circle cx=&quot;547&quot; cy=&quot;210&quot; fill=&quot;var(--text)&quot; r=&quot;2.5&quot;></circle>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;547&quot; y=&quot;230&quot;>互联网+明厨亮灶</text>
+<circle cx=&quot;547&quot; cy=&quot;255&quot; fill=&quot;var(--text)&quot; r=&quot;2.5&quot;></circle>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;547&quot; y=&quot;275&quot;>消费者投诉渠道</text>
+<circle cx=&quot;547&quot; cy=&quot;300&quot; fill=&quot;var(--text)&quot; r=&quot;2.5&quot;></circle>
+<text fill=&quot;var(--text)&quot; font-family=&quot;system-ui, sans-serif&quot; font-size=&quot;11&quot; text-anchor=&quot;middle&quot; x=&quot;547&quot; y=&quot;320&quot;>媒体行业监督</text>
+</svg>
+</div>
+<!-- 插图标题 -->
+<div style=&quot;text-align:center;margin-top:12px;font-size:12px;color:rgba(var(--text-rgb),0.5);font-style:italic;&quot;>保障食品安全需要企业主体责任、政府监管责任和社会共治三方协同发力</div>
+<!-- 标注说明 -->
+<div style=&quot;margin-top:24px;display:flex;flex-wrap:wrap;gap:16px;justify-content:center;&quot;>
+<div style=&quot;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);&quot;>
+<div style=&quot;width:10px;height:10px;border-radius:50%;background:var(--chart-0);&quot;></div>企业主体责任（三级体系）
+        </div>
+<div style=&quot;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);&quot;>
+<div style=&quot;width:10px;height:10px;border-radius:50%;background:var(--chart-1);&quot;></div>政府监管责任
+        </div>
+<div style=&quot;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text);&quot;>
+<div style=&quot;width:10px;height:10px;border-radius:50%;background:var(--chart-2);&quot;></div>社会共治监督
+        </div>
+</div>
+</div>
+</div>
+<!-- ═══ 页尾区 45px ═══ -->
+<div style=&quot;flex-shrink:0;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.4);border-top:1px solid rgba(var(--text-rgb),0.08);&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>智绘教案系统</div>
+<div style=&quot;flex:1;text-align:left;&quot;>梁其良</div>
+<div style=&quot;flex:1;text-align:left;&quot;>Page 2</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-embed-sheet"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;7&quot;><div style=&quot;width:794px;height:1123px;position:relative;overflow:hidden;display:flex;flex-direction:column;background:var(--background);&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;100&quot; cy=&quot;950&quot; fill=&quot;none&quot; opacity=&quot;0.12&quot; r=&quot;140&quot; stroke=&quot;var(--primary)&quot; stroke-width=&quot;1.2&quot;></circle>
+</svg>
+<!-- 页头区 -->
+<div style=&quot;width:100%;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.6);background:var(--background);border-bottom:1px solid rgba(var(--text-rgb),0.1);z-index:2;&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>食品安全管理体系</div>
+<div style=&quot;flex:1;text-align:left;&quot;>2023年10月 / V1.0</div>
+<div style=&quot;flex:1;text-align:left;padding-right:60px;&quot;>7/8</div>
+</div>
+<!-- 顶部accent色条 -->
+<div style=&quot;width:100%;height:4px;background:var(--accent);flex-shrink:0;z-index:2;&quot;></div>
+<!-- 内容区 -->
+<div style=&quot;flex:1;position:relative;z-index:2;&quot;>
+<table style=&quot;width:100%;height:100%;border-collapse:collapse;&quot;>
+<!-- 标题行 -->
+<tr>
+<td colspan=&quot;8&quot; style=&quot;font-size:36px;font-weight:700;color:var(--primary);text-align:left;padding:40px 60px 10px 60px;letter-spacing:-0.5px;line-height:1.2;&quot;>
+                    日管控周排查月调度流程
+                </td>
+</tr>
+<!-- 导语行 -->
+<tr>
+<td colspan=&quot;8&quot; style=&quot;font-size:16px;color:var(--text);text-align:left;padding: 0px 60px 30px 60px;line-height:1.8;&quot;>
+                    “日管控、周排查、月调度”动态风险管控机制是落实食品安全主体责任的主要抓手，通过循环式管理实现隐患早发现、早消除。
+                </td>
+</tr>
+<!-- 流程步骤行 -->
+<tr>
+<td colspan=&quot;8&quot; style=&quot;color:var(--text);padding: 0px 60px;&quot;>
+<div style=&quot;display:flex;align-items:flex-start;gap: 0px;&quot;>
+<!-- 步骤1 -->
+<div style=&quot;flex:1;padding-top:10px;&quot;>
+<div style=&quot;width:100%;height:4px;background:var(--chart-0);margin-bottom:15px;&quot;></div>
+<div style=&quot;font-size:64px;font-weight:700;color:rgba(var(--primary-rgb),0.15);line-height:1;margin-bottom:5px;letter-spacing:-1px;&quot;>01</div>
+<div style=&quot;font-size:20px;font-weight:700;color:var(--primary);margin-bottom:10px;&quot;>日管控</div>
+<div style=&quot;font-size:14px;color:var(--text);line-height:1.6;&quot;>食品安全员每日巡检，即时纠正并记录。</div>
+</div>
+<!-- 箭头1 -->
+<div style=&quot;display:flex;align-items:center;justify-content:center;padding: 0px 10px;padding-top:25px;&quot;>
+<svg height=&quot;20&quot; width=&quot;30&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<path d=&quot;M0,10 L20,10 L15,5 M20,10 L15,15&quot; fill=&quot;none&quot; stroke=&quot;rgba(var(--accent-rgb),0.4)&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot;></path>
+</svg>
+</div>
+<!-- 步骤2 -->
+<div style=&quot;flex:1;padding-top:10px;&quot;>
+<div style=&quot;width:100%;height:4px;background:var(--chart-1);margin-bottom:15px;&quot;></div>
+<div style=&quot;font-size:64px;font-weight:700;color:rgba(var(--primary-rgb),0.15);line-height:1;margin-bottom:5px;letter-spacing:-1px;&quot;>02</div>
+<div style=&quot;font-size:20px;font-weight:700;color:var(--primary);margin-bottom:10px;&quot;>周排查</div>
+<div style=&quot;font-size:14px;color:var(--text);line-height:1.6;&quot;>食品安全总监分析数据、组织排查、制定整改方案。</div>
+</div>
+<!-- 箭头2 -->
+<div style=&quot;display:flex;align-items:center;justify-content:center;padding: 0px 10px;padding-top:25px;&quot;>
+<svg height=&quot;20&quot; width=&quot;30&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<path d=&quot;M0,10 L20,10 L15,5 M20,10 L15,15&quot; fill=&quot;none&quot; stroke=&quot;rgba(var(--accent-rgb),0.4)&quot; stroke-linecap=&quot;round&quot; stroke-linejoin=&quot;round&quot; stroke-width=&quot;2&quot;></path>
+</svg>
+</div>
+<!-- 步骤3 -->
+<div style=&quot;flex:1;padding-top:10px;&quot;>
+<div style=&quot;width:100%;height:4px;background:var(--chart-2);margin-bottom:15px;&quot;></div>
+<div style=&quot;font-size:64px;font-weight:700;color:rgba(var(--primary-rgb),0.15);line-height:1;margin-bottom:5px;letter-spacing:-1px;&quot;>03</div>
+<div style=&quot;font-size:20px;font-weight:700;color:var(--primary);margin-bottom:10px;&quot;>月调度</div>
+<div style=&quot;font-size:14px;color:var(--text);line-height:1.6;&quot;>企业负责人召开会议、总结趋势、部署重点工作。</div>
+</div>
+</div>
+</td>
+</tr>
+<!-- 备注行 -->
+<tr>
+<td colspan=&quot;8&quot; style=&quot;color:var(--text);padding:30px 60px 0 60px;&quot;>
+<div style=&quot;border-top:1px solid rgba(var(--text-rgb),0.15);padding-top:15px;&quot;>
+<div style=&quot;font-size:14px;font-weight:700;color:var(--primary);margin-bottom:5px;&quot;>备注</div>
+<div style=&quot;font-size:14px;color:rgba(var(--text-rgb),0.7);line-height:1.8;&quot;>
+                            所有记录、报告和纪要须真实完整，采用电子系统的应确保时间戳不可篡改，纸质记录严禁后补涂改，保存期限不少于2年。
+                        </div>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<!-- 页尾区 -->
+<div style=&quot;width:100%;height:45px;display:flex;align-items:center;font-size:12px;color:rgba(var(--text-rgb),0.6);background:var(--background);border-top:1px solid rgba(var(--text-rgb),0.1);z-index:2;&quot;>
+<div style=&quot;flex:1;text-align:left;padding-left:60px;&quot;>智绘教案系统</div>
+<div style=&quot;flex:1;text-align:left;&quot;>梁其良</div>
+<div style=&quot;flex:1;text-align:left;padding-right:60px;&quot;>7/8</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-embed-sheet"><iframe class="bk-embed-frame" srcdoc="<!DOCTYPE html><html><head><meta charset=&quot;UTF-8&quot;><style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { overflow-x: hidden; }
+:root {
+  --primary: #1a365d;
+  --primary-r: 26;
+  --primary-g: 54;
+  --primary-b: 93;
+  --primary-rgb: 26, 54, 93;
+  --secondary: #2d5f8a;
+  --secondary-r: 45;
+  --secondary-g: 95;
+  --secondary-b: 138;
+  --secondary-rgb: 45, 95, 138;
+  --accent: #e67e22;
+  --accent-r: 230;
+  --accent-g: 126;
+  --accent-b: 34;
+  --accent-rgb: 230, 126, 34;
+  --background: #ffffff;
+  --background-r: 255;
+  --background-g: 255;
+  --background-b: 255;
+  --background-rgb: 255, 255, 255;
+  --text: #1a202c;
+  --text-r: 26;
+  --text-g: 32;
+  --text-b: 44;
+  --text-rgb: 26, 32, 44;
+  --card_bg: #f0f4f8;
+  --card-bg: #f0f4f8;
+  --card_bg-r: 240;
+  --card-bg-r: 240;
+  --card_bg-g: 244;
+  --card-bg-g: 244;
+  --card_bg-b: 248;
+  --card-bg-b: 248;
+  --card_bg-rgb: 240, 244, 248;
+  --card-bg-rgb: 240, 244, 248;
+  --chart-0: #c8752e;
+  --chart-0-rgb: 200, 117, 46;
+  --chart-1: #2d5f8a;
+  --chart-1-rgb: 45, 95, 138;
+  --chart-2: #3b6b9e;
+  --chart-2-rgb: 59, 107, 158;
+  --chart-3: #d4956a;
+  --chart-3-rgb: 212, 149, 106;
+  --chart-4: #2980b9;
+  --chart-4-rgb: 41, 128, 185;
+  --semantic-positive: #27ae60;
+  --semantic-positive-rgb: 39, 174, 96;
+  --semantic-negative: #c0392b;
+  --semantic-negative-rgb: 192, 57, 43;
+  --chart_color: #c8752e;
+  --chart-color: #c8752e;
+  --shadow_md: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+  body {
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+    padding: 24px;
+    font-family: system-ui, -apple-system, sans-serif;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  .slide-wrapper {
+    width: 794px;
+    height: 1123px;
+    overflow: hidden;
+    border-radius: 4px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    flex-shrink: 0;
+    transform-origin: top left;
+  }
+  /* anti-copy */
+  * { -webkit-user-select: none; user-select: none; }
+  img { pointer-events: none; -webkit-touch-callout: none; }
+</style><style>html,body{margin:0;padding:0;overflow:hidden;width:794px;height:1123px;}.slide-wrapper{margin:0 !important;}</style></head><body><div class=&quot;slide-wrapper&quot; data-seq=&quot;8&quot;><div style=&quot;width:794px;height:1123px;display:flex;flex-direction:column;background:var(--primary);font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;position:relative;overflow:hidden;color:#ffffff&quot;>
+<svg style=&quot;position:absolute;top: 0px;left: 0px;width:100%;height:100%;pointer-events:none;&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>
+<circle cx=&quot;700&quot; cy=&quot;280&quot; fill=&quot;none&quot; opacity=&quot;0.3&quot; r=&quot;180&quot; stroke=&quot;#ffffff&quot; stroke-width=&quot;2.5&quot;></circle>
+</svg>
+<!-- ═══ 顶端金色装饰线 10px ═══ -->
+<div style=&quot;flex-shrink:0;height:10px;background:var(--accent);&quot;></div>
+<!-- ═══ 居中内容区 flex:1 ═══ -->
+<div style=&quot;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding: 0px 100px;&quot;>
+<!-- 感谢语 -->
+<div style=&quot;font-size:44px;font-weight:700;color:#ffffff;letter-spacing:2px;font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;&quot;>感谢聆听</div>
+<div style=&quot;width:48px;height:4px;background:var(--accent);margin:24px auto 32px auto;&quot;></div>
+<!-- 行动号召 -->
+<div style=&quot;font-size:16px;font-weight:500;color:#ffffff;margin-bottom:20px;&quot;>食品安全，人人有责</div>
+<!-- 联系方式 -->
+<div style=&quot;font-size:12px;color:#ffffff;line-height:1.8;&quot;>联系部门：食品安全管理部</div>
+</div>
+<!-- ═══ 底部版权区 ═══ -->
+<div style=&quot;flex-shrink:0;padding: 0px 100px 48px 100px;text-align:center;&quot;>
+<div style=&quot;font-size:12px;color:#ffffff;&quot;>智绘教案系统</div>
+<div style=&quot;font-size:12px;color:#ffffff;margin-top:6px;&quot;>梁其良</div>
+</div>
+</div></div></body></html>"></iframe></section>
+<section class="bk-sheet bk-chapter" id="bk-ch-4"><div class="bk-sheet-inner"><div class="bk-chapter-head"><div class="bk-chapter-no">第 4 章</div><div class="bk-chapter-title">自建说明章节</div><div class="bk-chapter-src">自建章节</div></div><div class="bk-prose"><h1>编者按</h1><p>本册由电子成册功能合成。</p></div></div></section>
+
+  <!-- ═══ 封底 ═══ -->
+  
+  <section class="bk-sheet bk-back">
+    <div class="bk-sheet-inner">
+      <div class="bk-back-text">封底致谢文字。</div>
+      <div class="bk-back-brand">张三 · 验收测试单位<br>智绘教案系统 梁其良</div>
+    </div>
+    <div class="bk-back-band"></div>
+  </section>
+  
+
+</div>
+
+<div class="bk-nav">
+  <button id="bkPrev" type="button">← 上一页</button>
+  <span id="bkCounter">1 / 1</span>
+  <button id="bkNext" type="button">下一页 →</button>
+</div>
+
+<script>
+/* ═══ 长正文自动拆页（模板内置资产）：超出固定页高的 .bk-prose 按块级子元素填充分页，表格按行拆，续页不带章头 ═══ */
+(function () {
+  function contentBottom(box) {
+    var r = box.getBoundingClientRect();
+    var pb = parseFloat(getComputedStyle(box).paddingBottom) || 0;
+    return r.bottom - pb;
+  }
+  function overflowIndex(prose, limit) {
+    var kids = prose.children;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].getBoundingClientRect().bottom > limit + 1) return i;
+    }
+    return -1;
+  }
+  function splitTable(table, limit) {
+    var rows = [];
+    for (var b = 0; b < table.tBodies.length; b++) {
+      rows = rows.concat(Array.prototype.slice.call(table.tBodies[b].rows));
+    }
+    var cut = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getBoundingClientRect().bottom > limit + 1) { cut = i; break; }
+    }
+    if (cut <= 0) return null; /* 首行就超 → 整表移到下一页 */
+    var clone = table.cloneNode(false);
+    if (table.tHead) clone.appendChild(table.tHead.cloneNode(true));
+    var tb = document.createElement('tbody');
+    for (var j = cut; j < rows.length; j++) tb.appendChild(rows[j]);
+    clone.appendChild(tb);
+    return clone;
+  }
+  window.bkSplitProse = function (opts) {
+    Array.prototype.slice.call(opts.sections).forEach(function (section) {
+      var cur = section, guard = 0;
+      while (cur && guard++ < 200) {
+        if (opts.prepare) opts.prepare(cur);
+        var prose = cur.querySelector('.bk-prose');
+        if (!prose) { if (opts.restore) opts.restore(cur); break; }
+        var limit = contentBottom(opts.box ? opts.box(cur) : cur);
+        var idx = overflowIndex(prose, limit);
+        if (idx < 0) { if (opts.restore) opts.restore(cur); break; }
+        var carry = [];
+        var breaker = prose.children[idx];
+        if (breaker && breaker.tagName === 'TABLE') {
+          var rest = splitTable(breaker, limit);
+          if (rest) { carry.push(rest); idx += 1; }
+        }
+        if (idx === 0 && carry.length === 0 && !cur.querySelector('.bk-chapter-head')) {
+          if (prose.children.length <= 1) { if (opts.restore) opts.restore(cur); break; }
+          idx = 1; /* 单个超高不可拆块留本页，其余移下页 */
+        }
+        var moved = [];
+        while (prose.children.length > idx) moved.push(prose.removeChild(prose.children[idx]));
+        var next = opts.makeCont(cur);
+        carry.forEach(function (n) { next.prose.appendChild(n); });
+        moved.forEach(function (n) { next.prose.appendChild(n); });
+        if (opts.restore) opts.restore(cur);
+        cur = next.section;
+      }
+    });
+  };
+})();
+
+(function () {
+  /* 翻页式下非激活页 display:none 无法测量 → 拆页时临时显隐（visibility:hidden 不闪屏） */
+  var proseSheets = [];
+  Array.prototype.slice.call(document.querySelectorAll('.bk-sheet.bk-chapter')).forEach(function (s) {
+    if (s.querySelector(':scope > .bk-sheet-inner > .bk-prose')) proseSheets.push(s);
+  });
+  window.bkSplitProse({
+    sections: proseSheets,
+    box: function (s) { return s.querySelector('.bk-sheet-inner'); },
+    prepare: function (s) { s.style.display = 'flex'; s.style.visibility = 'hidden'; },
+    restore: function (s) { s.style.display = ''; s.style.visibility = ''; },
+    makeCont: function (s) {
+      var cont = s.cloneNode(false);
+      cont.removeAttribute('id');
+      cont.classList.remove('bk-chapter');
+      cont.style.display = 'flex'; cont.style.visibility = 'hidden'; /* 供本轮继续测量，restore 时清除 */
+      var inner = document.createElement('div'); inner.className = 'bk-sheet-inner';
+      var prose = document.createElement('div'); prose.className = 'bk-prose';
+      inner.appendChild(prose); cont.appendChild(inner);
+      s.parentNode.insertBefore(cont, s.nextSibling);
+      return { section: cont, prose: prose };
+    },
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.bk-sheet'));
+  var idx = 0;
+  var counter = document.getElementById('bkCounter');
+  var PAGE_W = 794, PAGE_H = 1123; /* A4 @96dpi 固定几何（210mm×297mm），非主题值 */
+
+  function fit() {
+    var scale = Math.min(window.innerWidth / PAGE_W, (window.innerHeight - 70) / PAGE_H);
+    slides.forEach(function (s) { s.style.transform = 'scale(' + scale + ')'; });
+  }
+
+  function show(i) {
+    if (i < 0) i = 0;
+    if (i > slides.length - 1) i = slides.length - 1;
+    idx = i;
+    slides.forEach(function (s, k) { s.classList.toggle('bk-active', k === idx); });
+    counter.textContent = (idx + 1) + ' / ' + slides.length;
+  }
+
+  document.getElementById('bkPrev').addEventListener('click', function () { show(idx - 1); });
+  document.getElementById('bkNext').addEventListener('click', function () { show(idx + 1); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { show(idx + 1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(idx - 1); e.preventDefault(); }
+    if (e.key === 'Home') { show(0); }
+    if (e.key === 'End') { show(slides.length - 1); }
+  });
+
+  // 目录点击跳转：a4 目录用 href="#bk-ch-N" 锚点 → 定位所在纸页
+  document.querySelectorAll('.bk-toc-list a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var target = document.getElementById(a.getAttribute('href').slice(1));
+      if (!target) return;
+      var sheet = target.closest ? target.closest('.bk-sheet') : null;
+      if (sheet) show(slides.indexOf(sheet));
+    });
+  });
+
+  window.addEventListener('resize', fit);
+  fit();
+  show(0);
+})();
+</script>
+
+</body>
+</html>

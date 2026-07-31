@@ -115,7 +115,12 @@ async def generate(
         kwargs["response_format"] = {"type": "json_object"}
 
     response = await client.chat.completions.create(**kwargs)
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    if not content:
+        rc = getattr(response.choices[0].message, 'reasoning_content', None)
+        if rc:
+            content = rc
+    return content
 
 
 async def generate_stream(

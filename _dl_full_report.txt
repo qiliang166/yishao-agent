@@ -1,0 +1,772 @@
+Total ASCII strings extracted: 1136524
+
+=== ITEM_INSERT (2 matches) ===
+INSERT INTO project_items (id, project_id, name, prompt, skill, "
+"output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+"INSERT INTO project_items (id, project_id, name, prompt, skill, "
+"output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+"INSERT INTO project_items (id, project_id, name, prompt, skill, "
+"output_mode, config_json, sort_order) VALUES (?, ?, ?, 
+---
+INSERT INTO project_items (id, project_id, name, prompt, skill, output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO project_items (id, project_id, name, prompt, skill, output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO project_items (id, project_id, name, prompt, skill, output_mode, config_json, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?
+---
+
+=== SLIDE_PLAN (35 matches) ===
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "SOP
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "key_points": ["2024
+", "
+", "
+", "
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+", "
+V1.0"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "SOP
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+", "
+ V1.0"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+", "V1.0"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+", "
+ V1.0"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+", "
+ V1.0"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "key_points": ["2024
+", "
+", "
+", "
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+ SOP 
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+ SOP 
+", "key_points": ["
+", "SOP 
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "key_points": ["2025
+", "
+", "
+", "
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+ SOP
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+0cb9d4b0e4e8_ppt_plan_step3_yan_ppt{"slides":[{"seq":1,"heading":"
+","page_type":"cover","layout_hint":"full_bleed","visual_weight":"high","subtitle":"
+","summary":"
+","key_points":["
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+", "
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "key_points": ["2024
+", "
+", "
+", "
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+c2e636002cb9_preview_html_step3_yan_ppt__SVG__/api/exports/
+)_col5/index.htmlmarkdown2026-07-15 04:34:232026-07-15 05:02:13
+c2e636002cb9_ppt_plan_step3_sop_doc{"slides":[{"seq":1,"heading":"
+","page_type":"cover","key_points":["2025
+---
+"slide_plan": [{"seq": 1, "heading": "
+ SOP 
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "SOP
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "SOP
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "key_points": ["2025
+", "
+", "
+", "
+"]
+---
+"slide_plan": [{"seq": 1, "heading": "
+", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "
+", "summary": "
+", "key_points": ["
+", "
+", "
+v1.0"]
+---
+
+=== PROJECT_CODE (8 matches) ===
+project_code&&n.jsx("span",{style:{fontSize:11,color:"var(--te
+---
+project_code}),n.jsx("span",{className:"pc-name",style:{cursor
+---
+project_code&&n.jsx("span",{style:{fontFamily:"monospace",font
+---
+project_code}),n.jsx("span",{style:{fontWeight:500,flex:1},chi
+---
+project_code LIKE ?
+List video files in the project's storage 
+---
+project_code LIKE ?"
+SELECT * FROM projects WHERE id = ?
+/api/
+---
+project_code
+ject_code
+source_type
+bmE.
+y_count
+pace_id
+api_pr
+---
+project_code TEXT DEFAULT '', created_by TEXT, point_cost_deci
+---
+
+=== PROJECT_NAME (46 matches) ===
+"name": "", "
+---
+"name": "list_knowledge_topics"
+---
+"name": "lookup_knowledge"
+---
+"name":"A","
+---
+"name":"B","
+---
+"name":"A","
+---
+"name":"B","
+---
+"name":"A","
+---
+"name":"B","
+---
+"name":"A","
+---
+"name":"B","
+---
+"name":"Nginx"
+---
+"name":"Apache"
+---
+"name":"MySQL"
+---
+"name":"Pure-Ftpd"
+---
+"name":"PHP"
+---
+"name":"Tomcat"
+---
+"name":"phpMyAdmin"
+---
+"name":"A","
+---
+"name":"B","
+---
+
+=== CREATED_BY (751 matches) ===
+created_by TEXT, updated_by TEXT
+  )9
+
+indexsqlite_autoindex
+---
+created_by TEXT, updated_by TEXT,
+    FOREIGN KEY (recipe_co
+---
+created_by TEXT, updated_by TEXT,
+    FOREIGN KEY (recipe_co
+---
+created_by TEXT, updated_by TEXT
+  )7
+indexsqlite_autoindex_
+---
+created_by
+\[]d2026-07-09T02:47:14.598Z2026-07-09T02:47:14.5
+---
+created_byscoring_models1CREATE INDEX idx_scoring_models_cre
+---
+created_by)z,
+indexidx_scoring_models_hashscoring_models0CRE
+---
+created_by TEXT DEFAULT '',
+    created_at TEXT NOT NULL,
+  
+---
+created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    
+---
+created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    
+---
+created_by TEXT, updated_by TEXT
+  , finished_color TEXT NOT
+---
+created_by TEXT, updated_by TEXT
+  , file_attachment TEXT DE
+---
+created_by TEXT, updated_by TEXT
+  , finished_color TEXT NOT
+---
+created_by TEXT, updated_by TEXT,
+    FOREIGN KEY (form
+tabl
+---
+created_by
+\[]d2026-07-09T02:47:14.598Z2026-07-09T02:47:14.5
+---
+created_by
+\[]d2026-07-09T02:47:14.598Z2026-07-09T02:47:14.5
+---
+created_by<
+formula_stepsupdated_at;
+formula_stepscreated_at
+---
+created_by0
+recipe_stepsupdated_at/
+recipe_stepscreated_at.
+
+---
+created_by&
+formulas_detailsupdated_at%
+formulas_detailscrea
+---
+created_by
+formulas_mainupdated_at
+formulas_maincreated_at
+f
+---
+
+=== USER_DATA (1 matches) ===
+INSERT INTO users (id, username, password_hash, display_name, email, user_type,
+               is_active, is_approved, approved_by, approved_at, expires_at, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, datetime('now'),
+               {expires_val}, datetime('now'), datetime('now'))""",
+ 
+---
+
+=== WORKSPACE (508 matches) ===
+workspace_id: str = None):
+    db = get_db()
+    try:
+        if workspace_id:
+            rows = db.execute(
+---
+workspace_id = ? ORDER BY sort_order",
+                (workspace_id,)).fetchall()
+        else:
+            
+---
+workspace_id IS NULL ORDER BY sort_order").fetchall()
+        return {"configs": [dict(r) for r in rows]}
+   
+---
+workspace_id FROM column_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+           
+---
+workspace
+        col_id = existing["column_id"]
+        ws_id = existing["workspace_id"]
+        if ws_id an
+---
+workspace={ws_id} col={col_id} fields={keys}", flush=True)
+            projects = db.execute("SELECT id FROM 
+---
+workspace_id = ?", (ws_id,)).fetchall()
+            print(f"[SYNC] found {len(projects)} projects to sync", f
+---
+workspace_id (seed config, no sync needed)", flush=True)
+        else:
+            print(f"[SYNC] skipped - n
+---
+workspace_id: str = None):
+    db = get_db()
+    try:
+        if workspace_id:
+            rows = db.execute(
+---
+workspace_id = ? ORDER BY sort_order",
+                (workspace_id,)).fetchall()
+        else:
+            
+---
+workspace_id IS NULL ORDER BY sort_order").fetchall()
+        return {"configs": [dict(r) for r in rows]}
+   
+---
+workspace_id FROM speech_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+           
+---
+workspace
+        ws_id = existing["workspace_id"]
+        if ws_id and any(k in req for k in ("prompt", "ski
+---
+workspace_id = ?", (ws_id,)).fetchall()
+            for p in projects:
+                item_id = f"pi-{p['id'
+---
+workspace_id: str = None):
+    db = get_db()
+    try:
+        if workspace_id:
+            rows = db.execute(
+---
+workspace_id = ? ORDER BY sort_order",
+                (workspace_id,)).fetchall()
+        else:
+            
+---
+workspace_id IS NULL ORDER BY sort_order").fetchall()
+        return {"configs": [dict(r) for r in rows]}
+   
+---
+workspace_id FROM tts_configs WHERE id = ?", (config_id,)).fetchone()
+        if not existing:
+            ra
+---
+workspace
+        ws_id = existing["workspace_id"]
+        if ws_id and any(k in req for k in ("prompt", "ski
+---
+workspace_id = ?", (ws_id,)).fetchall()
+            for p in projects:
+                item_id = f"pi-{p['id'
+---
+
+=== BOOKLET (40 matches) ===
+booklets_import_file_post:93892142858288
+0|P+
+0-V_
+0|P+
+download
+TEXT
+unlocks
+routers.prompt_studio.Generat
+---
+booklets
+            else self._init_proxy_transport(
+
+        response.request = request
+
+            foll
+---
+booklets/bk-d3934d517538/cover-thumb
+    It can be shared between tasks.
+
+    def __enter__(self: T) -> T:
+
+---
+bookletAvailableContent(e.book_type,l).then(B=>{(B==null?void 0:B.projects)!=null&&h(B.projects)}).catch(B=
+---
+bookletImportFile(B);we!=null&&w
+&(C("md"),u(we.markdown),$.trim()||j(X
+eplace(/\.(docx?|xlsx)$/i,"")),r(`
+
+---
+booklets",elemen(P
+a1,{})}),t.jsx(Xt,{path:"/booklets/:id",element:t.jsx(d1,{})}),t.jsx(Xt,
+members",elemen
+---
+booklets_owner ON booklets(owner_id)
+ KEY,
+                owner_id TEXT NOT NULL,
+                owner_ro
+---
+booklets_1
+TEXT
+'{}'
+'[]'
+TIMESTAMP
+TIMESTAMP
+CURRENT_TIMESTAMP
+CURRENT_TIMESTAMP
+CURRENT_TIMESTAMP
+CURRENT
+---
+booklets_owner
+text
+coYj
+coYj
+coYj
+/yis
+ishao.db
+8txR
+noUl
+noUl
+8txR
+8txR
+0|:
+8:xR
+p25:
+8txR
+0X*:
+8txR
+noU
+---
+booklets.BookletCreate:94666191192352
+0{QD
+0qQD
+pqQD
+`L.0
+@D(0
+pD(0
+] --> C[
+] --> D[
+0M.0
+0M.0
+models.PPTG
+---
+booklets_import_file_post
+0q*:
+`~PR
+0{;;
+LVBR
+LVBR
+p+:0
+P|+0
+P|+0
+TKNS
+-k;;
+Pk;;
+default[int]
+kground:var(-
+---
+bookletsbooklets
+CREATE TABLE booklets (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT
+---
+booklets_ownerbooklets
+
+CREATE INDEX idx_booklets_owner ON booklets(owner_id)0d
+indexsqlite_autoindex_bookl
+---
+booklets
+indexsqlite_autoindex_authors_1authors
+tableauthorsauthors
+CREATE TABLE authors (
+                
+---
+booklets@
+TIMESTAMP
+TIMESTAMP
+CURRENT_TIMESTAMP
+CURRENT_TIMESTAMP
+ints_s
+_json
+TEXT
+oklet
+sqlite_autoindex_
+---
+booklets_1
+TEXT
+TEXT
+TEXT
+TEXT
+idx_pt_c
+TEXT
+TEXT
+is_enabled
+INTEGER
+TEXT
+orkspaces
+fts3_tokenizer
+fts3_tok
+---
+booklet_api_booklets__booklet_id__delete
+http://120.25.251.172:8766/project/6cb851f2573b/workspace
+http://1
+---
+Booklet(e.id,u.current):null,A=async()=>{x(!0);try{let L=null;o?L=await k.renderBooklet(e.id,u.current):L=a
+---
+booklet"}.html`,document.body.appendChild(B),B.click(),B.remove(),URL.revokeObjectURL(Z),l("
+","success")}}
+---
+booklets_import_file_post
+STAMP
+CURRENT_TIMESTAMP
+ofB\ 
+`%xR
+pxpD
+pzpD
+ #xR
+pwQD
+0{QD
+0qQD
+P/
+:
+P5
+:
+pqQD
+`
+---
+
+=== POINTS (1723 matches) ===
+pointer extension
+git-commit-tree
+1753319461
+Create a n
+---
+point_invert
+EC_POINT_invert
+3ssl
+1782373852
+Functions 
+---
+POINT objects
+wadd_wchstr
+1731380644
+add an array of co
+---
+point_set_affine_coordinates_gfp
+EC_POINT_set_affine_co
+---
+POINT objects
+locale::codes::langvar
+Locale::Codes::Lan
+---
+pointer extension
+docker-container-logs
+1715848525
+Fetc
+---
+POINTER__ 8
+__WCHAR_WIDTH__ 32
+__DEC128_MIN_EXP__ (-614
+---
+POINTER_LOCK_FREE 2
+__INT_LEAST8_MAX__ 0x7f
+__DEC64_MIN
+---
+POINTER__ 8
+__FLT64_EPSILON__ 2.22044604925031308084726
+---
+POINTER_LOCK_FREE 2
+_ISOC11_SOURCE
+__stub___compat_bdfl
+---
+POINTER__ 8
+__FLT64_EPSILON__ 2.22044604925031308084726
+---
+POINTER_LOCK_FREE 2
+_ISOC11_SOURCE
+__stub___compat_bdfl
+---
+POINTER__ 8
+__FLT64_EPSILON__ 2.22044604925031308084726
+---
+POINTER_LOCK_FREE 2
+_ISOC11_SOURCE
+__stub___compat_bdfl
+---
+POINTER__ 8
+__FLT64_EPSILON__ 2.22044604925031308084726
+---
+POINTER_LOCK_FREE 2
+_ISOC11_SOURCE
+__stub___compat_bdfl
+---
+POINTER__ 8
+__FLT64_EPSILON__ 2.22044604925031308084726
+---
+POINTER_LOCK_FREE 2
+_ISOC11_SOURCE
+__stub___compat_bdfl
+---
+POINTER__ 8
+__FLT64_EPSILON__ 2.22044604925031308084726
+---
+POINTER_LOCK_FREE 2
+_ISOC11_SOURCE
+__stub___compat_bdfl
+---
+
+
+=== RAW DISK SEARCH ===
+
+Disk matches: 50
+OFFSET=160399499:                                                              import subprocess, os
+
+# Search for specific project-related strings in raw disk
+# Use dd + strings + grep approach
+patterns = [
+    '乾坤多宝鱼',
+    'KH260721',
+    'KH260720',
+    'KH260719',
+    'KH260718',
+    'KH260717',
+    'KH260716',
+]
+
+DISK = '/dev/vda3'
+# Search in 0-35GB range using dd
+# Read in chunks and search for these patterns
+chunk_size = 500 * 1024 * 1024  # 500MB chunks
+results = []
+
+with op
+OFFSET=160403507:                                                                                                                                                      import os, sys
+
+DISK = '/dev/vda3'
+patterns = ['乾坤多宝鱼', 'KH260721', 'KH260720', 'KH260719', 'KH260718', 'KH260717', 'slide_plan', 'project_code', 'created_by']
+
+results = []
+chunk_size = 500 * 1024 * 1024
+
+with open(DISK, 'rb') as f:
+    for start_gb in range(0, 35):
+        offset = start_gb * 1024**3
+        f.seek(offset)
+  
+OFFSET=160409485: append('---')
+
+# 2. Search raw disk 0-35GB for Chinese project names
+results.append('\n\n=== RAW DISK SEARCH ===')
+DISK = '/dev/vda3'
+
+# Search for project name patterns in raw disk
+project_names = ['乾坤多宝鱼']
+
+# Also search for common Chinese characters that appear in project names
+import unicodedata
+
+disk_matches = []
+chunk_size = 500 * 1024 * 1024
+
+with open(DISK, 'rb') as f:
+    for start_gb in range(0, 35):
+        offset = start_gb * 1024**3
+        f.seek(offset)
+        data = f.
+OFFSET=193839139:                                                                                                                                                                      created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解�
+OFFSET=193839205:                                                                                                    created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四�
+OFFSET=193839266:                                       created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实�
+OFFSET=193839441:  [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key                                                                                                                                         
+OFFSET=193888256: 7-20 21:54:29e� 
+ %3)  33 a44b49e6cc6d_tmpl_step3_dao_pptstyle-businessmarkdown2026-07-20 21:53:332026-07-20 21:53:33��U�   %;��}  33 f5ee3�#C�q   ppt_plan8�B�q   _config slides":[{"seq":1,"heading":"乾坤多宝鱼SOP的道与术","page_type":"cover","layout_hint":"full_bleed","visual_weight":"high","subtitle":"一料两吃·脆嫩双拼","summary":"本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉
+OFFSET=193888421: onfig slides":[{"seq":1,"heading":"乾坤多宝鱼SOP的道与术","page_type":"cover","layout_hint":"full_bleed","visual_weight":"high","subtitle":"一料两吃·脆嫩双拼","summary":"本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。","key_points":["菜品研发部","SOP技术文档"],"body":"","notes":"","type":"cover","layout":"full_bleed","has_chart":false,"chart_hint":""
+OFFSET=193889316: gba(0,0,0,0.2),rgba(0,0,0,0.5));\"></div>\n<!-- 第2层：装饰层（光晕与几何图形） -->\n<svg style=\"position:a  H� � 
+ %Cs  33 f5ee31f43651_preview_html_step3_dao_ppt__SVG__/api/exports/乾坤多宝鱼_col4/index.htmlmarkdown2026-07-20 16:48:372026-07-20 16:48:37����B�q           ��B�q   s B�q                                     ��            ��8�q   created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_pl
+OFFSET=193889518: �坤多宝鱼_col4/index.htmlmarkdown2026-07-20 16:48:372026-07-20 16:48:37����B�q           ��B�q   s B�q                                     ��            ��8�q   created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解�
+OFFSET=193889584:  16:48:37����B�q           ��B�q   s B�q                                     ��            ��8�q   created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四�
+OFFSET=193889645:                 ��            ��8�q   created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实�
+OFFSET=193889820:  [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key_points": ["菜品研发部", "SOP技术文��� �'   �� �'   �� �'   �� �'   @� �'   �� �'   �� �'   �� �'   @� �'   `  �'   �� �'   `  �'
+OFFSET=198967314:                                                                                                                                                                                       OFF=193839139 PAT=乾坤多宝鱼:                                                                                                                   created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤�
+OFFSET=198967480:                 OFF=193839139 PAT=乾坤多宝鱼:                                                                                                                   created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解�
+OFFSET=198967546:                                                                                                    created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四�
+OFFSET=198967607:                                       created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼�
+OFF=193839205 PAT=乾坤�
+OFFSET=198967782:  [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼�
+OFF=193839205 PAT=乾坤多宝鱼:                                                 created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_
+OFFSET=198967900: eight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼�
+OFF=193839205 PAT=乾坤多宝鱼:                                                 created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "fu
+OFFSET=198968000: 道与术，阐述分材酥化保水火香四大原理及对应技法，提炼�
+OFF=193839205 PAT=乾坤多宝鱼:                                                 created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解�
+OFFSET=198968066: 法，提炼�
+OFF=193839205 PAT=乾坤多宝鱼:                                                 created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四�
+OFFSET=198968127:                                       created_by iew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实�
+OFFSET=198968302:  [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key 
+OFF=193839266 PAT=乾坤多宝鱼:ew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝
+OFFSET=198968485: y": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key 
+OFF=193839266 PAT=乾坤多宝鱼:ew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃
+OFFSET=198968524: ��术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key 
+OFF=193839266 PAT=乾坤多宝鱼:ew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解�
+OFFSET=198968590: ��提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key 
+OFF=193839266 PAT=乾坤多宝鱼:ew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四�
+OFFSET=198968651: �感。", "key 
+OFF=193839266 PAT=乾坤多宝鱼:ew_url": "/api/exports/乾坤多宝鱼_col4/index.html", "zip_url": "/api/ppt/export-zip/乾坤多宝鱼_col4", "slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实�
+OFFSET=198968826:  [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key                                                              
+OFF=193839441 PAT=乾坤多宝鱼:��术", "page_type": "cover", "layou
+OFFSET=198969070: �化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key                                                              
+OFF=193839441 PAT=乾坤多宝鱼:��术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨�
+
+
+=== RECOVERED SLIDE PLAN ===
+slide_plan": [{"seq": 1, "heading": "乾坤多宝鱼SOP的道与术", "page_type": "cover", "layout_hint": "full_bleed", "visual_weight": "high", "subtitle": "一料两吃·脆嫩双拼", "summary": "本文解构乾坤多宝鱼的道与术，阐述分材酥化保水火香四大原理及对应技法，提炼通用流程与参数，实现骨酥肉嫩的极致口感。", "key_points": ["菜品研发部", "SOP技术文����'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  `�'  ���'  `�'  @��'  ���'  ���'  @��'  0�'  ���'  0�'  @��'  ���'  ���'  @��'  0�'  ���'  0�'  @��'  ���'  ���'  @��'  0�'  0�'  @��'  ���'  ���'  0�'  ���'  ���'  @��'  0�'  ���'  ���'  ���'  ���'  0�'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  @��'   ��'  ���'   ��'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  p�'  @��'  p�'  ���'  ���'  p��'  ���'  p�'  @��'  ���'  p�'  ���'  p��'  @��'  p�'  ���'  ���'  p�'  @��'  p��'  ���'  p�'  ���'  @��'  p�'  ���'  p��'  ���'  0��'  ���'  0��'  ���'  ���'  0��'  ���'  ���'  ���'  ���'  ���'  0��'  ���'  ���'  ���'  ���'  ���'  0��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  ���'  ���'  @��'  ���'  ���'  � �'  @��'  ���'  ���'  @��'  ���'  �K�'   ��'  @��'   ��'  �K�'  ���'  @��'  �K�'   ��'  ���'   ��'  �K�'  @��'  ���'   ��'  �K�'  @��'  �K�'   ��'  ���'  @��'  �K�'  ���'  ���'  ���'  �K�'  @��'  ���'  �K�'  ���'  @��'  ���'  ���'  ���'  ���'  @��'  p�'  ���'  p�'  @��'  ���'  ���'  @��'  `3�'  ���'  `3�'  @��'  ���'  ���'  @��'  `3�'  ���'  `3�'  @��'  ���'  ���'  `3�'  @��'  ���'  @��'  `3�'  ���'  ���'  @��'  `3�'  `3�'  @��'  ���'  ���'  `3�'  ���'  @��'  ���'  ���'  `3�'  @��'  ���'  ���'  `3�'  @��'  ���'  @��'  `3�'  ���'  ���'  `3�'  @��'  ���'  @��'  `3�'  ���'  ���'  @��'  `3�'  ���'  `3�'  @��'  ���'  ���'  @��'  `3�'  ���'  `3�'  @��'  ���'  ���'  @��'  `3�'  ���'  `3�'  @��'  ���'  ���'  @��'  `3�'  ���'  `3�'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  ���'  @��'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  �'  ���'  �'  ���'  ���'  @��'  ���'  ���'  ���'  ���'  ���'  @��'  ���'  ���'   ��'  ���'  @��'   ��'  ���'  ���'  ���'   ��'  @��'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  `�'  ���'  `�'  ���'  @��'  ���'  `�'  @��'  @��'  @��'  `�'  ���'  @��'  @��'  `�'  `�'  @��'  @��'  ���'  `�'  @��'  @��'  ���'  0��'  p��'  `�'  @��'  @��'  ���'  ���'  0��'   ��'  @��'  ���'  0��'  ���'  @��'  0��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  ���'  ���'  ���'  @��'  ���'  ���'  ��'  @��'  ���'  ���'  @��'  ���'  ���'  @��'  ��'  ���'  @��'  ���'  ���'  @��'  ���'  ���'  ���'  @��'  ���'  ���'  �r�'  P	�'  p��'  ��'  ��'  p��'  P	�'  �r�'  ���'  ���'  @��'  ���'  ��'  @��'  ���'  �r�'  P	�'  p��'  ��'  ���'  @��'  �r�'  ���'  ��'  p��'  P	�'  @��'  p��'  \"color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);\">第一次2分30秒定型蛋底，确保入口初感滑嫩而不夹生</td>\n</tr>\n<tr style=\"background:rgba(var(--text-rgb),0.02);\">\n<td style=\"background:var(--card_bg);color:var(--text);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);\">质地</td>\n<td style=\"color:var(--text);padding:8px 14px;border:1px solid rgba(var(--text-rgb),0.2);\">第二次3分钟使蟹肉断生，第三次1分30秒令蟹膏凝固，分阶段控制蟹肉嫩度与蟹膏的固态层次</td>\n</tr>\n<tr>\n<td style=\"background:var(--card_bg);color:var(--text);font-weight:600;text-align:center;padding:8px 8px;border:1px solid rgba(var(--text-rgb),0.2);\">口味
+
+
+=== CURRENT DB STATUS ===
+Current projects: 29
+  港式传统萝卜焖牛腩(古志辉) | KH260716-0004 | created=2026-07-15 20:01:14 | updated=2026-07-15 20:01:14
+  桂花栗子红烧肉(古志辉) | KH260716-0003 | created=2026-07-15 19:44:49 | updated=2026-07-15 19:44:49
+  白切鸡(古志辉) | KH260716-0002 | created=2026-07-15 19:34:51 | updated=2026-07-15 19:34:51
+  土豆红焖牛腩(古志辉) | KH260716-0001 | created=2026-07-15 19:16:01 | updated=2026-07-15 19:16:01
+  粤式蜜汁水焖叉烧(古志辉) | KH260715-0018 | created=2026-07-15 05:36:12 | updated=2026-07-15 05:36:12
