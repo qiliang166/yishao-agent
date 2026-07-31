@@ -3091,7 +3091,7 @@ export default function ProjectPage() {
         {stage === 3 && sub === '3a' && (
           <div className="panel-grid">
             <div className="panel-left">
-              <div className="card">
+              <div className="card" style={{ overflow: 'hidden' }}>
                 <div className="card-title">📄 生成课件<HelpButton location="project-stage-3a" /></div>
                 <div className="card-hint">基于标准文档，选择模板生成课件</div>
                 <div className="form-label">选择模板</div>
@@ -3179,7 +3179,7 @@ export default function ProjectPage() {
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']) && (
-                  <div ref={pptLogContainerRef} style={{ height: 180, overflowY: 'auto', flexShrink: 0, background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, minHeight: 0, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
                     {pptLog.length === 0 ? (
                       <div style={{ color: '#888' }}>等待日志...</div>
                     ) : (
@@ -3462,7 +3462,7 @@ export default function ProjectPage() {
         {stage === 3 && sub === '3b' && (
           <div className="panel-grid">
             <div className="panel-left">
-              <div className="card">
+              <div className="card" style={{ overflow: 'hidden' }}>
                 <div className="card-title">📌 分析PPT<HelpButton location="project-stage-3b" /></div>
                 <div className="card-hint">基于分析文档，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
@@ -3543,7 +3543,7 @@ export default function ProjectPage() {
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']) && (
-                  <div ref={pptLogContainerRef} style={{ height: 180, overflowY: 'auto', flexShrink: 0, background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, minHeight: 0, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
                     {pptLog.length === 0 ? (
                       <div style={{ color: '#888' }}>等待日志...</div>
                     ) : (
@@ -3826,7 +3826,7 @@ export default function ProjectPage() {
         {stage === 3 && sub === '3c' && (
           <div className="panel-grid">
             <div className="panel-left">
-              <div className="card">
+              <div className="card" style={{ overflow: 'hidden' }}>
                 <div className="card-title">📚 综合PPT<HelpButton location="project-stage-3c" /></div>
                 <div className="card-hint">基于综合文档，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
@@ -3907,7 +3907,7 @@ export default function ProjectPage() {
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']) && (
-                  <div ref={pptLogContainerRef} style={{ height: 180, overflowY: 'auto', flexShrink: 0, background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, minHeight: 0, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
                     {pptLog.length === 0 ? (
                       <div style={{ color: '#888' }}>等待日志...</div>
                     ) : (
