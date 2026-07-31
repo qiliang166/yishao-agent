@@ -3179,7 +3179,7 @@ export default function ProjectPage() {
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_sop_doc'] || pptGenerating['step3_sop_doc']) && (
-                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                  <div ref={pptLogContainerRef} style={{ height: 180, overflowY: 'auto', flexShrink: 0, background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
                     {pptLog.length === 0 ? (
                       <div style={{ color: '#888' }}>等待日志...</div>
                     ) : (
@@ -3543,7 +3543,7 @@ export default function ProjectPage() {
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']) && (
-                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                  <div ref={pptLogContainerRef} style={{ height: 180, overflowY: 'auto', flexShrink: 0, background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
                     {pptLog.length === 0 ? (
                       <div style={{ color: '#888' }}>等待日志...</div>
                     ) : (
@@ -3907,7 +3907,7 @@ export default function ProjectPage() {
                   </div>
                 ) : null}
                 {(pptLog.length > 0 || pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']) && (
-                  <div ref={pptLogContainerRef} style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
+                  <div ref={pptLogContainerRef} style={{ height: 180, overflowY: 'auto', flexShrink: 0, background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
                     {pptLog.length === 0 ? (
                       <div style={{ color: '#888' }}>等待日志...</div>
                     ) : (

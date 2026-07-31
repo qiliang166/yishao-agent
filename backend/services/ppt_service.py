@@ -252,6 +252,12 @@ def _write_slide_cache(project_id: str, column_id: str, slide_seq: int, html: st
         pass  # cache write failure is non-fatal
 
 
+def _validate_cache_id(s: str) -> bool:
+    """Reject path traversal attempts in cache directory IDs."""
+    import re
+    return bool(re.match(r'^[a-zA-Z0-9_.@-]+$', s)) and '..' not in s
+
+
 def clear_slide_cache(project_id: str, column_id: str = ""):
     """Clear cached slide HTML for a project (and optionally a specific column).
 
@@ -259,14 +265,19 @@ def clear_slide_cache(project_id: str, column_id: str = ""):
     for changed slide content.
     """
     import shutil
+    if not _validate_cache_id(project_id):
+        return
     if column_id:
-        cache_dir = os.path.join(PPT_CACHE_DIR, project_id, column_id)
-        if os.path.exists(cache_dir):
-            shutil.rmtree(cache_dir, ignore_errors=True)
+        if not _validate_cache_id(column_id):
+            return
+        cache_dir = os.path.realpath(os.path.join(PPT_CACHE_DIR, project_id, column_id))
     else:
-        cache_dir = os.path.join(PPT_CACHE_DIR, project_id)
-        if os.path.exists(cache_dir):
-            shutil.rmtree(cache_dir, ignore_errors=True)
+        cache_dir = os.path.realpath(os.path.join(PPT_CACHE_DIR, project_id))
+    cache_root = os.path.realpath(PPT_CACHE_DIR)
+    if not cache_dir.startswith(cache_root + os.sep):
+        return
+    if os.path.exists(cache_dir):
+        shutil.rmtree(cache_dir, ignore_errors=True)
 
 
 def _load_branding() -> tuple:
@@ -4590,7 +4601,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         # ── Cache check: skip LLM if slide HTML is already cached ──
         if project_id and column_id and not force_regenerate:
             cached = _read_slide_cache(project_id, column_id, seq)
-            if cached and len(cached) > 300:
+            if cached and len(cached) > 300 and cached.lstrip().startswith('<'):
                 _logger.info(f"Slide {seq}: cache hit ({len(cached)} chars), skipping LLM")
                 if project_id:
                     with _done_lock:
@@ -4599,6 +4610,10 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         if _done_count[0] % 3 == 0 or _done_count[0] == total:
                             _append_log(project_id, f"HTML 生成进度: {_done_count[0]}/{total} 页 (含缓存)")
                 return {**slide, "html": cached, "html_vars": cached}
+            elif idx == 0:
+                _logger.info(f"[CACHE-DBG] Slide {seq}: check failed — exists={os.path.exists(_get_slide_cache_path(project_id, column_id, seq))}, cached_len={len(cached) if cached else 'None'}")
+        elif idx == 0:
+            _logger.info(f"[CACHE-DBG] Slide {seq}: cache check skipped — pid={repr(project_id)}, cid={repr(column_id)}, force={force_regenerate}")
 
         for attempt in range(2):
             try:
@@ -4837,8 +4852,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                             _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"已完成 {_done_count[0]}/{total} 页", "slides_done": _done_count[0], "slides_total": total}
                             if _done_count[0] % 3 == 0 or _done_count[0] == total:
                                 _append_log(project_id, f"HTML 生成进度: {_done_count[0]}/{total} 页")
-                    # Save to cache for future resume
-                    if project_id and column_id:
+                    # Save to cache for future resume (only if HTML is clean)
+                    if project_id and column_id and html.lstrip().startswith('<'):
                         _write_slide_cache(project_id, column_id, seq, html)
                     return {**slide, "html": html, "html_vars": html_vars}
                 else:
