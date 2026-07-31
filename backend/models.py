@@ -250,3 +250,48 @@ class BatchExecuteRequest(BaseModel):
     project_steps: dict  # { project_id: [["1", ["video","text","file"]], ["2", ["sop","dao","yanxi"]], ...] }
     start_time: str      # ISO datetime
     end_time: str        # ISO datetime
+
+
+# ── Signed Author / Revenue models ──
+
+class AuthorApplyRequest(BaseModel):
+    """Member applies to become a contracted author."""
+    name: str
+    intro: str = ""
+    photo_url: str = ""
+    note: str = ""
+
+
+class AuthorContractUpdate(BaseModel):
+    """Admin updates contract terms for an author."""
+    revenue_share: Optional[float] = None
+    cash_share: Optional[float] = None
+    points_per_yuan: Optional[float] = None
+    contract_status: Optional[str] = None  # active/suspended
+    contract_note: Optional[str] = None
+
+
+class RecipeSubmissionRequest(BaseModel):
+    """Author submits a recipe."""
+    name: str
+    description: str = ""
+    cover_url: str = ""
+    files_json: str = "[]"
+
+
+class RecipeSubmissionApprove(BaseModel):
+    """Admin approves a recipe submission."""
+    point_cost_deci: int = 5
+    category_id: str = ""
+
+
+class RecipeSubmissionReject(BaseModel):
+    """Admin rejects a recipe submission."""
+    review_note: str = ""
+
+
+class AuthorPayoutCreate(BaseModel):
+    """Admin creates a payout for an author."""
+    period_start: str
+    period_end: str
+    note: str = ""

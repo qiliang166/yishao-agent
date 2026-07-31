@@ -18,7 +18,9 @@ from models import (WorkspaceCreate, WorkspaceUpdate, ProjectCreate, ProjectUpda
     LLMRefineRequest, SynthesizeRequest, TtsSplitRequest, PPTGenerateRequest, PPTPlanRequest, PPTEditSlideRequest,
     PPTSlideSourceRequest, PPTRegenerateSlideRequest, TtsHistoryUpdate,
     ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
-    ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave)
+    ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave,
+    AuthorApplyRequest, AuthorContractUpdate, RecipeSubmissionRequest,
+    RecipeSubmissionApprove, RecipeSubmissionReject, AuthorPayoutCreate)
 from typing import Optional
 import json
 import logging
@@ -182,6 +184,39 @@ def _new_user_bonus_deci() -> int:
         return int(val)
     except (ValueError, TypeError):
         return 5
+
+
+def _record_author_revenue(db, project_id: str, points_spent_deci: int):
+    """Record author revenue from a project unlock. No-op if author isn't contracted or shares are 0."""
+    import math
+    proj = db.execute(
+        "SELECT author_id FROM projects WHERE id=?", (project_id,)
+    ).fetchone()
+    if not proj or not proj["author_id"]:
+        return
+    author = db.execute(
+        """SELECT revenue_share, cash_share, points_per_yuan, contract_status
+           FROM authors WHERE id=?""",
+        (proj["author_id"],),
+    ).fetchone()
+    if not author or author["contract_status"] != "active":
+        return
+    share = float(author["revenue_share"] or 0)
+    cash = float(author["cash_share"] or 0)
+    rate = float(author["points_per_yuan"] or 100)
+    if share <= 0 and cash <= 0:
+        return
+    author_points = int(math.floor(points_spent_deci * share))
+    author_cash_cents = int(math.floor(points_spent_deci / rate * 100 * cash)) if cash > 0 and rate > 0 else 0
+    db.execute(
+        """INSERT INTO author_revenue (author_id, project_id, unlock_id,
+           points_spent_deci, share_rate, cash_share_rate, author_points_deci,
+           author_cash_cents, points_per_yuan)
+           VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)""",
+        (proj["author_id"], project_id, points_spent_deci, share, cash,
+         author_points, author_cash_cents, rate),
+    )
+
 
 def _is_safe_audio_url(url: str) -> bool:
     try:
@@ -1766,6 +1801,513 @@ def delete_author(author_id: str, user=require_perm("member.manage")):
         db.execute("DELETE FROM authors WHERE id = ?", (author_id,))
         db.commit()
         return {"ok": True}
+    finally:
+        db.close()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Signed Author / Contract / Revenue System
+# ══════════════════════════════════════════════════════════════════════
+
+# ── Member self-service ──
+
+@app.post("/api/member/apply-author")
+def api_apply_author(req: AuthorApplyRequest, request: Request, user=Depends(get_current_user)):
+    """Member applies to become a contracted author."""
+    if user.get("user_type") != "member":
+        raise HTTPException(403, "仅会员可申请成为签约作者")
+    uid = user["sub"]
+    db = get_db()
+    try:
+        # Check existing author linked to this user
+        existing = db.execute(
+            "SELECT id, contract_status FROM authors WHERE user_id=?", (uid,)
+        ).fetchone()
+        if existing:
+            if existing["contract_status"] == "active":
+                raise HTTPException(400, "你已是签约作者，无需重复申请")
+            if existing["contract_status"] == "pending":
+                raise HTTPException(400, "你的申请正在审核中，请等待")
+            # Re-apply if previously rejected/suspended
+            db.execute(
+                "UPDATE authors SET name=?, intro=?, photo_url=?, contract_status='pending',"
+                " contract_note=?, updated_at=CURRENT_TIMESTAMP WHERE user_id=?",
+                (req.name.strip(), req.intro, req.photo_url, req.note, uid),
+            )
+            db.commit()
+            return {"ok": True, "author_id": existing["id"], "message": "申请已重新提交"}
+        # New author record
+        aid = f"au-{uuid.uuid4().hex[:8]}"
+        db.execute(
+            """INSERT INTO authors (id, name, intro, photo_url, user_id,
+               contract_status, contract_note, revenue_share, cash_share)
+               VALUES (?, ?, ?, ?, ?, 'pending', ?, 0.7, 0.0)""",
+            (aid, req.name.strip(), req.intro, req.photo_url, uid, req.note),
+        )
+        db.commit()
+        return {"ok": True, "author_id": aid, "message": "申请已提交，等待管理员审核"}
+    finally:
+        db.close()
+
+
+@app.get("/api/member/my-author-status")
+def api_my_author_status(user=Depends(get_current_user)):
+    """Return the member's author contract status and revenue summary."""
+    uid = user["sub"]
+    db = get_db()
+    try:
+        author = db.execute(
+            "SELECT * FROM authors WHERE user_id=?", (uid,)
+        ).fetchone()
+        if not author:
+            return {"author": None}
+        # Revenue summary
+        rev = db.execute(
+            """SELECT COALESCE(SUM(author_points_deci),0) AS total_points,
+                      COALESCE(SUM(author_cash_cents),0) AS total_cash_cents,
+                      COALESCE(SUM(CASE WHEN settled=0 THEN author_points_deci ELSE 0 END),0) AS unsettled_points,
+                      COALESCE(SUM(CASE WHEN settled=0 THEN author_cash_cents ELSE 0 END),0) AS unsettled_cash_cents,
+                      COUNT(*) AS total_count
+               FROM author_revenue WHERE author_id=?""",
+            (author["id"],),
+        ).fetchone()
+        return {
+            "author": dict(author),
+            "total_points_deci": int(rev["total_points"]),
+            "total_cash_cents": int(rev["total_cash_cents"]),
+            "unsettled_points_deci": int(rev["unsettled_points"]),
+            "unsettled_cash_cents": int(rev["unsettled_cash_cents"]),
+            "revenue_count": int(rev["total_count"]),
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/member/my-author-revenue")
+def api_my_author_revenue(page: int = 1, page_size: int = 50, user=Depends(get_current_user)):
+    """Author views own revenue history."""
+    uid = user["sub"]
+    db = get_db()
+    try:
+        author = db.execute("SELECT id FROM authors WHERE user_id=?", (uid,)).fetchone()
+        if not author:
+            return {"rows": [], "total": 0}
+        aid = author["id"]
+        total = db.execute(
+            "SELECT COUNT(*) FROM author_revenue WHERE author_id=?", (aid,)
+        ).fetchone()[0]
+        offset = max(page - 1, 0) * page_size
+        rows = db.execute(
+            """SELECT ar.*, p.name AS project_name
+               FROM author_revenue ar LEFT JOIN projects p ON p.id=ar.project_id
+               WHERE ar.author_id=? ORDER BY ar.created_at DESC LIMIT ? OFFSET ?""",
+            (aid, page_size, offset),
+        ).fetchall()
+        return {"rows": [dict(r) for r in rows], "total": total}
+    finally:
+        db.close()
+
+
+@app.get("/api/member/my-author-payouts")
+def api_my_author_payouts(user=Depends(get_current_user)):
+    """Author views own payout history."""
+    uid = user["sub"]
+    db = get_db()
+    try:
+        author = db.execute("SELECT id FROM authors WHERE user_id=?", (uid,)).fetchone()
+        if not author:
+            return {"payouts": []}
+        rows = db.execute(
+            "SELECT * FROM author_payouts WHERE author_id=? ORDER BY created_at DESC",
+            (author["id"],),
+        ).fetchall()
+        return {"payouts": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.post("/api/member/submit-recipe")
+def api_submit_recipe(req: RecipeSubmissionRequest, user=Depends(get_current_user)):
+    """Signed author submits a recipe for admin review."""
+    uid = user["sub"]
+    db = get_db()
+    try:
+        author = db.execute(
+            "SELECT id, contract_status FROM authors WHERE user_id=?", (uid,)
+        ).fetchone()
+        if not author or author["contract_status"] != "active":
+            raise HTTPException(403, "仅签约作者可提交食谱")
+        sid = f"sub-{uuid.uuid4().hex[:8]}"
+        db.execute(
+            """INSERT INTO recipe_submissions (id, author_id, name, description, cover_url, files_json)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (sid, author["id"], req.name.strip(), req.description, req.cover_url, req.files_json),
+        )
+        db.commit()
+        return {"ok": True, "id": sid, "message": "食谱已提交，等待管理员审核"}
+    finally:
+        db.close()
+
+
+@app.get("/api/member/my-submissions")
+def api_my_submissions(user=Depends(get_current_user)):
+    """Author views own recipe submission history."""
+    uid = user["sub"]
+    db = get_db()
+    try:
+        author = db.execute("SELECT id FROM authors WHERE user_id=?", (uid,)).fetchone()
+        if not author:
+            return {"submissions": []}
+        rows = db.execute(
+            "SELECT * FROM recipe_submissions WHERE author_id=? ORDER BY created_at DESC",
+            (author["id"],),
+        ).fetchall()
+        return {"submissions": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+# ── Public author profile / works ──
+
+@app.get("/api/authors/{author_id}/profile")
+def get_author_profile(author_id: str, user=Depends(get_current_user)):
+    """Public author profile page data — photo, intro, works gallery."""
+    db = get_db()
+    try:
+        author = db.execute(
+            "SELECT id, name, intro, license_text, photo_url, contract_status FROM authors WHERE id=?",
+            (author_id,),
+        ).fetchone()
+        if not author:
+            raise HTTPException(404, "作者不存在")
+        return dict(author)
+    finally:
+        db.close()
+
+
+@app.get("/api/authors/{author_id}/works")
+def get_author_works(author_id: str, user=Depends(get_current_user)):
+    """Public list of published works by this author (downloadable projects only)."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            """SELECT id, name, point_cost_deci, download_count, storage_path
+               FROM projects WHERE author_id=? AND is_downloadable=1
+               ORDER BY created_at DESC""",
+            (author_id,),
+        ).fetchall()
+        return {"works": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.put("/api/authors/{author_id}/photo")
+def update_author_photo(author_id: str, req: dict, user=Depends(get_current_user)):
+    """Update author photo URL."""
+    url = (req.get("photo_url") or "").strip()
+    db = get_db()
+    try:
+        db.execute("UPDATE authors SET photo_url=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+                   (url, author_id))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+# ── Admin: author contract management ──
+
+@app.get("/api/admin/authors/pending")
+def api_admin_authors_pending(user=require_perm("member.manage")):
+    """List authors with pending contract applications."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM authors WHERE contract_status='pending' ORDER BY created_at"
+        ).fetchall()
+        return {"authors": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/authors/{author_id}/approve")
+def api_admin_approve_author(author_id: str, req: AuthorContractUpdate, user=require_perm("member.manage")):
+    """Approve an author contract application and set share terms."""
+    db = get_db()
+    try:
+        author = db.execute("SELECT id, contract_status FROM authors WHERE id=?", (author_id,)).fetchone()
+        if not author:
+            raise HTTPException(404, "作者不存在")
+        now = datetime.utcnow().isoformat()
+        db.execute(
+            """UPDATE authors SET contract_status='active', contract_signed_at=?,
+               revenue_share=COALESCE(?, revenue_share), cash_share=COALESCE(?, cash_share),
+               points_per_yuan=COALESCE(?, points_per_yuan),
+               contract_note=COALESCE(?, contract_note),
+               updated_at=CURRENT_TIMESTAMP WHERE id=?""",
+            (now, req.revenue_share, req.cash_share, req.points_per_yuan,
+             req.contract_note, author_id),
+        )
+        db.commit()
+        return {"ok": True, "message": "签约申请已通过"}
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/authors/{author_id}/reject")
+def api_admin_reject_author(author_id: str, req: dict, user=require_perm("member.manage")):
+    """Reject an author contract application."""
+    db = get_db()
+    try:
+        note = (req.get("note") or "").strip()
+        db.execute(
+            "UPDATE authors SET contract_status='none', contract_note=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (f"[已拒绝] {note}" if note else "[已拒绝]", author_id),
+        )
+        db.commit()
+        return {"ok": True, "message": "签约申请已拒绝"}
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/authors/{author_id}/contract")
+def api_admin_update_contract(author_id: str, req: AuthorContractUpdate, user=require_perm("member.manage")):
+    """Update contract terms for an existing signed author."""
+    db = get_db()
+    try:
+        sets = []
+        vals = []
+        if req.revenue_share is not None:
+            sets.append("revenue_share=?")
+            vals.append(req.revenue_share)
+        if req.cash_share is not None:
+            sets.append("cash_share=?")
+            vals.append(req.cash_share)
+        if req.points_per_yuan is not None:
+            sets.append("points_per_yuan=?")
+            vals.append(req.points_per_yuan)
+        if req.contract_status is not None:
+            sets.append("contract_status=?")
+            vals.append(req.contract_status)
+        if req.contract_note is not None:
+            sets.append("contract_note=?")
+            vals.append(req.contract_note)
+        if sets:
+            sets.append("updated_at=CURRENT_TIMESTAMP")
+            vals.append(author_id)
+            db.execute(f"UPDATE authors SET {', '.join(sets)} WHERE id=?", vals)
+            db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+# ── Admin: author revenue & payout ──
+
+@app.get("/api/admin/authors/{author_id}/revenue")
+def api_admin_author_revenue(author_id: str, settled: int = 0, page: int = 1, page_size: int = 100,
+                              user=require_perm("member.manage")):
+    """Admin views revenue records for an author."""
+    db = get_db()
+    try:
+        total = db.execute(
+            "SELECT COUNT(*) FROM author_revenue WHERE author_id=? AND settled=?",
+            (author_id, settled),
+        ).fetchone()[0]
+        offset = max(page - 1, 0) * page_size
+        rows = db.execute(
+            """SELECT ar.*, p.name AS project_name
+               FROM author_revenue ar LEFT JOIN projects p ON p.id=ar.project_id
+               WHERE ar.author_id=? AND ar.settled=? ORDER BY ar.created_at DESC LIMIT ? OFFSET ?""",
+            (author_id, settled, page_size, offset),
+        ).fetchall()
+        # Summary
+        summary = db.execute(
+            """SELECT COALESCE(SUM(author_points_deci),0) AS total_points,
+                      COALESCE(SUM(author_cash_cents),0) AS total_cash_cents,
+                      COUNT(*) AS cnt
+               FROM author_revenue WHERE author_id=? AND settled=?""",
+            (author_id, settled),
+        ).fetchone()
+        return {
+            "rows": [dict(r) for r in rows], "total": total,
+            "total_points_deci": int(summary["total_points"]),
+            "total_cash_cents": int(summary["total_cash_cents"]),
+            "count": int(summary["cnt"]),
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/authors/{author_id}/payout")
+def api_admin_create_payout(author_id: str, req: AuthorPayoutCreate, user=require_perm("member.manage")):
+    """Create a payout for an author — settles all unsettled revenue in the given period."""
+    db = get_db()
+    try:
+        # Sum unsettled revenue
+        summary = db.execute(
+            """SELECT COALESCE(SUM(author_points_deci),0) AS pts,
+                      COALESCE(SUM(author_cash_cents),0) AS cash,
+                      COUNT(*) AS cnt
+               FROM author_revenue WHERE author_id=? AND settled=0""",
+            (author_id,),
+        ).fetchone()
+        if summary["cnt"] == 0:
+            raise HTTPException(400, "没有待结算的收益")
+        pid = f"pay-{uuid.uuid4().hex[:8]}"
+        db.execute(
+            """INSERT INTO author_payouts (id, author_id, points_deci, cash_cents,
+               revenue_count, period_start, period_end, note)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            (pid, author_id, int(summary["pts"]), int(summary["cash"]),
+             int(summary["cnt"]), req.period_start, req.period_end, req.note),
+        )
+        # Mark revenue as settled
+        db.execute(
+            "UPDATE author_revenue SET settled=1, payout_id=? WHERE author_id=? AND settled=0",
+            (pid, author_id),
+        )
+        db.commit()
+        return {"ok": True, "payout_id": pid,
+                "points_deci": int(summary["pts"]),
+                "cash_cents": int(summary["cash"]),
+                "revenue_count": int(summary["cnt"])}
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/authors/payouts")
+def api_admin_payouts(author_id: str = "", user=require_perm("member.manage")):
+    """List payout records, optionally filtered by author."""
+    db = get_db()
+    try:
+        if author_id:
+            rows = db.execute(
+                "SELECT * FROM author_payouts WHERE author_id=? ORDER BY created_at DESC",
+                (author_id,),
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT ap.*, a.name AS author_name FROM author_payouts ap LEFT JOIN authors a ON a.id=ap.author_id ORDER BY ap.created_at DESC"
+            ).fetchall()
+        return {"payouts": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+# ── Admin: recipe submission review ──
+
+@app.get("/api/admin/submissions/pending")
+def api_admin_submissions_pending(user=require_perm("member.manage")):
+    """List pending recipe submissions."""
+    db = get_db()
+    try:
+        rows = db.execute(
+            """SELECT rs.*, a.name AS author_name FROM recipe_submissions rs
+               LEFT JOIN authors a ON a.id=rs.author_id
+               WHERE rs.status='pending' ORDER BY rs.created_at"""
+        ).fetchall()
+        return {"submissions": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/submissions/{submission_id}/approve")
+def api_admin_approve_submission(submission_id: str, req: RecipeSubmissionApprove,
+                                  user=require_perm("member.manage")):
+    """Approve a recipe submission — creates a real project from it."""
+    db = get_db()
+    try:
+        sub = db.execute(
+            "SELECT * FROM recipe_submissions WHERE id=? AND status='pending'",
+            (submission_id,),
+        ).fetchone()
+        if not sub:
+            raise HTTPException(404, "提交不存在或已处理")
+        now = datetime.utcnow().isoformat()
+        # Create project
+        pid = f"proj-{uuid.uuid4().hex[:8]}"
+        db.execute(
+            """INSERT INTO projects (id, name, workspace_id, source_type, author_id,
+               point_cost_deci, is_downloadable, category_id, download_count, view_count,
+               status, storage_path, created_at, updated_at)
+               VALUES (?, ?, '', 'file', ?, ?, 1, ?, 0, 0, 'published', '', ?, ?)""",
+            (pid, sub["name"], sub["author_id"], req.point_cost_deci, req.category_id, now, now),
+        )
+        # Handle files — store as raw text content
+        files_json = sub["files_json"] or "[]"
+        files_list = json.loads(files_json) if isinstance(files_json, str) else files_json
+        raw_text = sub["description"] or ""
+        if files_list:
+            filenames = ", ".join(f.get("name", "") for f in files_list if f.get("name"))
+            raw_text = f"[附件: {filenames}]\n\n{raw_text}"
+        db.execute(
+            "UPDATE projects SET source_url=? WHERE id=?",
+            (raw_text, pid),
+        )
+        # Update submission
+        db.execute(
+            """UPDATE recipe_submissions SET status='approved', point_cost_deci=?,
+               category_id=?, reviewed_by=?, reviewed_at=?, created_project_id=?
+               WHERE id=?""",
+            (req.point_cost_deci, req.category_id, user.get("sub", ""), now, pid, submission_id),
+        )
+        db.commit()
+        return {"ok": True, "project_id": pid, "message": "食谱已通过审核并上架"}
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/submissions/{submission_id}/reject")
+def api_admin_reject_submission(submission_id: str, req: RecipeSubmissionReject,
+                                 user=require_perm("member.manage")):
+    """Reject a recipe submission."""
+    db = get_db()
+    try:
+        now = datetime.utcnow().isoformat()
+        db.execute(
+            """UPDATE recipe_submissions SET status='rejected', review_note=?,
+               reviewed_by=?, reviewed_at=? WHERE id=? AND status='pending'""",
+            (req.review_note, user.get("sub", ""), now, submission_id),
+        )
+        db.commit()
+        return {"ok": True, "message": "食谱已驳回"}
+    finally:
+        db.close()
+
+
+# ── Admin: revenue overview ──
+
+@app.get("/api/admin/stats/revenue")
+def api_admin_revenue_stats(user=require_perm("member.manage")):
+    """Revenue overview: total platform revenue and per-author breakdown."""
+    db = get_db()
+    try:
+        summary = db.execute(
+            """SELECT COALESCE(SUM(points_spent_deci),0) AS total_points_spent,
+                      COALESCE(SUM(author_points_deci),0) AS total_author_points,
+                      COALESCE(SUM(author_cash_cents),0) AS total_author_cash_cents,
+                      COUNT(*) AS total_unlocks
+               FROM author_revenue"""
+        ).fetchone()
+        by_author = db.execute(
+            """SELECT a.id, a.name, a.contract_status, a.revenue_share, a.cash_share,
+                      COALESCE(SUM(ar.author_points_deci),0) AS pts,
+                      COALESCE(SUM(ar.author_cash_cents),0) AS cash,
+                      COALESCE(SUM(CASE WHEN ar.settled=0 THEN ar.author_points_deci ELSE 0 END),0) AS unsettled_pts,
+                      COALESCE(SUM(CASE WHEN ar.settled=0 THEN ar.author_cash_cents ELSE 0 END),0) AS unsettled_cash,
+                      COUNT(ar.id) AS cnt
+               FROM authors a LEFT JOIN author_revenue ar ON ar.author_id=a.id
+               WHERE a.contract_status='active'
+               GROUP BY a.id ORDER BY pts DESC"""
+        ).fetchall()
+        return {
+            "total_points_spent_deci": int(summary["total_points_spent"]),
+            "total_author_points_deci": int(summary["total_author_points"]),
+            "total_author_cash_cents": int(summary["total_author_cash_cents"]),
+            "total_unlocks": int(summary["total_unlocks"]),
+            "by_author": [dict(r) for r in by_author],
+        }
     finally:
         db.close()
 
@@ -5794,6 +6336,11 @@ async def api_unlock_projects(request: Request, user=Depends(get_current_user)):
                    VALUES (?, ?, ?, ?, ?)""",
                 (uid, p["project_id"], p["point_cost_deci"], now, expires),
             )
+
+        # ── Author revenue tracking ──
+        for p in unlocked:
+            _record_author_revenue(db, p["project_id"], p["point_cost_deci"])
+        # ── End author revenue ──
 
         db.commit()
         return {

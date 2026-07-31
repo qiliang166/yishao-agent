@@ -1,5 +1,41 @@
 ﻿# 更新日志
 
+## 2026-08-01
+
+- fix: prevent log container overflow by constraining card parent with overflow:hidden + maxHeight/minHeight on log
+
+## 2026-07-31
+
+- fix: validate cached HTML starts with '<' to prevent dirty LLM output from entering/resuming from cache
+
+## 2026-07-31
+
+- fix: clear slide cache when outline is regenerated
+
+## 2026-07-31
+
+- feat: PPT generation resume from cache — skip already-generated slides on re-run
+
+## 2026-07-31
+
+- fix: video copy uses resolve_project_storage instead of raw DB field
+
+## 2026-07-31
+
+- fix: use absolute positioning for panel-left to force height constraint
+
+## 2026-07-31
+
+- fix: use height:100% instead of max-height/min-height on panel-left
+
+## 2026-07-31
+
+- fix: remove max-height:100% on panel-left, rely on flex stretch constraint
+
+## 2026-07-31
+
+- fix: structural container fix — max-height on panel-left + stable card height
+
 ## 2026-07-31
 
 - fix: split video card into input + action cards so buttons stay visible

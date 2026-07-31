@@ -20,6 +20,8 @@ import MemberApprovalPage from './pages/MemberApprovalPage'
 import UserManagePage from './pages/UserManagePage'
 import DownloadStatsPage from './pages/DownloadStatsPage'
 import AuthorManagePage from './pages/AuthorManagePage'
+import AuthorProfilePage from './pages/AuthorProfilePage'
+import MemberAuthorPage from './pages/MemberAuthorPage'
 import MemberDownloadsPage from './pages/MemberDownloadsPage'
 import RoleManagePage from './pages/RoleManagePage'
 import LandingPage from './pages/LandingPage'
@@ -607,6 +609,7 @@ function MemberAppShell() {
             <Route path="/project/:id" element={<ProjectPage />} />
             <Route path="/manual" element={<ManualPage />} />
             <Route path="/center" element={<MemberCenterPage />} />
+            <Route path="/author" element={<MemberAuthorPage />} />
             <Route path="/downloads" element={<MemberDownloadsPage />} />
             <Route path="/booklets" element={<BookletListPage />} />
             <Route path="/booklets/:id" element={<BookletEditorPage />} />
@@ -703,6 +706,7 @@ function AppShell() {
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
             <Route path="/member-center" element={<MemberCenterPage />} />
             <Route path="/" element={<HomePage />} />
+            <Route path="/author/:id" element={<AuthorProfilePage />} />
             <Route path="/home" element={<HomePage />} />
           </Routes>
         </div>
@@ -769,6 +773,7 @@ function App() {
             <Route path="/member" element={<MemberLoginPage />} />
             <Route path="/member/register" element={<MemberRegisterPage />} />
             <Route path="/member/renew" element={<MemberRenewPage />} />
+            <Route path="/author/:id" element={<AuthorProfilePage />} />
             <Route path="/app/*" element={
               <ProtectedRoute requiredType="member">
                 <MemberAppShell />

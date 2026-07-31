@@ -1409,6 +1409,83 @@ def init_db():
         except Exception:
             pass  # column already exists
 
+        # ── Signed author / revenue sharing migration ──
+        try:
+            author_cols = [r[1] for r in conn.execute("PRAGMA table_info(authors)").fetchall()]
+            author_adds = [
+                ("photo_url", "TEXT DEFAULT ''"),
+                ("user_id", "TEXT DEFAULT ''"),
+                ("contract_status", "TEXT DEFAULT 'none'"),
+                ("revenue_share", "REAL DEFAULT 0.7"),
+                ("cash_share", "REAL DEFAULT 0.0"),
+                ("points_per_yuan", "REAL DEFAULT 100.0"),
+                ("contract_signed_at", "TEXT DEFAULT ''"),
+                ("contract_note", "TEXT DEFAULT ''"),
+            ]
+            for col_name, col_def in author_adds:
+                if col_name not in author_cols:
+                    conn.execute(f"ALTER TABLE authors ADD COLUMN {col_name} {col_def}")
+        except Exception as e:
+            print(f"[DB] Warning: could not extend authors table: {e}")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS author_revenue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                author_id TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                unlock_id INTEGER NOT NULL,
+                points_spent_deci INTEGER NOT NULL,
+                share_rate REAL NOT NULL,
+                cash_share_rate REAL NOT NULL,
+                author_points_deci INTEGER NOT NULL,
+                author_cash_cents INTEGER DEFAULT 0,
+                points_per_yuan REAL NOT NULL,
+                settled INTEGER DEFAULT 0,
+                payout_id TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_arev_author ON author_revenue(author_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_arev_settled ON author_revenue(settled)")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS author_payouts (
+                id TEXT PRIMARY KEY,
+                author_id TEXT NOT NULL,
+                points_deci INTEGER NOT NULL,
+                cash_cents INTEGER NOT NULL DEFAULT 0,
+                revenue_count INTEGER NOT NULL,
+                period_start TEXT NOT NULL,
+                period_end TEXT NOT NULL,
+                status TEXT DEFAULT 'pending',
+                note TEXT DEFAULT '',
+                paid_at TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_apay_author ON author_payouts(author_id)")
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS recipe_submissions (
+                id TEXT PRIMARY KEY,
+                author_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                cover_url TEXT DEFAULT '',
+                files_json TEXT DEFAULT '[]',
+                point_cost_deci INTEGER DEFAULT 0,
+                category_id TEXT DEFAULT '',
+                status TEXT DEFAULT 'pending',
+                review_note TEXT DEFAULT '',
+                reviewed_by TEXT DEFAULT '',
+                reviewed_at TEXT DEFAULT '',
+                created_project_id TEXT DEFAULT '',
+                created_at TEXT DEFAULT (datetime('now','localtime'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_rsub_author ON recipe_submissions(author_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_rsub_status ON recipe_submissions(status)")
+
         conn.commit()
     finally:
         conn.close()

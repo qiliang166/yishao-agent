@@ -260,6 +260,51 @@ export const api = {
     request(`/api/authors/${authorId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   deleteAuthor: (authorId: string) =>
     request(`/api/authors/${authorId}`, { method: 'DELETE' }),
+  // Signed author / contract
+  getAuthorProfile: (authorId: string) =>
+    request(`/api/authors/${authorId}/profile`).then(d => d as { id: string; name: string; intro: string; license_text: string; photo_url: string; contract_status: string }),
+  getAuthorWorks: (authorId: string) =>
+    request(`/api/authors/${authorId}/works`).then(d => d as { works: { id: string; name: string; point_cost_deci: number; download_count: number; storage_path: string }[] }),
+  updateAuthorPhoto: (authorId: string, photo_url: string) =>
+    request(`/api/authors/${authorId}/photo`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photo_url }) }),
+  // Member author self-service
+  applyAuthor: (data: { name: string; intro?: string; photo_url?: string; note?: string }) =>
+    request('/api/member/apply-author', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  myAuthorStatus: () =>
+    request('/api/member/my-author-status'),
+  myAuthorRevenue: (page?: number, pageSize?: number) =>
+    request(`/api/member/my-author-revenue?page=${page || 1}&page_size=${pageSize || 50}`),
+  myAuthorPayouts: () =>
+    request('/api/member/my-author-payouts'),
+  submitRecipe: (data: { name: string; description?: string; cover_url?: string; files_json?: string }) =>
+    request('/api/member/submit-recipe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  mySubmissions: () =>
+    request('/api/member/my-submissions'),
+  // Admin: author contract
+  adminAuthorsPending: () =>
+    request('/api/admin/authors/pending').then(d => d as { authors: any[] }),
+  adminApproveAuthor: (authorId: string, data: { revenue_share?: number; cash_share?: number; points_per_yuan?: number; contract_note?: string }) =>
+    request(`/api/admin/authors/${authorId}/approve`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  adminRejectAuthor: (authorId: string, note?: string) =>
+    request(`/api/admin/authors/${authorId}/reject`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ note }) }),
+  adminUpdateContract: (authorId: string, data: { revenue_share?: number; cash_share?: number; points_per_yuan?: number; contract_status?: string; contract_note?: string }) =>
+    request(`/api/admin/authors/${authorId}/contract`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  // Admin: revenue & payouts
+  adminAuthorRevenue: (authorId: string, settled?: number) =>
+    request(`/api/admin/authors/${authorId}/revenue?settled=${settled ?? 0}`),
+  adminCreatePayout: (authorId: string, data: { period_start: string; period_end: string; note?: string }) =>
+    request(`/api/admin/authors/${authorId}/payout`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  adminPayouts: (authorId?: string) =>
+    request(`/api/admin/authors/payouts${authorId ? `?author_id=${authorId}` : ''}`),
+  adminRevenueStats: () =>
+    request('/api/admin/stats/revenue'),
+  // Admin: recipe submissions
+  adminSubmissionsPending: () =>
+    request('/api/admin/submissions/pending').then(d => d as { submissions: any[] }),
+  adminApproveSubmission: (submissionId: string, data: { point_cost_deci?: number; category_id?: string }) =>
+    request(`/api/admin/submissions/${submissionId}/approve`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
+  adminRejectSubmission: (submissionId: string, review_note: string) =>
+    request(`/api/admin/submissions/${submissionId}/reject`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ review_note }) }),
   batchDeleteProjects: (ids: string[]) =>
     request('/api/projects/batch-delete', {
       method: 'POST',

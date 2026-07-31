@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../services/api'
 
@@ -20,6 +20,7 @@ interface MemberProfile {
 
 export default function MemberCenterPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [profile, setProfile] = useState<MemberProfile | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -175,6 +176,19 @@ export default function MemberCenterPage() {
             <span style={{ width: 80, color: 'var(--text-secondary)', flexShrink: 0 }}>账号状态</span>
             <span>{profile?.is_active ? '正常' : '已停用'}</span>
           </div>
+        </div>
+      </div>
+
+      {/* Author Center entry */}
+      <div className="ac-sub-item" style={{ marginBottom: 16 }}>
+        <div className="ac-sub-item-header">创作者</div>
+        <div style={{ marginTop: 8 }}>
+          <button className="btn btn-primary btn-sm" onClick={() => navigate('/app/author')}>
+            作者中心 →
+          </button>
+          <span style={{ fontSize: 10, color: 'var(--text-secondary)', marginLeft: 8 }}>
+            申请签约作者、管理食谱、查看收益
+          </span>
         </div>
       </div>
 
