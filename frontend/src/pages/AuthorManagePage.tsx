@@ -540,6 +540,7 @@ export default function AuthorManagePage() {
                   )}
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <span>作者: {s.author_name || s.author_id}</span>
+                    {s.point_cost_deci > 0 && <span>建议积分: {(s.point_cost_deci / 10).toFixed(1)}</span>}
                     {s.cover_url && <span>有封面图</span>}
                     {s.files_json && s.files_json !== '[]' && <span>附件: {JSON.parse(s.files_json).length} 个</span>}
                     <span>提交: {s.created_at?.substring(0, 10)}</span>
@@ -547,7 +548,7 @@ export default function AuthorManagePage() {
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 16 }}>
                   <button className="btn btn-primary btn-sm"
-                    onClick={() => { setSubApproveOpen(s.id); setSubPointCost('5'); setSubCategory('') }}>
+                    onClick={() => { setSubApproveOpen(s.id); setSubPointCost(String(s.point_cost_deci || 5)); setSubCategory('') }}>
                     通过
                   </button>
                   <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}

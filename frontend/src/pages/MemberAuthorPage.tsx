@@ -45,6 +45,7 @@ export default function MemberAuthorPage() {
   const [showSubmit, setShowSubmit] = useState(false)
   const [recipeName, setRecipeName] = useState('')
   const [recipeDesc, setRecipeDesc] = useState('')
+  const [recipePoints, setRecipePoints] = useState('5')
   const [recipeFileName, setRecipeFileName] = useState('')
   const [uploadMaxMb, setUploadMaxMb] = useState(50)
   const [uploading, setUploading] = useState(false)
@@ -135,10 +136,10 @@ export default function MemberAuthorPage() {
     if (!recipeName.trim()) { modal.toast('请输入食谱名称', 'error'); return }
     setSubmitting(true)
     try {
-      await api.submitRecipe({ name: recipeName.trim(), description: recipeDesc })
+      await api.submitRecipe({ name: recipeName.trim(), description: recipeDesc, point_cost_deci: parseInt(recipePoints) || 5 })
       modal.toast('食谱已提交，等待审核', 'success')
       setShowSubmit(false)
-      setRecipeName(''); setRecipeDesc(''); setRecipeFileName('')
+      setRecipeName(''); setRecipeDesc(''); setRecipePoints('5'); setRecipeFileName('')
       if (fileInputRef.current) fileInputRef.current.value = ''
       load()
     } catch (e: any) {
@@ -323,6 +324,16 @@ export default function MemberAuthorPage() {
                     <div>
                       <div className="form-label">食谱描述/正文</div>
                       <textarea className="form-input" rows={5} value={recipeDesc} onChange={e => setRecipeDesc(e.target.value)} placeholder="食谱的详细内容、步骤等" />
+                    </div>
+                    <div>
+                      <div className="form-label">建议积分定价</div>
+                      <input className="form-input" type="number" step="1" min="1" value={recipePoints}
+                        onChange={e => setRecipePoints(e.target.value)}
+                        placeholder="例如 5 表示 0.5 积分"
+                        style={{ width: 120, boxSizing: 'border-box' }} />
+                      <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                        单位: 分 (5 = 0.5积分)，最终以管理员审核为准
+                      </span>
                     </div>
                     <div>
                       <div className="form-label">上传附件 <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-secondary)' }}>(最大 {uploadMaxMb}MB)</span></div>

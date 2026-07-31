@@ -1970,9 +1970,9 @@ def api_submit_recipe(req: RecipeSubmissionRequest, user=Depends(get_current_use
             raise HTTPException(403, "仅签约作者可提交食谱")
         sid = f"sub-{uuid.uuid4().hex[:8]}"
         db.execute(
-            """INSERT INTO recipe_submissions (id, author_id, name, description, cover_url, files_json)
-               VALUES (?, ?, ?, ?, ?, ?)""",
-            (sid, author["id"], req.name.strip(), req.description, req.cover_url, req.files_json),
+            """INSERT INTO recipe_submissions (id, author_id, name, description, cover_url, files_json, point_cost_deci)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (sid, author["id"], req.name.strip(), req.description, req.cover_url, req.files_json, req.point_cost_deci or 0),
         )
         db.commit()
         return {"ok": True, "id": sid, "message": "食谱已提交，等待管理员审核"}

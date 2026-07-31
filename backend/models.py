@@ -277,6 +277,7 @@ class RecipeSubmissionRequest(BaseModel):
     description: str = ""
     cover_url: str = ""
     files_json: str = "[]"
+    point_cost_deci: int = 0
 
 
 class RecipeSubmissionApprove(BaseModel):
