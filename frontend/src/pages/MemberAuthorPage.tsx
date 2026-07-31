@@ -45,8 +45,6 @@ export default function MemberAuthorPage() {
   const [showSubmit, setShowSubmit] = useState(false)
   const [recipeName, setRecipeName] = useState('')
   const [recipeDesc, setRecipeDesc] = useState('')
-  const [recipeCover, setRecipeCover] = useState('')
-  const [recipeFiles, setRecipeFiles] = useState('[]')
   const [submitting, setSubmitting] = useState(false)
 
   const load = async () => {
@@ -113,10 +111,10 @@ export default function MemberAuthorPage() {
     if (!recipeName.trim()) { modal.toast('请输入食谱名称', 'error'); return }
     setSubmitting(true)
     try {
-      await api.submitRecipe({ name: recipeName.trim(), description: recipeDesc, cover_url: recipeCover, files_json: recipeFiles })
+      await api.submitRecipe({ name: recipeName.trim(), description: recipeDesc })
       modal.toast('食谱已提交，等待审核', 'success')
       setShowSubmit(false)
-      setRecipeName(''); setRecipeDesc(''); setRecipeCover(''); setRecipeFiles('[]')
+      setRecipeName(''); setRecipeDesc('')
       load()
     } catch (e: any) {
       modal.toast('提交失败: ' + e.message, 'error')
@@ -287,16 +285,6 @@ export default function MemberAuthorPage() {
                     <div>
                       <div className="form-label">食谱描述/正文</div>
                       <textarea className="form-input" rows={5} value={recipeDesc} onChange={e => setRecipeDesc(e.target.value)} placeholder="食谱的详细内容、步骤等" />
-                    </div>
-                    <div>
-                      <div className="form-label">封面图 URL</div>
-                      <input className="form-input" value={recipeCover} onChange={e => setRecipeCover(e.target.value)} placeholder="封面的图片链接" />
-                    </div>
-                    <div>
-                      <div className="form-label">附件配置（JSON 数组）</div>
-                      <textarea className="form-input" rows={3} value={recipeFiles} onChange={e => setRecipeFiles(e.target.value)}
-                        placeholder='[{"name":"附件1.pdf","url":"...","type":"pdf","size":12345}]' />
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4 }}>{'格式: [{"name":"文件名","url":"链接","type":"类型","size":字节数}]'}</div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-primary" disabled={submitting} onClick={handleSubmitRecipe}>{submitting ? '提交中...' : '提交'}</button>

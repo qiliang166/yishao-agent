@@ -22,7 +22,7 @@ interface Author {
 
 export default function AuthorManagePage() {
   const modal = useModal()
-  const [tab, setTab] = useState<'authors' | 'pending' | 'submissions' | 'revenue'>('authors')
+  const [tab, setTab] = useState<'authors' | 'pending' | 'submissions' | 'revenue' | 'settings'>('authors')
 
   // ── Authors tab ──
   const [authors, setAuthors] = useState<Author[]>([])
@@ -75,6 +75,12 @@ export default function AuthorManagePage() {
   const [contractNote, setContractNote] = useState('')
   const [contractSaving, setContractSaving] = useState(false)
 
+  // ── Settings tab ──
+  const [contractEnabled, setContractEnabled] = useState(false)
+  const [contractTemplate, setContractTemplate] = useState('')
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [settingsMsg, setSettingsMsg] = useState('')
+
   const loadAuthors = async () => {
     setLoading(true)
     try {
@@ -125,13 +131,39 @@ export default function AuthorManagePage() {
     }
   }
 
+  const loadSettings = async () => {
+    try {
+      const data = await api.getSettings()
+      const s = (data as any)?.settings || {}
+      setContractEnabled(s.author_contract_enabled === '1')
+      if (s.author_contract_template) setContractTemplate(s.author_contract_template)
+    } catch {}
+  }
+
   useEffect(() => { loadAuthors() }, [])
 
   useEffect(() => {
     if (tab === 'pending') loadPending()
     else if (tab === 'submissions') loadSubmissions()
     else if (tab === 'revenue') loadRevenue()
+    else if (tab === 'settings') loadSettings()
   }, [tab])
+
+  const saveSettings = async () => {
+    setSettingsSaving(true)
+    setSettingsMsg('')
+    try {
+      await api.updateSettings({
+        author_contract_enabled: contractEnabled ? '1' : '0',
+        author_contract_template: contractTemplate,
+      })
+      setSettingsMsg('保存成功')
+    } catch (e: any) {
+      setSettingsMsg('保存失败: ' + (e.message || '未知错误'))
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
 
   // ── Authors CRUD ──
   const openCreate = () => {
@@ -309,6 +341,7 @@ export default function AuthorManagePage() {
           ['pending', '签约审核'],
           ['submissions', '食谱审核'],
           ['revenue', '收益管理'],
+          ['settings', '功能设置'],
         ] as const).map(([k, label]) => (
           <button key={k}
             onClick={() => setTab(k)}
@@ -697,6 +730,50 @@ export default function AuthorManagePage() {
             </>
           )}
         </>
+      )}
+
+      {/* ── Tab: 功能设置 ── */}
+      {tab === 'settings' && (
+        <div style={{ maxWidth: 600 }}>
+          <div style={{ background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--border)', padding: 24 }}>
+            <h3 style={{ margin: '0 0 20px 0', fontSize: 16 }}>签约作者设置</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 13, fontWeight: 500, minWidth: 80 }}>签约功能</span>
+                <button
+                  className={contractEnabled ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm'}
+                  onClick={() => setContractEnabled(!contractEnabled)}
+                  style={{ minWidth: 80 }}
+                >
+                  {contractEnabled ? '已开启' : '已关闭'}
+                </button>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                  {contractEnabled ? '会员可申请签约作者' : '关闭签约作者申请入口（已签约作者不受影响）'}
+                </span>
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>签约须知</div>
+                <textarea className="form-textarea" rows={8} value={contractTemplate}
+                  onChange={e => setContractTemplate(e.target.value)}
+                  placeholder="在此编辑签约须知内容（支持 Markdown），会员申请签约作者时需阅读并同意..."
+                  style={{ width: '100%', resize: 'vertical', boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                会员申请签约作者时，将在申请表单底部展示此内容，需勾选「我已阅读并同意签约须知」后才能提交。
+              </div>
+              {settingsMsg && (
+                <div style={{ fontSize: 12, color: settingsMsg.includes('失败') ? 'var(--warning)' : 'var(--success)', textAlign: 'center' }}>
+                  {settingsMsg}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-primary btn-sm" disabled={settingsSaving} onClick={saveSettings}>
+                  {settingsSaving ? '保存中...' : '保存设置'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Author edit dialog ── */}
