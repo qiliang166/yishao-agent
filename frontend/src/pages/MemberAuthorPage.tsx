@@ -1,6 +1,23 @@
 import { useState, useEffect } from 'react'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+
+const DEFAULT_CONTRACT_TEMPLATE = `## 签约作者协议
+
+欢迎申请成为本平台签约作者。签约后，您将获得以下权益：
+
+1. **收益分佣**：您的食谱作品被会员下载后，将按签约比例获得积分和现金收益。
+2. **作品上架**：提交的食谱经审核通过后，将上架至平台供会员浏览和下载。
+3. **作者主页**：拥有个人专属作者主页，展示您的相片和作品集。
+
+**签约义务**：
+- 保证提交作品的原创性，不得侵犯他人知识产权
+- 遵守平台审核规范，配合管理员的内容审核
+- 分佣比例以签约时约定为准，平台有权根据规则调整
+
+如您同意以上条款，请勾选下方确认框并提交申请。`
 
 export default function MemberAuthorPage() {
   const modal = useModal()
@@ -18,6 +35,10 @@ export default function MemberAuthorPage() {
   const [applyPhotoUrl, setApplyPhotoUrl] = useState('')
   const [applyNote, setApplyNote] = useState('')
   const [applying, setApplying] = useState(false)
+
+  // Contract agreement
+  const [contractTemplate, setContractTemplate] = useState('')
+  const [agreedContract, setAgreedContract] = useState(false)
 
   // Submit recipe form
   const [showSubmit, setShowSubmit] = useState(false)
@@ -50,6 +71,18 @@ export default function MemberAuthorPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Load contract template when apply form opens
+  useEffect(() => {
+    if (!showApply) return
+    fetch('/api/settings')
+      .then(r => r.json())
+      .then(data => {
+        const s = data.settings || {}
+        setContractTemplate(s.author_contract_template || DEFAULT_CONTRACT_TEMPLATE)
+      })
+      .catch(() => setContractTemplate(DEFAULT_CONTRACT_TEMPLATE))
+  }, [showApply])
 
   const handleApply = async () => {
     if (!applyName.trim()) { modal.toast('请输入作者姓名', 'error'); return }
@@ -117,9 +150,24 @@ export default function MemberAuthorPage() {
               <div className="form-label">申请说明</div>
               <textarea className="form-input" rows={2} value={applyNote} onChange={e => setApplyNote(e.target.value)} placeholder="补充说明（可选）" />
             </div>
+            {/* Contract notice */}
+            {contractTemplate && (
+              <div style={{
+                border: '1px solid var(--border)', borderRadius: 8, padding: 12,
+                background: 'var(--bg-secondary)', maxHeight: 200, overflowY: 'auto',
+              }}>
+                <div className="prev-md" style={{ fontSize: 12, lineHeight: 1.7 }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(contractTemplate) as string) }} />
+              </div>
+            )}
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+              <input type="checkbox" checked={agreedContract} onChange={e => setAgreedContract(e.target.checked)}
+                style={{ width: 16, height: 16, cursor: 'pointer' }} />
+              <span>我已阅读并同意签约须知</span>
+            </label>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn btn-primary" disabled={applying} onClick={handleApply}>{applying ? '提交中...' : '提交申请'}</button>
-              <button className="btn btn-ghost" onClick={() => setShowApply(false)}>取消</button>
+              <button className="btn btn-primary" disabled={applying || !agreedContract} onClick={handleApply}>{applying ? '提交中...' : '提交申请'}</button>
+              <button className="btn btn-ghost" onClick={() => { setShowApply(false); setAgreedContract(false) }}>取消</button>
             </div>
           </div>
         </div>

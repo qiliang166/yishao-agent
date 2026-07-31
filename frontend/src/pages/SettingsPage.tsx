@@ -116,6 +116,7 @@ function SettingsPage() {
   // 积分换算
   const [pointsPerYuan, setPointsPerYuan] = useState('1.0')
   const [newUserPointsDeci, setNewUserPointsDeci] = useState('5')
+  const [authorContractTemplate, setAuthorContractTemplate] = useState('')
 
   const [adminPasswordEnabled, setAdminPasswordEnabled] = useState(true)
 
@@ -178,6 +179,7 @@ function SettingsPage() {
       }
       if (s.points_per_yuan) setPointsPerYuan(s.points_per_yuan)
       if (s.new_user_points_deci) setNewUserPointsDeci(s.new_user_points_deci)
+      if (s.author_contract_template) setAuthorContractTemplate(s.author_contract_template)
       setAdminPasswordEnabled(s.admin_password_enabled !== '0')
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
@@ -307,6 +309,7 @@ function SettingsPage() {
         }),
         points_per_yuan: pointsPerYuan,
         new_user_points_deci: newUserPointsDeci,
+        author_contract_template: authorContractTemplate,
       })
       const fallback = (await api.getVersion()).app || ''
       document.title = brandName || fallback
@@ -669,6 +672,20 @@ function SettingsPage() {
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               显示在会员注册页、注册成功页和会员登录页底部（"遇到问题？联系我们"），方便客户联系到您。
+            </div>
+          </div>
+
+          <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
+            <h3>签约作者设置</h3>
+            <div className="settings-row" style={{ alignItems: 'flex-start' }}>
+              <label>签约须知</label>
+              <textarea className="form-textarea" rows={8} value={authorContractTemplate}
+                onChange={e => setAuthorContractTemplate(e.target.value)}
+                placeholder="在此编辑签约须知内容（支持 Markdown），会员申请签约作者时需阅读并同意..."
+                style={{ maxWidth: 480, width: '100%', resize: 'vertical' }} disabled={!canSaveGlobal} />
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+              会员申请签约作者时，将在申请表单底部展示此内容，需勾选「我已阅读并同意签约须知」后才能提交。
             </div>
           </div>
 
