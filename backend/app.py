@@ -2225,14 +2225,26 @@ def api_admin_approve_submission(submission_id: str, req: RecipeSubmissionApprov
         if not sub:
             raise HTTPException(404, "提交不存在或已处理")
         now = datetime.utcnow().isoformat()
+        # Get or create workspace for recipe projects
+        recipe_ws = db.execute(
+            "SELECT id FROM workspaces WHERE name='食谱作品' LIMIT 1"
+        ).fetchone()
+        if recipe_ws:
+            ws_id = recipe_ws["id"]
+        else:
+            ws_id = f"ws-{uuid.uuid4().hex[:8]}"
+            db.execute(
+                "INSERT INTO workspaces (id, name, status, created_at, updated_at) VALUES (?, '食谱作品', 'completed', ?, ?)",
+                (ws_id, now, now),
+            )
         # Create project
         pid = f"proj-{uuid.uuid4().hex[:8]}"
         db.execute(
             """INSERT INTO projects (id, name, workspace_id, source_type, author_id,
                point_cost_deci, is_downloadable, category_id, download_count, view_count,
                status, storage_path, created_at, updated_at)
-               VALUES (?, ?, '', 'file', ?, ?, 1, ?, 0, 0, 'published', '', ?, ?)""",
-            (pid, sub["name"], sub["author_id"], req.point_cost_deci, req.category_id, now, now),
+               VALUES (?, ?, ?, 'file', ?, ?, 1, ?, 0, 0, 'published', '', ?, ?)""",
+            (pid, sub["name"], ws_id, sub["author_id"], req.point_cost_deci, req.category_id, now, now),
         )
         # Handle files — store as raw text content
         files_json = sub["files_json"] or "[]"
