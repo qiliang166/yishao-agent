@@ -2228,6 +2228,29 @@ def api_admin_payouts(author_id: str = "", user=require_perm("member.manage")):
 
 # ── Admin: recipe submission review ──
 
+@app.get("/api/admin/submissions")
+def api_admin_submissions(status: str = "all", user=require_perm("member.manage")):
+    """List recipe submissions with optional status filter (all, pending, approved, rejected)."""
+    db = get_db()
+    try:
+        if status == "all":
+            rows = db.execute(
+                """SELECT rs.*, a.name AS author_name FROM recipe_submissions rs
+                   LEFT JOIN authors a ON a.id=rs.author_id
+                   ORDER BY rs.created_at DESC"""
+            ).fetchall()
+        else:
+            rows = db.execute(
+                """SELECT rs.*, a.name AS author_name FROM recipe_submissions rs
+                   LEFT JOIN authors a ON a.id=rs.author_id
+                   WHERE rs.status=? ORDER BY rs.created_at DESC""",
+                (status,),
+            ).fetchall()
+        return {"submissions": [dict(r) for r in rows]}
+    finally:
+        db.close()
+
+
 @app.get("/api/admin/submissions/pending")
 def api_admin_submissions_pending(user=require_perm("member.manage")):
     """List pending recipe submissions."""
@@ -2246,7 +2269,7 @@ def api_admin_submissions_pending(user=require_perm("member.manage")):
 @app.put("/api/admin/submissions/{submission_id}/approve")
 def api_admin_approve_submission(submission_id: str, req: RecipeSubmissionApprove,
                                   user=require_perm("member.manage")):
-    """Approve a recipe submission — creates a real project from it."""
+    """Approve a recipe submission — marks it approved, admin creates project manually later."""
     db = get_db()
     try:
         sub = db.execute(
@@ -2256,47 +2279,14 @@ def api_admin_approve_submission(submission_id: str, req: RecipeSubmissionApprov
         if not sub:
             raise HTTPException(404, "提交不存在或已处理")
         now = datetime.utcnow().isoformat()
-        # Get or create workspace for recipe projects
-        recipe_ws = db.execute(
-            "SELECT id FROM workspaces WHERE name='食谱作品' LIMIT 1"
-        ).fetchone()
-        if recipe_ws:
-            ws_id = recipe_ws["id"]
-        else:
-            ws_id = f"ws-{uuid.uuid4().hex[:8]}"
-            db.execute(
-                "INSERT INTO workspaces (id, name, status, created_at, updated_at) VALUES (?, '食谱作品', 'completed', ?, ?)",
-                (ws_id, now, now),
-            )
-        # Create project
-        pid = f"proj-{uuid.uuid4().hex[:8]}"
-        db.execute(
-            """INSERT INTO projects (id, name, workspace_id, source_type, author_id,
-               point_cost_deci, is_downloadable, category_id, download_count, view_count,
-               status, storage_path, created_at, updated_at)
-               VALUES (?, ?, ?, 'file', ?, ?, 1, ?, 0, 0, 'published', '', ?, ?)""",
-            (pid, sub["name"], ws_id, sub["author_id"], req.point_cost_deci, req.category_id, now, now),
-        )
-        # Handle files — store as raw text content
-        files_json = sub["files_json"] or "[]"
-        files_list = json.loads(files_json) if isinstance(files_json, str) else files_json
-        raw_text = sub["description"] or ""
-        if files_list:
-            filenames = ", ".join(f.get("name", "") for f in files_list if f.get("name"))
-            raw_text = f"[附件: {filenames}]\n\n{raw_text}"
-        db.execute(
-            "UPDATE projects SET source_url=? WHERE id=?",
-            (raw_text, pid),
-        )
-        # Update submission
         db.execute(
             """UPDATE recipe_submissions SET status='approved', point_cost_deci=?,
-               category_id=?, reviewed_by=?, reviewed_at=?, created_project_id=?
+               category_id=?, reviewed_by=?, reviewed_at=?
                WHERE id=?""",
-            (req.point_cost_deci, req.category_id, user.get("sub", ""), now, pid, submission_id),
+            (req.point_cost_deci, req.category_id, user.get("sub", ""), now, submission_id),
         )
         db.commit()
-        return {"ok": True, "project_id": pid, "message": "食谱已通过审核并上架"}
+        return {"ok": True, "message": "食谱已通过审核"}
     finally:
         db.close()
 

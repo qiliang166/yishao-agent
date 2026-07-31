@@ -47,6 +47,7 @@ export default function MemberAuthorPage() {
   const [recipeDesc, setRecipeDesc] = useState('')
   const [recipePoints, setRecipePoints] = useState('5')
   const [recipeFileName, setRecipeFileName] = useState('')
+  const [recipeFiles, setRecipeFiles] = useState<{url: string, filename: string, size: number}[]>([])
   const [uploadMaxMb, setUploadMaxMb] = useState(50)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -120,8 +121,7 @@ export default function MemberAuthorPage() {
     setUploading(true)
     try {
       const result = await api.uploadRecipeFile(file)
-      const fileInfo = `[附件: ${result.filename} (${(result.size / 1024).toFixed(1)}KB)]`
-      setRecipeDesc(prev => prev ? prev + '\n\n' + fileInfo : fileInfo)
+      setRecipeFiles(prev => [...prev, { url: result.url, filename: result.filename, size: result.size }])
       modal.toast('文件上传成功', 'success')
     } catch (err: any) {
       modal.toast('文件上传失败: ' + (err.message || '未知错误'), 'error')
@@ -136,10 +136,10 @@ export default function MemberAuthorPage() {
     if (!recipeName.trim()) { modal.toast('请输入食谱名称', 'error'); return }
     setSubmitting(true)
     try {
-      await api.submitRecipe({ name: recipeName.trim(), description: recipeDesc, point_cost_deci: parseInt(recipePoints) || 5 })
+      await api.submitRecipe({ name: recipeName.trim(), description: recipeDesc, point_cost_deci: parseInt(recipePoints) || 5, files_json: JSON.stringify(recipeFiles) })
       modal.toast('食谱已提交，等待审核', 'success')
       setShowSubmit(false)
-      setRecipeName(''); setRecipeDesc(''); setRecipePoints('5'); setRecipeFileName('')
+      setRecipeName(''); setRecipeDesc(''); setRecipePoints('5'); setRecipeFileName(''); setRecipeFiles([])
       if (fileInputRef.current) fileInputRef.current.value = ''
       load()
     } catch (e: any) {

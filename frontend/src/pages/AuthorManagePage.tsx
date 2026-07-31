@@ -54,6 +54,7 @@ export default function AuthorManagePage() {
   const [subRejectOpen, setSubRejectOpen] = useState<string | null>(null)
   const [subRejectNote, setSubRejectNote] = useState('')
   const [subSaving, setSubSaving] = useState(false)
+  const [subStatusFilter, setSubStatusFilter] = useState('pending')
 
   // ── Revenue tab ──
   const [revStats, setRevStats] = useState<any>(null)
@@ -109,7 +110,7 @@ export default function AuthorManagePage() {
   const loadSubmissions = async () => {
     setSubLoading(true)
     try {
-      const d = await api.adminSubmissionsPending()
+      const d = await api.adminSubmissions(subStatusFilter)
       setSubmissions((d as any)?.submissions || [])
     } catch (e: any) {
       modal.toast('加载失败: ' + e.message, 'error')
@@ -149,7 +150,7 @@ export default function AuthorManagePage() {
     else if (tab === 'submissions') loadSubmissions()
     else if (tab === 'revenue') loadRevenue()
     else if (tab === 'settings') loadSettings()
-  }, [tab])
+  }, [tab, subStatusFilter])
 
   const saveSettings = async () => {
     setSettingsSaving(true)
@@ -522,17 +523,38 @@ export default function AuthorManagePage() {
       {/* ── Tab: 食谱审核 ── */}
       {tab === 'submissions' && (
         <>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>状态筛选:</span>
+            <select className="form-input" value={subStatusFilter}
+              onChange={e => setSubStatusFilter(e.target.value)}
+              style={{ width: 120, fontSize: 12, boxSizing: 'border-box' }}>
+              <option value="pending">待审核</option>
+              <option value="approved">已通过</option>
+              <option value="rejected">已驳回</option>
+              <option value="all">全部</option>
+            </select>
+          </div>
           {subLoading ? (
             <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
           ) : submissions.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-              <p>暂无待审核的食谱提交</p>
+              <p>暂无{subStatusFilter === 'pending' ? '待审核的' : subStatusFilter === 'approved' ? '已通过的' : subStatusFilter === 'rejected' ? '已驳回的' : ''}食谱提交</p>
             </div>
           ) : submissions.map((s: any) => (
             <div key={s.id} className="card" style={{ padding: 16, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>{s.name}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>{s.name}</span>
+                    {s.status !== 'pending' && (
+                      <span style={{
+                        fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 8,
+                        ...(s.status === 'approved' ? { background: '#dcfce7', color: '#166534' } : { background: '#fef2f2', color: '#991b1b' }),
+                      }}>
+                        {s.status === 'approved' ? '已通过' : '已驳回'}
+                      </span>
+                    )}
+                  </div>
                   {s.description && (
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 4, maxHeight: 60, overflow: 'hidden' }}>
                       {s.description.length > 150 ? s.description.slice(0, 150) + '…' : s.description}
@@ -541,21 +563,45 @@ export default function AuthorManagePage() {
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                     <span>作者: {s.author_name || s.author_id}</span>
                     {s.point_cost_deci > 0 && <span>建议积分: {(s.point_cost_deci / 10).toFixed(1)}</span>}
-                    {s.cover_url && <span>有封面图</span>}
-                    {s.files_json && s.files_json !== '[]' && <span>附件: {JSON.parse(s.files_json).length} 个</span>}
+                    {s.reviewed_at && <span>审核时间: {s.reviewed_at?.substring(0, 10)}</span>}
                     <span>提交: {s.created_at?.substring(0, 10)}</span>
                   </div>
+                  {(() => {
+                    try {
+                      const fls = JSON.parse(s.files_json || '[]')
+                      if (fls.length > 0) {
+                        return (
+                          <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                            {fls.map((f: any, i: number) => (
+                              <a key={i} href={f.url} target="_blank" rel="noreferrer"
+                                style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                                {f.filename || ('附件 ' + (i + 1))}
+                              </a>
+                            ))}
+                          </div>
+                        )
+                      }
+                    } catch {}
+                    return null
+                  })()}
+                  {s.status === 'rejected' && s.review_note && (
+                    <div style={{ fontSize: 11, color: '#991b1b', marginTop: 4 }}>
+                      驳回原因: {s.review_note}
+                    </div>
+                  )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 16 }}>
-                  <button className="btn btn-primary btn-sm"
-                    onClick={() => { setSubApproveOpen(s.id); setSubPointCost(String(s.point_cost_deci || 5)); setSubCategory('') }}>
-                    通过
-                  </button>
-                  <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
-                    onClick={() => { setSubRejectOpen(s.id); setSubRejectNote('') }}>
-                    驳回
-                  </button>
-                </div>
+                {s.status === 'pending' && (
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 16 }}>
+                    <button className="btn btn-primary btn-sm"
+                      onClick={() => { setSubApproveOpen(s.id); setSubPointCost(String(s.point_cost_deci || 5)); setSubCategory('') }}>
+                      通过
+                    </button>
+                    <button className="btn btn-ghost btn-sm" style={{ color: 'var(--warning)' }}
+                      onClick={() => { setSubRejectOpen(s.id); setSubRejectNote('') }}>
+                      驳回
+                    </button>
+                  </div>
+                )}
               </div>
 
               {subApproveOpen === s.id && (

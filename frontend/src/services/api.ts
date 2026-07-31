@@ -314,6 +314,8 @@ export const api = {
   adminRevenueStats: () =>
     request('/api/admin/stats/revenue'),
   // Admin: recipe submissions
+  adminSubmissions: (status?: string) =>
+    request(`/api/admin/submissions?status=${status || 'all'}`).then(d => d as { submissions: any[] }),
   adminSubmissionsPending: () =>
     request('/api/admin/submissions/pending').then(d => d as { submissions: any[] }),
   adminApproveSubmission: (submissionId: string, data: { point_cost_deci?: number; category_id?: string }) =>
