@@ -252,6 +252,23 @@ def _write_slide_cache(project_id: str, column_id: str, slide_seq: int, html: st
         pass  # cache write failure is non-fatal
 
 
+def clear_slide_cache(project_id: str, column_id: str = ""):
+    """Clear cached slide HTML for a project (and optionally a specific column).
+
+    Called when outline is regenerated, so stale cache doesn't serve old HTML
+    for changed slide content.
+    """
+    import shutil
+    if column_id:
+        cache_dir = os.path.join(PPT_CACHE_DIR, project_id, column_id)
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir, ignore_errors=True)
+    else:
+        cache_dir = os.path.join(PPT_CACHE_DIR, project_id)
+        if os.path.exists(cache_dir):
+            shutil.rmtree(cache_dir, ignore_errors=True)
+
+
 def _load_branding() -> tuple:
     """Load copyright and signature from DB settings. Returns (copyright_str, signature_str)."""
     try:

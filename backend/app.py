@@ -3898,6 +3898,10 @@ def api_ppt_outline(req: PPTPlanRequest, user=require_perm("stage3.generate")):
             column_prompt, column_skill, temperature=req.temperature,
             st=st, project_id=req.project_id or "",
             column_id=req.column_id or "")
+        # Clear cached slide HTML — new outline means old cache is stale
+        from services.ppt_service import clear_slide_cache
+        if project_id and column_id:
+            clear_slide_cache(project_id, column_id)
         return {"outline_json": outline_json or [], "outline_text": outline_text or ""}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
