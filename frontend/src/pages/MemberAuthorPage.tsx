@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { api } from '../services/api'
@@ -45,6 +45,10 @@ export default function MemberAuthorPage() {
   const [showSubmit, setShowSubmit] = useState(false)
   const [recipeName, setRecipeName] = useState('')
   const [recipeDesc, setRecipeDesc] = useState('')
+  const [recipeFileName, setRecipeFileName] = useState('')
+  const [uploadMaxMb, setUploadMaxMb] = useState(50)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [submitting, setSubmitting] = useState(false)
 
   const load = async () => {
@@ -78,6 +82,7 @@ export default function MemberAuthorPage() {
       .then(data => {
         const s = data.settings || {}
         setContractEnabled(s.author_contract_enabled === '1')
+        if (s.recipe_upload_max_mb) setUploadMaxMb(parseInt(s.recipe_upload_max_mb) || 50)
       })
       .catch(() => {})
   }, [])
@@ -107,6 +112,25 @@ export default function MemberAuthorPage() {
     } finally { setApplying(false) }
   }
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setRecipeFileName(file.name)
+    setUploading(true)
+    try {
+      const result = await api.uploadRecipeFile(file)
+      const fileInfo = `[附件: ${result.filename} (${(result.size / 1024).toFixed(1)}KB)]`
+      setRecipeDesc(prev => prev ? prev + '\n\n' + fileInfo : fileInfo)
+      modal.toast('文件上传成功', 'success')
+    } catch (err: any) {
+      modal.toast('文件上传失败: ' + (err.message || '未知错误'), 'error')
+      setRecipeFileName('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleSubmitRecipe = async () => {
     if (!recipeName.trim()) { modal.toast('请输入食谱名称', 'error'); return }
     setSubmitting(true)
@@ -114,7 +138,8 @@ export default function MemberAuthorPage() {
       await api.submitRecipe({ name: recipeName.trim(), description: recipeDesc })
       modal.toast('食谱已提交，等待审核', 'success')
       setShowSubmit(false)
-      setRecipeName(''); setRecipeDesc('')
+      setRecipeName(''); setRecipeDesc(''); setRecipeFileName('')
+      if (fileInputRef.current) fileInputRef.current.value = ''
       load()
     } catch (e: any) {
       modal.toast('提交失败: ' + e.message, 'error')
@@ -286,9 +311,20 @@ export default function MemberAuthorPage() {
                       <div className="form-label">食谱描述/正文</div>
                       <textarea className="form-input" rows={5} value={recipeDesc} onChange={e => setRecipeDesc(e.target.value)} placeholder="食谱的详细内容、步骤等" />
                     </div>
+                    <div>
+                      <div className="form-label">上传附件 <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-secondary)' }}>(最大 {uploadMaxMb}MB)</span></div>
+                      <input type="file" ref={fileInputRef} onChange={handleFileUpload} disabled={uploading}
+                        style={{ fontSize: 13 }} />
+                      {uploading && <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>上传中...</span>}
+                      {recipeFileName && !uploading && (
+                        <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>
+                          已上传: {recipeFileName}
+                        </div>
+                      )}
+                    </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-primary" disabled={submitting} onClick={handleSubmitRecipe}>{submitting ? '提交中...' : '提交'}</button>
-                      <button className="btn btn-ghost" onClick={() => setShowSubmit(false)}>取消</button>
+                      <button className="btn btn-ghost" onClick={() => { setShowSubmit(false); setRecipeFileName(''); if (fileInputRef.current) fileInputRef.current.value = '' }}>取消</button>
                     </div>
                   </div>
                 </div>

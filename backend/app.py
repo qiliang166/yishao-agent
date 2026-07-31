@@ -1926,6 +1926,33 @@ def api_my_author_payouts(user=Depends(get_current_user)):
         db.close()
 
 
+@app.post("/api/member/upload-recipe-file")
+async def api_upload_recipe_file(file: UploadFile = File(...), user=Depends(get_current_user)):
+    """Upload a recipe attachment file. Returns {url} for use in recipe submission."""
+    # Check upload size limit from settings
+    db = get_db()
+    max_mb = 50
+    try:
+        row = db.execute("SELECT value FROM settings WHERE key='recipe_upload_max_mb'").fetchone()
+        if row and row["value"]:
+            max_mb = max(1, int(float(row["value"])))
+    finally:
+        db.close()
+    import uuid as _uuid
+    ext = os.path.splitext(file.filename or "")[1] or ".txt"
+    safe_name = f"recipe-{_uuid.uuid4().hex[:12]}{ext}"
+    save_dir = os.path.join(os.path.dirname(__file__), "data", "downloads")
+    os.makedirs(save_dir, exist_ok=True)
+    dest = os.path.join(save_dir, safe_name)
+    content = await file.read()
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > max_mb:
+        raise HTTPException(413, f"文件大小 ({size_mb:.1f}MB) 超过限制 ({max_mb}MB)")
+    with open(dest, "wb") as f:
+        f.write(content)
+    return {"ok": True, "url": f"/api/downloads/{safe_name}", "filename": file.filename, "size": len(content)}
+
+
 @app.post("/api/member/submit-recipe")
 def api_submit_recipe(req: RecipeSubmissionRequest, user=Depends(get_current_user)):
     """Signed author submits a recipe for admin review."""
@@ -9440,6 +9467,9 @@ if os.path.isdir(FRONTEND_DIST):
             return _serve(real)
         return _serve(_os.path.join(FRONTEND_DIST, "index.html"))
 
+    DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "downloads")
+    if os.path.isdir(DOWNLOADS_DIR):
+        app.mount("/api/downloads", StaticFiles(directory=DOWNLOADS_DIR), name="downloads")
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":

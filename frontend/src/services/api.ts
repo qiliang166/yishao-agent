@@ -276,6 +276,21 @@ export const api = {
     request(`/api/member/my-author-revenue?page=${page || 1}&page_size=${pageSize || 50}`),
   myAuthorPayouts: () =>
     request('/api/member/my-author-payouts'),
+  uploadRecipeFile: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const token = localStorage.getItem('auth_token') || ''
+    const res = await fetch('/api/member/upload-recipe-file', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(err.detail || '上传失败')
+    }
+    return res.json() as Promise<{ ok: boolean; url: string; filename: string; size: number }>
+  },
   submitRecipe: (data: { name: string; description?: string; cover_url?: string; files_json?: string }) =>
     request('/api/member/submit-recipe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   mySubmissions: () =>

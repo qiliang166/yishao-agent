@@ -78,6 +78,7 @@ export default function AuthorManagePage() {
   // ── Settings tab ──
   const [contractEnabled, setContractEnabled] = useState(false)
   const [contractTemplate, setContractTemplate] = useState('')
+  const [uploadMaxMb, setUploadMaxMb] = useState('50')
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [settingsMsg, setSettingsMsg] = useState('')
 
@@ -137,6 +138,7 @@ export default function AuthorManagePage() {
       const s = (data as any)?.settings || {}
       setContractEnabled(s.author_contract_enabled === '1')
       if (s.author_contract_template) setContractTemplate(s.author_contract_template)
+      if (s.recipe_upload_max_mb) setUploadMaxMb(s.recipe_upload_max_mb)
     } catch {}
   }
 
@@ -156,6 +158,7 @@ export default function AuthorManagePage() {
       await api.updateSettings({
         author_contract_enabled: contractEnabled ? '1' : '0',
         author_contract_template: contractTemplate,
+        recipe_upload_max_mb: uploadMaxMb,
       })
       setSettingsMsg('保存成功')
     } catch (e: any) {
@@ -760,6 +763,15 @@ export default function AuthorManagePage() {
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
                 会员申请签约作者时，将在申请表单底部展示此内容，需勾选「我已阅读并同意签约须知」后才能提交。
+              </div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>上传文件大小限制 (MB)</div>
+                <input className="form-input" type="number" min="1" max="500" step="1" value={uploadMaxMb}
+                  onChange={e => setUploadMaxMb(e.target.value)}
+                  style={{ width: 100, boxSizing: 'border-box' }} />
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>
+                  签约作者上传食谱附件的单文件大小上限
+                </span>
               </div>
               {settingsMsg && (
                 <div style={{ fontSize: 12, color: settingsMsg.includes('失败') ? 'var(--warning)' : 'var(--success)', textAlign: 'center' }}>
