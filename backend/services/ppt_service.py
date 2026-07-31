@@ -219,6 +219,38 @@ WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
+PPT_CACHE_DIR = os.path.join(BASE_DIR, "data", "ppt_cache")
+os.makedirs(PPT_CACHE_DIR, exist_ok=True)
+
+
+def _get_slide_cache_path(project_id: str, column_id: str, slide_seq: int) -> str:
+    """Return filesystem path for a cached slide HTML file."""
+    slide_dir = os.path.join(PPT_CACHE_DIR, project_id, column_id)
+    os.makedirs(slide_dir, exist_ok=True)
+    return os.path.join(slide_dir, f"slide_{slide_seq}.html")
+
+
+def _read_slide_cache(project_id: str, column_id: str, slide_seq: int) -> str | None:
+    """Read cached slide HTML, or None if not cached."""
+    path = _get_slide_cache_path(project_id, column_id, slide_seq)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            return None
+    return None
+
+
+def _write_slide_cache(project_id: str, column_id: str, slide_seq: int, html: str):
+    """Write slide HTML to cache."""
+    try:
+        path = _get_slide_cache_path(project_id, column_id, slide_seq)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(html)
+    except Exception:
+        pass  # cache write failure is non-fatal
+
 
 def _load_branding() -> tuple:
     """Load copyright and signature from DB settings. Returns (copyright_str, signature_str)."""
@@ -316,7 +348,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                  temp_review: float = 0, temp_fix: float = 0,
                  temp_holistic: float = 0, temp_holistic_fix: float = 0,
                  temp_stage_outline: float = 0, temp_stage_generation: float = 0,
-                 temp_stage_review: float = 0) -> str:
+                 temp_stage_review: float = 0,
+                 force_regenerate: bool = False) -> str:
     """Generate presentation from content. Default: SVG (PPT-Agent Bento Grid).
 
     All 12 stage temperatures follow the pattern: 0 = use `temperature` as fallback."""
@@ -522,7 +555,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                                       temperature=st['html'],
                                                       column_id=column_id,
                                                       color_scheme=color_scheme,
-                                                      project_id=project_id)
+                                                      project_id=project_id,
+                                                      force_regenerate=force_regenerate)
                 if html_slides:
                     slide_data = html_slides
                     first = slide_data[0] if slide_data else {}
@@ -988,7 +1022,8 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                                          temperature=st.get('html', temperature),
                                          column_id=column_id,
                                          color_scheme=color_scheme,
-                                         project_id=project_id)
+                                         project_id=project_id,
+                                         force_regenerate=force_regenerate)
     if not html_slides:
         _logger.warning("Phase 2 HTML generation failed, using fallback")
         html_slides = _fallback_stage1_to_html_slides(stage1, style_id)
@@ -4100,7 +4135,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                            style_id: str = "business", parallel: int = 3,
                            temperature: float = 0.3, column_id: str = "",
                            color_scheme: str = "deep-blue",
-                           project_id: str = "") -> list | None:
+                           project_id: str = "",
+                           force_regenerate: bool = False) -> list | None:
     """Phase 2 of two-phase HTML pipeline: Per-slide parallel HTML generation.
 
     Each slide gets its own LLM call with the full design-system.md as the design guide.
@@ -4534,6 +4570,19 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             with open(os.path.join(debug_dir, "last_system_prompt.txt"), "w", encoding="utf-8") as _df:
                 _df.write(tailored_system)
 
+        # ── Cache check: skip LLM if slide HTML is already cached ──
+        if project_id and column_id and not force_regenerate:
+            cached = _read_slide_cache(project_id, column_id, seq)
+            if cached and len(cached) > 300:
+                _logger.info(f"Slide {seq}: cache hit ({len(cached)} chars), skipping LLM")
+                if project_id:
+                    with _done_lock:
+                        _done_count[0] += 1
+                        _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"已完成 {_done_count[0]}/{total} 页 (缓存)", "slides_done": _done_count[0], "slides_total": total}
+                        if _done_count[0] % 3 == 0 or _done_count[0] == total:
+                            _append_log(project_id, f"HTML 生成进度: {_done_count[0]}/{total} 页 (含缓存)")
+                return {**slide, "html": cached, "html_vars": cached}
+
         for attempt in range(2):
             try:
                 response = _safe_run_async(llm_generate(provider_id, model,
@@ -4771,6 +4820,9 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                             _ppt_status[project_id] = {"phase": "generating", "phase_label": "正在生成页面...", "message": f"已完成 {_done_count[0]}/{total} 页", "slides_done": _done_count[0], "slides_total": total}
                             if _done_count[0] % 3 == 0 or _done_count[0] == total:
                                 _append_log(project_id, f"HTML 生成进度: {_done_count[0]}/{total} 页")
+                    # Save to cache for future resume
+                    if project_id and column_id:
+                        _write_slide_cache(project_id, column_id, seq, html)
                     return {**slide, "html": html, "html_vars": html_vars}
                 else:
                     _logger.warning(f"Slide {seq} attempt {attempt+1}: HTML too short ({len(html)} chars)")

@@ -182,6 +182,7 @@ class PPTGenerateRequest(BaseModel):
     temp_stage_outline: float = 0    # 覆盖 Tab1 全部温度
     temp_stage_generation: float = 0  # 覆盖 Tab2 全部温度
     temp_stage_review: float = 0     # 覆盖 Tab3 全部温度
+    force_regenerate: bool = False   # 全新生成（跳过缓存）
 
 
 class PPTPlanRequest(BaseModel):

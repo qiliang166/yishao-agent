@@ -740,6 +740,7 @@ export default function ProjectPage() {
   const [s3SopTemps, setS3SopTemps] = useState<StageTemps>({ ...DEFAULT_STAGE_TEMPS })
   const [globalBranding, setGlobalBranding] = useState<{ copyright: string; signature: string }>({ copyright: '', signature: '' })
   const [pptGenerating, setPptGenerating] = useState<Record<string, boolean>>({})
+  const [forceRegenerate, setForceRegenerate] = useState(false)
   const [s3ViewMode, setS3ViewMode] = useState<Record<string, 'edit' | 'preview'>>({})
   const [s4ViewMode, setS4ViewMode] = useState<string>('edit')
   const [pptProgress, setPptProgress] = useState<{ phase_label: string; message: string; slides_done?: number; slides_total?: number; preview_url?: string } | null>(null)
@@ -1770,7 +1771,7 @@ export default function ProjectPage() {
     }
   }
 
-  const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, _prompt: string, model: string, columnId: string, temperature: number = 0.3, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) => {
+  const doGeneratePPT = async (stepKey: string, content: string, tmplId: string, label: string, _prompt: string, model: string, columnId: string, temperature: number = 0.3, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, forceRegen?: boolean) => {
     if (!pptOutline[stepKey]?.outline_json?.length) {
       modal.confirm('请先生成大纲')
       return
@@ -1802,7 +1803,7 @@ export default function ProjectPage() {
       const [pid, mdl] = model ? model.split(':') : ['', '']
       const outlineJson = pptOutline[stepKey]?.outline_json
       const validOutlinePlan = outlineJson?.length ? outlineJson : undefined
-      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl, validOutlinePlan, ctrl.signal, columnId, pptColorScheme[stepKey] || 'deep-blue', temperature, tempKeyword, tempResearch, tempOutline, tempFill, tempCards, tempHtml, tempSvgBatch, tempSvgSingle, tempReview, tempFix, tempHolistic, tempHolisticFix, tempStageOutline, tempStageGeneration, tempStageReview)
+      const result: any = await api.generatePPT(content, tmplId, branding, id, pid, mdl, validOutlinePlan, ctrl.signal, columnId, pptColorScheme[stepKey] || 'deep-blue', temperature, tempKeyword, tempResearch, tempOutline, tempFill, tempCards, tempHtml, tempSvgBatch, tempSvgSingle, tempReview, tempFix, tempHolistic, tempHolisticFix, tempStageOutline, tempStageGeneration, tempStageReview, forceRegen)
 
       if (result.format === 'svg') {
         // SVG output — PPT-Agent Bento Grid
@@ -3131,6 +3132,10 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3SopTempOpen(true)}>⚙温度设置</button>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, userSelect: 'none', marginLeft: 8 }}>
+                  <input type="checkbox" checked={forceRegenerate} onChange={(e) => setForceRegenerate(e.target.checked)} style={{ cursor: 'pointer' }} />
+                  全新生成
+                </label>
                 <CanEdit perm={canGenerate3}>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
@@ -3150,7 +3155,8 @@ export default function ProjectPage() {
                       s3SopTemps.keyword, s3SopTemps.research, s3SopTemps.outline, s3SopTemps.fill,
                       s3SopTemps.cards, s3SopTemps.html, s3SopTemps.svg_batch, s3SopTemps.svg_single,
                       s3SopTemps.review, s3SopTemps.fix, s3SopTemps.holistic, s3SopTemps.holistic_fix,
-                      s3SopTemps.stageOutline, s3SopTemps.stageGeneration, s3SopTemps.stageReview)}>
+                      s3SopTemps.stageOutline, s3SopTemps.stageGeneration, s3SopTemps.stageReview,
+                      forceRegenerate)}>
                     {pptGenerating['step3_sop_doc'] ? '⏳ 合成中...' : '📄 合成课件'}
                   </button>
                 </div>
@@ -3497,6 +3503,10 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3DaoTempOpen(true)}>⚙温度设置</button>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, userSelect: 'none', marginLeft: 8 }}>
+                  <input type="checkbox" checked={forceRegenerate} onChange={(e) => setForceRegenerate(e.target.checked)} style={{ cursor: 'pointer' }} />
+                  全新生成
+                </label>
                 <CanEdit perm={canGenerate3}>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
@@ -3510,7 +3520,7 @@ export default function ProjectPage() {
                     disabled={!daoPptSelected || !(steps.step2_daoshuyi || '') || !s3DaoPptModel || !pptOutline['step3_dao_ppt']?.outline_json?.length || pptOutlineLoading['step3_dao_ppt'] || pptGenerating['step3_dao_ppt']}
                     onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '分析PPT',
                       stage3Prompts.daoPpt?.prompt || '请将分析文档内容转化为PPT大纲。',
-                      s3DaoPptModel, 'col4', s3DaoPptTemp, s3DaoTemps.keyword, s3DaoTemps.research, s3DaoTemps.outline, s3DaoTemps.fill, s3DaoTemps.cards, s3DaoTemps.html, s3DaoTemps.svg_batch, s3DaoTemps.svg_single, s3DaoTemps.review, s3DaoTemps.fix, s3DaoTemps.holistic, s3DaoTemps.holistic_fix, s3DaoTemps.stageOutline, s3DaoTemps.stageGeneration, s3DaoTemps.stageReview)}>
+                      s3DaoPptModel, 'col4', s3DaoPptTemp, s3DaoTemps.keyword, s3DaoTemps.research, s3DaoTemps.outline, s3DaoTemps.fill, s3DaoTemps.cards, s3DaoTemps.html, s3DaoTemps.svg_batch, s3DaoTemps.svg_single, s3DaoTemps.review, s3DaoTemps.fix, s3DaoTemps.holistic, s3DaoTemps.holistic_fix, s3DaoTemps.stageOutline, s3DaoTemps.stageGeneration, s3DaoTemps.stageReview, forceRegenerate)}>
                     {pptGenerating['step3_dao_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
@@ -3857,6 +3867,10 @@ export default function ProjectPage() {
                   )}
                 </select>
                 <button className="btn btn-ghost btn-sm" onClick={() => setS3YanxiTempOpen(true)}>⚙温度设置</button>
+                <label style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, userSelect: 'none', marginLeft: 8 }}>
+                  <input type="checkbox" checked={forceRegenerate} onChange={(e) => setForceRegenerate(e.target.checked)} style={{ cursor: 'pointer' }} />
+                  全新生成
+                </label>
                 <CanEdit perm={canGenerate3}>
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button className="btn btn-sm"
@@ -3870,7 +3884,7 @@ export default function ProjectPage() {
                     disabled={!yanxiPptSelected || !(steps.step2_yanxi || '') || !s3YanxiPptModel || !pptOutline['step3_yan_ppt']?.outline_json?.length || pptOutlineLoading['step3_yan_ppt'] || pptGenerating['step3_yan_ppt']}
                     onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '综合PPT',
                       stage3Prompts.yanxiPpt?.prompt || '请将手册内容转化为PPT。',
-                      s3YanxiPptModel, 'col5', s3YanxiPptTemp, s3YanxiTemps.keyword, s3YanxiTemps.research, s3YanxiTemps.outline, s3YanxiTemps.fill, s3YanxiTemps.cards, s3YanxiTemps.html, s3YanxiTemps.svg_batch, s3YanxiTemps.svg_single, s3YanxiTemps.review, s3YanxiTemps.fix, s3YanxiTemps.holistic, s3YanxiTemps.holistic_fix, s3YanxiTemps.stageOutline, s3YanxiTemps.stageGeneration, s3YanxiTemps.stageReview)}>
+                      s3YanxiPptModel, 'col5', s3YanxiPptTemp, s3YanxiTemps.keyword, s3YanxiTemps.research, s3YanxiTemps.outline, s3YanxiTemps.fill, s3YanxiTemps.cards, s3YanxiTemps.html, s3YanxiTemps.svg_batch, s3YanxiTemps.svg_single, s3YanxiTemps.review, s3YanxiTemps.fix, s3YanxiTemps.holistic, s3YanxiTemps.holistic_fix, s3YanxiTemps.stageOutline, s3YanxiTemps.stageGeneration, s3YanxiTemps.stageReview, forceRegenerate)}>
                     {pptGenerating['step3_yan_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
                   </button>
                 </div>
