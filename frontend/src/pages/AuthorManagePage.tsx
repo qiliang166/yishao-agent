@@ -637,19 +637,11 @@ export default function AuthorManagePage() {
 
               {subApproveOpen === s.id && (
                 <div style={{ marginTop: 12, padding: 14, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>通过并创建项目</div>
-                  <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>积分定价 (单位: 分, 5=0.5积分)</label>
-                      <input className="form-input" type="number" step="1" min="1" value={subPointCost}
-                        onChange={e => setSubPointCost(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>分类 ID (可选)</label>
-                      <input className="form-input" value={subCategory}
-                        onChange={e => setSubCategory(e.target.value)} placeholder="如: recipe"
-                        style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
-                    </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>审核通过</div>
+                  <div style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>积分定价 (单位: 分, 5=0.5积分)</label>
+                    <input className="form-input" type="number" step="1" min="1" value={subPointCost}
+                      onChange={e => setSubPointCost(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
                   </div>
                   <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                     <button className="btn btn-ghost btn-sm" onClick={() => setSubApproveOpen(null)}>取消</button>
@@ -877,8 +869,8 @@ export default function AuthorManagePage() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => !saving && setDialogOpen(false)}>
           <div style={{
-            background: 'var(--bg-primary)', borderRadius: 12, padding: 24, width: 480,
-            maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            background: '#fff', borderRadius: 12, padding: 24, width: 480,
+            maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', color: '#333',
           }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 16px 0' }}>
               {editingId ? '编辑作者' : '新建作者'}
@@ -936,8 +928,8 @@ export default function AuthorManagePage() {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }} onClick={() => !contractSaving && setContractOpen(null)}>
           <div style={{
-            background: 'var(--bg-primary)', borderRadius: 12, padding: 24, width: 440,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+            background: '#fff', borderRadius: 12, padding: 24, width: 440,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2)', color: '#333',
           }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 16px 0' }}>签约管理</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
