@@ -362,22 +362,58 @@ export default function MemberAuthorPage() {
               {submissions.map((s: any, i: number) => (
                 <div key={i} style={{
                   padding: '14px 16px', marginBottom: 8, background: 'var(--card-bg)',
-                  borderRadius: 8, border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  borderRadius: 8, border: '1px solid var(--border)',
                 }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>{s.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>{s.created_at?.substring(0, 10)}</div>
-                  </div>
-                  <div>
-                    <span style={{
-                      fontSize: 12, padding: '2px 10px', borderRadius: 10, fontWeight: 500,
-                      ...(s.status === 'approved' ? { background: '#dcfce7', color: '#166534' }
-                        : s.status === 'rejected' ? { background: '#fef2f2', color: '#991b1b' }
-                        : { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }),
-                    }}>
-                      {{ pending: '待审核', approved: '已通过', rejected: '已驳回' }[s.status as string] || s.status}
-                    </span>
-                    {s.review_note && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, textAlign: 'right' }}>{s.review_note}</div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 14, fontWeight: 500 }}>{s.name}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{s.created_at?.substring(0, 10)}</div>
+                      {s.description && (
+                        <div style={{ marginTop: 8, position: 'relative' }}>
+                          <pre style={{ fontSize: 12, color: 'var(--text)', lineHeight: 1.6, whiteSpace: 'pre-wrap', margin: 0, padding: '8px 40px 8px 8px', background: 'var(--bg-secondary)', borderRadius: 6, maxHeight: 120, overflow: 'auto' }}>
+                            {s.description}
+                          </pre>
+                          <button className="btn btn-ghost btn-sm" style={{ position: 'absolute', top: 8, right: 8, fontSize: 10 }}
+                            onClick={() => { navigator.clipboard.writeText(s.description).then(() => modal.toast('已复制', 'success')) }}>
+                            复制
+                          </button>
+                        </div>
+                      )}
+                      {(() => {
+                        try {
+                          const fls = JSON.parse(s.files_json || '[]')
+                          if (fls.length > 0) {
+                            return (
+                              <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                                {fls.map((f: any, j: number) => (
+                                  <a key={j} href={f.url} target="_blank" rel="noreferrer"
+                                    style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', background: 'var(--bg-secondary)', padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                                    {f.filename || ('附件 ' + (j + 1))}
+                                  </a>
+                                ))}
+                              </div>
+                            )
+                          }
+                        } catch {}
+                        return null
+                      })()}
+                      {s.point_cost_deci > 0 && s.status === 'approved' && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 6 }}>
+                          积分定价: {(s.point_cost_deci / 10).toFixed(1)}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ flexShrink: 0, marginLeft: 12, textAlign: 'right' }}>
+                      <span style={{
+                        fontSize: 12, padding: '2px 10px', borderRadius: 10, fontWeight: 500,
+                        ...(s.status === 'approved' ? { background: '#dcfce7', color: '#166534' }
+                          : s.status === 'rejected' ? { background: '#fef2f2', color: '#991b1b' }
+                          : { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }),
+                      }}>
+                        {{ pending: '待审核', approved: '已通过', rejected: '已驳回' }[s.status as string] || s.status}
+                      </span>
+                      {s.review_note && <div style={{ fontSize: 12, color: '#991b1b', marginTop: 4 }}>{s.review_note}</div>}
+                    </div>
                   </div>
                 </div>
               ))}
