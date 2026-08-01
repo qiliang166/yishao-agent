@@ -345,6 +345,8 @@ export const api = {
     }),
   listProjectDirs: (projectId: string, subdir?: string) =>
     request(`/api/projects/${projectId}/directories${subdir ? `?subdir=${encodeURIComponent(subdir)}` : ''}`),
+  backfillProjectFiles: () =>
+    request('/api/backfill-project-files', { method: 'POST' }),
 
   // Filesystem browser (unscoped, for save dialog)
   listFsDirs: (path?: string) =>

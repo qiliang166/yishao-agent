@@ -528,6 +528,14 @@ export default function ProjectDashboard() {
         <HelpButton location="dashboard" />
         {canCreate && <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建明细</button>}
         {canCreate && <button className="btn btn-outline btn-sm" onClick={() => setShowBatch(true)}>批量管理</button>}
+        {canCreate && (
+          <button className="btn btn-outline btn-sm" onClick={async () => {
+            try {
+              const res = await api.backfillProjectFiles()
+              modal.toast(`已补保存 ${res.total_saved} 个文件到 ${res.projects?.length || 0} 个项目`, 'success')
+            } catch (e: any) { modal.toast('补保存失败: ' + e.message, 'error') }
+          }}>一键补保存</button>
+        )}
 
       </div>
 
