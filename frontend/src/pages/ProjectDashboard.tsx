@@ -19,6 +19,7 @@ export default function ProjectDashboard() {
   const canDeleteOwn = usePermission('project.delete_own')
   const canDownload = usePermission('stage5.download')
   const canView4 = usePermission('stage4.view')
+  const canConfigGlobal = usePermission('config.global')
   const { user } = useAuth()
   const isOwner = (createdBy: string | null | undefined): boolean => {
     if (!user) return false
@@ -528,7 +529,7 @@ export default function ProjectDashboard() {
         <HelpButton location="dashboard" />
         {canCreate && <button className="btn btn-primary btn-sm" onClick={openCreateDialog}>+ 新建明细</button>}
         {canCreate && <button className="btn btn-outline btn-sm" onClick={() => setShowBatch(true)}>批量管理</button>}
-        {canCreate && (
+        {canConfigGlobal && (
           <button className="btn btn-outline btn-sm" onClick={async () => {
             try {
               const res = await api.backfillProjectFiles()

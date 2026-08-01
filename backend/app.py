@@ -9547,8 +9547,11 @@ def backfill_project_files(user=require_perm("config.global")):
             content = step_map.get(step_name, "")
             if not content or not content.strip():
                 continue
-            filename = f"{pname}{suffix}"
+            safe_name = pname.replace('/', '_').replace('\\', '_').lstrip('.')
+            filename = f"{safe_name}{suffix}"
             filepath = os.path.join(target_dir, filename)
+            if os.path.realpath(filepath) != filepath or not os.path.realpath(filepath).startswith(os.path.realpath(target_dir) + os.sep):
+                continue
             if os.path.exists(filepath):
                 continue
             try:
