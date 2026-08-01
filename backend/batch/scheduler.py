@@ -651,6 +651,13 @@ def _execute_project(item: dict, job: BatchJob):
                     })
                     step1_content_map[step1_key] = content
                     _log(item, f"  ✓ {label} 完成 ({len(content)}字)")
+                    try:
+                        _call("POST", f"/api/projects/{project_id}/save-file", {
+                            "filename": f"{proj['name']}_AI整理.txt",
+                            "content": content, "encoding": "text",
+                        })
+                    except Exception:
+                        pass
                 except Exception as e:
                     _log(item, f"  ✗ {label} 失败: {e}")
                     raise
@@ -928,6 +935,13 @@ def _tab_pipeline(project_id: str, pipeline: dict, item: dict):
             "step_name": task["step_name"], "content": step2_content, "content_type": "markdown",
         })
         _log(item, f"    [{label}] ✓ Step2 完成 ({len(step2_content)}字)")
+        try:
+            _call("POST", f"/api/projects/{project_id}/save-file", {
+                "filename": f"{item['project_name']}_{label}.txt",
+                "content": step2_content, "encoding": "text",
+            })
+        except Exception:
+            pass
     elif pipeline.get("step2_no_source"):
         _log(item, f"    [{label}] Step2 无素材，跳过")
     elif pipeline.get("step2_no_model"):
@@ -963,6 +977,13 @@ def _tab_pipeline(project_id: str, pipeline: dict, item: dict):
                     "step_name": info["step_name"], "content": content, "content_type": "markdown",
                 })
                 _log(item, f"    [{label}] ✓ Step3 文本生成完成 ({len(content)}字)")
+                try:
+                    _call("POST", f"/api/projects/{project_id}/save-file", {
+                        "filename": f"{item['project_name']}_{s3_label}.txt",
+                        "content": content, "encoding": "text",
+                    })
+                except Exception:
+                    pass
             else:
                 # Outline
                 _log(item, f"    [{label}] 生成大纲...")
@@ -990,6 +1011,14 @@ def _tab_pipeline(project_id: str, pipeline: dict, item: dict):
                     "content_type": "json",
                 })
                 _log(item, f"    [{label}] 大纲已生成: {len(outline_json)} 页")
+                try:
+                    _call("POST", f"/api/projects/{project_id}/save-file", {
+                        "filename": f"{item['project_name']}_{s3_label}大纲.txt",
+                        "content": outline_text or "",
+                        "encoding": "text",
+                    })
+                except Exception:
+                    pass
 
                 # PPT
                 _log(item, f"    [{label}] 生成PPT...")
@@ -1034,6 +1063,16 @@ def _tab_pipeline(project_id: str, pipeline: dict, item: dict):
                         "content_type": "markdown",
                     })
                 _log(item, f"    [{label}] ✓ Step3({s3_label}) 完成 ({slide_count} 页)")
+                if slide_plan:
+                    try:
+                        lines = [f"{i+1}. {s.get('heading', s.get('title', f'幻灯片{i+1}'))}" for i, s in enumerate(slide_plan)]
+                        slide_list = f"{s3_label} — 幻灯片列表 (共 {len(slide_plan)} 页)\n\n" + "\n".join(lines)
+                        _call("POST", f"/api/projects/{project_id}/save-file", {
+                            "filename": f"{item['project_name']}_{s3_label}_幻灯片列表.txt",
+                            "content": slide_list, "encoding": "text",
+                        })
+                    except Exception:
+                        pass
     elif pipeline.get("step3_no_model"):
         _log(item, f"    [{label}] Step3 缺少 LLM 配置，跳过")
     elif pipeline.get("step3_skip"):

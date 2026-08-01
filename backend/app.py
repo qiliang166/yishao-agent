@@ -9495,6 +9495,58 @@ if os.path.isdir(FRONTEND_DIST):
         disposition = "inline" if ext in IMG_EXT else "attachment"
         return FileResponse(real, filename=filename, headers={"Content-Disposition": disposition})
 
+    @app.post("/api/backfill-project-files")
+    def backfill_project_files(user=require_perm("config.global")):
+        """Scan all projects and save existing step content to their file lists."""
+        db = get_db()
+        projects = db.execute("SELECT id, name FROM projects ORDER BY name").fetchall()
+        results = []
+        STEP_MAP = [
+            ("step1_video", "_AI整理.txt"),
+            ("step1_text", "_AI整理.txt"),
+            ("step1_file", "_AI整理.txt"),
+            ("step2_sop", "_标准文档.txt"),
+            ("step2_daoshuyi", "_分析文档.txt"),
+            ("step2_yanxi", "_综合文档.txt"),
+            ("step3_sop_doc", "_文档课件大纲.txt"),
+            ("step3_dao_ppt", "_分析PPT大纲.txt"),
+            ("step3_yan_ppt", "_综合PPT大纲.txt"),
+        ]
+        total_saved = 0
+        for proj in projects:
+            pid = proj["id"]
+            pname = proj["name"] or "文档"
+            steps = db.execute(
+                "SELECT step_name, content FROM step_results WHERE project_id = ? AND content IS NOT NULL AND content != ''",
+                (pid,)
+            ).fetchall()
+            step_map = {s["step_name"]: s["content"] for s in steps}
+            target_dir = resolve_project_storage(pid)
+            os.makedirs(target_dir, exist_ok=True)
+            saved = 0
+            for step_name, suffix in STEP_MAP:
+                content = step_map.get(step_name, "")
+                if not content or not content.strip():
+                    continue
+                safe_name = pname.replace('/', '_').replace('\\', '_').lstrip('.')
+                filename = f"{safe_name}{suffix}"
+                filepath = os.path.join(target_dir, filename)
+                if os.path.realpath(filepath) != filepath or not os.path.realpath(filepath).startswith(os.path.realpath(target_dir) + os.sep):
+                    continue
+                if os.path.exists(filepath):
+                    continue
+                try:
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    saved += 1
+                except Exception:
+                    pass
+            if saved > 0:
+                results.append({"id": pid, "name": pname, "saved": saved})
+            total_saved += saved
+        db.close()
+        return {"ok": True, "total_saved": total_saved, "projects": results}
+
     @app.get("/{full_path:path}")
     async def _spa_fallback(full_path: str):
         # HTML 一律 no-cache：防止手机浏览器缓存旧入口页后加载旧 JS（带 hash 的 assets 不受影响）
@@ -9513,59 +9565,6 @@ if os.path.isdir(FRONTEND_DIST):
             return _serve(real)
         return _serve(_os.path.join(FRONTEND_DIST, "index.html"))
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
-
-@app.post("/api/backfill-project-files")
-def backfill_project_files(user=require_perm("config.global")):
-    """Scan all projects and save existing step content to their file lists."""
-    db = get_db()
-    projects = db.execute("SELECT id, name FROM projects ORDER BY name").fetchall()
-    results = []
-    STEP_MAP = [
-        ("step1_video", "_AI整理.txt"),
-        ("step1_text", "_AI整理.txt"),
-        ("step1_file", "_AI整理.txt"),
-        ("step2_sop", "_标准文档.txt"),
-        ("step2_daoshuyi", "_分析文档.txt"),
-        ("step2_yanxi", "_综合文档.txt"),
-        ("step3_sop_doc", "_文档课件大纲.txt"),
-        ("step3_dao_ppt", "_分析PPT大纲.txt"),
-        ("step3_yan_ppt", "_综合PPT大纲.txt"),
-    ]
-    total_saved = 0
-    for proj in projects:
-        pid = proj["id"]
-        pname = proj["name"] or "文档"
-        steps = db.execute(
-            "SELECT step_name, content FROM step_results WHERE project_id = ? AND content IS NOT NULL AND content != ''",
-            (pid,)
-        ).fetchall()
-        step_map = {s["step_name"]: s["content"] for s in steps}
-        target_dir = resolve_project_storage(pid)
-        os.makedirs(target_dir, exist_ok=True)
-        saved = 0
-        for step_name, suffix in STEP_MAP:
-            content = step_map.get(step_name, "")
-            if not content or not content.strip():
-                continue
-            safe_name = pname.replace('/', '_').replace('\\', '_').lstrip('.')
-            filename = f"{safe_name}{suffix}"
-            filepath = os.path.join(target_dir, filename)
-            if os.path.realpath(filepath) != filepath or not os.path.realpath(filepath).startswith(os.path.realpath(target_dir) + os.sep):
-                continue
-            if os.path.exists(filepath):
-                continue
-            try:
-                with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(content)
-                saved += 1
-            except Exception:
-                pass
-        if saved > 0:
-            results.append({"id": pid, "name": pname, "saved": saved})
-        total_saved += saved
-    db.close()
-    return {"ok": True, "total_saved": total_saved, "projects": results}
-
 
 if __name__ == "__main__":
     import uvicorn
