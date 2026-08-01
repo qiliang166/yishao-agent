@@ -1753,6 +1753,8 @@ export default function ProjectPage() {
         setPreviewTab(prev => ({...prev, [stepKey]: 'ppt'}))
         saveStep(stepKey, result.outline_text || '')
         if (result.outline_json?.length) saveStep(`_ppt_outline_json_${stepKey}`, JSON.stringify(result.outline_json))
+        const outlineLabel = stepKey === 'step3_dao_ppt' ? '分析PPT' : stepKey === 'step3_yan_ppt' ? '综合PPT' : '文档课件'
+        api.saveFileToProject(id!, `${project?.name || '文档'}_${outlineLabel}大纲.txt`, result.outline_text || '').catch(() => {})
         modal.toast(`大纲已生成：${result.outline_json.length} 页`, 'success')
       } else {
         modal.toast('大纲生成失败：返回为空', 'error')
@@ -1849,6 +1851,11 @@ export default function ProjectPage() {
           setPreviewHtml(prev => ({...prev, [stepKey]: ''}))
         }
         modal.toast(`PPT 已生成: ${result.filename}`, 'success')
+      }
+      // Auto-save slide plan to project file list
+      if (result.slide_plan?.length) {
+        const lines = result.slide_plan.map((s: any, i: number) => `${i + 1}. ${s.heading || s.title || `幻灯片 ${i + 1}`}`)
+        api.saveFileToProject(id!, `${project?.name || '文档'}_${label}_幻灯片列表.txt`, `${label} — 幻灯片列表 (共 ${result.slide_plan.length} 页)\n\n${lines.join('\n')}`).catch(() => {})
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
