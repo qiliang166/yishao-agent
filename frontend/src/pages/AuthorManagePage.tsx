@@ -567,8 +567,8 @@ export default function AuthorManagePage() {
               <button key={k}
                 onClick={() => { setSubTab(k); setSubPage(1) }}
                 style={{
-                  padding: '8px 18px', border: 'none', background: 'none', cursor: 'pointer',
-                  fontSize: 13, fontWeight: subTab === k ? 600 : 400,
+                  padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
+                  fontSize: 14, fontWeight: subTab === k ? 600 : 400,
                   color: subTab === k ? 'var(--text)' : 'var(--text-secondary)',
                   borderBottom: subTab === k ? '2px solid var(--accent)' : '2px solid transparent',
                 }}>

@@ -285,6 +285,56 @@ input, select, textarea {
   color: var(--warning);
 }
 
+.m-badge.primary {
+  background: rgba(59,130,246,0.08);
+  color: var(--primary);
+}
+
+.m-badge.muted {
+  background: rgba(148,163,184,0.1);
+  color: var(--text-secondary);
+}
+
+/* ── 支付记录卡片 ── */
+.m-pay-card {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--card);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.m-pay-card .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.m-pay-card .name {
+  font-weight: 600;
+}
+
+.m-pay-card .status {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.m-pay-card .meta {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.m-pay-card .note {
+  background: var(--bg-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
 /* ── 文件列表 ── */
 .m-group-head {
   display: flex;

@@ -286,7 +286,7 @@ export default function MMe() {
                     <div className="m-kv-group">
                       <div className="m-kv">
                         <span className="m-kv-label">当前积分</span>
-                        <span className="m-kv-value" style={{ color: 'var(--primary)', fontWeight: 700, fontSize: 16 }}>
+                        <span className="m-kv-value" style={{ color: 'var(--primary)', fontWeight: 700 }}>
                           {points.balance_display}
                         </span>
                       </div>
@@ -296,7 +296,7 @@ export default function MMe() {
                           <span className="m-kv-value">
                             {new Date(points.expires_at).toLocaleDateString('zh-CN')}
                             {new Date(points.expires_at).getTime() < Date.now() && (
-                              <span style={{ color: 'var(--warning)', marginLeft: 6, fontSize: 11 }}>(已过期)</span>
+                              <span className="m-badge warn" style={{ marginLeft: 6 }}>(已过期)</span>
                             )}
                           </span>
                         </div>
@@ -304,7 +304,7 @@ export default function MMe() {
                       {unlockedProjects.length > 0 && (
                         <div className="m-kv">
                           <span className="m-kv-label">已解锁明细</span>
-                          <span className="m-kv-value" style={{ fontSize: 11 }}>
+                          <span className="m-kv-value">
                             {unlockedProjects.map((p: any) => p.project_name).join('、')}
                           </span>
                         </div>
@@ -322,29 +322,20 @@ export default function MMe() {
                         const statusLabel = p.status === 'pending' ? '待审核' : p.status === 'rejected' ? '已拒绝' : p.status === 'confirmed' ? '已确认' : p.status
                         const statusColor = p.status === 'pending' ? '#f0ad4e' : p.status === 'rejected' ? 'var(--warning)' : p.status === 'confirmed' ? '#5cb85c' : 'var(--text-secondary)'
                         return (
-                          <div key={i} style={{
-                            padding: '10px 12px', borderRadius: 8,
-                            background: 'var(--card-bg)', border: '1px solid var(--border)',
-                            fontSize: 12,
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontWeight: 600 }}>{p.plan_name || '付款记录'}</span>
-                              <span style={{
-                                fontSize: 11, padding: '2px 8px', borderRadius: 4,
-                                background: statusColor + '20', color: statusColor, fontWeight: 600,
-                              }}>
+                          <div key={i} className="m-pay-card">
+                            <div className="head">
+                              <span className="name">{p.plan_name || '付款记录'}</span>
+                              <span className="status" style={{ background: statusColor + '20', color: statusColor }}>
                                 {statusLabel}
                               </span>
                             </div>
-                            <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>
+                            <div className="meta">
                               ￥{(p.amount_cents / 100).toFixed(2)}
                               {p.payment_ref ? ` · 单号：${p.payment_ref}` : ''}
                               {p.paid_at ? ` · ${new Date(p.paid_at).toLocaleString('zh-CN')}` : ''}
                             </div>
                             {p.note && (
-                              <div style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 2 }}>
-                                备注：{p.note}
-                              </div>
+                              <div className="note">备注：{p.note}</div>
                             )}
                           </div>
                         )

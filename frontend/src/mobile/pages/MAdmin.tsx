@@ -781,12 +781,12 @@ export default function MAdmin() {
                       {Array.isArray(u.roles) && u.roles.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
                           {u.roles.map((r: any) => (
-                            <span key={r.id} className="m-badge" style={{ fontSize: 11, padding: '1px 6px' }}>{r.name}</span>
+                            <span key={r.id} className="m-badge">{r.name}</span>
                           ))}
                         </div>
                       )}
                       {iAmSuper && u.admin_note && (
-                        <div style={{ marginTop: 2 }}>备注：{u.admin_note}</div>
+                        <div className="m-user-meta">备注：{u.admin_note}</div>
                       )}
                     </div>
                     {!isRejected && (
@@ -795,7 +795,7 @@ export default function MAdmin() {
                         {tab === 'member' && (
                           <>
                             <button className="m-mini-btn" onClick={() => openPayments(u)}>明细</button>
-                            <button className="m-mini-btn" onClick={() => openPoints(u)} style={{ color: '#5cb85c' }}>积分</button>
+                            <button className="m-mini-btn" onClick={() => openPoints(u)}>积分</button>
                           </>
                         )}
                         {!isSuperAdmin && (
@@ -874,14 +874,14 @@ export default function MAdmin() {
                         {pendingFilter === 'pending' ? (
                           <>
                             {m.expires_at ? (
-                              <span className="m-badge" style={{ background: 'rgba(59,130,246,0.08)', color: 'var(--primary)', fontWeight: 600 }}>续费</span>
+                              <span className="m-badge primary">续费</span>
                             ) : (
-                              <span className="m-badge" style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600 }}>新注册</span>
+                              <span className="m-badge muted">新注册</span>
                             )}
                             {m.payment ? (
-                              <span className="m-badge" style={{ background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', fontWeight: 600 }}>付费</span>
+                              <span className="m-badge primary">付费</span>
                             ) : (
-                              <span className="m-badge" style={{ background: 'rgba(148,163,184,0.1)', color: 'var(--text-secondary)', fontWeight: 600 }}>试用</span>
+                              <span className="m-badge muted">试用</span>
                             )}
                           </>
                         ) : (
@@ -891,7 +891,7 @@ export default function MAdmin() {
                       <div className="m-user-meta">
                         <div>{m.username}{m.email ? ` · ${m.email}` : ''}{m.phone ? ` · ${m.phone}` : ''}</div>
                         <div>注册：{fmtDate(m.created_at)} · {pendingFilter === 'pending' ? '原到期：' : '会员到期：'}{fmtDate(m.expires_at)}</div>
-                        {m.payment != null && <div style={{ marginTop: 2 }}>{paymentInfo(m)}</div>}
+                        {m.payment != null && <div className="m-user-meta">{paymentInfo(m)}</div>}
 
                       </div>
                       <div className="m-row-actions">
@@ -937,7 +937,7 @@ export default function MAdmin() {
                     <div key={p.project_id} className="m-user-row">
                       <div className="m-user-head">
                         <div className="m-user-name">{p.project_name}</div>
-                        <span style={{ fontSize: 11, color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
+                        <span className={`m-badge ${p.is_downloadable ? 'completed' : 'muted'}`}>
                           {p.is_downloadable ? '可下载' : '未开放'}
                         </span>
                       </div>
@@ -1089,7 +1089,7 @@ export default function MAdmin() {
                       </span>
                     ))}
                     {editRoles.length === 0 && (
-                      <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>未分配角色</span>
+                      <span className="m-user-meta">未分配角色</span>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -1109,7 +1109,7 @@ export default function MAdmin() {
               <div className="m-section-title">可访问工作区</div>
               <div style={{ marginBottom: 8 }}>
                 {editWs.length === 0 ? (
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>未分配工作区</div>
+                  <div className="m-user-meta" style={{ marginBottom: 8 }}>未分配工作区</div>
                 ) : (
                   editWs.map(w => (
                     <div key={w.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, padding: '4px 0', borderBottom: '1px solid var(--border)' }}>
