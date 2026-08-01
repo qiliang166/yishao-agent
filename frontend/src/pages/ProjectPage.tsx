@@ -538,7 +538,7 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
                   <div style={{ padding: '2px 0 2px 14px' }}>
                     {catFiles.map((f: any) => {
                       const isAudio = f.type === 'MP3' || f.type === 'Audio'
-                      const dateStr = f.modified ? new Date(f.modified * 1000).toLocaleDateString('zh-CN') : ''
+                      const dateStr = f.modified ? new Date(f.modified * 1000).toLocaleString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''
                       return (
                       <div key={fileKey(f)}
                         style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 6px', fontSize: 11, borderBottom: '1px solid var(--border)', background: selected.has(fileKey(f)) ? 'var(--bg-hover)' : 'transparent' }}>

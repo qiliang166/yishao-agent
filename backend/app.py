@@ -1033,7 +1033,7 @@ def list_projects(page: int = 1, page_size: int = 50, workspace_id: str = "", re
                 offset = (page - 1) * page_size
                 rows = db.execute(
                     "SELECT DISTINCT p.* " + base_from + " " + access_clause + " AND p.workspace_id = ?" +
-                    " ORDER BY p.download_count DESC, p.updated_at DESC LIMIT ? OFFSET ?",
+                    " ORDER BY p.updated_at DESC LIMIT ? OFFSET ?",
                     (uid, uid, workspace_id, page_size, offset)
                 ).fetchall()
             else:
@@ -1044,7 +1044,7 @@ def list_projects(page: int = 1, page_size: int = 50, workspace_id: str = "", re
                 offset = (page - 1) * page_size
                 rows = db.execute(
                     "SELECT DISTINCT p.* " + base_from + " " + access_clause +
-                    " ORDER BY p.download_count DESC, p.updated_at DESC LIMIT ? OFFSET ?",
+                    " ORDER BY p.updated_at DESC LIMIT ? OFFSET ?",
                     (uid, uid, page_size, offset)
                 ).fetchall()
         else:
@@ -1052,14 +1052,14 @@ def list_projects(page: int = 1, page_size: int = 50, workspace_id: str = "", re
                 total = db.execute("SELECT COUNT(*) FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchone()[0]
                 offset = (page - 1) * page_size
                 rows = db.execute(
-                    "SELECT * FROM projects WHERE workspace_id = ? ORDER BY download_count DESC, updated_at DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM projects WHERE workspace_id = ? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                     (workspace_id, page_size, offset)
                 ).fetchall()
             else:
                 total = db.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
                 offset = (page - 1) * page_size
                 rows = db.execute(
-                    "SELECT * FROM projects ORDER BY download_count DESC, updated_at DESC LIMIT ? OFFSET ?",
+                    "SELECT * FROM projects ORDER BY updated_at DESC LIMIT ? OFFSET ?",
                     (page_size, offset)
                 ).fetchall()
         projects = [dict(r) for r in rows]
