@@ -9508,9 +9508,6 @@ if os.path.isdir(FRONTEND_DIST):
             ("step2_sop", "_标准文档.txt"),
             ("step2_daoshuyi", "_分析文档.txt"),
             ("step2_yanxi", "_综合文档.txt"),
-            ("step3_sop_doc", "_文档课件大纲.txt"),
-            ("step3_dao_ppt", "_分析PPT大纲.txt"),
-            ("step3_yan_ppt", "_综合PPT大纲.txt"),
         ]
         total_saved = 0
         for proj in projects:
