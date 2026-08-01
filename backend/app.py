@@ -1313,7 +1313,7 @@ def _list_project_files(project_id: str):
     _variant_suffixes = ('_vars', '_backup', '_regenerated', '_regenerated_partial', '_regenerated_vars')
 
     if os.path.exists(path):
-        for f in sorted(os.listdir(path), key=lambda x: os.path.getmtime(os.path.join(path, x)), reverse=True):
+        for f in sorted(os.listdir(path), key=lambda x: os.path.getmtime(os.path.join(path, x))):
             full = os.path.join(path, f)
             if os.path.isfile(full):
                 # Skip variant / intermediate PPT HTML files
