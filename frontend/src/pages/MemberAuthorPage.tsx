@@ -33,6 +33,9 @@ export default function MemberAuthorPage() {
   const [applyName, setApplyName] = useState('')
   const [applyIntro, setApplyIntro] = useState('')
   const [applyPhotoUrl, setApplyPhotoUrl] = useState('')
+  const [applyPhotoFile, setApplyPhotoFile] = useState('')
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const photoInputRef = useRef<HTMLInputElement>(null)
   const [applyNote, setApplyNote] = useState('')
   const [applying, setApplying] = useState(false)
 
@@ -108,10 +111,30 @@ export default function MemberAuthorPage() {
       await api.applyAuthor({ name: applyName.trim(), intro: applyIntro, photo_url: applyPhotoUrl, note: applyNote })
       modal.toast('申请已提交，等待管理员审核', 'success')
       setShowApply(false)
+      setApplyPhotoUrl(''); setApplyPhotoFile('')
+      if (photoInputRef.current) photoInputRef.current.value = ''
       load()
     } catch (e: any) {
       modal.toast('申请失败: ' + e.message, 'error')
     } finally { setApplying(false) }
+  }
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setApplyPhotoFile(file.name)
+    setUploadingPhoto(true)
+    try {
+      const result = await api.uploadRecipeFile(file)
+      setApplyPhotoUrl(result.url)
+      modal.toast('相片上传成功', 'success')
+    } catch (err: any) {
+      modal.toast('相片上传失败: ' + (err.message || '未知错误'), 'error')
+      setApplyPhotoFile('')
+      if (photoInputRef.current) photoInputRef.current.value = ''
+    } finally {
+      setUploadingPhoto(false)
+    }
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,8 +208,13 @@ export default function MemberAuthorPage() {
               <textarea className="form-input" rows={3} value={applyIntro} onChange={e => setApplyIntro(e.target.value)} placeholder="介绍你的专业背景、擅长菜系等" />
             </div>
             <div>
-              <div className="form-label">相片 URL</div>
-              <input className="form-input" value={applyPhotoUrl} onChange={e => setApplyPhotoUrl(e.target.value)} placeholder="头像/相片的图片链接" />
+              <div className="form-label">相片</div>
+              <input type="file" ref={photoInputRef} accept="image/*" onChange={handlePhotoUpload} disabled={uploadingPhoto}
+                style={{ fontSize: 13 }} />
+              {uploadingPhoto && <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>上传中...</span>}
+              {applyPhotoFile && !uploadingPhoto && (
+                <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 4 }}>已上传: {applyPhotoFile}</div>
+              )}
             </div>
             <div>
               <div className="form-label">申请说明</div>
@@ -211,7 +239,7 @@ export default function MemberAuthorPage() {
             )}
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-primary" disabled={applying || (contractEnabled && !agreedContract)} onClick={handleApply}>{applying ? '提交中...' : '提交申请'}</button>
-              <button className="btn btn-ghost" onClick={() => { setShowApply(false); setAgreedContract(false) }}>取消</button>
+              <button className="btn btn-ghost" onClick={() => { setShowApply(false); setAgreedContract(false); setApplyPhotoFile(''); setApplyPhotoUrl(''); if (photoInputRef.current) photoInputRef.current.value = '' }}>取消</button>
             </div>
           </div>
         </div>

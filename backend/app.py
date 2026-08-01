@@ -9472,7 +9472,10 @@ if os.path.isdir(FRONTEND_DIST):
         real = os.path.realpath(file_path)
         if not real.startswith(os.path.realpath(DOWNLOADS_DIR)):
             raise HTTPException(403)
-        return FileResponse(real, filename=filename, headers={"Content-Disposition": "attachment"})
+        IMG_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.ico'}
+        ext = os.path.splitext(filename)[1].lower()
+        disposition = "inline" if ext in IMG_EXT else "attachment"
+        return FileResponse(real, filename=filename, headers={"Content-Disposition": disposition})
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":
