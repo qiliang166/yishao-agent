@@ -7153,15 +7153,17 @@ def backup_database(user=require_perm("config.global")):
 
 @app.get("/api/backup-full")
 def backup_full(user=require_perm("config.global")):
-    """Download a complete backup: database + backend source + frontend dist."""
+    """Download a complete backup: database + backend source + frontend source & dist."""
     import shutil, zipfile
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
     tmp = os.path.join(BASE_DIR, "data", f"yishao-full-{ts}.zip")
+    project_root = os.path.dirname(BASE_DIR)
     try:
         with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as zf:
             # Database
             db_path = os.path.join(BASE_DIR, "data", "yishao.db")
             zf.write(db_path, "yishao.db")
+
             # Backend source (explicit dirs only, avoid walking activation_server/venv etc.)
             source_dirs = [
                 ("", (".py", ".txt")),
@@ -7170,20 +7172,53 @@ def backup_full(user=require_perm("config.global")):
             for sub, exts in source_dirs:
                 sd = os.path.join(BASE_DIR, sub) if sub else BASE_DIR
                 if os.path.isdir(sd):
-                    for root, _, files in os.walk(sd):
+                    for root, dirs, files in os.walk(sd):
+                        dirs[:] = [d for d in dirs if d not in ("__pycache__", "venv", ".venv", "node_modules", "activation_server")]
                         for f in files:
-                            if f.endswith(exts):
+                            if f.endswith(exts) and not f.endswith(".pyc"):
                                 fp = os.path.join(root, f)
                                 arc = os.path.join("backend", os.path.relpath(fp, BASE_DIR))
                                 zf.write(fp, arc)
-            # Frontend dist
-            fe = os.path.join(os.path.dirname(BASE_DIR), "frontend", "dist")
-            if os.path.isdir(fe):
-                for root, _, files in os.walk(fe):
+
+            # Frontend source (everything except node_modules)
+            fe_src = os.path.join(project_root, "frontend", "src")
+            if os.path.isdir(fe_src):
+                for root, dirs, files in os.walk(fe_src):
+                    dirs[:] = [d for d in dirs if d not in ("node_modules",)]
                     for f in files:
                         fp = os.path.join(root, f)
-                        arc = os.path.join("frontend", "dist", os.path.relpath(fp, fe))
+                        arc = os.path.join("frontend", "src", os.path.relpath(fp, fe_src))
                         zf.write(fp, arc)
+
+            # Frontend config files (package.json, tsconfig, vite config, index.html, etc.)
+            fe_root = os.path.join(project_root, "frontend")
+            fe_config_files = [
+                "package.json", "package-lock.json", "tsconfig.json", "tsconfig.node.json",
+                "vite.config.ts", "index.html", ".env", ".env.production",
+            ]
+            for fn in fe_config_files:
+                fp = os.path.join(fe_root, fn)
+                if os.path.isfile(fp):
+                    zf.write(fp, os.path.join("frontend", fn))
+
+            # Frontend dist (compiled output)
+            fe_dist = os.path.join(fe_root, "dist")
+            if os.path.isdir(fe_dist):
+                for root, _, files in os.walk(fe_dist):
+                    for f in files:
+                        fp = os.path.join(root, f)
+                        arc = os.path.join("frontend", "dist", os.path.relpath(fp, fe_dist))
+                        zf.write(fp, arc)
+
+            # Project root config files
+            root_files = [
+                "CLAUDE.md", ".gitignore", "build_server.ps1", "build_desktop.ps1",
+            ]
+            for fn in root_files:
+                fp = os.path.join(project_root, fn)
+                if os.path.isfile(fp):
+                    zf.write(fp, fn)
+
         return FileResponse(
             tmp,
             media_type="application/zip",
