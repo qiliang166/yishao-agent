@@ -14,7 +14,7 @@ export const DEFAULT_THEMES: ThemePreset[] = [
       success: '#4A8B3F', warning: '#C75B39', purple: '#7C3AED', cyan: '#0891B2',
       primaryHover: '#6E1515', bgSecondary: '#F5F3F0', bgHover: '#F0EFEC',
       muted: '#D4C8B8', btnDirtyBg: '#A0522D', btnDirtyText: '#ffffff',
-      successLight: '#EDF7EB',
+      successLight: '#EDF7EB', warningLight: '#FDF0EA',
     }
   },
   {
@@ -25,7 +25,7 @@ export const DEFAULT_THEMES: ThemePreset[] = [
       success: '#3A7D44', warning: '#B85C38', purple: '#7C3AED', cyan: '#0891B2',
       primaryHover: '#1F4D37', bgSecondary: '#EDF2EE', bgHover: '#E8F0EA',
       muted: '#B5C5BA', btnDirtyBg: '#7A5230', btnDirtyText: '#ffffff',
-      successLight: '#E6F3E8',
+      successLight: '#E6F3E8', warningLight: '#FDE8E0',
     }
   },
   {
@@ -36,7 +36,7 @@ export const DEFAULT_THEMES: ThemePreset[] = [
       success: '#5AAD55', warning: '#E07B50', purple: '#9F7BEA', cyan: '#2EB5C6',
       primaryHover: '#A84A4A', bgSecondary: '#303034', bgHover: '#2A2A2E',
       muted: '#5A5A5E', btnDirtyBg: '#C47A50', btnDirtyText: '#ffffff',
-      successLight: '#1E3A1E',
+      successLight: '#1E3A1E', warningLight: '#3A2020',
     }
   },
 ]
@@ -48,7 +48,7 @@ const CSS_VAR_MAP: Record<string, string> = {
   primaryHover: '--primary-hover', bgSecondary: '--bg-secondary',
   bgHover: '--bg-hover', muted: '--muted',
   btnDirtyBg: '--btn-dirty-bg', btnDirtyText: '--btn-dirty-text',
-  successLight: '--success-light',
+  successLight: '--success-light', warningLight: '--warning-light',
 }
 
 const ALL_VARS = Object.values(CSS_VAR_MAP)

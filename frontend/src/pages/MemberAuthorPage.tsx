@@ -178,11 +178,11 @@ export default function MemberAuthorPage() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 20px' }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 24px 0' }}>作者中心</h2>
+      <h2 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 24px 0' }}>作者中心</h2>
 
       {/* Not yet applied */}
       {!author && !showApply && (
-        <div style={{ textAlign: 'center', padding: 60, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
+        <div style={{ textAlign: 'center', padding: 60, background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)' }}>
           {contractEnabled ? (
             <>
               <p style={{ color: 'var(--text-secondary)', fontSize: 15, marginBottom: 24 }}>你还没有申请成为签约作者</p>
@@ -196,7 +196,7 @@ export default function MemberAuthorPage() {
 
       {/* Apply form */}
       {!author && showApply && (
-        <div style={{ background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--border)', padding: 24 }}>
+        <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: 24 }}>
           <h3 style={{ margin: '0 0 20px 0', fontSize: 16 }}>签约作者申请</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
@@ -247,7 +247,7 @@ export default function MemberAuthorPage() {
 
       {/* Pending */}
       {isPending && (
-        <div style={{ textAlign: 'center', padding: 60, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--border)' }}>
+        <div style={{ textAlign: 'center', padding: 60, background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)' }}>
           <p style={{ fontSize: 16, color: 'var(--warning)', marginBottom: 8 }}>申请审核中</p>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>你的签约申请正在审核，请耐心等待管理员处理</p>
         </div>
@@ -257,7 +257,7 @@ export default function MemberAuthorPage() {
       {isActive && (
         <>
           {/* Author info bar */}
-          <div style={{ background: 'var(--card-bg)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, fontSize: 13 }}>
+          <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, fontSize: 13 }}>
             <span style={{ fontWeight: 600 }}>{author?.name || '签约作者'}</span>
             {author?.contract_signed_at && (
               <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
@@ -266,7 +266,7 @@ export default function MemberAuthorPage() {
             )}
             <span style={{
               fontSize: 11, padding: '2px 8px', borderRadius: 8, fontWeight: 500,
-              background: '#dcfce7', color: '#166534',
+              background: 'var(--success-light)', color: 'var(--success)',
             }}>已签约</span>
           </div>
           {/* Revenue summary */}
@@ -278,7 +278,7 @@ export default function MemberAuthorPage() {
               { label: '待结算现金(元)', value: ((revenue as any)?.unsettled_cash_cents / 100 || 0).toFixed(2) },
               { label: '收益笔数', value: (revenue as any)?.revenue_count || 0 },
             ].map(item => (
-              <div key={item.label} style={{ background: 'var(--card-bg)', borderRadius: 10, border: '1px solid var(--border)', padding: '16px 18px', textAlign: 'center' }}>
+              <div key={item.label} style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '16px 18px', textAlign: 'center' }}>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{item.label}</div>
                 <div style={{ fontSize: 22, fontWeight: 700 }}>{item.value}</div>
               </div>
@@ -294,7 +294,7 @@ export default function MemberAuthorPage() {
                   padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
                   fontSize: 14, fontWeight: tab === t ? 600 : 400,
                   color: tab === t ? 'var(--text)' : 'var(--text-secondary)',
-                  borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
+                  borderBottom: tab === t ? '2px solid var(--primary)' : '2px solid transparent',
                 }}>
                 {{ revenue: '收益明细', submit: '提交食谱', submissions: '我的提交', payouts: '派发记录' }[t]}
               </button>
@@ -342,7 +342,7 @@ export default function MemberAuthorPage() {
             <div>
               <button className="btn btn-primary" onClick={() => setShowSubmit(true)}>+ 提交新食谱</button>
               {showSubmit && (
-                <div style={{ marginTop: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--border)', padding: 24 }}>
+                <div style={{ marginTop: 16, background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: 24 }}>
                   <h3 style={{ margin: '0 0 20px 0', fontSize: 16 }}>提交食谱</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                     <div>
@@ -389,7 +389,7 @@ export default function MemberAuthorPage() {
             <div>
               {submissions.map((s: any, i: number) => (
                 <div key={i} style={{
-                  padding: '14px 16px', marginBottom: 8, background: 'var(--card-bg)',
+                  padding: '14px 16px', marginBottom: 8, background: 'var(--card)',
                   borderRadius: 8, border: '1px solid var(--border)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -415,7 +415,7 @@ export default function MemberAuthorPage() {
                               <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                                 {fls.map((f: any, j: number) => (
                                   <a key={j} href={f.url} target="_blank" rel="noreferrer"
-                                    style={{ fontSize: 12, color: 'var(--accent)', textDecoration: 'none', background: 'var(--bg-secondary)', padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                                    style={{ fontSize: 12, color: 'var(--primary)', textDecoration: 'none', background: 'var(--bg-secondary)', padding: '3px 10px', borderRadius: 4, border: '1px solid var(--border)' }}>
                                     {f.filename || ('附件 ' + (j + 1))}
                                   </a>
                                 ))}
@@ -434,13 +434,13 @@ export default function MemberAuthorPage() {
                     <div style={{ flexShrink: 0, marginLeft: 12, textAlign: 'right' }}>
                       <span style={{
                         fontSize: 12, padding: '2px 10px', borderRadius: 10, fontWeight: 500,
-                        ...(s.status === 'approved' ? { background: '#dcfce7', color: '#166534' }
-                          : s.status === 'rejected' ? { background: '#fef2f2', color: '#991b1b' }
+                        ...(s.status === 'approved' ? { background: 'var(--success-light)', color: 'var(--success)' }
+                          : s.status === 'rejected' ? { background: 'var(--warning-light)', color: 'var(--warning)' }
                           : { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }),
                       }}>
                         {{ pending: '待审核', approved: '已通过', rejected: '已驳回' }[s.status as string] || s.status}
                       </span>
-                      {s.review_note && <div style={{ fontSize: 12, color: '#991b1b', marginTop: 4 }}>{s.review_note}</div>}
+                      {s.review_note && <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 4 }}>{s.review_note}</div>}
                     </div>
                   </div>
                 </div>
@@ -454,7 +454,7 @@ export default function MemberAuthorPage() {
             <div>
               {payouts.map((p: any, i: number) => (
                 <div key={i} style={{
-                  padding: '14px 16px', marginBottom: 8, background: 'var(--card-bg)',
+                  padding: '14px 16px', marginBottom: 8, background: 'var(--card)',
                   borderRadius: 8, border: '1px solid var(--border)',
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -468,7 +468,7 @@ export default function MemberAuthorPage() {
                     </div>
                     <span style={{
                       fontSize: 12, padding: '2px 10px', borderRadius: 10, fontWeight: 500,
-                      ...(p.status === 'paid' ? { background: '#dcfce7', color: '#166534' } : { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }),
+                      ...(p.status === 'paid' ? { background: 'var(--success-light)', color: 'var(--success)' } : { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }),
                     }}>
                       {p.status === 'paid' ? '已派发' : '待派发'}
                     </span>

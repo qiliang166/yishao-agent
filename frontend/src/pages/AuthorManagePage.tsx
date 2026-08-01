@@ -368,7 +368,7 @@ export default function AuthorManagePage() {
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1100, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>作者管理</h1>
+        <h1 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>作者管理</h1>
         {tab === 'authors' && <button className="btn btn-primary btn-sm" onClick={openCreate}>+ 新建作者</button>}
       </div>
 
@@ -387,7 +387,7 @@ export default function AuthorManagePage() {
               padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
               fontSize: 14, fontWeight: tab === k ? 600 : 400,
               color: tab === k ? 'var(--text)' : 'var(--text-secondary)',
-              borderBottom: tab === k ? '2px solid var(--accent)' : '2px solid transparent',
+              borderBottom: tab === k ? '2px solid var(--primary)' : '2px solid transparent',
             }}>
             {label}
             {k === 'pending' && pending.length > 0 && (
@@ -519,23 +519,23 @@ export default function AuthorManagePage() {
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>设置分佣比例</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 10 }}>
                     <div>
-                      <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>积分分成 (0~1)</label>
+                      <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>积分分成 (0~1)</label>
                       <input className="form-input" type="number" step="0.01" min="0" max="1" value={approveRevShare}
                         onChange={e => setApproveRevShare(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>现金分成 (0~1)</label>
+                      <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>现金分成 (0~1)</label>
                       <input className="form-input" type="number" step="0.01" min="0" max="1" value={approveCashShare}
                         onChange={e => setApproveCashShare(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
                     </div>
                     <div>
-                      <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>积分汇率 (1元=X积分)</label>
+                      <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>积分汇率 (1元=X积分)</label>
                       <input className="form-input" type="number" step="1" min="1" value={approvePtsPerYuan}
                         onChange={e => setApprovePtsPerYuan(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
                     </div>
                   </div>
                   <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>签约备注</label>
+                    <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>签约备注</label>
                     <input className="form-input" value={approveNote}
                       onChange={e => setApproveNote(e.target.value)} placeholder="可选备注"
                       style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
@@ -570,7 +570,7 @@ export default function AuthorManagePage() {
                   padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
                   fontSize: 14, fontWeight: subTab === k ? 600 : 400,
                   color: subTab === k ? 'var(--text)' : 'var(--text-secondary)',
-                  borderBottom: subTab === k ? '2px solid var(--accent)' : '2px solid transparent',
+                  borderBottom: subTab === k ? '2px solid var(--primary)' : '2px solid transparent',
                 }}>
                 {label}
               </button>
@@ -593,7 +593,7 @@ export default function AuthorManagePage() {
                     {s.status !== 'pending' && (
                       <span style={{
                         fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 8,
-                        ...(s.status === 'approved' ? { background: '#dcfce7', color: '#166534' } : { background: '#fef2f2', color: '#991b1b' }),
+                        ...(s.status === 'approved' ? { background: 'var(--success-light)', color: 'var(--success)' } : { background: 'var(--warning-light)', color: 'var(--warning)' }),
                       }}>
                         {s.status === 'approved' ? '已通过' : '已驳回'}
                       </span>
@@ -624,7 +624,7 @@ export default function AuthorManagePage() {
                           <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                             {fls.map((f: any, i: number) => (
                               <a key={i} href={f.url} target="_blank" rel="noreferrer"
-                                style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)' }}>
+                                style={{ fontSize: 11, color: 'var(--primary)', textDecoration: 'none', background: 'var(--bg-secondary)', padding: '2px 8px', borderRadius: 4, border: '1px solid var(--border)' }}>
                                 {f.filename || ('附件 ' + (i + 1))}
                               </a>
                             ))}
@@ -635,7 +635,7 @@ export default function AuthorManagePage() {
                     return null
                   })()}
                   {s.status === 'rejected' && s.review_note && (
-                    <div style={{ fontSize: 11, color: '#991b1b', marginTop: 4 }}>
+                    <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>
                       驳回原因: {s.review_note}
                     </div>
                   )}
@@ -658,7 +658,7 @@ export default function AuthorManagePage() {
                 <div style={{ marginTop: 12, padding: 14, background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>审核通过</div>
                   <div style={{ marginBottom: 10 }}>
-                    <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>积分定价 (单位: 分, 5=0.5积分)</label>
+                    <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>积分定价 (单位: 分, 5=0.5积分)</label>
                     <input className="form-input" type="number" step="1" min="1" value={subPointCost}
                       onChange={e => setSubPointCost(e.target.value)} style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
                   </div>
@@ -721,7 +721,7 @@ export default function AuthorManagePage() {
                   { label: '未结算积分', value: ((revStats as any)?.unsettled_points_deci / 10 || 0).toFixed(1) },
                   { label: '未结算现金(元)', value: ((revStats as any)?.unsettled_cash_cents / 100 || 0).toFixed(2) },
                 ].map(item => (
-                  <div key={item.label} style={{ background: 'var(--card-bg)', borderRadius: 10, border: '1px solid var(--border)', padding: '14px 16px', textAlign: 'center' }}>
+                  <div key={item.label} style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: '14px 16px', textAlign: 'center' }}>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 6 }}>{item.label}</div>
                     <div style={{ fontSize: 20, fontWeight: 700 }}>{item.value}</div>
                   </div>
@@ -759,20 +759,20 @@ export default function AuthorManagePage() {
                       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10 }}>派发收益 — {item.author_name || item.author_id}</div>
                       <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>开始日期</label>
+                          <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>开始日期</label>
                           <input className="form-input" type="date" value={payoutStart}
                             onChange={e => setPayoutStart(e.target.value)}
                             style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>结束日期</label>
+                          <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>结束日期</label>
                           <input className="form-input" type="date" value={payoutEnd}
                             onChange={e => setPayoutEnd(e.target.value)}
                             style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
                         </div>
                       </div>
                       <div style={{ marginBottom: 10 }}>
-                        <label style={{ fontSize: 11, display: 'block', marginBottom: 3 }}>备注</label>
+                        <label style={{ fontSize: 10, display: 'block', marginBottom: 3 }}>备注</label>
                         <input className="form-input" value={payoutNote}
                           onChange={e => setPayoutNote(e.target.value)} placeholder="可选备注"
                           style={{ width: '100%', boxSizing: 'border-box', fontSize: 12 }} />
@@ -819,7 +819,7 @@ export default function AuthorManagePage() {
                             <td>
                               <span style={{
                                 fontSize: 11, padding: '2px 8px', borderRadius: 8, fontWeight: 500,
-                                ...(p.status === 'paid' ? { background: '#dcfce7', color: '#166534' } : { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }),
+                                ...(p.status === 'paid' ? { background: 'var(--success-light)', color: 'var(--success)' } : { background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }),
                               }}>
                                 {p.status === 'paid' ? '已派发' : '待派发'}
                               </span>
@@ -840,7 +840,7 @@ export default function AuthorManagePage() {
       {/* ── Tab: 功能设置 ── */}
       {tab === 'settings' && (
         <div style={{ maxWidth: 600 }}>
-          <div style={{ background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--border)', padding: 24 }}>
+          <div style={{ background: 'var(--card)', borderRadius: 8, border: '1px solid var(--border)', padding: 24 }}>
             <h3 style={{ margin: '0 0 20px 0', fontSize: 16 }}>签约作者设置</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -892,17 +892,11 @@ export default function AuthorManagePage() {
 
       {/* ── Author edit dialog ── */}
       {dialogOpen && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }} onClick={() => !saving && setDialogOpen(false)}>
-          <div style={{
-            background: '#fff', borderRadius: 12, padding: 24, width: 480,
-            maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 32px rgba(0,0,0,0.2)', color: '#333',
-          }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 16px 0' }}>
+        <div className="dialog-overlay" onClick={() => !saving && setDialogOpen(false)}>
+          <div className="dialog-box wide" style={{ maxHeight: '85vh' }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">
               {editingId ? '编辑作者' : '新建作者'}
-            </h2>
+            </div>
             <div className="form-group">
               <label className="form-label">姓名 *</label>
               <input className="form-input" type="text" value={formName} autoFocus
@@ -951,15 +945,9 @@ export default function AuthorManagePage() {
 
       {/* ── Contract edit dialog ── */}
       {contractOpen && (
-        <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }} onClick={() => !contractSaving && setContractOpen(null)}>
-          <div style={{
-            background: '#fff', borderRadius: 12, padding: 24, width: 440,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.2)', color: '#333',
-          }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 16px 0' }}>签约管理</h2>
+        <div className="dialog-overlay" onClick={() => !contractSaving && setContractOpen(null)}>
+          <div className="dialog-box" style={{ width: 440 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">签约管理</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <label className="form-label">签约状态</label>
