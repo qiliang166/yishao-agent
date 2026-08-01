@@ -58,7 +58,9 @@ export default function AuthorManagePage() {
   const [subRejectOpen, setSubRejectOpen] = useState<string | null>(null)
   const [subRejectNote, setSubRejectNote] = useState('')
   const [subSaving, setSubSaving] = useState(false)
-  const [subStatusFilter, setSubStatusFilter] = useState('pending')
+  const [subTab, setSubTab] = useState<'pending' | 'approved' | 'rejected'>('pending')
+  const [subPage, setSubPage] = useState(1)
+  const [subPendingCount, setSubPendingCount] = useState(0)
 
   // ── Revenue tab ──
   const [revStats, setRevStats] = useState<any>(null)
@@ -114,8 +116,11 @@ export default function AuthorManagePage() {
   const loadSubmissions = async () => {
     setSubLoading(true)
     try {
-      const d = await api.adminSubmissions(subStatusFilter)
+      const d = await api.adminSubmissions(subTab)
       setSubmissions((d as any)?.submissions || [])
+      // Also refresh pending count for badge
+      const p = await api.adminSubmissions('pending')
+      setSubPendingCount(((p as any)?.submissions || []).length)
     } catch (e: any) {
       modal.toast('加载失败: ' + e.message, 'error')
     } finally {
@@ -147,14 +152,18 @@ export default function AuthorManagePage() {
     } catch {}
   }
 
-  useEffect(() => { loadAuthors() }, [])
+  useEffect(() => {
+    loadAuthors()
+    // Load pending submission count for badge
+    api.adminSubmissions('pending').then(d => setSubPendingCount(((d as any)?.submissions || []).length)).catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (tab === 'pending') loadPending()
     else if (tab === 'submissions') loadSubmissions()
     else if (tab === 'revenue') loadRevenue()
     else if (tab === 'settings') loadSettings()
-  }, [tab, subStatusFilter])
+  }, [tab, subTab])
 
   const saveSettings = async () => {
     setSettingsSaving(true)
@@ -306,7 +315,7 @@ export default function AuthorManagePage() {
         point_cost_deci: parseInt(subPointCost) || 5,
         category_id: subCategory,
       })
-      modal.toast('食谱已通过并创建项目', 'success')
+      modal.toast('食谱已通过审核', 'success')
       setSubApproveOpen(null)
       loadSubmissions()
     } catch (e: any) {
@@ -384,8 +393,8 @@ export default function AuthorManagePage() {
             {k === 'pending' && pending.length > 0 && (
               <span style={{ marginLeft: 6, fontSize: 11, background: '#f0ad4e', color: '#fff', padding: '1px 6px', borderRadius: 8 }}>{pending.length}</span>
             )}
-            {k === 'submissions' && submissions.length > 0 && (
-              <span style={{ marginLeft: 6, fontSize: 11, background: '#f0ad4e', color: '#fff', padding: '1px 6px', borderRadius: 8 }}>{submissions.length}</span>
+            {k === 'submissions' && subPendingCount > 0 && (
+              <span style={{ marginLeft: 6, fontSize: 11, background: '#f0ad4e', color: '#fff', padding: '1px 6px', borderRadius: 8 }}>{subPendingCount}</span>
             )}
           </button>
         ))}
@@ -548,24 +557,34 @@ export default function AuthorManagePage() {
       {/* ── Tab: 食谱审核 ── */}
       {tab === 'submissions' && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>状态筛选:</span>
-            <select className="form-input" value={subStatusFilter}
-              onChange={e => setSubStatusFilter(e.target.value)}
-              style={{ width: 120, fontSize: 12, boxSizing: 'border-box' }}>
-              <option value="pending">待审核</option>
-              <option value="approved">已通过</option>
-              <option value="rejected">已驳回</option>
-              <option value="all">全部</option>
-            </select>
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 16 }}>
+            {([
+              ['pending', '待审核'],
+              ['approved', '已通过'],
+              ['rejected', '已驳回'],
+            ] as const).map(([k, label]) => (
+              <button key={k}
+                onClick={() => { setSubTab(k); setSubPage(1) }}
+                style={{
+                  padding: '8px 18px', border: 'none', background: 'none', cursor: 'pointer',
+                  fontSize: 13, fontWeight: subTab === k ? 600 : 400,
+                  color: subTab === k ? 'var(--text)' : 'var(--text-secondary)',
+                  borderBottom: subTab === k ? '2px solid var(--accent)' : '2px solid transparent',
+                }}>
+                {label}
+              </button>
+            ))}
           </div>
           {subLoading ? (
             <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
           ) : submissions.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-              <p>暂无{subStatusFilter === 'pending' ? '待审核的' : subStatusFilter === 'approved' ? '已通过的' : subStatusFilter === 'rejected' ? '已驳回的' : ''}食谱提交</p>
+              <p>暂无{subTab === 'pending' ? '待审核的' : subTab === 'approved' ? '已通过的' : '已驳回的'}食谱提交</p>
             </div>
-          ) : submissions.map((s: any) => (
+          ) : (
+            <>
+              {submissions.slice((subPage - 1) * PAGE_SIZE, subPage * PAGE_SIZE).map((s: any) => (
             <div key={s.id} className="card" style={{ padding: 16, marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
@@ -670,6 +689,15 @@ export default function AuthorManagePage() {
               )}
             </div>
           ))}
+              {Math.ceil(submissions.length / PAGE_SIZE) > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '12px 0', fontSize: 11, color: 'var(--text-secondary)' }}>
+                  <button className="btn btn-ghost btn-sm" disabled={subPage <= 1} onClick={() => setSubPage(p => p - 1)}>上一页</button>
+                  <span>第 {subPage} / {Math.ceil(submissions.length / PAGE_SIZE)} 页（共 {submissions.length} 条）</span>
+                  <button className="btn btn-ghost btn-sm" disabled={subPage >= Math.ceil(submissions.length / PAGE_SIZE)} onClick={() => setSubPage(p => p + 1)}>下一页</button>
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
 
