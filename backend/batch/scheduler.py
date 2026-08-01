@@ -1011,14 +1011,6 @@ def _tab_pipeline(project_id: str, pipeline: dict, item: dict):
                     "content_type": "json",
                 })
                 _log(item, f"    [{label}] 大纲已生成: {len(outline_json)} 页")
-                try:
-                    _call("POST", f"/api/projects/{project_id}/save-file", {
-                        "filename": f"{item['project_name']}_{s3_label}大纲.txt",
-                        "content": outline_text or "",
-                        "encoding": "text",
-                    })
-                except Exception:
-                    pass
 
                 # PPT
                 _log(item, f"    [{label}] 生成PPT...")
