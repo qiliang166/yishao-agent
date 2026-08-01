@@ -556,8 +556,14 @@ export default function AuthorManagePage() {
                     )}
                   </div>
                   {s.description && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 4, maxHeight: 60, overflow: 'hidden' }}>
-                      {s.description.length > 150 ? s.description.slice(0, 150) + '…' : s.description}
+                    <div style={{ position: 'relative' }}>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 4, maxHeight: 60, overflow: 'hidden', paddingRight: 50 }}>
+                        {s.description.length > 150 ? s.description.slice(0, 150) + '…' : s.description}
+                      </div>
+                      <button className="btn btn-ghost btn-sm" style={{ position: 'absolute', top: 0, right: 0, fontSize: 10 }}
+                        onClick={() => { navigator.clipboard.writeText(s.description); modal.toast('已复制内容', 'success') }}>
+                        复制
+                      </button>
                     </div>
                   )}
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>

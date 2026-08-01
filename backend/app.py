@@ -9462,18 +9462,17 @@ if os.path.isdir(FRONTEND_DIST):
         return _serve(_os.path.join(FRONTEND_DIST, "index.html"))
 
     DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "downloads")
-    if os.path.isdir(DOWNLOADS_DIR):
-        @app.get("/api/downloads/{filename:path}")
-        async def serve_download(filename: str):
-            from starlette.responses import FileResponse
-            import mimetypes
-            file_path = os.path.join(DOWNLOADS_DIR, filename)
-            if not os.path.isfile(file_path):
-                raise HTTPException(404)
-            real = os.path.realpath(file_path)
-            if not real.startswith(os.path.realpath(DOWNLOADS_DIR)):
-                raise HTTPException(403)
-            return FileResponse(real, filename=filename, headers={"Content-Disposition": "attachment"})
+    @app.get("/api/downloads/{filename:path}")
+    async def serve_download(filename: str):
+        from starlette.responses import FileResponse
+        os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+        file_path = os.path.join(DOWNLOADS_DIR, filename)
+        if not os.path.isfile(file_path):
+            raise HTTPException(404)
+        real = os.path.realpath(file_path)
+        if not real.startswith(os.path.realpath(DOWNLOADS_DIR)):
+            raise HTTPException(403)
+        return FileResponse(real, filename=filename, headers={"Content-Disposition": "attachment"})
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":
