@@ -248,6 +248,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
       onProgressChange?.('')
       if (fullText) {
         await api.saveStep(projectId, stepKey, fullText)
+        api.saveFileToProject(projectId, `${projectName}_${label}.txt`, fullText).catch(() => {})
         await onRefresh()
         setViewMode('preview')
       } else {
