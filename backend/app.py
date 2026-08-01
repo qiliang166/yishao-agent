@@ -1359,30 +1359,6 @@ def _list_project_files(project_id: str):
                     "download_url": f"/api/download/{f}?project_id={project_id}",
                     "audio_url": audio_url,
                 })
-    # Also include source materials (素材输入)
-    db = get_db()
-    try:
-        sources = db.execute(
-            "SELECT id, source_name, source_type, raw_content, created_at FROM source_materials WHERE project_id = ? ORDER BY created_at DESC",
-            (project_id,)).fetchall()
-        for s in sources:
-            fname = s["source_name"] or s["source_type"] or "素材"
-            content = s["raw_content"] or ""
-            files.append({
-                "filename": fname,
-                "display_name": s["source_name"] or fname,
-                "type": s["source_type"] or '素材',
-                "category": '1. 素材输入',
-                "size": len(content.encode('utf-8')),
-                "modified": 0,
-                "download_url": "",
-                "audio_url": "",
-                "source_name": s["source_name"] or fname,
-                "material_id": s["id"],
-            })
-    finally:
-        db.close()
-
     # Include PPT export runs (课件输出)
     ppt_db = get_db()
     try:
