@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 
@@ -33,6 +33,10 @@ export default function AuthorManagePage() {
   const [formName, setFormName] = useState('')
   const [formIntro, setFormIntro] = useState('')
   const [formLicense, setFormLicense] = useState('')
+  const [formPhotoUrl, setFormPhotoUrl] = useState('')
+  const [formPhotoFile, setFormPhotoFile] = useState('')
+  const [formPhotoUploading, setFormPhotoUploading] = useState(false)
+  const editPhotoInputRef = useRef<HTMLInputElement>(null)
   const [saving, setSaving] = useState(false)
 
   // ── Pending tab ──
@@ -179,7 +183,28 @@ export default function AuthorManagePage() {
   const openEdit = (a: Author) => {
     setEditingId(a.id)
     setFormName(a.name); setFormIntro(a.intro || ''); setFormLicense(a.license_text || '')
+    setFormPhotoUrl(a.photo_url || ''); setFormPhotoFile('')
+    if (editPhotoInputRef.current) editPhotoInputRef.current.value = ''
     setDialogOpen(true)
+  }
+
+  const handleEditPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !editingId) return
+    setFormPhotoFile(file.name)
+    setFormPhotoUploading(true)
+    try {
+      const result = await api.uploadRecipeFile(file)
+      await api.updateAuthorPhoto(editingId, result.url)
+      setFormPhotoUrl(result.url)
+      modal.toast('相片已更新', 'success')
+    } catch (err: any) {
+      modal.toast('上传失败: ' + (err.message || '未知错误'), 'error')
+      setFormPhotoFile('')
+      if (editPhotoInputRef.current) editPhotoInputRef.current.value = ''
+    } finally {
+      setFormPhotoUploading(false)
+    }
   }
 
   const save = async () => {
@@ -862,6 +887,23 @@ export default function AuthorManagePage() {
               <label className="form-label">姓名 *</label>
               <input className="form-input" type="text" value={formName} autoFocus
                 onChange={e => setFormName(e.target.value)} placeholder="作者姓名" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">相片</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                {formPhotoUrl && (
+                  <img src={formPhotoUrl} alt=""
+                    style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} />
+                )}
+                <div>
+                  <input type="file" ref={editPhotoInputRef} accept="image/*" onChange={handleEditPhotoUpload} disabled={formPhotoUploading}
+                    style={{ fontSize: 12 }} />
+                  {formPhotoUploading && <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>上传中...</span>}
+                  {formPhotoFile && !formPhotoUploading && (
+                    <div style={{ fontSize: 11, color: 'var(--success)', marginTop: 2 }}>已更新: {formPhotoFile}</div>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="form-group">
               <label className="form-label">简介</label>
