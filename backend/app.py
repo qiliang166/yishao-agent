@@ -7191,10 +7191,11 @@ def backup_full(user=require_perm("config.global")):
                         zf.write(fp, arc)
 
             # Frontend config files (package.json, tsconfig, vite config, index.html, etc.)
+            # .env files are intentionally excluded — they may contain secrets
             fe_root = os.path.join(project_root, "frontend")
             fe_config_files = [
                 "package.json", "package-lock.json", "tsconfig.json", "tsconfig.node.json",
-                "vite.config.ts", "index.html", ".env", ".env.production",
+                "vite.config.ts", "index.html",
             ]
             for fn in fe_config_files:
                 fp = os.path.join(fe_root, fn)
