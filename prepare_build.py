@@ -58,9 +58,6 @@ def main():
     with open(spec_src, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # Replace name
-    content = content.replace("name='YishaoAgent'", f"name={repr(app_name)}")
-
     # Replace icon
     if icon_path:
         icon_path_fwd = icon_path.replace("\\", "/")
