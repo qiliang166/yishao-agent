@@ -20,12 +20,12 @@ import requests
 
 from database import get_db
 
-_SECRET = os.environ.get("JWT_SECRET", "").strip()
-if not _SECRET:
-    import secrets as _secrets
-    _SECRET = _secrets.token_hex(32)
-    print(f"[SECURITY] JWT_SECRET env var not set. Generated random key for this session.", flush=True)
-JWT_SECRET = _SECRET
+JWT_SECRET: str = ""  # Set by app.py via set_jwt_secret() before init()
+
+
+def set_jwt_secret(key: str):
+    global JWT_SECRET
+    JWT_SECRET = key
 
 _batch_lock = threading.Lock()
 _log_lock = threading.Lock()

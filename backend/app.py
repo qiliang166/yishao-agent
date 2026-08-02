@@ -274,8 +274,9 @@ async def catch_all_exceptions(request: Request, call_next):
 @app.on_event("startup")
 async def startup_batch_scheduler():
     import os as _os
-    from batch.scheduler import init as batch_init
+    from batch.scheduler import init as batch_init, set_jwt_secret
     port = int(_os.environ.get("PORT", "8766"))
+    set_jwt_secret(SECRET_KEY)
     batch_init(port)
     # Mark any batches that were "running" before restart as stopped (thread killed)
     try:
@@ -9592,6 +9593,6 @@ if __name__ == "__main__":
     from batch.scheduler import init as batch_init
     port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
     batch_init(port)
-    workers = int(os.environ.get("WORKERS", min((os.cpu_count() or 2), 4)))
+    workers = int(os.environ.get("WORKERS", "1"))
     _log.info("Starting server on port %s with %s workers", port, workers)
     uvicorn.run(app, host="0.0.0.0", port=port, workers=workers)

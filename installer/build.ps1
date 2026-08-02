@@ -26,10 +26,10 @@ $stagingExe = Join-Path $DIST "YishaoAgent.exe"
 Copy-Item $builtExe.FullName $stagingExe -Force
 Write-Host "  Staged: $($builtExe.Name) -> YishaoAgent.exe"
 
-# Check for LICENSE.txt (needed by NSIS MUI_PAGE_LICENSE)
-$licenseFile = Join-Path $ROOT "LICENSE.txt"
+# Check for EULA.txt (needed by NSIS MUI_PAGE_LICENSE)
+$licenseFile = Join-Path $ROOT "EULA.txt"
 if (-not (Test-Path $licenseFile)) {
-    Write-Host "  [WARNING] LICENSE.txt not found, creating placeholder..."
+    Write-Host "  [WARNING] EULA.txt not found, creating placeholder..."
     @"
 END USER LICENSE AGREEMENT
 
