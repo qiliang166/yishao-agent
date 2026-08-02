@@ -150,6 +150,7 @@ class PPTRegenerateSlideRequest(BaseModel):
     provider_id: str = ""
     model: str = ""
     column_id: str = ""
+    force_regenerate: bool = True
 
 
 class PPTGenerateRequest(BaseModel):

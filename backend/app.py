@@ -5072,6 +5072,7 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest, user=require_perm("
         style_id=style_id, color_scheme=color_scheme,
         parallel=min(len(redo_structure), 3), temperature=0.3,
         column_id=column_id, project_id=project_id,
+        force_regenerate=req.force_regenerate,
     )
 
     if not html_slides:
