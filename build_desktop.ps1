@@ -104,7 +104,7 @@ if (-not (Test-Path $downloadsDir)) { New-Item -ItemType Directory -Path $downlo
 
 $builtExe = Get-ChildItem "$root\dist\*.exe" | Where-Object { $_.Name -ne 'YishaoAgent-KeyGen.exe' } | Sort-Object LastWriteTime -Desc | Select-Object -First 1
 if ($builtExe) {
-    $portableName = $builtExe.BaseName + "-Portable.exe"
+    $portableName = "YishaoAgent-Portable.exe"
     Copy-Item $builtExe.FullName "$downloadsDir\$portableName" -Force -ErrorAction SilentlyContinue
     Write-Host "  Copied portable exe to downloads as $portableName"
 }
