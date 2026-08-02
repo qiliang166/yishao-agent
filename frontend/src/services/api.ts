@@ -1509,4 +1509,35 @@ export const api = {
     if (!res.ok) throw new Error(data.detail || '导入失败')
     return data as { markdown: string; filename: string }
   },
+
+  // ── Sales System ──
+
+  listPlans: () =>
+    request('/api/plans').then(d => d as {
+      plans: { id: number; name: string; price_yuan: number; duration_days: number | null; features: string[] }[]
+    }),
+
+  createOrder: (data: { phone: string; plan_type_id: number }) =>
+    request('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }).then(d => d as { ok: boolean; order_no: string; amount_yuan: number; plan_name: string }),
+
+  getOrder: (orderNo: string) =>
+    request(`/api/orders/${encodeURIComponent(orderNo)}`).then(d => d as {
+      order_no: string; phone: string; plan_name: string; amount_yuan: number;
+      status: string; payment_ref: string; license_key?: string;
+      created_at: string; updated_at: string;
+    }),
+
+  updatePaymentRef: (orderNo: string, paymentRef: string) =>
+    request(`/api/orders/${encodeURIComponent(orderNo)}/payment-ref`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ payment_ref: paymentRef }),
+    }).then(d => d as { ok: boolean; status: string }),
+
+  getQrcodeUrls: () =>
+    request('/api/payment-config').then(d => d as { wechat_qr: string; alipay_qr: string }),
 }

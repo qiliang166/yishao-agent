@@ -10,12 +10,15 @@ import json
 import os
 import secrets
 import sqlite3
+import time
+import uuid as _uuid
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 import uvicorn
 
 # ── Config ──────────────────────────────────────────────────────────
@@ -39,12 +42,16 @@ TAG_LEN = 16
 # ── Database ─────────────────────────────────────────────────────────
 DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(DB_DIR, "data", "activation.db")
+QRCODE_DIR = os.path.join(DB_DIR, "data", "qrcodes")
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+os.makedirs(QRCODE_DIR, exist_ok=True)
 
 
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -76,7 +83,6 @@ def init_db():
         ON activations(license_key, machine_id)
     """)
 
-    # Migrate: add new columns if missing
     try:
         cols = [r[1] for r in db.execute("PRAGMA table_info(license_keys)").fetchall()]
         if "is_suspended" not in cols:
@@ -90,19 +96,62 @@ def init_db():
     except Exception:
         pass
 
-    # site_config table for pricing & announcements
     db.execute("""
         CREATE TABLE IF NOT EXISTS site_config (
             key TEXT PRIMARY KEY,
             value TEXT DEFAULT ''
         )
     """)
-    # Seed default rows if missing
     for key in ("pricing_html", "announce_html", "announce_enabled"):
         db.execute(
             "INSERT OR IGNORE INTO site_config (key, value) VALUES (?, ?)",
             (key, "0" if key == "announce_enabled" else ""),
         )
+
+    # ── Sales system tables ──
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS plan_types (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            price_yuan REAL NOT NULL,
+            duration_days INTEGER,
+            features TEXT DEFAULT '[]',
+            is_active INTEGER DEFAULT 1,
+            sort_order INTEGER DEFAULT 0
+        )
+    """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS payment_config (
+            key TEXT PRIMARY KEY,
+            value TEXT DEFAULT ''
+        )
+    """)
+    for key in ("wechat_qr", "alipay_qr"):
+        db.execute(
+            "INSERT OR IGNORE INTO payment_config (key, value) VALUES (?, ?)",
+            (key, ""),
+        )
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_no TEXT UNIQUE NOT NULL,
+            phone TEXT DEFAULT '',
+            plan_type_id INTEGER NOT NULL,
+            amount_yuan REAL NOT NULL,
+            status TEXT DEFAULT 'submitted',
+            payment_ref TEXT DEFAULT '',
+            license_key_sn INTEGER,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    try:
+        cols = [r[1] for r in db.execute("PRAGMA table_info(orders)").fetchall()]
+        if "phone" not in cols:
+            db.execute("ALTER TABLE orders ADD COLUMN phone TEXT DEFAULT ''")
+    except Exception:
+        pass
 
     db.commit()
     db.close()
@@ -216,6 +265,43 @@ def _check_admin(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+# ── Rate limiter ─────────────────────────────────────────────────────
+_rate_store: dict = {}
+
+def _check_rate(ip: str, limit: int = 3, window: int = 3600) -> bool:
+    now = time.time()
+    entry = _rate_store.get(ip)
+    if entry is None or now - entry["window_start"] > window:
+        _rate_store[ip] = {"window_start": now, "count": 1}
+        return True
+    if entry["count"] >= limit:
+        return False
+    entry["count"] += 1
+    return True
+
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "127.0.0.1"
+
+
+# ── Image validation ─────────────────────────────────────────────────
+VALID_MAGIC = {
+    b'\x89PNG\r\n\x1a\n': 'png',
+    b'\xff\xd8\xff': 'jpg',
+}
+MAX_QR_SIZE = 2 * 1024 * 1024  # 2MB
+
+def _validate_image(data: bytes) -> str:
+    if len(data) > MAX_QR_SIZE:
+        raise HTTPException(status_code=400, detail="图片大小不能超过2MB")
+    for magic, ext in VALID_MAGIC.items():
+        if data.startswith(magic):
+            return ext
+    raise HTTPException(status_code=400, detail="仅支持 PNG 和 JPEG 格式的收款码图片")
+
+
 # ── FastAPI app ──────────────────────────────────────────────────────
 app = FastAPI(title="Yishao Agent Activation Server")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -231,14 +317,15 @@ def health():
     return {"ok": True, "service": "yishao-activation-server"}
 
 
-# ── Admin: generate keys ─────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+# Admin: generate keys
+# ══════════════════════════════════════════════════════════════════════
 @app.post("/api/admin/generate-key")
 def admin_generate_key(req: dict, request: Request):
-    """Generate a new license key."""
     _check_admin(request)
     count = max(1, min(100, req.get("count", 1)))
     product_id = req.get("product_id", 1)
-    expires_at = req.get("expires_at")  # format: "2026-12-31 23:59:59" or None
+    expires_at = req.get("expires_at")
 
     keys = []
     db = get_db()
@@ -261,7 +348,6 @@ def admin_generate_key(req: dict, request: Request):
 
 @app.get("/api/admin/keys")
 def admin_list_keys(request: Request):
-    """List all generated keys and their status."""
     _check_admin(request)
     db = get_db()
     try:
@@ -296,7 +382,6 @@ def admin_list_keys(request: Request):
 
 @app.post("/api/admin/revoke")
 def admin_revoke(req: dict, request: Request):
-    """Revoke a license key permanently."""
     _check_admin(request)
     serial = req.get("serial_number")
     if serial is None:
@@ -317,10 +402,9 @@ def admin_revoke(req: dict, request: Request):
 
 @app.post("/api/admin/suspend")
 def admin_suspend(req: dict, request: Request):
-    """Suspend or resume a license key (reversible)."""
     _check_admin(request)
     serial = req.get("serial_number")
-    suspend = req.get("suspend", True)  # True=suspend, False=resume
+    suspend = req.get("suspend", True)
     if serial is None:
         raise HTTPException(status_code=400, detail="serial_number required")
     db = get_db()
@@ -343,10 +427,9 @@ def admin_suspend(req: dict, request: Request):
 
 @app.post("/api/admin/set-expiry")
 def admin_set_expiry(req: dict, request: Request):
-    """Set or clear the expiration date of a license key."""
     _check_admin(request)
     serial = req.get("serial_number")
-    expires_at = req.get("expires_at")  # "2026-12-31 23:59:59" or None to clear
+    expires_at = req.get("expires_at")
     if serial is None:
         raise HTTPException(status_code=400, detail="serial_number required")
     db = get_db()
@@ -361,7 +444,6 @@ def admin_set_expiry(req: dict, request: Request):
 
 @app.post("/api/admin/set-notes")
 def admin_set_notes(req: dict, request: Request):
-    """Set or clear the notes field of a license key."""
     _check_admin(request)
     serial = req.get("serial_number")
     notes = req.get("notes", "")
@@ -379,7 +461,6 @@ def admin_set_notes(req: dict, request: Request):
 
 @app.post("/api/admin/set-phone")
 def admin_set_phone(req: dict, request: Request):
-    """Set or clear the phone field of a license key."""
     _check_admin(request)
     serial = req.get("serial_number")
     phone = req.get("phone", "")
@@ -395,10 +476,11 @@ def admin_set_phone(req: dict, request: Request):
         db.close()
 
 
-# ── Site config: public ──────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+# Site config
+# ══════════════════════════════════════════════════════════════════════
 @app.get("/api/site-config")
 def get_site_config():
-    """Public endpoint — no auth required."""
     db = get_db()
     try:
         rows = db.execute("SELECT key, value FROM site_config").fetchall()
@@ -412,7 +494,6 @@ def get_site_config():
         db.close()
 
 
-# ── Site config: admin ───────────────────────────────────────────────
 @app.get("/api/admin/site-config")
 def admin_get_site_config(request: Request):
     _check_admin(request)
@@ -446,10 +527,11 @@ def admin_update_site_config(req: dict, request: Request):
         db.close()
 
 
-# ── Client: activate ─────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════
+# Client: activate / check / deactivate
+# ══════════════════════════════════════════════════════════════════════
 @app.post("/api/activate")
 def client_activate(req: dict):
-    """Activate a license key for a machine."""
     key = (req.get("key", "") or "").strip()
     machine_id = (req.get("machine_id", "") or "").strip()
 
@@ -499,10 +581,8 @@ def client_activate(req: dict):
         db.close()
 
 
-# ── Client: check activation ─────────────────────────────────────────
 @app.post("/api/check")
 def client_check(req: dict):
-    """Periodic check: is this key still valid for this machine?"""
     key = (req.get("key", "") or "").strip()
     machine_id = (req.get("machine_id", "") or "").strip()
     if not key or not machine_id:
@@ -544,10 +624,8 @@ def client_check(req: dict):
         db.close()
 
 
-# ── Client: deactivate ───────────────────────────────────────────────
 @app.post("/api/deactivate")
 def client_deactivate(req: dict):
-    """Deactivate this machine."""
     key = (req.get("key", "") or "").strip()
     machine_id = (req.get("machine_id", "") or "").strip()
 
@@ -556,6 +634,439 @@ def client_deactivate(req: dict):
         db.execute(
             "DELETE FROM activations WHERE license_key = ? AND machine_id = ?",
             (key, machine_id),
+        )
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Sales System — Public APIs (no auth, rate-limited)
+# ══════════════════════════════════════════════════════════════════════
+
+@app.get("/api/plans")
+def public_list_plans():
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM plan_types WHERE is_active = 1 ORDER BY sort_order, id"
+        ).fetchall()
+        return {
+            "plans": [
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "price_yuan": r["price_yuan"],
+                    "duration_days": r["duration_days"],
+                    "features": json.loads(r["features"] or "[]"),
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/orders")
+def public_create_order(req: dict, request: Request):
+    ip = _client_ip(request)
+    if not _check_rate(ip):
+        raise HTTPException(status_code=429, detail="提交过于频繁，请稍后再试")
+
+    phone = (req.get("phone", "") or "").strip()
+    plan_type_id = req.get("plan_type_id")
+    if not phone:
+        raise HTTPException(status_code=400, detail="请输入手机号")
+    if not plan_type_id:
+        raise HTTPException(status_code=400, detail="请选择套餐")
+
+    db = get_db()
+    try:
+        plan = db.execute("SELECT * FROM plan_types WHERE id = ? AND is_active = 1",
+                          (plan_type_id,)).fetchone()
+        if plan is None:
+            raise HTTPException(status_code=400, detail="套餐不存在或已下架")
+
+        order_no = str(_uuid.uuid4())
+        amount = plan["price_yuan"]
+
+        db.execute(
+            "INSERT INTO orders (order_no, phone, plan_type_id, amount_yuan, status) "
+            "VALUES (?, ?, ?, ?, 'submitted')",
+            (order_no, phone, plan_type_id, amount),
+        )
+        db.commit()
+
+        return {
+            "ok": True,
+            "order_no": order_no,
+            "amount_yuan": amount,
+            "plan_name": plan["name"],
+        }
+    finally:
+        db.close()
+
+
+@app.get("/api/orders/{order_no}")
+def public_get_order(order_no: str):
+    db = get_db()
+    try:
+        order = db.execute(
+            "SELECT o.*, p.name as plan_name, p.duration_days "
+            "FROM orders o JOIN plan_types p ON o.plan_type_id = p.id "
+            "WHERE o.order_no = ?", (order_no,)
+        ).fetchone()
+        if order is None:
+            raise HTTPException(status_code=404, detail="订单不存在")
+
+        result = {
+            "order_no": order["order_no"],
+            "phone": order["phone"],
+            "plan_name": order["plan_name"],
+            "amount_yuan": order["amount_yuan"],
+            "status": order["status"],
+            "payment_ref": order["payment_ref"],
+            "created_at": order["created_at"],
+            "updated_at": order["updated_at"],
+        }
+
+        if order["status"] == "completed":
+            db2 = get_db()
+            try:
+                key_row = db2.execute(
+                    "SELECT license_key FROM license_keys WHERE serial_number = ?",
+                    (order["license_key_sn"],)
+                ).fetchone()
+            finally:
+                db2.close()
+            if key_row:
+                result["license_key"] = key_row["license_key"]
+
+        return result
+    finally:
+        db.close()
+
+
+@app.put("/api/orders/{order_no}/payment-ref")
+def public_update_payment_ref(order_no: str, req: dict, request: Request):
+    ip = _client_ip(request)
+    if not _check_rate(ip):
+        raise HTTPException(status_code=429, detail="提交过于频繁，请稍后再试")
+
+    payment_ref = (req.get("payment_ref", "") or "").strip()
+    if not payment_ref:
+        raise HTTPException(status_code=400, detail="请输入付款参考号")
+
+    db = get_db()
+    try:
+        order = db.execute("SELECT * FROM orders WHERE order_no = ?", (order_no,)).fetchone()
+        if order is None:
+            raise HTTPException(status_code=404, detail="订单不存在")
+        if order["status"] != "submitted":
+            raise HTTPException(status_code=400, detail="订单状态不允许此操作")
+
+        db.execute(
+            "UPDATE orders SET payment_ref = ?, status = 'payment_pending', "
+            "updated_at = datetime('now') WHERE order_no = ?",
+            (payment_ref, order_no),
+        )
+        db.commit()
+        return {"ok": True, "status": "payment_pending"}
+    finally:
+        db.close()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Sales System — QR code public access
+# ══════════════════════════════════════════════════════════════════════
+
+@app.get("/api/qrcode/{filename}")
+def public_qrcode(filename: str):
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="无效的文件名")
+    filepath = os.path.join(QRCODE_DIR, filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="收款码不存在")
+    return FileResponse(filepath)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# Sales System — Admin APIs
+# ══════════════════════════════════════════════════════════════════════
+
+@app.get("/api/admin/plans")
+def admin_list_plans(request: Request):
+    _check_admin(request)
+    db = get_db()
+    try:
+        rows = db.execute(
+            "SELECT * FROM plan_types ORDER BY sort_order, id"
+        ).fetchall()
+        return {
+            "plans": [
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "price_yuan": r["price_yuan"],
+                    "duration_days": r["duration_days"],
+                    "features": json.loads(r["features"] or "[]"),
+                    "is_active": r["is_active"],
+                    "sort_order": r["sort_order"],
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/admin/plans")
+def admin_create_plan(req: dict, request: Request):
+    _check_admin(request)
+    name = (req.get("name", "") or "").strip()
+    price_yuan = req.get("price_yuan", 0)
+    duration_days = req.get("duration_days")
+    features = req.get("features", [])
+    sort_order = req.get("sort_order", 0)
+
+    if not name or price_yuan <= 0:
+        raise HTTPException(status_code=400, detail="套餐名称和价格不能为空")
+
+    db = get_db()
+    try:
+        db.execute(
+            "INSERT INTO plan_types (name, price_yuan, duration_days, features, sort_order) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (name, price_yuan, duration_days, json.dumps(features, ensure_ascii=False), sort_order),
+        )
+        db.commit()
+        return {"ok": True, "id": db.execute("SELECT last_insert_rowid()").fetchone()[0]}
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/plans/{plan_id}")
+def admin_update_plan(plan_id: int, req: dict, request: Request):
+    _check_admin(request)
+    db = get_db()
+    try:
+        plan = db.execute("SELECT * FROM plan_types WHERE id = ?", (plan_id,)).fetchone()
+        if plan is None:
+            raise HTTPException(status_code=404, detail="套餐不存在")
+
+        updates = {}
+        for field in ("name", "price_yuan", "duration_days", "is_active", "sort_order"):
+            if field in req:
+                updates[field] = req[field]
+        if "features" in req:
+            updates["features"] = json.dumps(req["features"], ensure_ascii=False)
+
+        if updates:
+            sets = ", ".join(f"{k} = ?" for k in updates)
+            db.execute(
+                f"UPDATE plan_types SET {sets} WHERE id = ?",
+                list(updates.values()) + [plan_id],
+            )
+            db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.delete("/api/admin/plans/{plan_id}")
+def admin_delete_plan(plan_id: int, request: Request):
+    _check_admin(request)
+    db = get_db()
+    try:
+        db.execute("DELETE FROM plan_types WHERE id = ?", (plan_id,))
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/payment-config")
+def admin_get_payment_config(request: Request):
+    _check_admin(request)
+    db = get_db()
+    try:
+        rows = db.execute("SELECT key, value FROM payment_config").fetchall()
+        config = {r["key"]: r["value"] for r in rows}
+        return {
+            "wechat_qr": config.get("wechat_qr", ""),
+            "alipay_qr": config.get("alipay_qr", ""),
+        }
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/payment-config")
+async def admin_update_payment_config(request: Request):
+    _check_admin(request)
+    form = await request.form()
+    updates = {}
+
+    for key in ("wechat_qr", "alipay_qr"):
+        file = form.get(key)
+        if file is not None and hasattr(file, "filename") and file.filename:
+            data = await file.read()
+            ext = _validate_image(data)
+            filename = f"{_uuid.uuid4().hex}.{ext}"
+            filepath = os.path.join(QRCODE_DIR, filename)
+            with open(filepath, "wb") as f:
+                f.write(data)
+            updates[key] = filename
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="请上传收款码图片")
+
+    db = get_db()
+    try:
+        for key, value in updates.items():
+            db.execute(
+                "INSERT OR REPLACE INTO payment_config (key, value) VALUES (?, ?)",
+                (key, value),
+            )
+        db.commit()
+        return {"ok": True, **updates}
+    finally:
+        db.close()
+
+
+@app.get("/api/admin/orders")
+def admin_list_orders(status: str = "", request: Request = None):
+    _check_admin(request)
+    db = get_db()
+    try:
+        if status:
+            rows = db.execute(
+                "SELECT o.*, p.name as plan_name FROM orders o "
+                "JOIN plan_types p ON o.plan_type_id = p.id "
+                "WHERE o.status = ? ORDER BY o.created_at DESC",
+                (status,)
+            ).fetchall()
+        else:
+            rows = db.execute(
+                "SELECT o.*, p.name as plan_name FROM orders o "
+                "JOIN plan_types p ON o.plan_type_id = p.id "
+                "ORDER BY o.created_at DESC"
+            ).fetchall()
+
+        return {
+            "orders": [
+                {
+                    "id": r["id"],
+                    "order_no": r["order_no"],
+                    "phone": r["phone"],
+                    "plan_name": r["plan_name"],
+                    "plan_type_id": r["plan_type_id"],
+                    "amount_yuan": r["amount_yuan"],
+                    "status": r["status"],
+                    "payment_ref": r["payment_ref"],
+                    "license_key_sn": r["license_key_sn"],
+                    "notes": r["notes"] or "",
+                    "created_at": r["created_at"],
+                    "updated_at": r["updated_at"],
+                }
+                for r in rows
+            ]
+        }
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/orders/{order_id}/verify")
+def admin_verify_order(order_id: int, request: Request):
+    _check_admin(request)
+    db = get_db()
+    try:
+        db.execute("BEGIN IMMEDIATE")
+
+        order = db.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+        if order is None:
+            db.execute("ROLLBACK")
+            raise HTTPException(status_code=404, detail="订单不存在")
+        if order["status"] not in ("submitted", "payment_pending"):
+            db.execute("ROLLBACK")
+            raise HTTPException(status_code=400, detail="订单状态不允许审核")
+
+        plan = db.execute("SELECT * FROM plan_types WHERE id = ?",
+                          (order["plan_type_id"],)).fetchone()
+
+        # Generate license key
+        expires_at = None
+        if plan and plan["duration_days"]:
+            expires_at = (datetime.now() + timedelta(days=plan["duration_days"])).strftime(
+                "%Y-%m-%d %H:%M:%S")
+
+        key, sn = generate_license_key(expires_at=expires_at)
+        db.execute(
+            "INSERT INTO license_keys (license_key, serial_number, product_id, expires_at, phone) "
+            "VALUES (?, ?, 1, ?, ?)",
+            (key, sn, expires_at, order["phone"]),
+        )
+
+        db.execute(
+            "UPDATE orders SET status = 'completed', license_key_sn = ?, "
+            "updated_at = datetime('now') WHERE id = ?",
+            (sn, order_id),
+        )
+        db.commit()
+
+        return {
+            "ok": True,
+            "status": "completed",
+            "serial_number": sn,
+            "license_key": key,
+            "expires_at": expires_at,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        try:
+            db.execute("ROLLBACK")
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/orders/{order_id}/reject")
+def admin_reject_order(order_id: int, req: dict, request: Request):
+    _check_admin(request)
+    notes = (req.get("notes", "") or "").strip()
+
+    db = get_db()
+    try:
+        order = db.execute("SELECT * FROM orders WHERE id = ?", (order_id,)).fetchone()
+        if order is None:
+            raise HTTPException(status_code=404, detail="订单不存在")
+        if order["status"] in ("completed", "cancelled"):
+            raise HTTPException(status_code=400, detail="订单状态不允许驳回")
+
+        db.execute(
+            "UPDATE orders SET status = 'cancelled', notes = ?, "
+            "updated_at = datetime('now') WHERE id = ?",
+            (notes or "管理员驳回", order_id),
+        )
+        db.commit()
+        return {"ok": True, "status": "cancelled"}
+    finally:
+        db.close()
+
+
+@app.put("/api/admin/orders/{order_id}/notes")
+def admin_update_order_notes(order_id: int, req: dict, request: Request):
+    _check_admin(request)
+    notes = (req.get("notes", "") or "").strip()
+
+    db = get_db()
+    try:
+        db.execute(
+            "UPDATE orders SET notes = ?, updated_at = datetime('now') WHERE id = ?",
+            (notes, order_id),
         )
         db.commit()
         return {"ok": True}

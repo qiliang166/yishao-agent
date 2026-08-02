@@ -717,6 +717,10 @@ async def license_middleware(request: Request, call_next):
         or path.startswith("/api/logos/")
         or path.startswith("/api/help-manual/")
         or path.startswith("/api/download/")
+        or path.startswith("/api/plans")
+        or path.startswith("/api/orders")
+        or path.startswith("/api/qrcode/")
+        or path.startswith("/api/payment-config")
         or not path.startswith("/api/")):
         return await call_next(request)
 
@@ -7267,6 +7271,101 @@ def get_site_config():
         return resp.json()
     except Exception:
         return {"pricing_html": "", "announce_html": "", "announce_enabled": "0"}
+
+
+# ── Sales System proxy routes ─────────────────────────────────────────
+
+def _proxy_to_activation(method: str, path: str, body: dict = None):
+    """Forward a request to the activation server, returning (json, status_code)."""
+    import httpx
+    activation_url = os.environ.get("ACTIVATION_SERVER_URL", "http://120.25.251.172:18777")
+    url = f"{activation_url}{path}"
+    try:
+        if method == "GET":
+            resp = httpx.get(url, timeout=10.0)
+        elif method == "POST":
+            resp = httpx.post(url, json=body, timeout=10.0)
+        elif method == "PUT":
+            resp = httpx.put(url, json=body, timeout=10.0)
+        else:
+            return {"detail": "不支持的请求方法"}, 405
+        return resp.json(), resp.status_code
+    except Exception as e:
+        return {"detail": f"激活服务器不可用: {str(e)}"}, 502
+
+
+@app.get("/api/plans")
+def proxy_list_plans():
+    data, status = _proxy_to_activation("GET", "/api/plans")
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=data.get("detail", "请求失败"))
+    return data
+
+
+@app.post("/api/orders")
+def proxy_create_order(req: dict, request: Request):
+    data, status = _proxy_to_activation("POST", "/api/orders", req)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=data.get("detail", "请求失败"))
+    return data
+
+
+@app.get("/api/orders/{order_no}")
+def proxy_get_order(order_no: str):
+    data, status = _proxy_to_activation("GET", f"/api/orders/{order_no}")
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=data.get("detail", "请求失败"))
+    return data
+
+
+@app.put("/api/orders/{order_no}/payment-ref")
+def proxy_update_payment_ref(order_no: str, req: dict, request: Request):
+    data, status = _proxy_to_activation("PUT", f"/api/orders/{order_no}/payment-ref", req)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=data.get("detail", "请求失败"))
+    return data
+
+
+@app.get("/api/qrcode/{filename}")
+def proxy_qrcode(filename: str):
+    """Proxy QR code images from activation server."""
+    import httpx
+    activation_url = os.environ.get("ACTIVATION_SERVER_URL", "http://120.25.251.172:18777")
+    url = f"{activation_url}/api/qrcode/{filename}"
+    try:
+        resp = httpx.get(url, timeout=10.0)
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=resp.status_code, detail="收款码不存在")
+        from fastapi.responses import Response
+        return Response(content=resp.content, media_type=resp.headers.get("content-type", "image/png"))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"激活服务器不可用: {str(e)}")
+
+
+@app.get("/api/payment-config")
+def proxy_payment_config():
+    """Get payment QR code URLs (uses admin token internally)."""
+    import httpx
+    activation_url = os.environ.get("ACTIVATION_SERVER_URL", "http://120.25.251.172:18777")
+    admin_token = os.environ.get("ACTIVATION_ADMIN_TOKEN", "yishao-admin-2026")
+    try:
+        resp = httpx.get(
+            f"{activation_url}/api/admin/payment-config",
+            headers={"X-Admin-Token": admin_token},
+            timeout=10.0,
+        )
+        if resp.status_code >= 400:
+            return {"wechat_qr": "", "alipay_qr": ""}
+        data = resp.json()
+        result = {}
+        for key in ("wechat_qr", "alipay_qr"):
+            filename = data.get(key, "")
+            result[key] = f"/api/qrcode/{filename}" if filename else ""
+        return result
+    except Exception:
+        return {"wechat_qr": "", "alipay_qr": ""}
 
 
 # ── Help Manual Sections ──

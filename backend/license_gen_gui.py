@@ -1,12 +1,23 @@
 """License key manager GUI for Yishao Agent.
 Connects to activation server: generate, suspend, resume, set expiry, set notes, revoke,
-plus site config (pricing & announcement).
+site config (pricing & announcement), plan types, payment QR codes, order management.
 """
 import json
+import os
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 import urllib.request
 import urllib.error
+
+
+STATUS_LABELS = {
+    "submitted": "待付款",
+    "payment_pending": "已付款待审核",
+    "paid_confirming": "审核中",
+    "completed": "已完成",
+    "cancelled": "已驳回",
+    "expired": "已过期",
+}
 
 
 class KeyGenApp:
@@ -14,14 +25,17 @@ class KeyGenApp:
         self.root = root
         self.root.title("Yishao Agent — 注册码管理器")
         self.root.resizable(True, True)
-        w, h = 1100, 740
+        w, h = 1200, 780
         ws = root.winfo_screenwidth()
         hs = root.winfo_screenheight()
         x = (ws - w) // 2
         y = (hs - h) // 2
         root.geometry(f"{w}x{h}+{x}+{y}")
-        root.minsize(900, 560)
-        self._all_keys = []  # cached for search/filter
+        root.minsize(960, 600)
+        self._all_keys = []
+        self._all_plans = []
+        self._all_orders = []
+        self._orders_auto_refresh = None
         self._build_ui()
 
     def _call_api(self, method: str, path: str, body: dict | None = None) -> dict:
@@ -42,11 +56,40 @@ class KeyGenApp:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read().decode("utf-8"))
 
+    def _upload_file(self, path: str, filepath: str, field_name: str) -> dict:
+        token = self.admin_token.get().strip()
+        server = self.server_url.get().strip().rstrip("/")
+        if not token or not server:
+            raise ValueError("请先配置服务器连接")
+
+        boundary = "----YishaoKeyGenBoundary"
+        filename = os.path.basename(filepath)
+        with open(filepath, "rb") as f:
+            file_data = f.read()
+
+        body = bytearray()
+        body.extend(f"--{boundary}\r\n".encode())
+        body.extend(f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode())
+        body.extend(b"Content-Type: application/octet-stream\r\n\r\n")
+        body.extend(file_data)
+        body.extend(f"\r\n--{boundary}--\r\n".encode())
+
+        req = urllib.request.Request(
+            f"{server}{path}",
+            data=bytes(body),
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": f"multipart/form-data; boundary={boundary}",
+            },
+            method="PUT",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
     def _build_ui(self):
-        # Title
         ttk.Label(self.root, text="Yishao Agent 注册码管理器",
                   font=("Microsoft YaHei UI", 14, "bold")).pack(pady=(16, 2))
-        ttk.Label(self.root, text="生成 / 查看 / 暂停 / 授权时间 / 备注 / 吊销  |  站点配置（标价 & 公告）",
+        ttk.Label(self.root, text="注册码 / 站点配置 / 套餐 / 收款码 / 订单管理",
                   font=("Microsoft YaHei UI", 9)).pack(pady=(0, 12))
 
         # ── Server config ──
@@ -73,23 +116,34 @@ class KeyGenApp:
 
         self._build_key_tab()
         self._build_site_config_tab()
+        self._build_plan_tab()
+        self._build_qrcode_tab()
+        self._build_order_tab()
 
         # Status bar
         self.status_var = tk.StringVar(value="就绪")
         ttk.Label(self.root, textvariable=self.status_var, font=("Microsoft YaHei UI", 8),
                   foreground="gray").pack(side="bottom", anchor="w", padx=12, pady=(0, 8))
 
-    # ── Tab 1: Key Management ────────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════
+    # Tab 1: Key Management
+    # ═══════════════════════════════════════════════════════════════
 
     def _build_key_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="注册码管理")
 
-        # ── Generate section ──
         gen_frame = ttk.LabelFrame(tab, text="生成新注册码", padding=8)
         gen_frame.pack(fill="x", pady=(8, 8))
 
-        gen_row1 = ttk.Frame(gen_frame); gen_row1.pack(fill="x")
+        gen_row0 = ttk.Frame(gen_frame); gen_row0.pack(fill="x")
+        ttk.Label(gen_row0, text="关联订单：", width=10).pack(side="left")
+        self.order_no_var = tk.StringVar(value="")
+        ttk.Entry(gen_row0, textvariable=self.order_no_var, font=("Consolas", 9), width=26).pack(side="left", padx=(0, 8))
+        ttk.Label(gen_row0, text="(可选) 填入订单号，自动回填手机和到期时间", foreground="gray",
+                  font=("Microsoft YaHei UI", 8)).pack(side="left")
+
+        gen_row1 = ttk.Frame(gen_frame); gen_row1.pack(fill="x", pady=(4, 0))
         ttk.Label(gen_row1, text="到期时间：", width=10).pack(side="left")
         self.expiry_var = tk.StringVar(value="")
         ttk.Entry(gen_row1, textvariable=self.expiry_var, font=("Consolas", 9), width=22).pack(side="left", padx=(0, 8))
@@ -104,10 +158,11 @@ class KeyGenApp:
         self.note_var = tk.StringVar(value="")
         ttk.Entry(gen_row2, textvariable=self.note_var, font=("Consolas", 9)).pack(side="right", expand=True, fill="x")
 
-        self.gen_btn = ttk.Button(gen_frame, text="生成注册码", command=self._generate)
-        self.gen_btn.pack(anchor="w", pady=(6, 0))
+        btn_row = ttk.Frame(gen_frame); btn_row.pack(fill="x", pady=(6, 0))
+        self.gen_btn = ttk.Button(btn_row, text="生成注册码", command=self._generate)
+        self.gen_btn.pack(side="left")
+        ttk.Button(btn_row, text="查询订单回填", command=self._lookup_order).pack(side="left", padx=(8, 0))
 
-        # Generated key output
         self.output = tk.Text(tab, height=2, font=("Consolas", 10),
                               bg="#1e1e1e", fg="#4ec94e", relief="flat", borderwidth=1,
                               highlightthickness=1, highlightbackground="#555", padx=10, pady=8)
@@ -119,7 +174,7 @@ class KeyGenApp:
         self.copy_btn = ttk.Button(cp_frame, text="复制注册码", command=self._copy)
         self.copy_btn.pack(side="left")
 
-        # ── Search bar ──
+        # Search bar
         search_frame = ttk.Frame(tab); search_frame.pack(fill="x", pady=(0, 4))
         ttk.Label(search_frame, text="手机搜索：",
                   font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 6))
@@ -131,7 +186,7 @@ class KeyGenApp:
         ttk.Button(search_frame, text="清除", width=5,
                    command=self._clear_search).pack(side="left")
 
-        # ── Key list ──
+        # Key list
         ttk.Label(tab, text="所有注册码（单击选中后可操作）：",
                   font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w", pady=(0, 2))
 
@@ -158,7 +213,7 @@ class KeyGenApp:
         self.tree.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        # ── Action buttons ──
+        # Action buttons
         act_frame = ttk.Frame(tab); act_frame.pack(fill="x", pady=(0, 4))
         ttk.Label(act_frame, text="选中后操作：", font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(0, 6))
         self.list_btn = ttk.Button(act_frame, text="刷新列表", command=self._list_keys)
@@ -178,13 +233,14 @@ class KeyGenApp:
         self.revoke_btn = ttk.Button(act_frame, text="吊销", command=self._revoke)
         self.revoke_btn.pack(side="left")
 
-    # ── Tab 2: Site Config ───────────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════
+    # Tab 2: Site Config
+    # ═══════════════════════════════════════════════════════════════
 
     def _build_site_config_tab(self):
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="站点配置")
 
-        # ── Pricing ──
         pricing_frame = ttk.LabelFrame(tab, text="标价说明（显示在软件登录页底部）", padding=8)
         pricing_frame.pack(fill="x", padx=0, pady=(8, 8))
 
@@ -204,7 +260,6 @@ class KeyGenApp:
         ttk.Label(btn_row1, textvariable=self.pricing_status, foreground="green",
                   font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
 
-        # ── Announcement ──
         announce_frame = ttk.LabelFrame(tab, text="公告弹窗（管理员/会员登录后自动弹出）", padding=8)
         announce_frame.pack(fill="x", padx=0, pady=(0, 8))
 
@@ -232,54 +287,172 @@ class KeyGenApp:
         ttk.Label(btn_row2, textvariable=self.announce_status, foreground="green",
                   font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
 
-    def _load_site_config(self):
-        try:
-            data = self._call_api("GET", "/api/admin/site-config")
-            self.pricing_text.delete("1.0", "end")
-            self.pricing_text.insert("1.0", data.get("pricing_html", ""))
-            self.announce_text.delete("1.0", "end")
-            self.announce_text.insert("1.0", data.get("announce_html", ""))
-            self.announce_enabled_var.set(data.get("announce_enabled", "0") == "1")
-            self.status_var.set("站点配置已加载")
-            self.pricing_status.set("")
-            self.announce_status.set("")
-            self.announce_enabled_status.set("")
-        except Exception as e:
-            messagebox.showerror("加载失败", str(e))
-            self.status_var.set(f"加载失败: {e}")
+    # ═══════════════════════════════════════════════════════════════
+    # Tab 3: Plan Types
+    # ═══════════════════════════════════════════════════════════════
 
-    def _save_pricing(self):
-        try:
-            html = self.pricing_text.get("1.0", "end-1c")
-            self._call_api("PUT", "/api/admin/site-config", {"pricing_html": html})
-            self.pricing_status.set("已保存")
-            self.status_var.set("标价说明已保存")
-            self.root.after(3000, lambda: self.pricing_status.set(""))
-        except Exception as e:
-            messagebox.showerror("保存失败", str(e))
-            self.status_var.set(f"保存失败: {e}")
+    def _build_plan_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="套餐配置")
 
-    def _save_announce(self):
-        try:
-            html = self.announce_text.get("1.0", "end-1c")
-            enabled = "1" if self.announce_enabled_var.get() else "0"
-            self._call_api("PUT", "/api/admin/site-config", {
-                "announce_html": html,
-                "announce_enabled": enabled,
-            })
-            self.announce_status.set("已保存")
-            self.status_var.set("公告已保存")
-            self.root.after(3000, lambda: self.announce_status.set(""))
-        except Exception as e:
-            messagebox.showerror("保存失败", str(e))
-            self.status_var.set(f"保存失败: {e}")
+        btn_row = ttk.Frame(tab); btn_row.pack(fill="x", pady=(8, 4))
+        ttk.Button(btn_row, text="刷新", command=self._list_plans).pack(side="left", padx=(0, 8))
+        ttk.Button(btn_row, text="新增套餐", command=self._add_plan).pack(side="left")
+        self.plan_status_var = tk.StringVar()
+        ttk.Label(btn_row, textvariable=self.plan_status_var, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
 
-    # ── Helpers ──────────────────────────────────────────────────────
+        columns = ("id", "name", "price", "duration", "status", "sort")
+        self.plan_tree = ttk.Treeview(tab, columns=columns, show="headings", height=10)
+        self.plan_tree.heading("id", text="ID", anchor="center")
+        self.plan_tree.heading("name", text="套餐名称", anchor="center")
+        self.plan_tree.heading("price", text="价格(元)", anchor="center")
+        self.plan_tree.heading("duration", text="有效期", anchor="center")
+        self.plan_tree.heading("status", text="状态", anchor="center")
+        self.plan_tree.heading("sort", text="排序", anchor="center")
+        self.plan_tree.column("id", width=40, anchor="center")
+        self.plan_tree.column("name", width=150, anchor="center")
+        self.plan_tree.column("price", width=80, anchor="center")
+        self.plan_tree.column("duration", width=100, anchor="center")
+        self.plan_tree.column("status", width=60, anchor="center")
+        self.plan_tree.column("sort", width=50, anchor="center")
+        self.plan_tree.pack(fill="both", expand=True, pady=(0, 4))
+
+        act_row = ttk.Frame(tab); act_row.pack(fill="x")
+        ttk.Button(act_row, text="编辑", command=self._edit_plan).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="启用/禁用", command=self._toggle_plan_active).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="删除", command=self._delete_plan).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="上移", command=lambda: self._move_plan(-1)).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="下移", command=lambda: self._move_plan(1)).pack(side="left")
+
+        self.plan_tree.bind("<Double-1>", lambda e: self._edit_plan())
+
+    # ═══════════════════════════════════════════════════════════════
+    # Tab 4: Payment QR Codes
+    # ═══════════════════════════════════════════════════════════════
+
+    def _build_qrcode_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="收款码配置")
+
+        # WeChat
+        wx_frame = ttk.LabelFrame(tab, text="微信收款码", padding=8)
+        wx_frame.pack(fill="x", padx=0, pady=(8, 8))
+
+        wx_row = ttk.Frame(wx_frame); wx_row.pack(fill="x")
+        self.wx_preview_label = ttk.Label(wx_row, text="(未上传)")
+        self.wx_preview_label.pack(side="left", padx=(0, 12))
+        ttk.Button(wx_row, text="选择文件上传", command=lambda: self._upload_qr("wechat_qr")).pack(side="left")
+        self.wx_status_var = tk.StringVar()
+        ttk.Label(wx_row, textvariable=self.wx_status_var, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        # Alipay
+        ali_frame = ttk.LabelFrame(tab, text="支付宝收款码", padding=8)
+        ali_frame.pack(fill="x", padx=0, pady=(0, 8))
+
+        ali_row = ttk.Frame(ali_frame); ali_row.pack(fill="x")
+        self.ali_preview_label = ttk.Label(ali_row, text="(未上传)")
+        self.ali_preview_label.pack(side="left", padx=(0, 12))
+        ttk.Button(ali_row, text="选择文件上传", command=lambda: self._upload_qr("alipay_qr")).pack(side="left")
+        self.ali_status_var = tk.StringVar()
+        ttk.Label(ali_row, textvariable=self.ali_status_var, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        ttk.Button(tab, text="加载当前收款码", command=self._load_qrcodes).pack(anchor="w", pady=(0, 8))
+
+        # Store photo references for preview
+        self._qr_photos = {}
+
+    # ═══════════════════════════════════════════════════════════════
+    # Tab 5: Order Management
+    # ═══════════════════════════════════════════════════════════════
+
+    def _build_order_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="订单管理")
+
+        top_row = ttk.Frame(tab); top_row.pack(fill="x", pady=(8, 4))
+        ttk.Label(top_row, text="状态筛选：", font=("Microsoft YaHei UI", 9)).pack(side="left")
+        self.order_filter_var = tk.StringVar(value="")
+        filter_combo = ttk.Combobox(top_row, textvariable=self.order_filter_var,
+                                    values=["", "submitted", "payment_pending", "completed", "cancelled", "expired"],
+                                    state="readonly", width=12)
+        filter_combo.pack(side="left", padx=(4, 8))
+        filter_combo.bind("<<ComboboxSelected>>", lambda e: self._list_orders())
+
+        self.order_count_var = tk.StringVar(value="")
+        ttk.Label(top_row, textvariable=self.order_count_var, foreground="gray",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        columns = ("id", "order_no", "phone", "plan", "amount", "status", "ref", "key_sn", "time")
+        self.order_tree = ttk.Treeview(tab, columns=columns, show="headings", height=12)
+        self.order_tree.heading("id", text="ID", anchor="center")
+        self.order_tree.heading("order_no", text="订单号", anchor="center")
+        self.order_tree.heading("phone", text="手机号", anchor="center")
+        self.order_tree.heading("plan", text="套餐", anchor="center")
+        self.order_tree.heading("amount", text="金额", anchor="center")
+        self.order_tree.heading("status", text="状态", anchor="center")
+        self.order_tree.heading("ref", text="付款参考号", anchor="center")
+        self.order_tree.heading("key_sn", text="密钥SN", anchor="center")
+        self.order_tree.heading("time", text="提交时间", anchor="center")
+        self.order_tree.column("id", width=40, anchor="center")
+        self.order_tree.column("order_no", width=100, anchor="center")
+        self.order_tree.column("phone", width=100, anchor="center")
+        self.order_tree.column("plan", width=100, anchor="center")
+        self.order_tree.column("amount", width=60, anchor="center")
+        self.order_tree.column("status", width=90, anchor="center")
+        self.order_tree.column("ref", width=110, anchor="center")
+        self.order_tree.column("key_sn", width=60, anchor="center")
+        self.order_tree.column("time", width=130, anchor="center")
+        self.order_tree.pack(fill="both", expand=True)
+
+        self.order_tree.bind("<Double-1>", lambda e: self._view_order_detail())
+
+        act_row = ttk.Frame(tab); act_row.pack(fill="x", pady=(4, 0))
+        ttk.Button(act_row, text="刷新", command=self._list_orders).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="确认收款", command=self._verify_order).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="驳回", command=self._reject_order).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="查看详情", command=self._view_order_detail).pack(side="left", padx=(0, 6))
+        ttk.Button(act_row, text="编辑备注", command=self._edit_order_notes).pack(side="left")
+        self.order_status_var = tk.StringVar()
+        ttk.Label(act_row, textvariable=self.order_status_var, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        # Start auto-refresh
+        self._schedule_order_refresh()
+
+    # ── Helpers ──────────────────────────────────────────────────
 
     def _toggle_token_vis(self):
         self._token_showing = not self._token_showing
         self._token_entry.configure(show="" if self._token_showing else "*")
         self._token_eye.configure(text="隐藏" if self._token_showing else "显示")
+
+    def _lookup_order(self):
+        order_no = self.order_no_var.get().strip()
+        if not order_no:
+            messagebox.showinfo("提示", "请先输入关联订单号")
+            return
+        try:
+            data = self._call_api("GET", f"/api/admin/orders")
+            orders = data.get("orders", [])
+            for o in orders:
+                if o["order_no"].startswith(order_no):
+                    self.phone_var.set(o.get("phone", ""))
+                    if o.get("plan_name"):
+                        plan_name = o["plan_name"]
+                        for p in self._all_plans:
+                            if p["id"] == o.get("plan_type_id") and p.get("duration_days"):
+                                from datetime import datetime, timedelta
+                                expires = datetime.now() + timedelta(days=p["duration_days"])
+                                self.expiry_var.set(expires.strftime("%Y-%m-%d %H:%M:%S"))
+                                break
+                    self.status_var.set(f"已从订单 {order_no} 回填信息")
+                    return
+            messagebox.showinfo("提示", "未找到匹配订单")
+        except Exception as e:
+            self.status_var.set(f"查询失败: {e}")
 
     def _generate(self):
         body = {"count": 1}
@@ -562,12 +735,456 @@ class KeyGenApp:
             self.root.clipboard_append(content)
             self.status_var.set(f"{self.status_var.get()} — 已复制")
 
+    # ── Site Config ─────────────────────────────────────────────
+
+    def _load_site_config(self):
+        try:
+            data = self._call_api("GET", "/api/admin/site-config")
+            self.pricing_text.delete("1.0", "end")
+            self.pricing_text.insert("1.0", data.get("pricing_html", ""))
+            self.announce_text.delete("1.0", "end")
+            self.announce_text.insert("1.0", data.get("announce_html", ""))
+            self.announce_enabled_var.set(data.get("announce_enabled", "0") == "1")
+            self.status_var.set("站点配置已加载")
+            self.pricing_status.set("")
+            self.announce_status.set("")
+            self.announce_enabled_status.set("")
+        except Exception as e:
+            messagebox.showerror("加载失败", str(e))
+            self.status_var.set(f"加载失败: {e}")
+
+    def _save_pricing(self):
+        try:
+            html = self.pricing_text.get("1.0", "end-1c")
+            self._call_api("PUT", "/api/admin/site-config", {"pricing_html": html})
+            self.pricing_status.set("已保存")
+            self.status_var.set("标价说明已保存")
+            self.root.after(3000, lambda: self.pricing_status.set(""))
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            self.status_var.set(f"保存失败: {e}")
+
+    def _save_announce(self):
+        try:
+            html = self.announce_text.get("1.0", "end-1c")
+            enabled = "1" if self.announce_enabled_var.get() else "0"
+            self._call_api("PUT", "/api/admin/site-config", {
+                "announce_html": html,
+                "announce_enabled": enabled,
+            })
+            self.announce_status.set("已保存")
+            self.status_var.set("公告已保存")
+            self.root.after(3000, lambda: self.announce_status.set(""))
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            self.status_var.set(f"保存失败: {e}")
+
+    # ── Plan Management ──────────────────────────────────────────
+
+    def _list_plans(self):
+        try:
+            data = self._call_api("GET", "/api/admin/plans")
+            self._all_plans = data.get("plans", [])
+        except Exception as e:
+            self.status_var.set(f"获取套餐列表失败: {e}")
+            return
+
+        for item in self.plan_tree.get_children():
+            self.plan_tree.delete(item)
+
+        for p in self._all_plans:
+            dur = "永久" if p["duration_days"] is None else f"{p['duration_days']}天"
+            status = "启用" if p["is_active"] else "禁用"
+            self.plan_tree.insert("", "end",
+                                  values=(p["id"], p["name"], p["price_yuan"], dur, status, p["sort_order"]),
+                                  iid=str(p["id"]))
+        self.plan_status_var.set(f"共 {len(self._all_plans)} 个套餐")
+
+    def _get_selected_plan(self):
+        sel = self.plan_tree.selection()
+        if not sel:
+            messagebox.showinfo("提示", "请先选中一个套餐")
+            return None
+        pid = int(sel[0])
+        for p in self._all_plans:
+            if p["id"] == pid:
+                return p
+        return None
+
+    def _add_plan(self):
+        self._plan_dialog(None)
+
+    def _edit_plan(self):
+        plan = self._get_selected_plan()
+        if plan is None:
+            return
+        self._plan_dialog(plan)
+
+    def _plan_dialog(self, plan):
+        is_edit = plan is not None
+        dialog = tk.Toplevel(self.root)
+        dialog.title("编辑套餐" if is_edit else "新增套餐")
+        dialog.resizable(False, False)
+        dialog.geometry("420x340")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="套餐名称:", font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=16, pady=(12, 2))
+        name_var = tk.StringVar(value=plan["name"] if is_edit else "")
+        ttk.Entry(dialog, textvariable=name_var, font=("Microsoft YaHei UI", 9), width=40).pack(padx=16)
+
+        ttk.Label(dialog, text="价格 (元):", font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=16, pady=(8, 2))
+        price_var = tk.StringVar(value=str(plan["price_yuan"]) if is_edit else "")
+        ttk.Entry(dialog, textvariable=price_var, font=("Microsoft YaHei UI", 9), width=20).pack(padx=16, anchor="w")
+
+        ttk.Label(dialog, text="有效期:", font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=16, pady=(8, 2))
+        dur_frame = ttk.Frame(dialog); dur_frame.pack(fill="x", padx=16)
+        dur_presets = {"永久": None, "1个月": 30, "3个月": 90, "6个月": 180, "1年": 365}
+        dur_var = tk.StringVar(value="永久")
+        if is_edit:
+            if plan["duration_days"] is None:
+                dur_var.set("永久")
+            elif plan["duration_days"] in dur_presets.values():
+                for k, v in dur_presets.items():
+                    if v == plan["duration_days"]:
+                        dur_var.set(k)
+                        break
+            else:
+                dur_var.set("自定义")
+        dur_combo = ttk.Combobox(dur_frame, textvariable=dur_var, values=list(dur_presets.keys()) + ["自定义"],
+                                 state="readonly", width=10)
+        dur_combo.pack(side="left", padx=(0, 8))
+        custom_var = tk.StringVar(value=str(plan["duration_days"]) if is_edit and plan["duration_days"] else "")
+        custom_entry = ttk.Entry(dur_frame, textvariable=custom_var, font=("Microsoft YaHei UI", 9), width=8)
+        custom_entry.pack(side="left")
+        ttk.Label(dur_frame, text="天", font=("Microsoft YaHei UI", 9)).pack(side="left")
+
+        def on_dur_change(*args):
+            if dur_var.get() == "自定义":
+                custom_entry.configure(state="normal")
+            else:
+                custom_entry.configure(state="disabled")
+        dur_var.trace_add("write", on_dur_change)
+        if dur_var.get() != "自定义":
+            custom_entry.configure(state="disabled")
+
+        ttk.Label(dialog, text="功能说明 (每行一个):", font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=16, pady=(8, 2))
+        features_text = tk.Text(dialog, height=4, font=("Microsoft YaHei UI", 9),
+                                relief="flat", borderwidth=1, highlightthickness=1,
+                                highlightbackground="#ccc", padx=6, pady=4)
+        features_text.pack(fill="x", padx=16)
+        if is_edit and plan.get("features"):
+            features_text.insert("1.0", "\n".join(plan["features"]))
+
+        def do_save():
+            name = name_var.get().strip()
+            try:
+                price = float(price_var.get().strip())
+            except ValueError:
+                messagebox.showerror("错误", "价格必须是数字", parent=dialog)
+                return
+            if not name or price <= 0:
+                messagebox.showerror("错误", "套餐名称和价格不能为空", parent=dialog)
+                return
+
+            dur_label = dur_var.get()
+            if dur_label == "永久":
+                duration = None
+            elif dur_label == "自定义":
+                try:
+                    duration = int(custom_var.get().strip())
+                except ValueError:
+                    messagebox.showerror("错误", "自定义天数必须是整数", parent=dialog)
+                    return
+            else:
+                duration = dur_presets[dur_label]
+
+            features = [l.strip() for l in features_text.get("1.0", "end-1c").split("\n") if l.strip()]
+
+            body = {"name": name, "price_yuan": price, "duration_days": duration, "features": features}
+            try:
+                if is_edit:
+                    self._call_api("PUT", f"/api/admin/plans/{plan['id']}", body)
+                else:
+                    body["sort_order"] = len(self._all_plans)
+                    self._call_api("POST", "/api/admin/plans", body)
+                self._list_plans()
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("错误", str(e), parent=dialog)
+
+        ttk.Button(dialog, text="保存", command=do_save).pack(pady=(12, 0))
+
+    def _toggle_plan_active(self):
+        plan = self._get_selected_plan()
+        if plan is None:
+            return
+        try:
+            self._call_api("PUT", f"/api/admin/plans/{plan['id']}",
+                           {"is_active": 0 if plan["is_active"] else 1})
+            self._list_plans()
+        except Exception as e:
+            self.status_var.set(f"操作失败: {e}")
+
+    def _delete_plan(self):
+        plan = self._get_selected_plan()
+        if plan is None:
+            return
+        if not messagebox.askyesno("确认删除", f"确定要删除套餐「{plan['name']}」吗？"):
+            return
+        try:
+            self._call_api("DELETE", f"/api/admin/plans/{plan['id']}")
+            self._list_plans()
+        except Exception as e:
+            self.status_var.set(f"删除失败: {e}")
+
+    def _move_plan(self, delta):
+        plan = self._get_selected_plan()
+        if plan is None:
+            return
+        new_order = (plan["sort_order"] or 0) + delta
+        try:
+            self._call_api("PUT", f"/api/admin/plans/{plan['id']}", {"sort_order": max(0, new_order)})
+            self._list_plans()
+        except Exception as e:
+            self.status_var.set(f"排序失败: {e}")
+
+    # ── QR Code Management ───────────────────────────────────────
+
+    def _load_qrcodes(self):
+        try:
+            data = self._call_api("GET", "/api/admin/payment-config")
+        except Exception as e:
+            self.status_var.set(f"加载收款码失败: {e}")
+            return
+
+        server = self.server_url.get().strip().rstrip("/")
+        for key, label in [("wechat_qr", "wx"), ("alipay_qr", "ali")]:
+            filename = data.get(key, "")
+            if filename:
+                url = f"{server}/api/qrcode/{filename}"
+                try:
+                    req = urllib.request.Request(url)
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        img_data = resp.read()
+                    from tkinter import PhotoImage
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+                        f.write(img_data)
+                        tmp_path = f.name
+                    photo = tk.PhotoImage(file=tmp_path)
+                    photo = photo.subsample(max(1, photo.width() // 200), max(1, photo.height() // 200))
+                    if label == "wx":
+                        self._qr_photos["wechat"] = photo
+                        self.wx_preview_label.configure(image=photo, text="")
+                    else:
+                        self._qr_photos["alipay"] = photo
+                        self.ali_preview_label.configure(image=photo, text="")
+                    os.unlink(tmp_path)
+                except Exception:
+                    getattr(self, f"{label}_preview_label").configure(text="(加载失败)")
+            else:
+                getattr(self, f"{label}_preview_label").configure(text="(未上传)")
+        self.status_var.set("收款码已加载")
+
+    def _upload_qr(self, key):
+        filepath = filedialog.askopenfilename(
+            title="选择收款码图片",
+            filetypes=[("图片文件", "*.png;*.jpg;*.jpeg"), ("所有文件", "*.*")]
+        )
+        if not filepath:
+            return
+
+        label_map = {"wechat_qr": "微信", "alipay_qr": "支付宝"}
+        try:
+            result = self._upload_file("/api/admin/payment-config", filepath, key)
+            status_var = self.wx_status_var if key == "wechat_qr" else self.ali_status_var
+            status_var.set("已上传")
+            self.root.after(3000, lambda: status_var.set(""))
+            self.status_var.set(f"{label_map[key]}收款码已上传")
+            self._load_qrcodes()
+        except Exception as e:
+            self.status_var.set(f"上传失败: {e}")
+            messagebox.showerror("上传失败", str(e))
+
+    # ── Order Management ─────────────────────────────────────────
+
+    def _list_orders(self):
+        status = self.order_filter_var.get()
+        path = f"/api/admin/orders?status={status}" if status else "/api/admin/orders"
+        try:
+            data = self._call_api("GET", path)
+            self._all_orders = data.get("orders", [])
+        except Exception as e:
+            self.status_var.set(f"获取订单列表失败: {e}")
+            return
+
+        for item in self.order_tree.get_children():
+            self.order_tree.delete(item)
+
+        for o in self._all_orders:
+            order_no_short = o["order_no"][:8]
+            key_sn = f"#{o['license_key_sn']:05d}" if o.get("license_key_sn") else ""
+            self.order_tree.insert("", "end",
+                                   values=(o["id"], order_no_short, o["phone"], o["plan_name"],
+                                           o["amount_yuan"], STATUS_LABELS.get(o["status"], o["status"]),
+                                           o["payment_ref"], key_sn,
+                                           (o.get("created_at") or "")[:19]),
+                                   iid=str(o["id"]))
+        self.order_count_var.set(f"共 {len(self._all_orders)} 个订单")
+
+    def _get_selected_order(self):
+        sel = self.order_tree.selection()
+        if not sel:
+            messagebox.showinfo("提示", "请先选中一个订单")
+            return None
+        oid = int(sel[0])
+        for o in self._all_orders:
+            if o["id"] == oid:
+                return o
+        return None
+
+    def _verify_order(self):
+        order = self._get_selected_order()
+        if order is None:
+            return
+        if order["status"] not in ("submitted", "payment_pending"):
+            messagebox.showinfo("提示", "只能审核待付款或已付款待审核的订单")
+            return
+        if not messagebox.askyesno("确认收款",
+                                   f"确认收到「{order['phone']}」的 {order['amount_yuan']} 元付款？\n\n"
+                                   f"套餐: {order['plan_name']}\n"
+                                   f"确认后将自动生成激活码。"):
+            return
+        try:
+            result = self._call_api("PUT", f"/api/admin/orders/{order['id']}/verify")
+            self._list_orders()
+            lic = result.get("license_key", "")
+            sn = result.get("serial_number", "")
+            msg = f"收款已确认，激活码已生成\n\n序列号: #{sn:05d}\n激活码: {lic}"
+            messagebox.showinfo("操作成功", msg)
+            self.order_status_var.set(f"订单 #{order['id']} 已确认收款 — SN: {sn:05d}")
+        except Exception as e:
+            self.status_var.set(f"确认收款失败: {e}")
+            messagebox.showerror("错误", str(e))
+
+    def _reject_order(self):
+        order = self._get_selected_order()
+        if order is None:
+            return
+        if order["status"] in ("completed", "cancelled"):
+            messagebox.showinfo("提示", "该订单已完成或已驳回")
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("驳回订单")
+        dialog.resizable(False, False)
+        dialog.geometry("360x180")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text=f"驳回订单 #{order['id']} — {order.get('phone', '')}",
+                  font=("Microsoft YaHei UI", 9, "bold")).pack(pady=(12, 8))
+        ttk.Label(dialog, text="驳回原因:", font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=16)
+        reason_var = tk.StringVar(value="未收到款项")
+        ttk.Entry(dialog, textvariable=reason_var, font=("Microsoft YaHei UI", 9), width=36).pack(padx=16, pady=(2, 0))
+
+        def do_reject():
+            try:
+                self._call_api("PUT", f"/api/admin/orders/{order['id']}/reject",
+                               {"notes": reason_var.get().strip()})
+                self._list_orders()
+                dialog.destroy()
+                self.order_status_var.set(f"订单 #{order['id']} 已驳回")
+            except Exception as e:
+                messagebox.showerror("错误", str(e), parent=dialog)
+
+        ttk.Button(dialog, text="确认驳回", command=do_reject).pack(pady=(12, 0))
+
+    def _view_order_detail(self):
+        order = self._get_selected_order()
+        if order is None:
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"订单详情 — #{order['id']}")
+        dialog.resizable(False, False)
+        dialog.geometry("520x380")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        info = (
+            f"订单号: {order['order_no']}\n"
+            f"手机号: {order['phone']}\n"
+            f"套餐: {order['plan_name']}\n"
+            f"金额: ¥{order['amount_yuan']}\n"
+            f"状态: {STATUS_LABELS.get(order['status'], order['status'])}\n"
+            f"付款参考号: {order['payment_ref'] or '(未填写)'}\n"
+            f"密钥序列号: #{order['license_key_sn']:05d}" if order.get('license_key_sn') else "密钥序列号: (未生成)"
+        )
+        if order.get("license_key_sn"):
+            info += f"\n密钥序列号: #{order['license_key_sn']:05d}"
+        else:
+            info += "\n密钥序列号: (未生成)"
+
+        info += (
+            f"\n创建时间: {order.get('created_at', '')}\n"
+            f"更新时间: {order.get('updated_at', '')}"
+        )
+
+        ttk.Label(dialog, text=info, font=("Consolas", 9),
+                  justify="left").pack(padx=16, pady=(12, 4), anchor="w")
+
+        ttk.Label(dialog, text="备注:", font=("Microsoft YaHei UI", 9, "bold")).pack(anchor="w", padx=16, pady=(8, 2))
+        notes_text = tk.Text(dialog, height=4, font=("Microsoft YaHei UI", 9),
+                             relief="flat", borderwidth=1, highlightthickness=1,
+                             highlightbackground="#ccc", padx=6, pady=4)
+        notes_text.pack(fill="x", padx=16)
+        notes_text.insert("1.0", order.get("notes", "") or "")
+        notes_text.configure(state="disabled")
+        ttk.Button(dialog, text="关闭", command=dialog.destroy).pack(pady=(8, 12))
+
+    def _edit_order_notes(self):
+        order = self._get_selected_order()
+        if order is None:
+            return
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"编辑备注 — 订单 #{order['id']}")
+        dialog.resizable(False, False)
+        dialog.geometry("400x160")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text=f"当前备注: {order.get('notes') or '(无)'}",
+                  font=("Microsoft YaHei UI", 9)).pack(pady=(12, 8))
+        entry_var = tk.StringVar(value=order.get("notes", ""))
+        ttk.Entry(dialog, textvariable=entry_var, font=("Microsoft YaHei UI", 9), width=42).pack(pady=(4, 0))
+
+        def do_save():
+            try:
+                self._call_api("PUT", f"/api/admin/orders/{order['id']}/notes",
+                               {"notes": entry_var.get().strip()})
+                self._list_orders()
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("错误", str(e), parent=dialog)
+
+        ttk.Button(dialog, text="保存", command=do_save).pack(pady=(12, 0))
+
+    def _schedule_order_refresh(self):
+        try:
+            self._list_orders()
+        except Exception:
+            pass
+        self._orders_auto_refresh = self.root.after(30000, self._schedule_order_refresh)
+
 
 def main():
     root = tk.Tk()
     app = KeyGenApp(root)
-    # Auto-load on start
     root.after(200, lambda: app._list_keys())
+    root.after(400, lambda: app._list_plans())
     root.mainloop()
 
 

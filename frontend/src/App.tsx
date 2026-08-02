@@ -28,6 +28,7 @@ import LandingPage from './pages/LandingPage'
 import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
 import BookletListPage from './booklet/BookletListPage'
 import BookletEditorPage from './booklet/BookletEditorPage'
+import PurchasePage from './pages/PurchasePage'
 import { ModalProvider } from './components/ModalProvider'
 import AboutDialog from './components/AboutDialog'
 import AnnounceModal from './components/AnnounceModal'
@@ -274,6 +275,13 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sidebarPricing) }}
             />
           )}
+          <button
+            className="sidebar-item"
+            onClick={() => navigate('/purchase')}
+            style={{ fontSize: 11, padding: '3px 0' }}
+          >
+            <span className="ico">🛒</span> 立即购买
+          </button>
           <LogoutButton />
       </div>
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
@@ -467,6 +475,13 @@ function MemberSidebar() {
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sidebarPricing) }}
             />
           )}
+          <button
+            className="sidebar-item"
+            onClick={() => navigate('/app/purchase')}
+            style={{ fontSize: 11, padding: '3px 0' }}
+          >
+            <span className="ico">🛒</span> 立即购买
+          </button>
           <MemberLogoutButton />
       </div>
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
@@ -613,6 +628,7 @@ function MemberAppShell() {
             <Route path="/downloads" element={<MemberDownloadsPage />} />
             <Route path="/booklets" element={<BookletListPage />} />
             <Route path="/booklets/:id" element={<BookletEditorPage />} />
+            <Route path="/purchase" element={<PurchasePage />} />
             <Route path="/home-legacy" element={<MemberHomePage />} />
             <Route path="/" element={<Navigate to="/app/center" replace />} />
           </Routes>
@@ -707,6 +723,7 @@ function AppShell() {
             <Route path="/member-center" element={<MemberCenterPage />} />
             <Route path="/" element={<HomePage />} />
             <Route path="/author/:id" element={<AuthorProfilePage />} />
+            <Route path="/purchase" element={<PurchasePage />} />
             <Route path="/home" element={<HomePage />} />
           </Routes>
         </div>
