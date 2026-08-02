@@ -1,5 +1,117 @@
 ﻿# 更新日志
 
+## 2026-08-03
+
+- feat: semi-automated sales system — purchase page, order management, plan config
+
+## 2026-08-03
+
+- fix: don't delete PyInstaller output when staging exe is the original
+
+## 2026-08-03
+
+- fix: skip staging copy when PyInstaller output is already YishaoAgent.exe
+
+## 2026-08-03
+
+- fix: stop using Chinese brand name as PyInstaller output filename
+
+## 2026-08-03
+
+- fix: use ASCII-safe YishaoAgent-Portable.exe instead of Chinese filename
+
+## 2026-08-03
+
+- fix: call set_jwt_secret() before batch_init() in __main__ block
+
+## 2026-08-03
+
+- fix: 3 review findings — JWT key sync, connection pool revert, NSIS correctness
+
+## 2026-08-02
+
+- fix: commercial readiness — P0 security + P1 resilience + P2 packaging
+
+## 2026-08-02
+
+- fix: HTML editor regenerate now bypasses slide cache by default
+- fix: remove source materials from project file list
+- fix: project list sort by updated_at only, file list shows time not just date
+- fix: sort project file list by creation time oldest first
+
+## 2026-08-01
+
+- fix: remove all outline auto-save from project file list
+
+## 2026-08-01
+
+- fix: remove outline auto-save from batch scheduler, keep slide list only
+
+## 2026-08-01
+
+- fix: move backfill endpoint before catch-all GET + add batch auto-save
+
+## 2026-08-01
+
+- fix: add permission check back to backfill endpoint, match frontend guard
+
+## 2026-08-01
+
+- feat: add one-click backfill to save all project step content to file lists
+
+## 2026-08-01
+
+- feat: auto-save step3 outline and PPT slide list to project files
+
+## 2026-08-01
+
+- feat: auto-save generated doc to project file list after generation
+
+## 2026-08-01
+
+- build: regenerate server zip and desktop installer (backup-full fix)
+
+## 2026-08-01
+
+- fix: exclude .env files from full backup to prevent secret leakage
+
+## 2026-08-01
+
+- fix: full backup now includes frontend source code and config files
+
+## 2026-08-01
+
+- fix: replace undefined CSS vars and hardcoded hex with theme tokens in author pages
+
+## 2026-08-01
+
+- style: unify mobile page UI with site conventions
+
+## 2026-08-01
+
+- style: unify mobile page UI with site conventions
+
+## 2026-08-01
+
+- feat: replace submissions filter dropdown with sub-tabs + pagination
+- fix: solid white background for dialogs + simplify recipe approve UI
+- fix: move download endpoint before SPA catch-all to prevent route interception
+- feat: show and upload author photo in edit dialog
+- feat: replace photo URL input with local file upload; serve images inline
+- feat: show submission content, attachments and copy button in member center
+- fix: download endpoint always registered + copy button for recipe description
+
+## 2026-08-01
+
+- fix: approve only marks status, no auto project creation; file upload stores URL in files_json
+- feat: display suggested point cost in submission review card
+
+## 2026-08-01
+
+- feat: contract signed date display + secure file upload
+- feat: recipe file upload with configurable size limit
+- feat: move author contract settings to AuthorManagePage, simplify recipe submission form
+
 ## 2026-08-01
 
 - feat: add toggle to enable/disable author contract application

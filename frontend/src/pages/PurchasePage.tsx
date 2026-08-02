@@ -56,7 +56,7 @@ export default function PurchasePage() {
       .finally(() => setLoading(false))
 
     // Load QR code URLs
-    api.getQrcodeUrls().then(setQrcodes).catch(() => {})
+    api.getQrcodeUrls().then(d => setQrcodes({ wechat: d.wechat_qr, alipay: d.alipay_qr })).catch(() => {})
   }, [])
 
   useEffect(() => {
