@@ -23,8 +23,10 @@ if (-not $builtExe) {
 
 # Stage the exe with a fixed name for NSIS to find (skip if already correct name)
 $stagingExe = Join-Path $DIST "YishaoAgent.exe"
+$staged = $false
 if ($builtExe.FullName -ne $stagingExe) {
     Copy-Item $builtExe.FullName $stagingExe -Force
+    $staged = $true
     Write-Host "  Staged: $($builtExe.Name) -> YishaoAgent.exe"
 } else {
     Write-Host "  Already named YishaoAgent.exe, skip staging"
@@ -48,7 +50,7 @@ $nsis = Get-Command makensis -ErrorAction SilentlyContinue
 if (-not $nsis) {
     Write-Host "  [WARNING] makensis not found. Skipping NSIS installer."
     Write-Host "  Download NSIS: https://nsis.sourceforge.io/Download"
-    Remove-Item $stagingExe -Force -ErrorAction SilentlyContinue
+    if ($staged) { Remove-Item $stagingExe -Force -ErrorAction SilentlyContinue }
     exit 0
 }
 
@@ -57,8 +59,8 @@ $installerScript = Join-Path $PSScriptRoot "installer.nsi"
 $nsisArgs = @("/V2", "/DVERSION=$VERSION", $installerScript)
 $result = & makensis @nsisArgs
 
-# Clean up staging
-Remove-Item $stagingExe -Force -ErrorAction SilentlyContinue
+# Clean up staging (only if it was a copy, not the original)
+if ($staged) { Remove-Item $stagingExe -Force -ErrorAction SilentlyContinue }
 
 if ($LASTEXITCODE -eq 0) {
     $output = Get-ChildItem "$DIST\*Setup*.exe" | Sort-Object LastWriteTime -Desc | Select-Object -First 1
