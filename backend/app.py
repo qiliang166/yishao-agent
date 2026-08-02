@@ -9590,8 +9590,9 @@ if os.path.isdir(FRONTEND_DIST):
 
 if __name__ == "__main__":
     import uvicorn
-    from batch.scheduler import init as batch_init
+    from batch.scheduler import init as batch_init, set_jwt_secret
     port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
+    set_jwt_secret(SECRET_KEY)
     batch_init(port)
     workers = int(os.environ.get("WORKERS", "1"))
     _log.info("Starting server on port %s with %s workers", port, workers)
