@@ -2,6 +2,14 @@
 
 ## 2026-08-03
 
+- fix: code review fixes — auth header, path validation, phone regex, polling
+
+## 2026-08-03
+
+- fix: TS type mismatch in PurchasePage getQrcodeUrls + build stamp
+
+## 2026-08-03
+
 - feat: semi-automated sales system — purchase page, order management, plan config
 
 ## 2026-08-03
