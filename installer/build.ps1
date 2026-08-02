@@ -21,10 +21,14 @@ if (-not $builtExe) {
     exit 1
 }
 
-# Stage the exe with a fixed name for NSIS to find
+# Stage the exe with a fixed name for NSIS to find (skip if already correct name)
 $stagingExe = Join-Path $DIST "YishaoAgent.exe"
-Copy-Item $builtExe.FullName $stagingExe -Force
-Write-Host "  Staged: $($builtExe.Name) -> YishaoAgent.exe"
+if ($builtExe.FullName -ne $stagingExe) {
+    Copy-Item $builtExe.FullName $stagingExe -Force
+    Write-Host "  Staged: $($builtExe.Name) -> YishaoAgent.exe"
+} else {
+    Write-Host "  Already named YishaoAgent.exe, skip staging"
+}
 
 # Check for EULA.txt (needed by NSIS MUI_PAGE_LICENSE)
 $licenseFile = Join-Path $ROOT "EULA.txt"
