@@ -2,6 +2,7 @@ import os
 import sys
 import sqlite3
 import shutil
+import threading
 from datetime import datetime, timedelta
 
 # When running as PyInstaller bundle, data goes next to the exe
@@ -17,12 +18,28 @@ BACKUP_DIR = os.path.join(DATA_DIR, "backups")
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
+# Thread-local connection pool (avoids creating a new connection per request)
+_conn_local = threading.local()
+
 
 def get_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
+    conn = getattr(_conn_local, "conn", None)
+    if conn is None:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        _conn_local.conn = conn
+        return conn
+    # Reconnect if a caller closed the cached connection
+    try:
+        conn.execute("SELECT 1")
+    except (sqlite3.ProgrammingError, sqlite3.InterfaceError):
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA foreign_keys=ON")
+        _conn_local.conn = conn
     return conn
 
 
@@ -153,6 +170,14 @@ def init_db():
     backup_database()
     conn = get_db()
     try:
+        # Migration tracking table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS schema_version (
+                version INTEGER PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                description TEXT
+            )
+        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,

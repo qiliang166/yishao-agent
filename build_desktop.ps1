@@ -12,7 +12,7 @@ Write-Host "========================================"
 Write-Host ""
 
 # Step 0: Check PyInstaller
-Write-Host "[0/4] Checking PyInstaller..."
+Write-Host "[0/5] Checking PyInstaller..."
 $pyinstaller = Get-Command pyinstaller -ErrorAction SilentlyContinue
 if (-not $pyinstaller) {
     Write-Host "  Installing PyInstaller..."
@@ -32,7 +32,7 @@ Write-Host "  Done"
 
 # Step 1: Build frontend
 if (-not $SkipFrontend) {
-    Write-Host "[1/4] Building frontend..."
+    Write-Host "[1/5] Building frontend..."
     Set-Location "$root\frontend"
     if (-not (Test-Path "node_modules")) {
         Write-Host "  Installing dependencies..."
@@ -61,7 +61,6 @@ if (Test-Path $lastBuildFile) {
     $lastCommit = (Get-Content $lastBuildFile -Raw).Trim()
 }
 if ($lastCommit -and $commit) {
-    # git emits UTF-8; default console codepage (GBK) would mangle Chinese commit subjects
     $prevEnc = [Console]::OutputEncoding
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     $newLog = git log "${lastCommit}..${commit}" --format="- %s" 2>$null
@@ -83,37 +82,56 @@ if ($lastCommit -and $commit) {
 [System.IO.File]::WriteAllText($lastBuildFile, $commit, [System.Text.Encoding]::UTF8)
 
 # Step 2: Prepare dynamic build config (app name + icon from DB)
-Write-Host "[2/4] Reading app settings & generating icon..."
+Write-Host "[2/5] Reading app settings & generating icon..."
 $python = "$root\backend\venv\Scripts\python.exe"
 if (-not (Test-Path $python)) { $python = "python" }
 & $python "$root\prepare_build.py"
 if ($LASTEXITCODE -ne 0) { throw "prepare_build.py failed" }
 Write-Host "  Done"
 
-# Step 3: PyInstaller
-Write-Host "[3/4] Packaging desktop app (this may take a few minutes)..."
+# Step 3: PyInstaller (portable exe)
+Write-Host "[3/5] Packaging desktop app (this may take a few minutes)..."
 pyinstaller build_temp.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
 # Clean up temp spec
 Remove-Item "$root\build_temp.spec" -Force -ErrorAction SilentlyContinue
 
-# Step 4: Copy to downloads
-Write-Host "[4/4] Copying to downloads..."
+# Step 4: Copy portable exe to downloads (NOT called "Setup")
+Write-Host "[4/5] Copying portable exe to downloads..."
 $downloadsDir = "$root\backend\data\downloads"
 if (-not (Test-Path $downloadsDir)) { New-Item -ItemType Directory -Path $downloadsDir -Force | Out-Null }
 
 $builtExe = Get-ChildItem "$root\dist\*.exe" | Where-Object { $_.Name -ne 'YishaoAgent-KeyGen.exe' } | Sort-Object LastWriteTime -Desc | Select-Object -First 1
 if ($builtExe) {
-    $destName = "YishaoAgent-Setup.exe"
-    Copy-Item $builtExe.FullName "$downloadsDir\$destName" -Force -ErrorAction SilentlyContinue
-    Write-Host "  Copied to downloads as $destName"
+    $portableName = $builtExe.BaseName + "-Portable.exe"
+    Copy-Item $builtExe.FullName "$downloadsDir\$portableName" -Force -ErrorAction SilentlyContinue
+    Write-Host "  Copied portable exe to downloads as $portableName"
 }
 
-# Also copy CHANGELOG alongside the installer
+# Also copy CHANGELOG alongside the build artifacts
 if (Test-Path "$root\CHANGELOG.md") {
     Copy-Item "$root\CHANGELOG.md" "$root\dist\CHANGELOG.md" -Force
     Write-Host "  CHANGELOG.md copied to dist"
+}
+
+# Step 5: Build NSIS installer (real "Setup") — shell out to installer/build.ps1
+Write-Host "[5/5] Building NSIS installer..."
+$installerBuildScript = "$root\installer\build.ps1"
+if (Test-Path $installerBuildScript) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $installerBuildScript
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  [WARNING] NSIS installer build had errors (exit code: $LASTEXITCODE)"
+    } else {
+        # Copy NSIS output to downloads
+        $nsisExe = Get-ChildItem "$root\dist\*Setup*.exe" | Sort-Object LastWriteTime -Desc | Select-Object -First 1
+        if ($nsisExe) {
+            Copy-Item $nsisExe.FullName "$downloadsDir\$($nsisExe.Name)" -Force -ErrorAction SilentlyContinue
+            Write-Host "  NSIS installer copied to downloads"
+        }
+    }
+} else {
+    Write-Host "  [SKIP] installer/build.ps1 not found"
 }
 
 Write-Host ""

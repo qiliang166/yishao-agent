@@ -1,0 +1,50 @@
+PRIVACY POLICY
+
+Last updated: 2026-08-02
+
+一勺笔录(SOP)智能体 (YishaoAgent) respects your privacy. This policy explains what data
+the application handles and how.
+
+1. DATA STORED LOCALLY
+   All project content, user accounts, settings, prompts, templates, generated documents,
+   audio files, and images are stored exclusively in a local SQLite database and local
+   file directories on your computer or server. No data is automatically uploaded to any
+   cloud service.
+
+2. WHAT WE COLLECT
+   - User-provided content: project text, uploaded files, generated output, prompts
+   - Account information: username, hashed password, permissions
+   - Configuration: workspace settings, branding assets (logos)
+   - Usage metadata: timestamps, download counts
+
+3. WHAT WE DO NOT COLLECT
+   - No telemetry or analytics data is sent off-device
+   - No usage tracking or behavioral profiling
+   - No keystroke logging or screen capture
+   - No automatic error reporting (unless explicitly enabled)
+
+4. THIRD-PARTY SERVICES
+   The application may make API calls to third-party LLM (Large Language Model), TTS
+   (Text-to-Speech), and image generation services that you configure. When you use
+   these features, your prompt content is transmitted to those services. Please review
+   the privacy policies of your chosen providers:
+   - OpenAI (ChatGPT): https://openai.com/policies/privacy-policy
+   - Other providers as configured by your administrator
+
+5. DATA SECURITY
+   - Passwords are stored using bcrypt hashing (one-way)
+   - JWT tokens are used for session management
+   - Local data is stored in SQLite with WAL journal mode
+   - We recommend enabling HTTPS for network deployments
+
+6. YOUR RIGHTS
+   - You own all content you create with the software
+   - You may export and delete your data at any time
+   - You may request assistance with data portability
+
+7. CONTACT
+   For privacy-related inquiries, please contact your software provider or administrator.
+
+This application is designed for on-premises deployment. If your administrator has
+configured additional data collection or cloud services, please refer to their
+supplemental privacy notice.

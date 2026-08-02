@@ -1,0 +1,39 @@
+END USER LICENSE AGREEMENT (EULA)
+
+Copyright (c) 2024-2026 一勺笔录(SOP)智能体 (YishaoAgent). All rights reserved.
+
+1. GRANT OF LICENSE
+   This software is licensed, not sold. You may install and use one copy per valid
+   license on a single computer or server. The license is non-transferable.
+
+2. RESTRICTIONS
+   You may NOT: (a) reverse engineer, decompile, or disassemble the software; (b) rent,
+   lease, lend, or sublicense the software; (c) remove any proprietary notices or
+   labels; (d) use the software for any illegal purpose.
+
+3. INTELLECTUAL PROPERTY
+   All title, ownership, and intellectual property rights in and to the software remain
+   with 一勺笔录(SOP)智能体. The software is protected by copyright laws and treaties.
+
+4. OPEN SOURCE COMPONENTS
+   This software includes open source components. See LICENSE.txt for the MIT license
+   terms applicable to the source code portions of this distribution.
+
+5. DISCLAIMER OF WARRANTY
+   THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+   INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+   PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+6. LIMITATION OF LIABILITY
+   IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+   OR OTHER LIABILITY, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+   USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+7. TERMINATION
+   This license terminates automatically if you fail to comply with its terms. Upon
+   termination, you must destroy all copies of the software.
+
+8. GOVERNING LAW
+   This agreement is governed by the laws of the People's Republic of China.
+
+By installing or using this software, you agree to the terms of this EULA.

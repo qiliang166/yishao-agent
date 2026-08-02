@@ -20,7 +20,12 @@ import requests
 
 from database import get_db
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "yishao-agent-jwt-secret-2026")
+_SECRET = os.environ.get("JWT_SECRET", "").strip()
+if not _SECRET:
+    import secrets as _secrets
+    _SECRET = _secrets.token_hex(32)
+    print(f"[SECURITY] JWT_SECRET env var not set. Generated random key for this session.", flush=True)
+JWT_SECRET = _SECRET
 
 _batch_lock = threading.Lock()
 _log_lock = threading.Lock()

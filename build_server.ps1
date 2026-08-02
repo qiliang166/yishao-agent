@@ -1,6 +1,7 @@
 # Build server deployment package
 param(
-    [switch]$SkipFrontend
+    [switch]$SkipFrontend,
+    [switch]$SkipFfmpeg
 )
 
 $ErrorActionPreference = "Stop"
@@ -98,8 +99,13 @@ Copy-Item "$root\backend\services\*.py" "$distDir\backend\services\" -ErrorActio
 # Copy batch
 Copy-Item "$root\backend\batch\*.py" "$distDir\backend\batch\" -ErrorAction SilentlyContinue
 
-# Copy ffmpeg static binary for Linux
-Copy-Item "$root\backend\ffmpeg" "$distDir\backend\ffmpeg" -Force -ErrorAction SilentlyContinue
+# Copy ffmpeg static binary for Linux (skip with -SkipFfmpeg for non-video deployments)
+if (-not $SkipFfmpeg) {
+    Copy-Item "$root\backend\ffmpeg" "$distDir\backend\ffmpeg" -Force -ErrorAction SilentlyContinue
+    Write-Host "  ffmpeg included"
+} else {
+    Write-Host "  ffmpeg skipped (-SkipFfmpeg)"
+}
 
 # Copy resources (prompts, scenarios, templates, vi)
 Copy-Item "$root\backend\resources\*" "$distDir\backend\resources\" -Recurse -Force -ErrorAction SilentlyContinue

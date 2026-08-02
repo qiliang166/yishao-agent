@@ -24,6 +24,21 @@ from models import (WorkspaceCreate, WorkspaceUpdate, ProjectCreate, ProjectUpda
 from typing import Optional
 import json
 import logging
+
+# ── Structured logging setup ───────────────────────────────────────
+LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "server.log")
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+    handlers=[
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+        logging.StreamHandler(sys.stderr),
+    ],
+)
+_log = logging.getLogger("app")
+
 from services.llm_service import test_connection, generate, generate_stream, refine, get_provider
 from routers.prompts import router as prompts_router
 from routers.users import router as users_router
@@ -236,6 +251,26 @@ app.add_middleware(
 )
 
 
+# ── Global exception handler middleware ─────────────────────────────
+@app.middleware("http")
+async def catch_all_exceptions(request: Request, call_next):
+    import uuid as _uuid
+    import traceback as _traceback
+    req_id = _uuid.uuid4().hex[:8]
+    request.state.req_id = req_id
+    try:
+        response = await call_next(request)
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        _log.exception("[%s] Unhandled exception on %s %s", req_id, request.method, request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error", "ref": req_id},
+        )
+
+
 @app.on_event("startup")
 async def startup_batch_scheduler():
     import os as _os
@@ -433,7 +468,12 @@ def _get_site_name() -> str:
 
 
 # ── JWT / Auth config ──────────────────────────────────────────────
-SECRET_KEY = os.environ.get("JWT_SECRET", "yishao-agent-jwt-secret-2026")
+_SECRET = os.environ.get("JWT_SECRET", "").strip()
+if not _SECRET:
+    import secrets as _secrets
+    _SECRET = _secrets.token_hex(32)
+    print(f"[SECURITY] JWT_SECRET env var not set. Generated random key for this session.", flush=True)
+SECRET_KEY = _SECRET
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
@@ -7034,15 +7074,22 @@ async def upload_logo(request: Request, file: UploadFile = File(...)):
 
 @app.get("/api/logos/{filename}")
 def serve_logo(filename: str):
-    filepath = os.path.join(LOGO_DIR, filename)
-    if not os.path.exists(filepath):
+    # Prevent path traversal: resolve real path and verify it stays within LOGO_DIR
+    ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico"}
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in ALLOWED_EXT:
+        raise HTTPException(status_code=403, detail="File type not allowed")
+    safe_name = os.path.basename(filename)
+    filepath = os.path.realpath(os.path.join(LOGO_DIR, safe_name))
+    if not filepath.startswith(os.path.realpath(LOGO_DIR) + os.sep):
+        raise HTTPException(status_code=403, detail="Path traversal denied")
+    if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="Logo not found")
     media_map = {
         ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
         ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
         ".ico": "image/x-icon",
     }
-    ext = os.path.splitext(filename)[1].lower()
     return FileResponse(filepath, media_type=media_map.get(ext, "application/octet-stream"))
 
 
@@ -9545,4 +9592,6 @@ if __name__ == "__main__":
     from batch.scheduler import init as batch_init
     port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
     batch_init(port)
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    workers = int(os.environ.get("WORKERS", min((os.cpu_count() or 2), 4)))
+    _log.info("Starting server on port %s with %s workers", port, workers)
+    uvicorn.run(app, host="0.0.0.0", port=port, workers=workers)
