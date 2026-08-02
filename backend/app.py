@@ -7329,6 +7329,8 @@ def proxy_update_payment_ref(order_no: str, req: dict, request: Request):
 @app.get("/api/qrcode/{filename}")
 def proxy_qrcode(filename: str):
     """Proxy QR code images from activation server."""
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="无效的文件名")
     import httpx
     activation_url = os.environ.get("ACTIVATION_SERVER_URL", "http://120.25.251.172:18777")
     url = f"{activation_url}/api/qrcode/{filename}"
@@ -7353,7 +7355,7 @@ def proxy_payment_config():
     try:
         resp = httpx.get(
             f"{activation_url}/api/admin/payment-config",
-            headers={"X-Admin-Token": admin_token},
+            headers={"Authorization": f"Bearer {admin_token}"},
             timeout=10.0,
         )
         if resp.status_code >= 400:

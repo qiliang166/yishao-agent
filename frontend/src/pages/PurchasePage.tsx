@@ -47,7 +47,9 @@ export default function PurchasePage() {
   const [licenseKey, setLicenseKey] = useState('')
   const [orderStatus, setOrderStatus] = useState('')
   const [copied, setCopied] = useState(false)
+  const [pollError, setPollError] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const pollErrorsRef = useRef(0)
 
   useEffect(() => {
     api.listPlans()
@@ -73,6 +75,7 @@ export default function PurchasePage() {
   const handleSubmitOrder = async () => {
     if (!selectedPlan) return
     if (!phone.trim()) { setError('请输入手机号'); return }
+    if (!/^1[3-9]\d{9}$/.test(phone.trim())) { setError('请输入正确的手机号'); return }
     setError('')
     setLoading(true)
     try {
@@ -108,11 +111,15 @@ export default function PurchasePage() {
   }
 
   const startPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollErrorsRef.current = 0
+    setPollError(false)
     let attempts = 0
     pollRef.current = setInterval(async () => {
       attempts++
       try {
         const order = await api.getOrder(orderNo)
+        pollErrorsRef.current = 0
         setOrderStatus(order.status)
         if (order.status === 'completed' && order.license_key) {
           setLicenseKey(order.license_key)
@@ -120,11 +127,14 @@ export default function PurchasePage() {
         } else if (order.status === 'cancelled' || order.status === 'expired') {
           if (pollRef.current) clearInterval(pollRef.current)
         } else if (attempts > 120) {
-          // Stop after 10 minutes
           if (pollRef.current) clearInterval(pollRef.current)
         }
       } catch {
-        // Silently retry
+        pollErrorsRef.current++
+        if (pollErrorsRef.current >= 5) {
+          setPollError(true)
+          if (pollRef.current) clearInterval(pollRef.current)
+        }
       }
     }, 4000)
   }
@@ -399,21 +409,40 @@ export default function PurchasePage() {
 
           {!licenseKey && orderStatus !== 'cancelled' && orderStatus !== 'expired' && (
             <>
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div style={{
-                  width: 40, height: 40, borderRadius: '50%',
-                  border: '3px solid var(--primary)',
-                  borderTopColor: 'transparent',
-                  animation: 'spin 1s linear infinite',
-                  margin: '0 auto 16px',
-                }} />
-                <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                  管理员正在审核您的付款，请稍候...
-                </p>
-                <p style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>
-                  订单号: {orderNo.slice(0, 8)}...
-                </p>
-              </div>
+              {pollError ? (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+                  <p style={{ color: 'var(--danger)', fontSize: 13, marginBottom: 12 }}>
+                    无法连接服务器，请检查网络后手动刷新
+                  </p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 11 }}>
+                    订单号: {orderNo.slice(0, 8)}...
+                  </p>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ marginTop: 16 }}
+                    onClick={() => { startPolling() }}
+                  >
+                    重新连接
+                  </button>
+                </div>
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px 0' }}>
+                  <div style={{
+                    width: 40, height: 40, borderRadius: '50%',
+                    border: '3px solid var(--primary)',
+                    borderTopColor: 'transparent',
+                    animation: 'spin 1s linear infinite',
+                    margin: '0 auto 16px',
+                  }} />
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                    管理员正在审核您的付款，请稍候...
+                  </p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 11, marginTop: 4 }}>
+                    订单号: {orderNo.slice(0, 8)}...
+                  </p>
+                </div>
+              )}
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </>
           )}

@@ -674,10 +674,13 @@ def public_create_order(req: dict, request: Request):
     if not _check_rate(ip):
         raise HTTPException(status_code=429, detail="提交过于频繁，请稍后再试")
 
+    import re
     phone = (req.get("phone", "") or "").strip()
     plan_type_id = req.get("plan_type_id")
     if not phone:
         raise HTTPException(status_code=400, detail="请输入手机号")
+    if not re.match(r'^1[3-9]\d{9}$', phone):
+        raise HTTPException(status_code=400, detail="请输入正确的手机号")
     if not plan_type_id:
         raise HTTPException(status_code=400, detail="请选择套餐")
 
@@ -714,7 +717,7 @@ def public_get_order(order_no: str):
     try:
         order = db.execute(
             "SELECT o.*, p.name as plan_name, p.duration_days "
-            "FROM orders o JOIN plan_types p ON o.plan_type_id = p.id "
+            "FROM orders o LEFT JOIN plan_types p ON o.plan_type_id = p.id "
             "WHERE o.order_no = ?", (order_no,)
         ).fetchone()
         if order is None:
@@ -731,15 +734,11 @@ def public_get_order(order_no: str):
             "updated_at": order["updated_at"],
         }
 
-        if order["status"] == "completed":
-            db2 = get_db()
-            try:
-                key_row = db2.execute(
-                    "SELECT license_key FROM license_keys WHERE serial_number = ?",
-                    (order["license_key_sn"],)
-                ).fetchone()
-            finally:
-                db2.close()
+        if order["status"] == "completed" and order["license_key_sn"]:
+            key_row = db.execute(
+                "SELECT license_key FROM license_keys WHERE serial_number = ?",
+                (order["license_key_sn"],)
+            ).fetchone()
             if key_row:
                 result["license_key"] = key_row["license_key"]
 
@@ -879,9 +878,16 @@ def admin_delete_plan(plan_id: int, request: Request):
     _check_admin(request)
     db = get_db()
     try:
+        ref = db.execute(
+            "SELECT COUNT(*) FROM orders WHERE plan_type_id = ?", (plan_id,)
+        ).fetchone()
+        if ref and ref[0] > 0:
+            raise HTTPException(status_code=400, detail="该套餐已有订单，无法删除")
         db.execute("DELETE FROM plan_types WHERE id = ?", (plan_id,))
         db.commit()
         return {"ok": True}
+    except HTTPException:
+        raise
     finally:
         db.close()
 
@@ -942,14 +948,14 @@ def admin_list_orders(status: str = "", request: Request = None):
         if status:
             rows = db.execute(
                 "SELECT o.*, p.name as plan_name FROM orders o "
-                "JOIN plan_types p ON o.plan_type_id = p.id "
+                "LEFT JOIN plan_types p ON o.plan_type_id = p.id "
                 "WHERE o.status = ? ORDER BY o.created_at DESC",
                 (status,)
             ).fetchall()
         else:
             rows = db.execute(
                 "SELECT o.*, p.name as plan_name FROM orders o "
-                "JOIN plan_types p ON o.plan_type_id = p.id "
+                "LEFT JOIN plan_types p ON o.plan_type_id = p.id "
                 "ORDER BY o.created_at DESC"
             ).fetchall()
 
