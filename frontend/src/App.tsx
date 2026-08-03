@@ -29,7 +29,7 @@ import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
 import BookletListPage from './booklet/BookletListPage'
 import BookletEditorPage from './booklet/BookletEditorPage'
 import PurchasePage from './pages/PurchasePage'
-import { ModalProvider } from './components/ModalProvider'
+import { ModalProvider, useModal } from './components/ModalProvider'
 import AboutDialog from './components/AboutDialog'
 import AnnounceModal from './components/AnnounceModal'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -113,6 +113,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const canMember = usePermission('member.manage')
   const canRole = usePermission('role.manage')
 
+  const { toast } = useModal()
   const [sidebarPricing, setSidebarPricing] = useState('')
   const [purchaseEnabled, setPurchaseEnabled] = useState(false)
   useEffect(() => {
@@ -268,7 +269,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
             className="sidebar-item"
             onClick={() => {
               if (!purchaseEnabled) {
-                alert('购买功能暂未开放，敬请期待。')
+                toast('购买功能暂未开放，敬请期待。', 'error')
                 return
               }
               navigate('/purchase')
@@ -361,6 +362,7 @@ function MemberSidebar() {
   const [showAbout, setShowAbout] = useState(false)
   const [sidebarPricing, setSidebarPricing] = useState('')
   const [purchaseEnabled, setPurchaseEnabled] = useState(false)
+  const { toast } = useModal()
   const isWorkspace = location.pathname.startsWith('/app/workspace/') || location.pathname.startsWith('/app/project/')
 
   useEffect(() => {
@@ -468,7 +470,7 @@ function MemberSidebar() {
             className="sidebar-item"
             onClick={() => {
               if (!purchaseEnabled) {
-                alert('购买功能暂未开放，敬请期待。')
+                toast('购买功能暂未开放，敬请期待。', 'error')
                 return
               }
               navigate('/app/purchase')
