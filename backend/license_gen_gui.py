@@ -269,6 +269,25 @@ class KeyGenApp:
         ttk.Label(btn_row2, textvariable=self.announce_status, foreground="green",
                   font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
 
+        purchase_frame = ttk.LabelFrame(tab, text="购买功能开关", padding=8)
+        purchase_frame.pack(fill="x", padx=0, pady=(8, 0))
+
+        purchase_row = ttk.Frame(purchase_frame); purchase_row.pack(fill="x")
+        self.purchase_enabled_var = tk.BooleanVar(value=False)
+        self._purchase_cb = ttk.Checkbutton(purchase_row, text="启用购买软件功能",
+                                             variable=self.purchase_enabled_var)
+        self._purchase_cb.pack(side="left")
+        self.purchase_status = tk.StringVar()
+        ttk.Label(purchase_row, textvariable=self.purchase_status, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        purchase_info = ttk.Frame(purchase_frame); purchase_info.pack(fill="x", pady=(4, 0))
+        ttk.Label(purchase_info, text="关闭后，用户单击「购买软件」将提示功能暂未开放，不会进入付款页面。",
+                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(anchor="w")
+
+        purchase_btn = ttk.Frame(purchase_frame); purchase_btn.pack(fill="x", pady=(8, 0))
+        ttk.Button(purchase_btn, text="保存开关", command=self._save_purchase).pack(side="left")
+
     # ═══════════════════════════════════════════════════════════════
     # Tab 3: Plan Types
     # ═══════════════════════════════════════════════════════════════
@@ -725,6 +744,7 @@ class KeyGenApp:
             self.announce_text.delete("1.0", "end")
             self.announce_text.insert("1.0", data.get("announce_html", ""))
             self.announce_enabled_var.set(data.get("announce_enabled", "0") == "1")
+            self.purchase_enabled_var.set(data.get("purchase_enabled", "0") == "1")
             self.status_var.set("站点配置已加载")
             self.announce_status.set("")
             self.announce_enabled_status.set("")
@@ -743,6 +763,19 @@ class KeyGenApp:
             self.announce_status.set("已保存")
             self.status_var.set("公告已保存")
             self.root.after(3000, lambda: self.announce_status.set(""))
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            self.status_var.set(f"保存失败: {e}")
+
+    def _save_purchase(self):
+        try:
+            enabled = "1" if self.purchase_enabled_var.get() else "0"
+            self._call_api("PUT", "/api/admin/site-config", {
+                "purchase_enabled": enabled,
+            })
+            self.purchase_status.set("已保存")
+            self.status_var.set("购买开关已保存")
+            self.root.after(3000, lambda: self.purchase_status.set(""))
         except Exception as e:
             messagebox.showerror("保存失败", str(e))
             self.status_var.set(f"保存失败: {e}")
@@ -935,20 +968,20 @@ class KeyGenApp:
                     req = urllib.request.Request(url)
                     with urllib.request.urlopen(req, timeout=10) as resp:
                         img_data = resp.read()
-                    from tkinter import PhotoImage
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
-                        f.write(img_data)
-                        tmp_path = f.name
-                    photo = tk.PhotoImage(file=tmp_path)
-                    photo = photo.subsample(max(1, photo.width() // 200), max(1, photo.height() // 200))
+                    from PIL import Image as PILImage
+                    from PIL import ImageTk
+                    import io
+                    pil_img = PILImage.open(io.BytesIO(img_data))
+                    w, h = pil_img.size
+                    scale = max(1, max(w, h) // 200)
+                    pil_img = pil_img.resize((w // scale, h // scale), PILImage.LANCZOS)
+                    photo = ImageTk.PhotoImage(pil_img)
                     if label == "wx":
                         self._qr_photos["wechat"] = photo
                         self.wx_preview_label.configure(image=photo, text="")
                     else:
                         self._qr_photos["alipay"] = photo
                         self.ali_preview_label.configure(image=photo, text="")
-                    os.unlink(tmp_path)
                 except Exception:
                     getattr(self, f"{label}_preview_label").configure(text="(加载失败)")
             else:
@@ -964,16 +997,20 @@ class KeyGenApp:
             return
 
         label_map = {"wechat_qr": "微信", "alipay_qr": "支付宝"}
+        status_var = self.wx_status_var if key == "wechat_qr" else self.ali_status_var
         try:
-            result = self._upload_file("/api/admin/payment-config", filepath, key)
-            status_var = self.wx_status_var if key == "wechat_qr" else self.ali_status_var
-            status_var.set("已上传")
-            self.root.after(3000, lambda: status_var.set(""))
-            self.status_var.set(f"{label_map[key]}收款码已上传")
-            self._load_qrcodes()
+            self._upload_file("/api/admin/payment-config", filepath, key)
         except Exception as e:
             self.status_var.set(f"上传失败: {e}")
             messagebox.showerror("上传失败", str(e))
+            return
+        status_var.set("已上传")
+        self.root.after(3000, lambda: status_var.set(""))
+        self.status_var.set(f"{label_map[key]}收款码已上传")
+        try:
+            self._load_qrcodes()
+        except Exception:
+            pass
 
     # ── Order Management ─────────────────────────────────────────
 

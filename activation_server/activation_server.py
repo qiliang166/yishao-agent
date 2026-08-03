@@ -102,10 +102,10 @@ def init_db():
             value TEXT DEFAULT ''
         )
     """)
-    for key in ("pricing_html", "announce_html", "announce_enabled"):
+    for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled"):
         db.execute(
             "INSERT OR IGNORE INTO site_config (key, value) VALUES (?, ?)",
-            (key, "0" if key == "announce_enabled" else ""),
+            (key, "0" if key in ("announce_enabled", "purchase_enabled") else ""),
         )
 
     # ── Sales system tables ──
@@ -489,6 +489,7 @@ def get_site_config():
             "pricing_html": config.get("pricing_html", ""),
             "announce_html": config.get("announce_html", ""),
             "announce_enabled": config.get("announce_enabled", "0"),
+            "purchase_enabled": config.get("purchase_enabled", "0"),
         }
     finally:
         db.close()
@@ -505,6 +506,7 @@ def admin_get_site_config(request: Request):
             "pricing_html": config.get("pricing_html", ""),
             "announce_html": config.get("announce_html", ""),
             "announce_enabled": config.get("announce_enabled", "0"),
+            "purchase_enabled": config.get("purchase_enabled", "0"),
         }
     finally:
         db.close()
@@ -515,7 +517,7 @@ def admin_update_site_config(req: dict, request: Request):
     _check_admin(request)
     db = get_db()
     try:
-        for key in ("pricing_html", "announce_html", "announce_enabled"):
+        for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled"):
             if key in req:
                 db.execute(
                     "INSERT OR REPLACE INTO site_config (key, value) VALUES (?, ?)",

@@ -531,7 +531,7 @@ export const api = {
 
   // Site config (from activation server)
   getSiteConfig: () => request('/api/site-config').then(d => d as {
-    pricing_html: string; announce_html: string; announce_enabled: string;
+    pricing_html: string; announce_html: string; announce_enabled: string; purchase_enabled: string;
   }),
 
   // Settings

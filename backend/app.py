@@ -7270,7 +7270,7 @@ def get_site_config():
         resp.raise_for_status()
         return resp.json()
     except Exception:
-        return {"pricing_html": "", "announce_html": "", "announce_enabled": "0"}
+        return {"pricing_html": "", "announce_html": "", "announce_enabled": "0", "purchase_enabled": "0"}
 
 
 # ── Sales System proxy routes ─────────────────────────────────────────

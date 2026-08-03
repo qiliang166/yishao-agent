@@ -114,9 +114,11 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const canRole = usePermission('role.manage')
 
   const [sidebarPricing, setSidebarPricing] = useState('')
+  const [purchaseEnabled, setPurchaseEnabled] = useState(false)
   useEffect(() => {
     api.getSiteConfig().then(cfg => {
       if (cfg.pricing_html) setSidebarPricing(cfg.pricing_html)
+      setPurchaseEnabled(cfg.purchase_enabled === '1')
     }).catch(() => {})
   }, [])
 
@@ -262,18 +264,24 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           <span onClick={() => setShowAbout(true)}
             style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>ℹ️ 关于软件</span>
         </div>
+          <button
+            className="sidebar-item"
+            onClick={() => {
+              if (!purchaseEnabled) {
+                alert('购买功能暂未开放，敬请期待。')
+                return
+              }
+              navigate('/purchase')
+            }}
+            style={{ fontSize: 11, padding: '3px 0' }}
+          >
+            <span className="ico">🛒</span> 购买软件
+          </button>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               👤 {user.display_name || user.username}
             </div>
           )}
-          <button
-            className="sidebar-item"
-            onClick={() => navigate('/purchase')}
-            style={{ fontSize: 11, padding: '3px 0' }}
-          >
-            <span className="ico">🛒</span> 立即购买
-          </button>
           <LogoutButton />
       </div>
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
@@ -352,6 +360,7 @@ function MemberSidebar() {
   const [projName, setProjName] = useState('')
   const [showAbout, setShowAbout] = useState(false)
   const [sidebarPricing, setSidebarPricing] = useState('')
+  const [purchaseEnabled, setPurchaseEnabled] = useState(false)
   const isWorkspace = location.pathname.startsWith('/app/workspace/') || location.pathname.startsWith('/app/project/')
 
   useEffect(() => {
@@ -367,6 +376,7 @@ function MemberSidebar() {
     }).catch(() => {})
     api.getSiteConfig().then(cfg => {
       if (cfg.pricing_html) setSidebarPricing(cfg.pricing_html)
+      setPurchaseEnabled(cfg.purchase_enabled === '1')
     }).catch(() => {})
   }, [])
 
@@ -454,18 +464,24 @@ function MemberSidebar() {
           <span onClick={() => setShowAbout(true)}
             style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>ℹ️ 关于软件</span>
         </div>
+          <button
+            className="sidebar-item"
+            onClick={() => {
+              if (!purchaseEnabled) {
+                alert('购买功能暂未开放，敬请期待。')
+                return
+              }
+              navigate('/app/purchase')
+            }}
+            style={{ fontSize: 11, padding: '3px 0' }}
+          >
+            <span className="ico">🛒</span> 购买软件
+          </button>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               👤 {user.display_name || user.username}
             </div>
           )}
-          <button
-            className="sidebar-item"
-            onClick={() => navigate('/app/purchase')}
-            style={{ fontSize: 11, padding: '3px 0' }}
-          >
-            <span className="ico">🛒</span> 立即购买
-          </button>
           <MemberLogoutButton />
       </div>
       {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
