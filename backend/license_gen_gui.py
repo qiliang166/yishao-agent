@@ -98,7 +98,7 @@ class KeyGenApp:
 
         row1 = ttk.Frame(cfg); row1.pack(fill="x", pady=(0, 4))
         ttk.Label(row1, text="地址：", width=8).pack(side="left")
-        self.server_url = tk.StringVar(value="http://120.25.251.172:18777")
+        self.server_url = tk.StringVar(value="http://localhost:18777")
         ttk.Entry(row1, textvariable=self.server_url, font=("Consolas", 9)).pack(side="right", expand=True, fill="x")
 
         row2 = ttk.Frame(cfg); row2.pack(fill="x")
@@ -241,25 +241,6 @@ class KeyGenApp:
         tab = ttk.Frame(self.notebook)
         self.notebook.add(tab, text="站点配置")
 
-        pricing_frame = ttk.LabelFrame(tab, text="标价说明（显示在软件登录页底部）", padding=8)
-        pricing_frame.pack(fill="x", padx=0, pady=(8, 8))
-
-        info1 = ttk.Frame(pricing_frame); info1.pack(fill="x", pady=(0, 4))
-        ttk.Label(info1, text="支持 HTML 格式。留空则不显示在登录页。",
-                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(anchor="w")
-
-        self.pricing_text = tk.Text(pricing_frame, height=4, font=("Consolas", 10),
-                                    relief="flat", borderwidth=1, highlightthickness=1,
-                                    highlightbackground="#ccc", padx=8, pady=6)
-        self.pricing_text.pack(fill="x")
-
-        btn_row1 = ttk.Frame(pricing_frame); btn_row1.pack(fill="x", pady=(6, 0))
-        ttk.Button(btn_row1, text="加载当前设置", command=self._load_site_config).pack(side="left", padx=(0, 8))
-        ttk.Button(btn_row1, text="保存标价", command=self._save_pricing).pack(side="left")
-        self.pricing_status = tk.StringVar()
-        ttk.Label(btn_row1, textvariable=self.pricing_status, foreground="green",
-                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
-
         announce_frame = ttk.LabelFrame(tab, text="公告弹窗（管理员/会员登录后自动弹出）", padding=8)
         announce_frame.pack(fill="x", padx=0, pady=(0, 8))
 
@@ -282,6 +263,7 @@ class KeyGenApp:
         self.announce_text.pack(fill="x")
 
         btn_row2 = ttk.Frame(announce_frame); btn_row2.pack(fill="x", pady=(6, 0))
+        ttk.Button(btn_row2, text="加载当前设置", command=self._load_site_config).pack(side="left", padx=(0, 8))
         ttk.Button(btn_row2, text="保存公告", command=self._save_announce).pack(side="left")
         self.announce_status = tk.StringVar()
         ttk.Label(btn_row2, textvariable=self.announce_status, foreground="green",
@@ -740,29 +722,15 @@ class KeyGenApp:
     def _load_site_config(self):
         try:
             data = self._call_api("GET", "/api/admin/site-config")
-            self.pricing_text.delete("1.0", "end")
-            self.pricing_text.insert("1.0", data.get("pricing_html", ""))
             self.announce_text.delete("1.0", "end")
             self.announce_text.insert("1.0", data.get("announce_html", ""))
             self.announce_enabled_var.set(data.get("announce_enabled", "0") == "1")
             self.status_var.set("站点配置已加载")
-            self.pricing_status.set("")
             self.announce_status.set("")
             self.announce_enabled_status.set("")
         except Exception as e:
             messagebox.showerror("加载失败", str(e))
             self.status_var.set(f"加载失败: {e}")
-
-    def _save_pricing(self):
-        try:
-            html = self.pricing_text.get("1.0", "end-1c")
-            self._call_api("PUT", "/api/admin/site-config", {"pricing_html": html})
-            self.pricing_status.set("已保存")
-            self.status_var.set("标价说明已保存")
-            self.root.after(3000, lambda: self.pricing_status.set(""))
-        except Exception as e:
-            messagebox.showerror("保存失败", str(e))
-            self.status_var.set(f"保存失败: {e}")
 
     def _save_announce(self):
         try:

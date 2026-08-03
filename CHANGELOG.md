@@ -2,6 +2,10 @@
 
 ## 2026-08-03
 
+- chore: build stamp after review fixes (511bccc)
+
+## 2026-08-03
+
 - fix: code review fixes — auth header, path validation, phone regex, polling
 
 ## 2026-08-03

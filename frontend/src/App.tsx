@@ -267,14 +267,6 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
               👤 {user.display_name || user.username}
             </div>
           )}
-          {sidebarPricing && (
-            <div style={{
-              borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 8,
-              fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
-            }}
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sidebarPricing) }}
-            />
-          )}
           <button
             className="sidebar-item"
             onClick={() => navigate('/purchase')}
@@ -466,14 +458,6 @@ function MemberSidebar() {
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               👤 {user.display_name || user.username}
             </div>
-          )}
-          {sidebarPricing && (
-            <div style={{
-              borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 8,
-              fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.5,
-            }}
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sidebarPricing) }}
-            />
           )}
           <button
             className="sidebar-item"
