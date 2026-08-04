@@ -57,6 +57,12 @@ class UpdateTemplateRequest(BaseModel):
     content: str
 
 
+# Mandatory root prompt_keys that must always be present in core_prompt_configs
+MANDATORY_ROOT_PROMPT_KEYS = [
+    "research", "outline-rules", "fill-content", "fill-user",
+    "text-to-json", "structure-output", "html-output", "cards-system",
+]
+
 # ── Structural contract (single source of truth for validation AND apply) ──
 
 # (slot, column_id, sort_order, forced_label or None)
@@ -402,6 +408,9 @@ def _validate_configs(configs: dict):
         if key in seen_keys:
             raise HTTPException(400, f"core_prompt_configs 的 prompt_key 重复: {key}")
         seen_keys.add(key)
+    missing_mandatory = [k for k in MANDATORY_ROOT_PROMPT_KEYS if k not in seen_keys]
+    if missing_mandatory:
+        raise HTTPException(400, f"core_prompt_configs 缺少必需的 root prompt_key: {', '.join(missing_mandatory)}")
 
 
 # ── Saved Configs CRUD ──

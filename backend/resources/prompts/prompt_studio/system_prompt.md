@@ -64,6 +64,16 @@ MUST KEEP UNCHANGED (format skeleton, consumed by code):
 5. The fixed labels: 文档课件/分析PPT/综合PPT, 文档演讲/分析演讲/综合演讲, 文档语音/分析语音/综合语音
 6. All system-level instructions (output format, constraints, quality checks)
 
+MANDATORY root prompt_keys (must ALWAYS be included in core_prompt_configs, with content adapted to the target industry):
+- research — Stage 1 research/analysis system prompt
+- outline-rules — Stage 3 outline extraction rules
+- fill-content — Stage 1 body fill system prompt (PPT slide content filling)
+- fill-user — Stage 1 body fill user prompt (configurable body fill instructions, MUST include body_rule handling)
+- text-to-json — Stage 1 text-to-JSON conversion prompt
+- structure-output — Stage 3 structure output format spec
+- html-output — Stage 3 HTML generation output spec
+- cards-system — Stage 3 cards subsystem prompt
+
 MUST REDESIGN FOR THE TARGET INDUSTRY (industry semantics):
 1. ALL role definitions (no cooking/culinary roles unless the target industry is culinary)
 2. ALL chapter names, section names, table columns and record fields
