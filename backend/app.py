@@ -1072,6 +1072,14 @@ def export_workspace_configs(workspace_id: str, user=require_perm("project.edit_
         db.close()
 
 
+ALLOWED_CONFIG_COLS = {
+    "column_configs": {"id", "slot", "column_id", "label", "prompt", "skill", "has_template", "template_path", "rules"},
+    "speech_configs": {"id", "label", "prompt", "skill"},
+    "tts_configs": {"id", "label", "prompt", "skill"},
+    "core_prompt_configs": {"id", "prompt_key", "category", "label", "content", "stage"},
+}
+
+
 @app.post("/api/workspaces/{workspace_id}/import-configs")
 def import_workspace_configs(workspace_id: str, body: WorkspaceConfigImport,
                               user=require_perm("project.edit_own")):
@@ -1087,9 +1095,13 @@ def import_workspace_configs(workspace_id: str, body: WorkspaceConfigImport,
         for tbl in required_tables:
             if tbl not in configs or not isinstance(configs[tbl], list):
                 raise HTTPException(400, f"configs 缺少必需的数组字段: {tbl}")
+            allowed = ALLOWED_CONFIG_COLS.get(tbl, set())
             for row in configs[tbl]:
                 if not isinstance(row, dict):
                     raise HTTPException(400, f"{tbl} 中包含非对象元素")
+                unknown = set(row.keys()) - allowed
+                if unknown:
+                    raise HTTPException(400, f"{tbl} 包含未知字段: {', '.join(sorted(unknown))}")
 
         applied = {}
         for tbl in required_tables:
