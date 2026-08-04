@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
@@ -143,6 +143,11 @@ export default function WorkspaceSettingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Export/Import
+  const [exporting, setExporting] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const loadAll = async () => {
     if (!wid) return
     setLoading(true)
@@ -272,6 +277,53 @@ export default function WorkspaceSettingsPage() {
       modal.toast('已删除', 'success')
     } catch (e: any) {
       modal.toast('删除失败: ' + e.message, 'error')
+    }
+  }
+
+  const handleExportConfigs = async () => {
+    if (!wid) return
+    setExporting(true)
+    try {
+      const data = await api.exportWorkspaceConfigs(Number(wid))
+      const json = JSON.stringify(data, null, 2)
+      const blob = new Blob([json], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `workspace-${wid}-configs-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      modal.toast('配置已导出', 'success')
+    } catch (e: any) {
+      modal.toast('导出失败: ' + e.message, 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleImportConfigs = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !wid) return
+    setImporting(true)
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      if (!data.configs) {
+        modal.toast('无效的配置文件：缺少 configs 字段', 'error')
+        return
+      }
+      const result = await api.importWorkspaceConfigs(Number(wid), { configs: data.configs })
+      if (result.ok) {
+        modal.toast('配置已导入: ' + JSON.stringify(result.applied), 'success')
+        loadAll()
+      }
+    } catch (e: any) {
+      modal.toast('导入失败: ' + e.message, 'error')
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -465,6 +517,24 @@ export default function WorkspaceSettingsPage() {
             {canEdit && <button className="btn btn-primary btn-sm" onClick={saveWorkspace} disabled={wsSaving}>
               {wsSaving ? '保存中...' : '保存'}
             </button>}
+
+            {/* Config export/import */}
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>配置迁移</div>
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                导出当前工作区的全部配置（栏目/演讲/语音/核心提示词）为 JSON 文件，或从 JSON 文件导入配置。
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost btn-sm" disabled={exporting} onClick={handleExportConfigs}>
+                  {exporting ? '导出中...' : '导出配置'}
+                </button>
+                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                  {importing ? '导入中...' : '导入配置'}
+                  <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
+                    onChange={handleImportConfigs} />
+                </label>
+              </div>
+            </div>
           </div>
         )}
 

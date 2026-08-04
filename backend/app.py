@@ -20,7 +20,7 @@ from models import (WorkspaceCreate, WorkspaceUpdate, ProjectCreate, ProjectUpda
     ImageGenerateRequest, SourceMaterialCreate, SourceMaterialUpdate,
     ProjectItemCreate, ProjectItemUpdate, ProjectItemResultSave,
     AuthorApplyRequest, AuthorContractUpdate, RecipeSubmissionRequest,
-    RecipeSubmissionApprove, RecipeSubmissionReject, AuthorPayoutCreate)
+    RecipeSubmissionApprove, RecipeSubmissionReject, AuthorPayoutCreate, WorkspaceConfigImport)
 from typing import Optional
 import json
 import logging
@@ -1049,6 +1049,70 @@ def copy_seed_configs_to_workspace(workspace_id: str, user=require_perm("project
             return {"ok": True, "message": "already has configs"}
         _copy_seed_configs(db, workspace_id)
         return {"ok": True, "message": "copied"}
+    finally:
+        db.close()
+
+
+@app.get("/api/workspaces/{workspace_id}/export-configs")
+def export_workspace_configs(workspace_id: str, user=require_perm("project.edit_own")):
+    db = get_db()
+    try:
+        ws = db.execute("SELECT created_by FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        if not ws:
+            raise HTTPException(404, "工作区不存在")
+        check_ownership(ws["created_by"], user)
+        from routers.prompt_studio import _serialize_configs
+        configs = _serialize_configs(db, workspace_id)
+        return {
+            "workspace_id": workspace_id,
+            "exported_at": datetime.now().isoformat(),
+            "configs": configs,
+        }
+    finally:
+        db.close()
+
+
+@app.post("/api/workspaces/{workspace_id}/import-configs")
+def import_workspace_configs(workspace_id: str, body: WorkspaceConfigImport,
+                              user=require_perm("project.edit_own")):
+    db = get_db()
+    try:
+        ws = db.execute("SELECT created_by FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        if not ws:
+            raise HTTPException(404, "工作区不存在")
+        check_ownership(ws["created_by"], user)
+
+        configs = body.configs
+        required_tables = ["column_configs", "speech_configs", "tts_configs", "core_prompt_configs"]
+        for tbl in required_tables:
+            if tbl not in configs or not isinstance(configs[tbl], list):
+                raise HTTPException(400, f"configs 缺少必需的数组字段: {tbl}")
+            for row in configs[tbl]:
+                if not isinstance(row, dict):
+                    raise HTTPException(400, f"{tbl} 中包含非对象元素")
+
+        applied = {}
+        for tbl in required_tables:
+            db.execute(f"DELETE FROM {tbl} WHERE workspace_id = ?", (workspace_id,))
+            count = 0
+            for row in configs[tbl]:
+                cols = list(row.keys())
+                vals = [workspace_id] + [row.get(k, "") for k in cols]
+                placeholders = ",".join(["?"] * len(vals))
+                db.execute(
+                    f"INSERT INTO {tbl} (workspace_id, {','.join(cols)}) VALUES ({placeholders})",
+                    vals,
+                )
+                count += 1
+            applied[tbl] = count
+
+        db.commit()
+        return {"ok": True, "applied": applied}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"导入失败: {str(e)}")
     finally:
         db.close()
 

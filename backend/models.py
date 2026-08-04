@@ -297,3 +297,8 @@ class AuthorPayoutCreate(BaseModel):
     period_start: str
     period_end: str
     note: str = ""
+
+
+class WorkspaceConfigImport(BaseModel):
+    """Import workspace configs from exported JSON."""
+    configs: dict
