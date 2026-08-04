@@ -215,10 +215,10 @@ export const api = {
   updateWorkspace: (id: string, data: {name?: string; status?: string; description?: string; logo?: string; role_ids?: string[]}) =>
     request(`/api/workspaces/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteWorkspace: (id: string) => request(`/api/workspaces/${id}`, { method: 'DELETE' }),
-  exportWorkspaceConfigs: (wid: number) =>
-    request(`/api/workspaces/${wid}/export-configs`).then(d => d as { workspace_id: string; exported_at: string; configs: Record<string, any[]> }),
-  importWorkspaceConfigs: (wid: number, data: { configs: Record<string, any[]> }) =>
-    request(`/api/workspaces/${wid}/import-configs`, {
+  exportWorkspaceConfigs: (wid: string) =>
+    request(`/api/workspaces/${encodeURIComponent(wid)}/export-configs`).then(d => d as { workspace_id: string; exported_at: string; configs: Record<string, any[]> }),
+  importWorkspaceConfigs: (wid: string, data: { configs: Record<string, any[]> }) =>
+    request(`/api/workspaces/${encodeURIComponent(wid)}/import-configs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),

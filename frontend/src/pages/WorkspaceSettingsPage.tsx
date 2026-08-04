@@ -284,7 +284,7 @@ export default function WorkspaceSettingsPage() {
     if (!wid) return
     setExporting(true)
     try {
-      const data = await api.exportWorkspaceConfigs(Number(wid))
+      const data = await api.exportWorkspaceConfigs(wid)
       const json = JSON.stringify(data, null, 2)
       const blob = new Blob([json], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
@@ -314,7 +314,7 @@ export default function WorkspaceSettingsPage() {
         modal.toast('无效的配置文件：缺少 configs 字段', 'error')
         return
       }
-      const result = await api.importWorkspaceConfigs(Number(wid), { configs: data.configs })
+      const result = await api.importWorkspaceConfigs(wid, { configs: data.configs })
       if (result.ok) {
         modal.toast('配置已导入: ' + JSON.stringify(result.applied), 'success')
         loadAll()
