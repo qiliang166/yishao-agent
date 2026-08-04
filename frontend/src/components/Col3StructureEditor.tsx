@@ -12,12 +12,18 @@ interface Chapter {
   example: string
 }
 
+interface ColumnDef {
+  name: string
+  desc: string
+}
+
 interface PageDef {
   id: string
   type: PageType
   heading: string
   dimensions?: Dimension[]   // content / chart / diagram
-  columns?: string[]         // table / flowchart
+  columns?: ColumnDef[]      // table / flowchart
+  bodyRule?: string          // table / flowchart — body fill instruction
   titleFormat?: string       // cover
   subtitle?: string          // cover
   description?: string       // cover
@@ -61,7 +67,8 @@ function emptyPage(type: PageType): PageDef {
   if (type === 'content' || type === 'chart' || type === 'diagram') {
     base.dimensions = [{ label: '', desc: '' }]
   } else if (type === 'table' || type === 'flowchart') {
-    base.columns = ['']
+    base.columns = [{ name: '', desc: '' }]
+    base.bodyRule = ''
   } else if (type === 'cover') {
     base.titleFormat = ''
     base.subtitle = ''
@@ -115,7 +122,11 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
           def.dimensions = kps.map((k: string) => ({ label: k, desc: '' }))
           if (def.dimensions.length === 0) def.dimensions = [{ label: '', desc: '' }]
         } else if (t === 'table' || t === 'flowchart') {
-          def.columns = (p.key_points || []).length > 0 ? p.key_points : ['']
+          const kps: string[] = p.key_points || []
+          const exs: string[] = p.examples || []
+          def.columns = kps.map((k: string, i: number) => ({ name: k, desc: exs[i] || '' }))
+          if (def.columns.length === 0) def.columns = [{ name: '', desc: '' }]
+          def.bodyRule = p.body_rule || ''
         } else if (t === 'cover') {
           def.metaFields = (p.key_points || []).length > 0 ? p.key_points : ['']
           def.metaExamples = p.examples || []
@@ -148,7 +159,10 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
       if (p.type === 'content' || p.type === 'chart' || p.type === 'diagram') {
         s.key_points = (p.dimensions || []).filter(d => d.label.trim()).map(d => d.label.trim())
       } else if (p.type === 'table' || p.type === 'flowchart') {
-        s.key_points = (p.columns || []).filter(c => c.trim()).map(c => c.trim())
+        s.key_points = (p.columns || []).filter(c => c.name.trim()).map(c => c.name.trim())
+        const colExamples = (p.columns || []).map(c => c.desc.trim()).filter(d => d !== '')
+        if (colExamples.length > 0) s.examples = colExamples
+        if (p.bodyRule && p.bodyRule.trim()) s.body_rule = p.bodyRule.trim()
       } else if (p.type === 'cover') {
         s.key_points = (p.metaFields || []).filter(f => f.trim()).map(f => f.trim())
         const examples = (p.metaExamples || []).map(e => e.trim()).filter(e => e !== '')
@@ -197,9 +211,11 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
     setPages(prev => prev.map(p => p.id === id ? { ...p, dimensions: (p.dimensions || []).filter((_, i) => i !== idx) } : p))
 
   const addCol = (id: string) => setPages(prev => prev.map(p =>
-    p.id === id ? { ...p, columns: [...(p.columns || []), ''] } : p))
-  const setCol = (id: string, idx: number, v: string) =>
-    setPages(prev => prev.map(p => p.id === id ? { ...p, columns: _strArrChange(p.columns || [], idx, v) } : p))
+    p.id === id ? { ...p, columns: [...(p.columns || []), { name: '', desc: '' }] } : p))
+  const setColName = (id: string, idx: number, v: string) =>
+    setPages(prev => prev.map(p => p.id === id ? { ...p, columns: (p.columns || []).map((c, i) => i === idx ? { ...c, name: v } : c) } : p))
+  const setColDesc = (id: string, idx: number, v: string) =>
+    setPages(prev => prev.map(p => p.id === id ? { ...p, columns: (p.columns || []).map((c, i) => i === idx ? { ...c, desc: v } : c) } : p))
   const removeCol = (id: string, idx: number) =>
     setPages(prev => prev.map(p => p.id === id ? { ...p, columns: (p.columns || []).filter((_, i) => i !== idx) } : p))
 
@@ -275,8 +291,10 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
               {(p.columns || []).map((c, ci) => (
                 <div key={ci} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                   <span style={dimLabelStyle}>列{ci + 1}</span>
-                  <input value={c} onChange={e => setCol(p.id, ci, e.target.value)}
-                    placeholder="列名（如：条款编号）" style={{ ...inputStyle, flex: 1 }} />
+                  <input value={c.name} onChange={e => setColName(p.id, ci, e.target.value)}
+                    placeholder="列名（如：食材名称）" style={{ ...inputStyle, flex: 1 }} />
+                  <input value={c.desc} onChange={e => setColDesc(p.id, ci, e.target.value)}
+                    placeholder="说明（可选，如：食材的具体名称，不可使用类别统称）" style={{ ...inputStyle, flex: 2 }} />
                   <button onClick={() => removeCol(p.id, ci)}
                     style={{ fontSize: 11, padding: '1px 4px', color: 'var(--danger)', border: 'none', background: 'transparent', cursor: 'pointer' }}>
                     ×
@@ -287,6 +305,15 @@ export default function Col3StructureEditor({ initialSkill, onSaved }: Props) {
                 style={{ fontSize: 10, padding: '2px 6px', alignSelf: 'flex-start', marginTop: 2 }}>
                 + 添加列
               </button>
+              <div style={{ marginTop: 6 }}>
+                <div className="form-hint" style={{ marginBottom: 2 }}>body 填充规则（控制内容生成行为，如逐行保留/归纳总结）</div>
+                <input
+                  value={p.bodyRule || ''}
+                  onChange={e => setPages(prev => prev.map(pp => pp.id === p.id ? { ...pp, bodyRule: e.target.value } : pp))}
+                  placeholder={p.type === 'table' ? '如：逐行完整保留，各单元格用 | 分隔，每条记录独占一行，禁止归纳合并' : '如：按步骤逐一列出，每步一行，保留原文所有细节，禁止归纳合并'}
+                  style={{ ...inputStyle, width: '100%' }}
+                />
+              </div>
             </div>
           )}
 

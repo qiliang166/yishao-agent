@@ -1,5 +1,11 @@
 ﻿# 更新日志
 
+## 2026-08-04
+
+- fix: replace alert() with custom toast for purchase disabled notice
+- feat: purchase enable/disable toggle in KeyGen station config
+- fix: remove sidebar pricing HTML and KeyGen pricing editor, now managed by plan_types
+
 ## 2026-08-03
 
 - chore: build stamp after review fixes (511bccc)

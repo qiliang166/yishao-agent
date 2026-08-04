@@ -1350,7 +1350,8 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
    - 若模板包含 examples 数组，对照每个 example 的说明来填充对应位置的 key_points 值
    - description 从正文提炼一段内容概述（≤150字），不可为空
 4. heading 根据模板的 page_type 和页面用途填写描述性标题，不超过 20 字符
-5. 你唯一的工作：根据 SOP 内容，按模板格式填空（将占位标签替换为实际内容值）
+5. 若模板中某页包含 body_rule、images、charts、cards 字段，必须原样保留在输出中，不可修改、增删或忽略
+6. 你唯一的工作：根据 SOP 内容，按模板格式填空（将占位标签替换为实际内容值）
 
 **禁止行为：**
 - 禁止在 key_points 中保留模板标签原文（如"编写日期""内容分类"等），必须替换为实际值
@@ -1358,6 +1359,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 - 禁止因为"看起来不合理"而修改 page_type
 - 禁止合并或拆分页面
 - 禁止自行添加模板中没有的字段
+- 禁止删除或修改模板中的 body_rule、images、charts、cards 字段
 - 禁止忽略 examples 中的指导信息
 
 仅输出 JSON，不输出其他文字"""
@@ -1377,7 +1379,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
    - summary 从正文提炼一句话概要（≤150字）填入 summary 字段，不可为空
    - key_points 每个位置必须填入从 SOP 提取的实际内容值，不可保留模板标签原文
    - 若模板包含 examples 数组，对照每个 example 的说明来填充对应位置的 key_points 值
-7. 若模板中某页包含 images 或 charts 字段，必须原样保留在输出中，不可修改、增删或忽略
+7. 若模板中某页包含 body_rule、images、charts、cards 字段，必须原样保留在输出中，不可修改、增删或忽略
 
 **禁止行为：**
 - 禁止在 JSON 数组外包裹对象包装（如 { "page_outline": [...] }），必须直接输出 [{...}]
@@ -1386,7 +1388,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 - 禁止因为"看起来不合理"而修改 page_type
 - 禁止合并或拆分页面
 - 禁止自行添加模板中没有的字段
-- 禁止删除模板中已有的字段（images、cards、charts、title_format、subtitle、description、examples 等必须全部保留在输出中）
+- 禁止删除模板中已有的字段（body_rule、images、cards、charts、title_format、subtitle、description、examples 等必须全部保留在输出中）
 - 禁止忽略 examples 中的指导信息
 
 仅输出 JSON 数组 [{...}]，不输出其他文字"""
@@ -1459,21 +1461,26 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
     def _fill_batch(batch: list) -> list:
         """Fill one batch of slides. Returns filled slide dicts, or [] on failure."""
         batch_json = json.dumps(batch, ensure_ascii=False, indent=2)
-        fill_user = f"""## SOP 文章（唯一内容来源）
-{sop_content}
 
-## 需要填充的幻灯片（只输出这些幻灯片的 body 和 notes，不要更改其他字段）
-{batch_json}
-
-## 输出格式
-```json
-{{"slides": [{{"seq":1,"heading":"原样保留","body":"从此 SOP 提取归纳的正文（结论先行，分段落，用 \\n\\n 分隔段落，每段不超过180字，并列要点用编号列表）","notes":"备注或反面后果(可选)","layout_hint":"原样保留","visual_weight":"原样保留","key_points":["原文保留"]}}, ...]}}
-```
-铁律：
-- 只输出以上幻灯片，不增减
-- heading, layout_hint, visual_weight, key_points 保持原样
-- body 从此 SOP 对应部分提取归纳，每页至少 80 字，结论先行，必须分段落
-- 仅输出 JSON"""
+        # Load user prompt from configurable template (core prompt: fill-user.md)
+        fill_user_template = _load_core_prompt("fill-user", project_id)
+        if not fill_user_template:
+            fill_user_template = (
+                "## SOP 文章（唯一内容来源）\n"
+                "{{SOP_CONTENT}}\n\n"
+                "## 需要填充的幻灯片（只输出这些幻灯片的 body 和 notes，不要更改其他字段）\n"
+                "{{BATCH_JSON}}\n\n"
+                "## 输出格式\n"
+                '```json\n'
+                '{{"slides": [{{"seq":1,"heading":"原样保留","body":"正文内容","notes":"备注(可选)","layout_hint":"原样保留","visual_weight":"原样保留","key_points":["原文保留"]}}, ...]}}\n'
+                '```\n'
+                "铁律：\n"
+                "- 只输出以上幻灯片，不增减\n"
+                "- heading, layout_hint, visual_weight, key_points 保持原样\n"
+                "- 若幻灯片 JSON 中包含 body_rule 字段，则严格按照 body_rule 的指示填写 body\n"
+                "- 仅输出 JSON"
+            )
+        fill_user = fill_user_template.replace("{{SOP_CONTENT}}", sop_content).replace("{{BATCH_JSON}}", batch_json)
 
         for attempt in range(2):
             try:
@@ -1515,11 +1522,14 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 
 
 def _fix_stage1_table_keypoints(stage1, skill_template):
-    """Restore key_points/examples/images/charts from SKILL template.
+    """Restore key_points/body_rule/examples/images/charts from SKILL template.
 
     The Stage1 prompt instructs LLM to replace all key_points labels with
     actual SOP values. For table/flowchart/chart/diagram pages, key_points are
     column/step/dimension names that must be preserved — data belongs in body.
+
+    body_rule is a per-page body filling instruction (e.g. "逐行完整保留" for
+    table pages). It is restored from the template so the fill phase can use it.
 
     Images and charts are code-level control fields that the LLM should not
     modify; they are restored from the template for all page types as a safety net.
@@ -1535,6 +1545,8 @@ def _fix_stage1_table_keypoints(stage1, skill_template):
             if pt in ("table", "flowchart", "chart", "diagram"):
                 entry["key_points"] = p.get("key_points", [])
                 entry["examples"] = p.get("examples", [])
+                if "body_rule" in p:
+                    entry["body_rule"] = p["body_rule"]
             # Restore images, charts, cards for all page types (code-level control fields)
             if "images" in p:
                 entry["images"] = p["images"]
@@ -1565,6 +1577,10 @@ def _fix_stage1_table_keypoints(stage1, skill_template):
                 # values; template placeholders would overwrite them.
                 if "cards" in entry and not s.get("cards"):
                     s["cards"] = entry["cards"]
+                # body_rule: always restore from template (per-page fill instruction).
+                # LLM may drop it; template is authoritative.
+                if "body_rule" in entry:
+                    s["body_rule"] = entry["body_rule"]
     except Exception:
         pass
     return stage1
