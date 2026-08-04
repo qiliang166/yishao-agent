@@ -1103,6 +1103,7 @@ def import_workspace_configs(workspace_id: str, body: WorkspaceConfigImport,
                 if unknown:
                     raise HTTPException(400, f"{tbl} 包含未知字段: {', '.join(sorted(unknown))}")
 
+        import uuid as _uuid
         applied = {}
         for tbl in required_tables:
             db.execute(f"DELETE FROM {tbl} WHERE workspace_id = ?", (workspace_id,))
@@ -1110,6 +1111,10 @@ def import_workspace_configs(workspace_id: str, body: WorkspaceConfigImport,
             for row in configs[tbl]:
                 cols = list(row.keys())
                 vals = [workspace_id] + [row.get(k, "") for k in cols]
+                # Replace any incoming id with a fresh one to avoid cross-workspace conflicts
+                if "id" in row:
+                    id_idx = cols.index("id") + 1  # +1 for workspace_id
+                    vals[id_idx] = _uuid.uuid4().hex[:12]
                 placeholders = ",".join(["?"] * len(vals))
                 db.execute(
                     f"INSERT INTO {tbl} (workspace_id, {','.join(cols)}) VALUES ({placeholders})",
