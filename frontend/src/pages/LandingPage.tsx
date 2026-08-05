@@ -216,7 +216,7 @@ export default function LandingPage() {
                     position: 'relative',
                   }}>
                     <iframe src={coverThumbUrl(b)}
-                      sandbox="allow-scripts" scrolling="no" title={b.title}
+                      sandbox="allow-scripts allow-same-origin" scrolling="no" title={b.title}
                       ref={(el) => {
                         if (!el) return
                         const parent = el.parentElement
