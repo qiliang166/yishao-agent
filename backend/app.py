@@ -7388,6 +7388,49 @@ def public_list_booklets(q: str = "", page: int = 1, page_size: int = 50, reques
         db.close()
 
 
+@app.get("/api/public/booklets/{booklet_id}/cover-thumb")
+def public_cover_thumb(booklet_id: str):
+    """Public cover thumbnail for recommended booklets — no auth required."""
+    from routers.booklets import _extract_head_styles as _extract_styles, _first_chapter_is_html, _resolve_theme, render_booklet
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM booklets WHERE id=? AND is_recommended=1", (booklet_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "册子不存在或未公开")
+        booklet = {
+            "id": row["id"], "owner_id": row["owner_id"], "owner_role": row["owner_role"],
+            "book_type": row["book_type"], "title": row["title"],
+            "subtitle": row["subtitle"] or "", "author": row["author"] or "",
+            "cover": json.loads(row["cover_json"] or "{}"),
+            "chapters": json.loads(row["chapters_json"] or "[]"),
+            "is_recommended": bool(row["is_recommended"]),
+            "created_at": row["created_at"], "updated_at": row["updated_at"],
+        }
+    finally:
+        db.close()
+    theme = _resolve_theme(booklet)
+    try:
+        full = render_booklet(booklet, theme)
+    except Exception:
+        return Response(content="", media_type="text/html")
+    styles = _extract_styles(full)
+    w, h = (794, 1123) if booklet["book_type"] == "a4" else (1280, 720)
+    m = re.search(r'<section class="[^"]*\bbk-cover\b[^"]*"[^>]*>.*?</section>', full, re.S)
+    if not m:
+        return Response(content="", media_type="text/html")
+    vi_mode = booklet["book_type"] == "a4" and _first_chapter_is_html(booklet.get("chapters") or [])
+    body_cls = ' class="bk-vi"' if vi_mode else ""
+    doc = (
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
+        f"{styles}"
+        f"<style>html,body{{margin:0;padding:0;overflow:hidden;width:{w}px;height:{h}px;}}"
+        ".bk-sheet,.bk-slide{display:flex !important;flex-direction:column !important;"
+        "position:relative !important;margin:0 !important;box-shadow:none !important;}</style>"
+        f"</head><body{body_cls}>{m.group(0)}</body></html>"
+    )
+    return Response(content=doc, media_type="text/html")
+
+
 @app.get("/api/site-config")
 def get_site_config():
     """Proxy to activation server — public site config (pricing, announcements)."""

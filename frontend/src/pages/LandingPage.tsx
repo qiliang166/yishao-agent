@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../services/api'
@@ -7,7 +7,7 @@ const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
 export default function LandingPage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const navigate = useNavigate()
 
   const [brandName, setBrandName] = useState('')
@@ -53,14 +53,12 @@ export default function LandingPage() {
   const name = brandName || 'Yishao Agent'
   const logo = brandLogo || '⚡'
 
-  // Extract cover style from cover_json
-  const coverStyle = (cover: any) => {
-    const c = cover?.theme_colors || {}
-    return {
-      background: c.bg || c.primary || 'var(--primary)',
-      color: c.text || '#ffffff',
+  const coverThumbUrl = useCallback((b: any) => {
+    if (user && token) {
+      return `/api/booklets/${b.id}/cover-thumb?token=${encodeURIComponent(token)}`
     }
-  }
+    return `/api/public/booklets/${b.id}/cover-thumb`
+  }, [user, token])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -188,7 +186,9 @@ export default function LandingPage() {
             gap: 20,
           }}>
             {filtered.map((b: any) => {
-              const s = coverStyle(b.cover)
+              const isPpt = b.book_type === 'ppt'
+              const pageW = isPpt ? 1280 : 794
+              const pageH = isPpt ? 720 : 1123
               return (
                 <div
                   key={b.id}
@@ -210,28 +210,35 @@ export default function LandingPage() {
                     ;(e.currentTarget as HTMLElement).style.transform = ''
                   }}
                 >
-                  {/* Cover */}
+                  {/* Cover iframe — same rendering engine as admin backend */}
                   <div style={{
                     aspectRatio: '3/4',
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                    padding: 20, textAlign: 'center',
-                    background: s.background,
-                    color: s.color,
+                    overflow: 'hidden',
+                    background: 'var(--bg-secondary, #f0f0f0)',
+                    position: 'relative',
                   }}>
-                    <h3 style={{
-                      fontSize: 14, fontWeight: 600, margin: '0 0 4px 0',
-                      lineHeight: 1.3,
-                      display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
-                      overflow: 'hidden',
-                    }}>
-                      {b.title}
-                    </h3>
-                    {b.author && (
-                      <span style={{ fontSize: 11, opacity: 0.8 }}>
-                        {b.author}
-                      </span>
-                    )}
+                    <iframe src={coverThumbUrl(b)}
+                      sandbox="allow-scripts" scrolling="no" title={b.title}
+                      ref={(el) => {
+                        if (!el) return
+                        const parent = el.parentElement
+                        if (!parent) return
+                        const cw = parent.clientWidth
+                        const ch = parent.clientHeight
+                        if (!cw || !ch) return
+                        const scale = Math.min(cw / pageW, ch / pageH)
+                        el.style.width = pageW + 'px'
+                        el.style.height = pageH + 'px'
+                        el.style.transform = `scale(${scale})`
+                      }}
+                      style={{
+                        border: 'none',
+                        transformOrigin: 'top left',
+                        position: 'absolute',
+                        top: 0, left: 0,
+                        pointerEvents: 'none',
+                      }}
+                    />
                   </div>
                   {/* Card Footer */}
                   <div style={{
