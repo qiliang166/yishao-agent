@@ -117,6 +117,7 @@ function SettingsPage() {
   const [pointsPerYuan, setPointsPerYuan] = useState('1.0')
   const [newUserPointsDeci, setNewUserPointsDeci] = useState('5')
   const [adminPasswordEnabled, setAdminPasswordEnabled] = useState(true)
+  const [homepagePath, setHomepagePath] = useState('')
 
   // -- 修改密码 state --
   const [oldPw, setOldPw] = useState('')
@@ -177,6 +178,7 @@ function SettingsPage() {
       }
       if (s.points_per_yuan) setPointsPerYuan(s.points_per_yuan)
       if (s.new_user_points_deci) setNewUserPointsDeci(s.new_user_points_deci)
+      if (s.homepage_path !== undefined) setHomepagePath(s.homepage_path)
       setAdminPasswordEnabled(s.admin_password_enabled !== '0')
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
@@ -306,6 +308,7 @@ function SettingsPage() {
         }),
         points_per_yuan: pointsPerYuan,
         new_user_points_deci: newUserPointsDeci,
+        homepage_path: homepagePath,
       })
       const fallback = (await api.getVersion()).app || ''
       document.title = brandName || fallback
@@ -516,6 +519,19 @@ function SettingsPage() {
             </div>
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
               此路径作为所有项目的默认存储根目录，每个项目将在此路径下创建独立子文件夹。
+            </div>
+          </div>
+
+          <div className="settings-section" style={{ borderTop: '1px solid var(--border)' }}>
+            <h3>首页设置</h3>
+            <div className="settings-row">
+              <label>首页路径</label>
+              <input className="form-input" type="text" value={homepagePath}
+                onChange={e => setHomepagePath(e.target.value)}
+                placeholder="留空则显示默认品牌页" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
+              匿名用户访问首页时跳转到此路径。示例：/login（登录页）、/search（搜索页）、/app（工作台）
             </div>
           </div>
 

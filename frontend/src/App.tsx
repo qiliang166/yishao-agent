@@ -752,6 +752,8 @@ function RootRoute() {
     if (user.user_type === 'member' || isExperienceOfficer) return <Navigate to="/app" replace />
     return <Navigate to="/home" replace />
   }
+  const homepagePath: string = (window as any).__HOMEPAGE_PATH__
+  if (homepagePath) return <Navigate to={homepagePath} replace />
   return <LandingPage />
 }
 

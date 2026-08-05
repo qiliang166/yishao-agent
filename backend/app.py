@@ -9768,6 +9768,35 @@ if os.path.isdir(FRONTEND_DIST):
         if _os.path.isfile(real):
             return _serve(real)
         return _serve(_os.path.join(FRONTEND_DIST, "index.html"))
+    @app.get("/")
+    def _serve_index_with_homepage_path():
+        """Serve index.html with injected __HOMEPAGE_PATH__ for anonymous landing page routing."""
+        import os as _os_inner
+        index_path = _os_inner.path.join(FRONTEND_DIST, "index.html")
+        if not _os_inner.path.isfile(index_path):
+            from fastapi.responses import PlainTextResponse
+            return PlainTextResponse("index.html not found", status_code=500)
+        html = open(index_path, "r", encoding="utf-8").read()
+        hp = ""
+        try:
+            db = SessionLocal()
+            row = db.execute(
+                "SELECT value FROM settings WHERE key='homepage_path'"
+            ).fetchone()
+            if row and row[0]:
+                hp = str(row[0]).strip()
+        except Exception:
+            pass
+        finally:
+            db.close()
+        tag = f'<script>window.__HOMEPAGE_PATH__="{hp}"</script>'
+        if "</head>" in html:
+            html = html.replace("</head>", tag + "\n</head>", 1)
+        else:
+            html = tag + "\n" + html
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content=html)
+
     app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":
