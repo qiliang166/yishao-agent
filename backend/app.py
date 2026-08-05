@@ -6,7 +6,7 @@ import shutil
 import uuid
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Body, Request, Depends
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -9858,37 +9858,38 @@ if os.path.isdir(FRONTEND_DIST):
         if _os.path.isfile(real):
             return _serve(real)
         return _serve(_os.path.join(FRONTEND_DIST, "index.html"))
-    @app.get("/")
-    def _serve_index_with_homepage_path():
-        """Serve index.html with injected __HOMEPAGE_PATH__ for anonymous landing page routing."""
-        import os as _os_inner
-        index_path = _os_inner.path.join(FRONTEND_DIST, "index.html")
-        if not _os_inner.path.isfile(index_path):
-            from fastapi.responses import PlainTextResponse
-            return PlainTextResponse("index.html not found", status_code=500)
-        html = open(index_path, "r", encoding="utf-8").read()
+    # Middleware: inject __HOMEPAGE_PATH__ into root index.html response.
+# (Cannot use @app.get("/") because app.mount("/", StaticFiles) shadows it.)
+@app.middleware("http")
+async def _inject_homepage_path(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path == "/" and response.headers.get("content-type", "").startswith("text/html"):
+        body = b""
+        async for chunk in response.body_iterator:
+            body += chunk
+        html = body.decode("utf-8")
         hp = ""
+        db = None
         try:
             db = SessionLocal()
-            row = db.execute(
-                "SELECT value FROM settings WHERE key='homepage_path'"
-            ).fetchone()
+            row = db.execute("SELECT value FROM settings WHERE key='homepage_path'").fetchone()
             if row and row[0]:
                 hp = str(row[0]).strip()
         except Exception:
             pass
         finally:
-            db.close()
-        safe_hp = json.dumps(hp).replace("<", "\\u003c")
+            if db:
+                db.close()
+        safe_hp = json.dumps(hp).replace("<", chr(92) + "u003c")
         tag = f'<script>window.__HOMEPAGE_PATH__={safe_hp}</script>'
         if "</head>" in html:
             html = html.replace("</head>", tag + "\n</head>", 1)
         else:
             html = tag + "\n" + html
-        from fastapi.responses import HTMLResponse
         return HTMLResponse(content=html)
+    return response
 
-    app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 if __name__ == "__main__":
     import uvicorn
