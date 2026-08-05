@@ -166,6 +166,11 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           </button>
         )}
         <button
+          className={`sidebar-item ${location.pathname === '/search' ? 'active' : ''}`}
+          onClick={() => navigate('/search')}>
+          <span className="ico">🔍</span> 浏览广场
+        </button>
+        <button
           className={`sidebar-item ${location.pathname.startsWith('/booklets') ? 'active' : ''}`}
           onClick={() => navigate('/booklets')}>
           <span className="ico">📚</span> 电子成册
@@ -427,6 +432,11 @@ function MemberSidebar() {
           className={`sidebar-item ${location.pathname === '/app/downloads' ? 'active' : ''}`}
           onClick={() => navigate('/app/downloads')}>
           <span className="ico">📥</span> 下载文件
+        </button>
+        <button
+          className={`sidebar-item ${location.pathname === '/search' ? 'active' : ''}`}
+          onClick={() => navigate('/search')}>
+          <span className="ico">🔍</span> 浏览广场
         </button>
         <button
           className={`sidebar-item ${location.pathname.startsWith('/app/booklets') ? 'active' : ''}`}
@@ -795,6 +805,7 @@ function App() {
             <Route path="/member/register" element={<MemberRegisterPage />} />
             <Route path="/member/renew" element={<MemberRenewPage />} />
             <Route path="/author/:id" element={<AuthorProfilePage />} />
+            <Route path="/search" element={<LandingPage />} />
             <Route path="/app/*" element={
               <ProtectedRoute requiredType="member">
                 <MemberAppShell />

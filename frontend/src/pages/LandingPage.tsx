@@ -18,12 +18,6 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (user) {
-      navigate(user.user_type === 'member' ? '/app' : '/home', { replace: true })
-    }
-  }, [user, navigate])
-
-  useEffect(() => {
     Promise.all([
       fetch('/api/settings').then(r => r.json()),
       fetch('/api/version').then(r => r.json()),
@@ -85,15 +79,26 @@ export default function LandingPage() {
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{name}</span>
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <Link to="/login" style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'none' }}>
-            管理员登录
-          </Link>
-          <Link to="/member" style={{
-            fontSize: 12, color: 'var(--primary)', textDecoration: 'none',
-            padding: '4px 12px', border: '1px solid var(--primary)', borderRadius: 4,
-          }}>
-            会员登录
-          </Link>
+          {user ? (
+            <Link to={user.user_type === 'member' ? '/app/center' : '/home'} style={{
+              fontSize: 12, color: 'var(--primary)', textDecoration: 'none',
+              padding: '4px 12px', border: '1px solid var(--primary)', borderRadius: 4,
+            }}>
+              {user.user_type === 'member' ? '进入工作台' : '进入后台'}
+            </Link>
+          ) : (
+            <>
+              <Link to="/login" style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'none' }}>
+                管理员登录
+              </Link>
+              <Link to="/member" style={{
+                fontSize: 12, color: 'var(--primary)', textDecoration: 'none',
+                padding: '4px 12px', border: '1px solid var(--primary)', borderRadius: 4,
+              }}>
+                会员登录
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
