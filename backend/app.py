@@ -9869,17 +9869,13 @@ async def _inject_homepage_path(request: Request, call_next):
             body += chunk
         html = body.decode("utf-8")
         hp = ""
-        db = None
         try:
-            db = SessionLocal()
+            db = get_db()
             row = db.execute("SELECT value FROM settings WHERE key='homepage_path'").fetchone()
             if row and row[0]:
                 hp = str(row[0]).strip()
         except Exception:
             pass
-        finally:
-            if db:
-                db.close()
         safe_hp = json.dumps(hp).replace("<", chr(92) + "u003c")
         tag = f'<script>window.__HOMEPAGE_PATH__={safe_hp}</script>'
         if "</head>" in html:
