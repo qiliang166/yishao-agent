@@ -154,7 +154,7 @@ def _check_project_readable(db, user: dict, project_id: str):
         raise HTTPException(403, "该明细未解锁，无法调取内容")
 
 
-def _get_booklet_or_403(db, booklet_id: str, user: dict, readonly_ok: bool = False):
+def _get_booklet_or_403(db, booklet_id: str, user: dict, readonly_ok: bool = False, skip_project_check: bool = False):
     row = db.execute("SELECT * FROM booklets WHERE id=?", (booklet_id,)).fetchone()
     if not row:
         raise HTTPException(404, "册子不存在")
@@ -162,15 +162,15 @@ def _get_booklet_or_403(db, booklet_id: str, user: dict, readonly_ok: bool = Fal
     if _is_admin(user) or is_owner:
         return row
     if readonly_ok:
-        # 会员预览画册封面：校验所有章节来源项目的工作区访问权限
-        try:
-            chapters = json.loads(row["chapters_json"] or "[]")
-        except (ValueError, TypeError):
-            chapters = []
-        for ch in chapters:
-            pid = (ch.get("project_id") or "").strip()
-            if pid and not can_access_project(pid, user):
-                raise HTTPException(403, "无权访问该册子（含受限工作区内容）")
+        if not skip_project_check:
+            try:
+                chapters = json.loads(row["chapters_json"] or "[]")
+            except (ValueError, TypeError):
+                chapters = []
+            for ch in chapters:
+                pid = (ch.get("project_id") or "").strip()
+                if pid and not can_access_project(pid, user):
+                    raise HTTPException(403, "无权访问该册子（含受限工作区内容）")
         return row
     raise HTTPException(403, "无权访问该册子")
 
@@ -1397,7 +1397,7 @@ def cover_thumb(booklet_id: str, request: Request):
         raise HTTPException(401, "请先登录")
     db = get_db()
     try:
-        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
+        row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True, skip_project_check=True)
         booklet = _row_to_full(row)
         theme = _resolve_theme(booklet)
     finally:

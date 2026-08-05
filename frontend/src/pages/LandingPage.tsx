@@ -48,7 +48,7 @@ export default function LandingPage() {
       navigate('/member?redirect=' + encodeURIComponent(hp))
       return
     }
-    navigate('/booklets/' + id)
+    navigate('/app/booklets/' + id)
   }
 
   const name = brandName || 'Yishao Agent'

@@ -1,5 +1,75 @@
 ﻿# 更新日志
 
+## 2026-08-05
+
+- fix: use real newline in homepage middleware instead of literal \n text
+- fix: landing page card aspect ratios + nginx client_max_body_size
+
+## 2026-08-05
+
+- fix: restore ?token= param for cover-thumb iframe auth (no cookie support in JWT middleware)
+
+## 2026-08-05
+
+- fix: add allow-same-origin to cover iframe sandbox so cookies are sent
+
+## 2026-08-05
+
+- fix: remove JWT from cover-thumb URL — rely on same-origin cookies
+
+## 2026-08-05
+
+- feat: public cover-thumb endpoint + LandingPage uses real iframe covers
+
+## 2026-08-05
+
+- fix: SessionLocal → get_db() in public_list_booklets endpoint
+
+## 2026-08-05
+
+- feat: add /search route + sidebar links, show header links based on login state
+
+## 2026-08-05
+
+- fix: f-string backslash syntax error — extract replace to variable (Python <3.12 compat)
+
+## 2026-08-05
+
+- feat: public landing page — brand hero + Google-style search + booklet grid
+
+## 2026-08-05
+
+- fix: XSS hardening — use json.dumps for __HOMEPAGE_PATH__ injection
+
+## 2026-08-05
+
+- feat: customizable homepage path via admin settings
+
+## 2026-08-05
+
+- feat: save slide images at 2x resolution (2560x1440) via device_scale_factor=2
+
+## 2026-08-04
+
+- fix: import generates fresh IDs to avoid UNIQUE constraint on cross-workspace import
+
+## 2026-08-04
+
+- fix: workspace config export/import — pass wid as string not Number
+
+## 2026-08-04
+
+- fix: SQL injection hardening — validate config columns against allowlist on import
+- feat: workspace config export/import — download/upload JSON configs
+
+## 2026-08-04
+
+- fix: enforce mandatory root prompt keys in Prompt Studio generation
+
+## 2026-08-04
+
+- fix: col3 outline table body preserves all rows via configurable body_rule
+
 ## 2026-08-04
 
 - fix: replace alert() with custom toast for purchase disabled notice
