@@ -7,7 +7,7 @@ const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
 export default function LandingPage() {
-  const { user } = useAuth()
+  const { user, token } = useAuth()
   const navigate = useNavigate()
 
   const [brandName, setBrandName] = useState('')
@@ -54,9 +54,9 @@ export default function LandingPage() {
   const logo = brandLogo || '⚡'
 
   const coverThumbUrl = useCallback((b: any) => {
-    if (user) return `/api/booklets/${b.id}/cover-thumb`
+    if (user && token) return `/api/booklets/${b.id}/cover-thumb?token=${encodeURIComponent(token)}`
     return `/api/public/booklets/${b.id}/cover-thumb`
-  }, [user])
+  }, [user, token])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
@@ -216,7 +216,7 @@ export default function LandingPage() {
                     position: 'relative',
                   }}>
                     <iframe src={coverThumbUrl(b)}
-                      sandbox="allow-scripts allow-same-origin" scrolling="no" title={b.title}
+                      sandbox="allow-scripts" scrolling="no" title={b.title}
                       ref={(el) => {
                         if (!el) return
                         const parent = el.parentElement
