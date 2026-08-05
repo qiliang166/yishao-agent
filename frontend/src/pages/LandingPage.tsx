@@ -44,7 +44,7 @@ export default function LandingPage() {
 
   const handleBookletClick = (id: string) => {
     if (!user) {
-      navigate('/login')
+      navigate('/member')
       return
     }
     navigate('/booklets/' + id)
@@ -179,19 +179,25 @@ export default function LandingPage() {
           </div>
         ) : (
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            display: 'flex',
+            flexWrap: 'wrap',
             gap: 20,
+            justifyContent: 'center',
           }}>
             {filtered.map((b: any) => {
               const isPpt = b.book_type === 'ppt'
               const pageW = isPpt ? 1280 : 794
               const pageH = isPpt ? 720 : 1123
+              const COVER_H = 255
+              const coverW = COVER_H * (isPpt ? 1280/720 : 794/1123)
               return (
                 <div
                   key={b.id}
                   onClick={() => handleBookletClick(b.id)}
                   style={{
+                    width: coverW,
+                    maxWidth: '100%',
+                    flexShrink: 0,
                     cursor: 'pointer',
                     borderRadius: 8,
                     overflow: 'hidden',
@@ -210,7 +216,8 @@ export default function LandingPage() {
                 >
                   {/* Cover iframe — same rendering engine as admin backend */}
                   <div style={{
-                    aspectRatio: '3/4',
+                    width: coverW,
+                    height: COVER_H,
                     overflow: 'hidden',
                     background: 'var(--bg-secondary, #f0f0f0)',
                     position: 'relative',
