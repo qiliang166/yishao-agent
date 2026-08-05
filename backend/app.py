@@ -9836,7 +9836,8 @@ if os.path.isdir(FRONTEND_DIST):
             pass
         finally:
             db.close()
-        tag = f'<script>window.__HOMEPAGE_PATH__={json.dumps(hp).replace("<", "\\u003c")}</script>'
+        safe_hp = json.dumps(hp).replace("<", "\\u003c")
+        tag = f'<script>window.__HOMEPAGE_PATH__={safe_hp}</script>'
         if "</head>" in html:
             html = html.replace("</head>", tag + "\n</head>", 1)
         else:
