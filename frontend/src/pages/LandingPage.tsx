@@ -7,7 +7,7 @@ const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
 export default function LandingPage() {
-  const { user, token } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
 
   const [brandName, setBrandName] = useState('')
@@ -54,11 +54,9 @@ export default function LandingPage() {
   const logo = brandLogo || '⚡'
 
   const coverThumbUrl = useCallback((b: any) => {
-    if (user && token) {
-      return `/api/booklets/${b.id}/cover-thumb?token=${encodeURIComponent(token)}`
-    }
+    if (user) return `/api/booklets/${b.id}/cover-thumb`
     return `/api/public/booklets/${b.id}/cover-thumb`
-  }, [user, token])
+  }, [user])
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
