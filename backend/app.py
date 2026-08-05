@@ -7344,7 +7344,7 @@ def backup_full(user=require_perm("config.global")):
 @app.get("/api/public/booklets")
 def public_list_booklets(q: str = "", page: int = 1, page_size: int = 50, request: Request = None):
     """Public listing of booklets — recommended-only for anonymous, all for authenticated users."""
-    db = SessionLocal()
+    db = get_db()
     try:
         user = request.state.user if request else None
         params = []
