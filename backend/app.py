@@ -5940,7 +5940,7 @@ def api_export_svg_zip(run_id: str):
 
 @app.post("/api/ppt/save-images/{run_id}")
 async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"), download: bool = False):
-    """Render each slide as a 1280x720 PNG and save to the export directory.
+    """Render each slide as a 2560x1440 PNG and save to the export directory.
     If download=true, return a zip file instead of JSON."""
     import asyncio
 
@@ -5961,7 +5961,7 @@ async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"
         saved = []
         with sync_playwright() as pw:
             browser = pw.chromium.launch()
-            page = browser.new_page(viewport={"width": 1280, "height": 720})
+            page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=2)
             page.goto("file:///" + html_path.replace("\\", "/"))
             page.wait_for_timeout(500)
 
