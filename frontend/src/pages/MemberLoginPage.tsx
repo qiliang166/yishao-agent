@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Navigate, Link } from 'react-router-dom'
+import { Navigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import AboutDialog from '../components/AboutDialog'
 
@@ -17,6 +17,8 @@ export default function MemberLoginPage() {
   const [loading, setLoading] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
 
+  const [searchParams] = useSearchParams()
+
   useEffect(() => {
     Promise.all([
       fetch('/api/settings').then(r => r.json()),
@@ -32,7 +34,9 @@ export default function MemberLoginPage() {
   }, [])
 
   if (user) {
-    return <Navigate to={user.user_type === 'member' ? '/app' : '/'} replace />
+    const redirect = searchParams.get('redirect')
+    const hp = (window as any).__HOMEPAGE_PATH__
+    return <Navigate to={user.user_type === 'member' ? (redirect || hp || '/app') : '/'} replace />
   }
 
   const handleSubmit = async () => {

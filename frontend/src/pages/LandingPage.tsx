@@ -44,7 +44,8 @@ export default function LandingPage() {
 
   const handleBookletClick = (id: string) => {
     if (!user) {
-      navigate('/member')
+      const hp = (window as any).__HOMEPAGE_PATH__ || window.location.pathname
+      navigate('/member?redirect=' + encodeURIComponent(hp))
       return
     }
     navigate('/booklets/' + id)
