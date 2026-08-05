@@ -161,8 +161,8 @@ def _get_booklet_or_403(db, booklet_id: str, user: dict, readonly_ok: bool = Fal
     is_owner = row["owner_id"] == user["sub"]
     if _is_admin(user) or is_owner:
         return row
-    if readonly_ok and row["is_recommended"]:
-        # 会员预览推荐画册：校验所有章节来源项目的工作区访问权限
+    if readonly_ok:
+        # 会员预览画册封面：校验所有章节来源项目的工作区访问权限
         try:
             chapters = json.loads(row["chapters_json"] or "[]")
         except (ValueError, TypeError):

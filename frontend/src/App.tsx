@@ -757,7 +757,8 @@ function RootRoute() {
       </div>
     )
   }
-  const homepagePath: string = (window as any).__HOMEPAGE_PATH__
+  const rawHomepagePath: string = (window as any).__HOMEPAGE_PATH__
+  const homepagePath: string = (rawHomepagePath && rawHomepagePath.startsWith('/') && !rawHomepagePath.startsWith('//')) ? rawHomepagePath : ''
   if (user) {
     const isExperienceOfficer = user.roles?.includes('开发体验员')
     if (user.user_type === 'member' || isExperienceOfficer) {
