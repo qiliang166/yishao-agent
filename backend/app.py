@@ -7341,6 +7341,53 @@ def backup_full(user=require_perm("config.global")):
         raise HTTPException(status_code=500, detail="备份失败")
 
 
+@app.get("/api/public/booklets")
+def public_list_booklets(q: str = "", page: int = 1, page_size: int = 50, request: Request = None):
+    """Public listing of booklets — recommended-only for anonymous, all for authenticated users."""
+    db = SessionLocal()
+    try:
+        user = request.state.user if request else None
+        params = []
+        wheres = []
+        if user:
+            # Authenticated: all booklets
+            pass
+        else:
+            # Anonymous: only recommended booklets
+            wheres.append("is_recommended = 1")
+        if q:
+            wheres.append("(title LIKE ? OR id LIKE ?)")
+            like = f"%{q}%"
+            params.extend([like, like])
+        where_clause = ("WHERE " + " AND ".join(wheres)) if wheres else ""
+        count_sql = f"SELECT COUNT(*) FROM booklets {where_clause}"
+        total = db.execute(count_sql, params).fetchone()[0]
+        offset = (page - 1) * page_size
+        sql = f"""SELECT id, title, author, book_type, cover_json,
+                     json_array_length(chapters_json) as chapter_count,
+                     is_recommended, updated_at
+              FROM booklets {where_clause}
+              ORDER BY updated_at DESC LIMIT ? OFFSET ?"""
+        rows = db.execute(sql, params + [page_size, offset]).fetchall()
+        items = []
+        for r in rows:
+            cover = {}
+            try:
+                cover = json.loads(r["cover_json"]) if r["cover_json"] else {}
+            except Exception:
+                pass
+            items.append({
+                "id": r["id"], "title": r["title"], "author": r["author"],
+                "book_type": r["book_type"], "cover": cover,
+                "chapter_count": r["chapter_count"],
+                "is_recommended": r["is_recommended"],
+                "updated_at": r["updated_at"],
+            })
+        return {"booklets": items, "total": total, "page": page, "page_size": page_size}
+    finally:
+        db.close()
+
+
 @app.get("/api/site-config")
 def get_site_config():
     """Proxy to activation server — public site config (pricing, announcements)."""

@@ -1,34 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { api } from '../services/api'
 
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
 export default function LandingPage() {
-  const { memberLogin, user } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
+
   const [brandName, setBrandName] = useState('')
   const [brandLogo, setBrandLogo] = useState('')
-  const [contactInfo, setContactInfo] = useState('')
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/settings').then(r => r.json()),
-      fetch('/api/version').then(r => r.json()),
-    ]).then(([data, ver]) => {
-      const s = data.settings || {}
-      const fallback = (ver as any).app || ''
-      if (s.brand_name) setBrandName(s.brand_name)
-      else if (fallback) setBrandName(fallback)
-      if (s.brand_logo) setBrandLogo(s.brand_logo)
-      if (s.contact_info) setContactInfo(s.contact_info)
-    }).catch(() => {})
-  }, [])
+  const [brandSlogan, setBrandSlogan] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [booklets, setBooklets] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (user) {
@@ -36,132 +23,233 @@ export default function LandingPage() {
     }
   }, [user, navigate])
 
-  const handleSubmit = async () => {
-    if (!username.trim() || !password.trim()) {
-      setError('请输入用户名和密码')
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/settings').then(r => r.json()),
+      fetch('/api/version').then(r => r.json()),
+      api.publicListBooklets(),
+    ]).then(([data, ver, bookletData]) => {
+      const s = data.settings || {}
+      const fallback = (ver as any).app || ''
+      if (s.brand_name) setBrandName(s.brand_name)
+      else if (fallback) setBrandName(fallback)
+      if (s.brand_logo) setBrandLogo(s.brand_logo)
+      if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
+      setBooklets(bookletData.booklets || [])
+    }).catch(() => {})
+    .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return booklets
+    const q = searchQuery.trim().toLowerCase()
+    return booklets.filter((b: any) =>
+      b.title.toLowerCase().includes(q) || b.id.toLowerCase().includes(q)
+    )
+  }, [booklets, searchQuery])
+
+  const handleBookletClick = (id: string) => {
+    if (!user) {
+      navigate('/login')
       return
     }
-    setLoading(true)
-    setError('')
-    try {
-      await memberLogin(username.trim(), password)
-      navigate('/app', { replace: true })
-    } catch (e: any) {
-      setError(e.message || '登录失败')
-    } finally {
-      setLoading(false)
-    }
+    navigate('/booklets/' + id)
   }
 
   const name = brandName || 'Yishao Agent'
   const logo = brandLogo || '⚡'
 
+  // Extract cover style from cover_json
+  const coverStyle = (cover: any) => {
+    const c = cover?.theme_colors || {}
+    return {
+      background: c.bg || c.primary || 'var(--primary)',
+      color: c.text || '#ffffff',
+    }
+  }
+
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: 'var(--primary)',
-    }}>
-      <div style={{
-        background: '#ffffff', padding: '48px 40px',
-        borderRadius: 12, width: 360,
-        boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
+    <div style={{ minHeight: '100vh', background: 'var(--bg)' }}>
+      {/* Header */}
+      <header style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '12px 24px', borderBottom: '1px solid var(--border)',
+        background: 'var(--card-bg, #ffffff)',
       }}>
-        <div style={{ textAlign: 'center', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isImagePath(logo) ? (
-            <img src={logo} alt="Logo" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
+            <img src={logo} alt="Logo" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
           ) : (
-            <span style={{ fontSize: 40 }}>{logo}</span>
+            <span style={{ fontSize: 24 }}>{logo}</span>
           )}
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{name}</span>
         </div>
-        <h1 style={{
-          fontSize: 22, fontWeight: 700, textAlign: 'center',
-          margin: '0 0 8px 0', color: 'var(--text)',
-        }}>
-          {name}
-        </h1>
-        <p style={{
-          fontSize: 12, textAlign: 'center', margin: '0 0 32px 0',
-          color: 'var(--text-secondary)',
-        }}>
-          会员登录
-        </p>
-
-        <input
-          className="form-input"
-          type="text"
-          placeholder="用户名"
-          value={username}
-          onChange={e => { setUsername(e.target.value); setError('') }}
-          onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
-          autoFocus
-          style={{ width: '100%', boxSizing: 'border-box', marginBottom: 10 }}
-        />
-        <input
-          className="form-input"
-          type="password"
-          placeholder="密码"
-          value={password}
-          onChange={e => { setPassword(e.target.value); setError('') }}
-          onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
-          style={{ width: '100%', boxSizing: 'border-box' }}
-        />
-
-        {error && (
-          <div style={{
-            fontSize: 12, color: 'var(--warning)',
-            marginTop: 10, textAlign: 'center',
-          }}>
-            {error}
-            {error.includes('已到期') && (
-              <> <Link to={`/member/renew?username=${encodeURIComponent(username)}`}
-                      style={{ color: 'var(--primary)', textDecoration: 'underline' }}>
-                续费 →
-              </Link></>
-            )}
-          </div>
-        )}
-
-        <button
-          className="btn btn-primary"
-          onClick={handleSubmit}
-          disabled={loading}
-          style={{ width: '100%', marginTop: 20 }}
-        >
-          {loading ? '验证中...' : '登录'}
-        </button>
-
-        <p style={{
-          fontSize: 11, color: 'var(--text-secondary)',
-          marginTop: 16, textAlign: 'center',
-        }}>
-          还没有账号？{' '}
-          <Link to="/member/register" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
-            立即注册 →
-          </Link>
-        </p>
-
-        <div style={{
-          display: 'flex', justifyContent: 'center', gap: 16,
-          marginTop: 16, paddingTop: 16,
-          borderTop: '1px solid var(--border)',
-        }}>
-          <Link to="/login" style={{ fontSize: 11, color: 'var(--text-secondary)', textDecoration: 'none' }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <Link to="/login" style={{ fontSize: 12, color: 'var(--text-secondary)', textDecoration: 'none' }}>
             管理员登录
           </Link>
-          <Link to="/member" style={{ fontSize: 11, color: 'var(--text-secondary)', textDecoration: 'none' }}>
+          <Link to="/member" style={{
+            fontSize: 12, color: 'var(--primary)', textDecoration: 'none',
+            padding: '4px 12px', border: '1px solid var(--primary)', borderRadius: 4,
+          }}>
             会员登录
           </Link>
         </div>
+      </header>
 
-        {contactInfo && (
+      {/* Hero */}
+      <section style={{
+        textAlign: 'center', padding: '60px 24px 40px',
+      }}>
+        <div style={{ marginBottom: 16 }}>
+          {isImagePath(logo) ? (
+            <img src={logo} alt="Logo" style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
+          ) : (
+            <span style={{ fontSize: 56 }}>{logo}</span>
+          )}
+        </div>
+        <h1 style={{
+          fontSize: 28, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--text)',
+        }}>
+          {name}
+        </h1>
+        {brandSlogan && (
           <p style={{
-            fontSize: 11, color: 'var(--text-secondary)',
-            marginTop: 12, textAlign: 'center',
+            fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 28px 0',
           }}>
-            遇到问题？联系我们：{contactInfo}
+            {brandSlogan}
           </p>
         )}
-      </div>
+
+        {/* Search Box */}
+        <div style={{
+          display: 'inline-flex', alignItems: 'center',
+          width: '100%', maxWidth: 560,
+          border: '1px solid var(--border)',
+          borderRadius: 24, padding: '10px 20px',
+          background: 'var(--card-bg, #ffffff)',
+          boxShadow: '0 1px 6px rgba(0,0,0,0.06)',
+          transition: 'box-shadow 0.2s',
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="搜索电子书..."
+            style={{
+              flex: 1, border: 'none', outline: 'none',
+              fontSize: 15, marginLeft: 10,
+              background: 'transparent', color: 'var(--text)',
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                border: 'none', background: 'none', cursor: 'pointer',
+                color: 'var(--text-secondary)', fontSize: 16, padding: 0,
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Booklet Grid */}
+      <section style={{ padding: '0 24px 60px', maxWidth: 1200, margin: '0 auto' }}>
+        {loading ? (
+          <div style={{
+            textAlign: 'center', padding: 60,
+            color: 'var(--text-secondary)', fontSize: 14,
+          }}>
+            加载中...
+          </div>
+        ) : filtered.length === 0 ? (
+          <div style={{
+            textAlign: 'center', padding: 60,
+            color: 'var(--text-secondary)', fontSize: 14,
+          }}>
+            {searchQuery ? '未找到匹配的电子书' : '暂无电子书'}
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: 20,
+          }}>
+            {filtered.map((b: any) => {
+              const s = coverStyle(b.cover)
+              return (
+                <div
+                  key={b.id}
+                  onClick={() => handleBookletClick(b.id)}
+                  style={{
+                    cursor: 'pointer',
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                    border: '1px solid var(--border)',
+                    background: 'var(--card-bg, #ffffff)',
+                    transition: 'box-shadow 0.2s, transform 0.2s',
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)'
+                    ;(e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLElement).style.boxShadow = ''
+                    ;(e.currentTarget as HTMLElement).style.transform = ''
+                  }}
+                >
+                  {/* Cover */}
+                  <div style={{
+                    aspectRatio: '3/4',
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                    padding: 20, textAlign: 'center',
+                    background: s.background,
+                    color: s.color,
+                  }}>
+                    <h3 style={{
+                      fontSize: 14, fontWeight: 600, margin: '0 0 4px 0',
+                      lineHeight: 1.3,
+                      display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}>
+                      {b.title}
+                    </h3>
+                    {b.author && (
+                      <span style={{ fontSize: 11, opacity: 0.8 }}>
+                        {b.author}
+                      </span>
+                    )}
+                  </div>
+                  {/* Card Footer */}
+                  <div style={{
+                    padding: '10px 12px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      {b.book_type === 'a4' ? '书册版' : '合辑版'}
+                    </span>
+                    <span style={{
+                      fontSize: 10, padding: '1px 6px', borderRadius: 3,
+                      background: b.is_recommended ? 'var(--primary)' : 'var(--border)',
+                      color: b.is_recommended ? '#ffffff' : 'var(--text-secondary)',
+                    }}>
+                      {b.is_recommended ? '推荐' : `${b.chapter_count || 0}篇`}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
     </div>
   )
 }
