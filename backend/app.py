@@ -7709,6 +7709,19 @@ def get_settings(request: Request):
                     pass
                 break
 
+        # Fallback: load download URLs from build-time embedded defaults
+        _dl_defaults_path = os.path.join(BASE_DIR, "default_download_urls.json")
+        if os.path.exists(_dl_defaults_path):
+            try:
+                import json as _json
+                with open(_dl_defaults_path, "r", encoding="utf-8") as _f:
+                    _defs = _json.load(_f)
+                for _k in ("download_desktop_url", "download_server_url"):
+                    if _defs.get(_k) and not settings.get(_k):
+                        settings[_k] = _defs[_k]
+            except Exception:
+                pass
+
         return JSONResponse(
             content={"settings": settings},
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},

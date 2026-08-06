@@ -11,6 +11,7 @@ backend_datas = [
     ('backend/data/styles', 'backend/data/styles'),
     ('backend/data/templates', 'backend/data/templates'),
     ('backend/data/logos', 'backend/data/logos'),
+    ('backend/default_download_urls.json', 'backend'),
 ]
 
 a = Analysis(

@@ -18,6 +18,35 @@ def main():
     if not app_name:
         app_name = "YishaoAgent"
 
+    # Embed download URLs from settings so distributed EXEs ship with them
+    _dl_defaults = {}
+    for _k in ("download_desktop_url", "download_server_url"):
+        _v = settings.get(_k, "").strip()
+        if _v:
+            _dl_defaults[_k] = _v
+    # Also check activation DB if main settings don't have the URLs
+    _act_db = os.path.join(ROOT, "activation_server", "data", "activation.db")
+    if not _dl_defaults and os.path.exists(_act_db):
+        try:
+            _aconn = sqlite3.connect(_act_db)
+            try:
+                for _r in _aconn.execute(
+                    "SELECT key, value FROM site_config WHERE key IN ('download_desktop_url','download_server_url')"
+                ).fetchall():
+                    if _r[1] and _r[0] not in _dl_defaults:
+                        _dl_defaults[_r[0]] = _r[1]
+            finally:
+                _aconn.close()
+        except Exception:
+            pass
+    _dl_path = os.path.join(ROOT, "backend", "default_download_urls.json")
+    if _dl_defaults:
+        with open(_dl_path, "w", encoding="utf-8") as _f:
+            json.dump(_dl_defaults, _f)
+        print(f"[prepare] Default download URLs: {_dl_defaults}")
+    elif os.path.exists(_dl_path):
+        os.remove(_dl_path)
+
     logo_url = settings.get("brand_logo", "").strip()
     icon_path = None
 
