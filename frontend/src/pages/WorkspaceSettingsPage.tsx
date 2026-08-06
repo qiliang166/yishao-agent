@@ -596,7 +596,7 @@ export default function WorkspaceSettingsPage() {
                         </div>
                       ))}
                       {ttsConfigs.length === 0 && (
-                        <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: 8 }}>加载中...</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: 8 }}>暂无配置</div>
                       )}
                     </>
                   ) : col.id === 'col6' ? (
@@ -638,7 +638,7 @@ export default function WorkspaceSettingsPage() {
                         </div>
                       ))}
                       {speechConfigs.length === 0 && (
-                        <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: 8 }}>加载中...</div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: 8 }}>暂无配置</div>
                       )}
                     </>
                   ) : (<>
