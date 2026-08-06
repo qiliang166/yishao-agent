@@ -378,7 +378,7 @@ def init_db():
         except Exception:
             pass
 
-        # Migrate: create default workspace "一勺笔录" and assign all workspace_id-less projects
+        # Migrate: create default workspace "食谱培训" and assign all workspace_id-less projects
         try:
             ws_count = conn.execute("SELECT COUNT(*) FROM workspaces").fetchone()[0]
             if ws_count == 0:
@@ -386,14 +386,14 @@ def init_db():
                 ws_id = _uuid.uuid4().hex[:12]
                 conn.execute(
                     "INSERT INTO workspaces (id, name, status) VALUES (?, ?, ?)",
-                    (ws_id, "一勺笔录", "completed"))
+                    (ws_id, "食谱培训", "completed"))
                 conn.execute(
                     "UPDATE projects SET workspace_id = ? WHERE workspace_id IS NULL OR workspace_id = ''",
                     (ws_id,))
         except Exception:
             pass
 
-        # Create workspace-specific configs for default workspace 一勺笔录
+        # Create workspace-specific configs for default workspace 食谱培训
         try:
             ws_cfg_count = conn.execute("SELECT COUNT(*) FROM column_configs WHERE workspace_id = ?", (ws_id,)).fetchone()[0]
             if ws_cfg_count == 0:
@@ -1045,7 +1045,7 @@ def init_db():
             import uuid as _uuid
             _config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "default_workspace_configs.json")
             if os.path.exists(_config_path):
-                _ws_row = conn.execute("SELECT id FROM workspaces WHERE name LIKE '%一勺笔录%' LIMIT 1").fetchone()
+                _ws_row = conn.execute("SELECT id FROM workspaces WHERE name LIKE '%食谱%' LIMIT 1").fetchone()
                 if _ws_row:
                     _ws_id = _ws_row[0]
                     _ws_cfg_count = conn.execute("SELECT COUNT(*) FROM column_configs WHERE workspace_id = ?", (_ws_id,)).fetchone()[0]
