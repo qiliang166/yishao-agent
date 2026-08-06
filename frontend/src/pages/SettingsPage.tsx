@@ -118,8 +118,6 @@ function SettingsPage() {
   const [newUserPointsDeci, setNewUserPointsDeci] = useState('5')
   const [adminPasswordEnabled, setAdminPasswordEnabled] = useState(true)
   const [homepagePath, setHomepagePath] = useState('')
-  const [downloadDesktopUrl, setDownloadDesktopUrl] = useState('')
-  const [downloadServerUrl, setDownloadServerUrl] = useState('')
 
   // -- 修改密码 state --
   const [oldPw, setOldPw] = useState('')
@@ -181,8 +179,6 @@ function SettingsPage() {
       if (s.points_per_yuan) setPointsPerYuan(s.points_per_yuan)
       if (s.new_user_points_deci) setNewUserPointsDeci(s.new_user_points_deci)
       if (s.homepage_path !== undefined) setHomepagePath(s.homepage_path)
-      if (s.download_desktop_url) setDownloadDesktopUrl(s.download_desktop_url)
-      if (s.download_server_url) setDownloadServerUrl(s.download_server_url)
       setAdminPasswordEnabled(s.admin_password_enabled !== '0')
       if ((ver as any).version) setAppVersion((ver as any).version)
       if (s.app_version) setAppVersion(s.app_version)
@@ -313,8 +309,6 @@ function SettingsPage() {
         points_per_yuan: pointsPerYuan,
         new_user_points_deci: newUserPointsDeci,
         homepage_path: homepagePath,
-        download_desktop_url: downloadDesktopUrl,
-        download_server_url: downloadServerUrl,
       })
       const fallback = (await api.getVersion()).app || ''
       document.title = brandName || fallback
@@ -560,20 +554,6 @@ function SettingsPage() {
               <label>管理员手机号</label>
               <input className="form-input" type="text" value={adminPhone}
                 onChange={e => setAdminPhone(e.target.value)} placeholder="用于身份验证" style={{ maxWidth: 220 }} disabled={!canSaveGlobal} />
-            </div>
-            <div className="settings-row">
-              <label>下载链接 — 桌面版</label>
-              <input className="form-input" type="text" value={downloadDesktopUrl}
-                onChange={e => setDownloadDesktopUrl(e.target.value)}
-                placeholder="例如: http://your-server.com/downloads/YishaoAgent.exe"
-                style={{ maxWidth: 400 }} disabled={!canSaveGlobal} />
-            </div>
-            <div className="settings-row">
-              <label>下载链接 — 服务器版</label>
-              <input className="form-input" type="text" value={downloadServerUrl}
-                onChange={e => setDownloadServerUrl(e.target.value)}
-                placeholder="例如: http://your-server.com/downloads/YishaoAgent-Server.zip"
-                style={{ maxWidth: 400 }} disabled={!canSaveGlobal} />
             </div>
             <h4 style={{ marginTop: 20, marginBottom: 8, fontSize: 13 }}>修改密码</h4>
             <div className="settings-row">
