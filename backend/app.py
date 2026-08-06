@@ -8038,6 +8038,58 @@ _MAX_FAILED_ATTEMPTS = 10
 _LOCK_DURATION_SEC = 1800  # 30 minutes
 
 
+@app.get("/api/auth/needs-setup")
+def auth_needs_setup():
+    """Check if the admin user needs first-time password setup."""
+    db = get_db()
+    try:
+        admin = db.execute(
+            "SELECT must_change_password FROM users WHERE user_type='admin' ORDER BY created_at LIMIT 1"
+        ).fetchone()
+        if admin and admin["must_change_password"] == 1:
+            return {"needs_setup": True, "admin_username": "admin"}
+        return {"needs_setup": False}
+    finally:
+        db.close()
+
+
+@app.post("/api/auth/setup")
+def auth_setup(req: dict):
+    """First-time admin password setup. Sets the admin password and removes the setup flag."""
+    password = (req.get("password") or "").strip()
+    if len(password) < 6:
+        raise HTTPException(400, "密码至少需要6个字符")
+
+    db = get_db()
+    try:
+        admin = db.execute(
+            "SELECT * FROM users WHERE user_type='admin' AND must_change_password = 1 ORDER BY created_at LIMIT 1"
+        ).fetchone()
+        if not admin:
+            raise HTTPException(400, "系统已完成初始化，无需重复设置")
+
+        password_hash = _hash_password(password)
+        db.execute(
+            "UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?",
+            (password_hash, admin["id"]),
+        )
+        db.commit()
+
+        # Delete the initial password file if it exists
+        pwd_path = os.path.join(BASE_DIR, "initial_admin_password.txt")
+        try:
+            if os.path.exists(pwd_path):
+                os.remove(pwd_path)
+        except Exception:
+            pass
+
+        return {"ok": True}
+    except HTTPException:
+        raise
+    finally:
+        db.close()
+
+
 @app.post("/api/login")
 def login(req: dict, request: Request):
     """Backward-compatible login. Accepts {password} and maps to super admin.

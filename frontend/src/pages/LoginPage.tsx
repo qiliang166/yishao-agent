@@ -14,6 +14,8 @@ export default function LoginPage() {
   const [storedPhone, setStoredPhone] = useState('')
   const [hasRbac, setHasRbac] = useState(false)
   const [initialAdminPassword, setInitialAdminPassword] = useState('')
+  const [needsSetup, setNeedsSetup] = useState(false)
+  const [setupSuccess, setSetupSuccess] = useState(false)
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -25,11 +27,16 @@ export default function LoginPage() {
   const [phoneVerified, setPhoneVerified] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
 
+  // Setup form state
+  const [setupPassword, setSetupPassword] = useState('')
+  const [setupConfirm, setSetupConfirm] = useState('')
+
   useEffect(() => {
     Promise.all([
       fetch('/api/settings').then(r => r.json()),
       fetch('/api/version').then(r => r.json()),
-    ]).then(([data, ver]) => {
+      fetch('/api/auth/needs-setup').then(r => r.json()),
+    ]).then(([data, ver, ns]) => {
       const s = data.settings || {}
       const fallback = ver.app || ''
       if (s.brand_name) setBrandName(s.brand_name)
@@ -37,7 +44,10 @@ export default function LoginPage() {
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.admin_phone) setStoredPhone(s.admin_phone)
       if (s.db_schema_version) setHasRbac(true)
-      if (s.initial_admin_password) {
+      if (ns && ns.needs_setup) {
+        setNeedsSetup(true)
+        setUsername(ns.admin_username || 'admin')
+      } else if (s.initial_admin_password) {
         setInitialAdminPassword(s.initial_admin_password)
         setUsername('admin')
       }
@@ -50,6 +60,36 @@ export default function LoginPage() {
       return <Navigate to="/app" replace />
     }
     return <Navigate to="/" replace />
+  }
+
+  const handleSetup = async () => {
+    setError('')
+    if (setupPassword.length < 6) {
+      setError('密码至少需要6个字符')
+      return
+    }
+    if (setupPassword !== setupConfirm) {
+      setError('两次输入的密码不一致')
+      return
+    }
+    setLoading(true)
+    try {
+      const res = await fetch('/api/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: setupPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || '设置失败')
+      setNeedsSetup(false)
+      setInitialAdminPassword('')
+      setPassword(setupPassword)
+      setSetupSuccess(true)
+    } catch (e: any) {
+      setError(e.message || '设置失败')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSubmit = async () => {
@@ -75,6 +115,103 @@ export default function LoginPage() {
 
   const name = brandName || ''
   const logo = brandLogo || '⚡'
+
+  if (needsSetup) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        height: '100vh', background: 'var(--primary)',
+      }}>
+        <div style={{
+          background: '#ffffff', padding: '48px 40px',
+          borderRadius: 12, width: 360,
+          boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: 12 }}>
+            {isImagePath(logo) ? (
+              <img src={logo} alt="Logo" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: 40 }}>{logo}</span>
+            )}
+          </div>
+          <h1 style={{
+            fontSize: 22, fontWeight: 700, textAlign: 'center',
+            margin: '0 0 4px 0', color: 'var(--text)',
+          }}>
+            {name}
+          </h1>
+          <p style={{
+            fontSize: 13, textAlign: 'center', margin: '0 0 28px 0',
+            color: 'var(--text-secondary)',
+          }}>
+            欢迎使用！请设置管理员密码
+          </p>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500, color: 'var(--text)' }}>
+              管理员账号
+            </label>
+            <input
+              className="form-input"
+              type="text"
+              value={username}
+              disabled
+              style={{ width: '100%', boxSizing: 'border-box', background: '#f3f4f6' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500, color: 'var(--text)' }}>
+              设置密码
+            </label>
+            <input
+              className="form-input"
+              type="password"
+              placeholder="至少6个字符"
+              value={setupPassword}
+              onChange={e => { setSetupPassword(e.target.value); setError('') }}
+              onKeyDown={e => { if (e.key === 'Enter') handleSetup() }}
+              autoFocus
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ display: 'block', fontSize: 13, marginBottom: 6, fontWeight: 500, color: 'var(--text)' }}>
+              确认密码
+            </label>
+            <input
+              className="form-input"
+              type="password"
+              placeholder="再次输入密码"
+              value={setupConfirm}
+              onChange={e => { setSetupConfirm(e.target.value); setError('') }}
+              onKeyDown={e => { if (e.key === 'Enter') handleSetup() }}
+              style={{ width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          {error && (
+            <div style={{
+              fontSize: 12, color: 'var(--warning)',
+              marginTop: 10, textAlign: 'center',
+            }}>
+              {error}
+            </div>
+          )}
+
+          <button
+            className="btn btn-primary"
+            onClick={handleSetup}
+            disabled={loading}
+            style={{ width: '100%', marginTop: 20 }}
+          >
+            {loading ? '设置中...' : '设置密码并进入'}
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{
@@ -106,6 +243,16 @@ export default function LoginPage() {
           请输入管理员账号密码以继续
         </p>
 
+        {setupSuccess && (
+          <div style={{
+            fontSize: 13, background: '#d1fae5', border: '1px solid #10b981',
+            color: '#065f46', padding: '10px 14px', borderRadius: 6,
+            marginBottom: 16, lineHeight: 1.7, textAlign: 'center',
+          }}>
+            密码设置成功，请登录
+          </div>
+        )}
+
         {initialAdminPassword && (
           <div style={{
             fontSize: 13, background: '#d1fae5', border: '1px solid #10b981',
@@ -122,7 +269,7 @@ export default function LoginPage() {
           </div>
         )}
 
-        {!storedPhone && !initialAdminPassword && (
+        {!storedPhone && !initialAdminPassword && !setupSuccess && (
           <div style={{
             fontSize: 11, background: '#fef3c7', border: '1px solid #f59e0b',
             color: '#92400e', padding: '8px 12px', borderRadius: 6,
@@ -151,7 +298,7 @@ export default function LoginPage() {
           value={password}
           onChange={e => { setPassword(e.target.value); setError('') }}
           onKeyDown={e => { if (e.key === 'Enter') handleSubmit() }}
-          autoFocus
+          autoFocus={!needsSetup}
           style={{ width: '100%', boxSizing: 'border-box' }}
         />
 
