@@ -73,6 +73,76 @@ class KeyGenApp:
         if selected == "站点配置":
             self.root.after(100, lambda: self._load_site_config(silent=True))
 
+    def _add_context_menu(self, widget):
+        """Add right-click context menu (Cut/Copy/Paste/Select All) to a widget."""
+        menu = tk.Menu(widget, tearoff=0)
+        is_text = isinstance(widget, tk.Text)
+        is_entry = isinstance(widget, ttk.Entry)
+
+        def _cut():
+            try:
+                if is_text:
+                    widget.event_generate("<<Cut>>")
+                elif is_entry:
+                    widget.event_generate("<<Cut>>")
+            except Exception:
+                pass
+
+        def _copy():
+            try:
+                if is_text:
+                    widget.event_generate("<<Copy>>")
+                elif is_entry:
+                    widget.event_generate("<<Copy>>")
+            except Exception:
+                pass
+
+        def _paste():
+            try:
+                if is_text:
+                    widget.event_generate("<<Paste>>")
+                elif is_entry:
+                    widget.event_generate("<<Paste>>")
+            except Exception:
+                pass
+
+        def _select_all():
+            try:
+                if is_text:
+                    widget.tag_add("sel", "1.0", "end")
+                elif is_entry:
+                    widget.select_range(0, "end")
+            except Exception:
+                pass
+
+        menu.add_command(label="剪切", command=_cut, accelerator="Ctrl+X")
+        menu.add_command(label="复制", command=_copy, accelerator="Ctrl+C")
+        menu.add_command(label="粘贴", command=_paste, accelerator="Ctrl+V")
+        menu.add_separator()
+        menu.add_command(label="全选", command=_select_all, accelerator="Ctrl+A")
+
+        def _show_menu(event):
+            try:
+                menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                menu.grab_release()
+
+        widget.bind("<Button-3>", _show_menu)
+        # Also handle the context menu key on Windows
+        widget.bind("<Button-2>", _show_menu)
+
+        # Store reference to prevent garbage collection
+        widget._context_menu = menu
+
+    def _bind_all_context_menus(self):
+        """Recursively walk all widgets and add context menus to Entry/Text."""
+        def _walk(w):
+            if isinstance(w, (ttk.Entry, tk.Entry, tk.Text)):
+                self._add_context_menu(w)
+            for child in w.winfo_children():
+                _walk(child)
+        _walk(self.root)
+
     def _call_api(self, method: str, path: str, body: dict | None = None) -> dict:
         token = self.admin_token.get().strip()
         server = self.server_url.get().strip().rstrip("/")
@@ -160,6 +230,8 @@ class KeyGenApp:
         self._build_plan_tab()
         self._build_qrcode_tab()
         self._build_order_tab()
+
+        self._bind_all_context_menus()
 
         # Status bar
         self.status_var = tk.StringVar(value="就绪")
