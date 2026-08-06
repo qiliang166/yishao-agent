@@ -1982,9 +1982,8 @@ function TemplateManager() {
             mood: '',
             keywords: [],
             colors: {
-              primary: '#2563eb', secondary: '#1e40af', accent: '#f59e0b',
-              background: '#ffffff', text: '#1f2937', card_bg: '#f9fafb',
-              chart_colors: ['#2563eb','#f59e0b','#10b981','#ef4444','#8b5cf6'],
+              primary: '#2563eb', accent: '#f59e0b',
+              background: '#ffffff', text: '#1f2937',
             },
           })
           existingIds.add(sid)

@@ -6015,7 +6015,7 @@ def api_ppt_regenerate_log(run_id: str):
 
 @app.get("/api/ppt/styles")
 def api_ppt_styles():
-    """List all 17 PPT-Agent styles from the YAML style library.
+    """List all styles from the YAML style library + DB-only templates.
     Returns a flat list of styles. Each style has a 'group' field
     (Professional, Creative, Tech / Dark, Thematic) and includes
     color palette, typography, mood, and use cases.
@@ -6025,9 +6025,41 @@ def api_ppt_styles():
         loader = StyleLoader()
         groups = loader.list_styles()
         flat = []
+        existing_ids = set()
         for g in groups:
             for s in g.get("styles", []):
                 flat.append(s)
+                existing_ids.add(s.get("id", ""))
+
+        # Merge DB-only templates that have no YAML entry
+        db = get_db()
+        try:
+            rows = db.execute("SELECT * FROM templates WHERE type = 'style' ORDER BY created_at DESC").fetchall()
+            for row in rows:
+                rules = json.loads(row["rules"] or "{}")
+                sid = rules.get("style_id", row["id"].replace("style-", ""))
+                if sid in existing_ids:
+                    continue
+                flat.append({
+                    "id": sid,
+                    "name": row["name"],
+                    "group": rules.get("group", "Professional"),
+                    "mood": "",
+                    "keywords": [],
+                    "colors": {
+                        "primary": "#2563eb",
+                        "secondary": "#1e40af",
+                        "accent": "#f59e0b",
+                        "background": "#ffffff",
+                        "text": "#1f2937",
+                        "card_bg": "#f9fafb",
+                        "chart_colors": ["#2563eb", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6"],
+                    },
+                })
+                existing_ids.add(sid)
+        finally:
+            db.close()
+
         return {"styles": flat}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
