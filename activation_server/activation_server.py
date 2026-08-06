@@ -530,6 +530,27 @@ def admin_update_site_config(req: dict, request: Request):
                     (key, str(req[key])),
                 )
         db.commit()
+
+        # Also sync download URLs to main backend settings table
+        for _mb in ("/opt/yishao-agent/backend/data/yishao.db",
+                     "/root/yishao-agent/backend/data/yishao.db"):
+            if os.path.exists(_mb):
+                try:
+                    _mconn = sqlite3.connect(_mb)
+                    try:
+                        for _k in ("download_desktop_url", "download_server_url"):
+                            if _k in req:
+                                _mconn.execute(
+                                    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+                                    (_k, str(req[_k])),
+                                )
+                        _mconn.commit()
+                    finally:
+                        _mconn.close()
+                except Exception:
+                    pass
+                break
+
         return {"ok": True}
     finally:
         db.close()
