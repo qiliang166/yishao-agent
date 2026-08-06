@@ -1967,6 +1967,30 @@ function TemplateManager() {
         api.listStyles() || [],
         api.listTemplates('style') || [],
       ])
+
+      // Merge DB-only templates into the styles list
+      const existingIds = new Set(s.map((st: any) => st.id))
+      for (const t of templates) {
+        let rules: any = {}
+        try { rules = JSON.parse(t.rules || '{}') } catch {}
+        const sid = rules.style_id || t.id.replace('style-', '')
+        if (!existingIds.has(sid)) {
+          s.push({
+            id: sid,
+            name: t.name,
+            group: rules.group || 'Professional',
+            mood: '',
+            keywords: [],
+            colors: {
+              primary: '#2563eb', secondary: '#1e40af', accent: '#f59e0b',
+              background: '#ffffff', text: '#1f2937', card_bg: '#f9fafb',
+              chart_colors: ['#2563eb','#f59e0b','#10b981','#ef4444','#8b5cf6'],
+            },
+          })
+          existingIds.add(sid)
+        }
+      }
+
       setStyles(s)
       const map: Record<string, boolean> = {}
       for (const t of templates) {
