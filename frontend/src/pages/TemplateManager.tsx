@@ -2127,9 +2127,22 @@ function TemplateManager() {
         modal.toast('模板导入成功', 'success')
       }
     } catch (e: any) {
-      if (e.message?.includes('已存在')) {
-        const overwrite = await modal.confirm(e.message + '\n\n是否覆盖已有模板？')
-        if (overwrite) {
+      const msg: string = e.message || ''
+      if (msg.includes('已存在')) {
+        const styleIdMatch = msg.match(/'([^']+)'/)
+        const conflictId = styleIdMatch ? styleIdMatch[1] : ''
+        const newId = await modal.prompt(
+          `模板「${conflictId}」已存在`,
+          '',
+          '输入新的 style_id 重命名导入，或留空直接覆盖已有模板'
+        )
+        if (newId === null) { /* user cancelled - do nothing */ }
+        else if (newId.trim()) {
+          try {
+            const res2: any = await api.importTemplate(file, false, newId.trim())
+            if (res2?.ok) { loadStyles(); modal.toast('模板已导入（重命名）', 'success') }
+          } catch (e2: any) { modal.toast(`导入失败: ${e2}`, 'error') }
+        } else {
           try {
             const res2: any = await api.importTemplate(file, true)
             if (res2?.ok) { loadStyles(); modal.toast('模板已覆盖', 'success') }
@@ -2139,7 +2152,6 @@ function TemplateManager() {
         modal.toast(`导入失败: ${e}`, 'error')
       }
     } finally {
-      // Reset input so same file can be re-selected
       e.target.value = ''
     }
   }
