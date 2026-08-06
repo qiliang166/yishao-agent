@@ -832,9 +832,52 @@ def list_workspaces(page: int = 1, page_size: int = 20, mine: int = 0, request: 
         db.close()
 
 
+def _ensure_seed_configs_from_json(db):
+    """Load seed configs from default_workspace_configs.json if seed rows are empty."""
+    _cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              "resources", "default_workspace_configs.json")
+    if not os.path.exists(_cfg_path):
+        return
+    # Check if any seed table is empty
+    seed_count = db.execute(
+        "SELECT COUNT(*) FROM column_configs WHERE workspace_id IS NULL").fetchone()[0]
+    if seed_count > 0:
+        return  # Already seeded
+    try:
+        with open(_cfg_path, 'r', encoding='utf-8') as _f:
+            _cfg = json.load(_f)
+        for _item in _cfg.get('column_configs', []):
+            _rid = 'seed-' + uuid.uuid4().hex[:16]
+            db.execute(
+                "INSERT INTO column_configs (id, workspace_id, column_id, label, prompt, skill, rules, sort_order, has_template) VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?)",
+                (_rid, _item['column_id'], _item['label'], _item['prompt'], _item['skill'],
+                 _item.get('rules', '{}'), _item['sort_order'], _item.get('has_template', 0)))
+        for _item in _cfg.get('speech_configs', []):
+            _rid = 'seed-' + uuid.uuid4().hex[:16]
+            db.execute(
+                "INSERT INTO speech_configs (id, workspace_id, label, prompt, skill, sort_order) VALUES (?, NULL, ?, ?, ?, ?)",
+                (_rid, _item['label'], _item['prompt'], _item['skill'], _item['sort_order']))
+        for _item in _cfg.get('tts_configs', []):
+            _rid = 'seed-' + uuid.uuid4().hex[:16]
+            db.execute(
+                "INSERT INTO tts_configs (id, workspace_id, label, prompt, skill, sort_order) VALUES (?, NULL, ?, ?, ?, ?)",
+                (_rid, _item['label'], _item['prompt'], _item['skill'], _item['sort_order']))
+        for _item in _cfg.get('core_prompt_configs', []):
+            _rid = 'seed-' + uuid.uuid4().hex[:16]
+            db.execute(
+                "INSERT INTO core_prompt_configs (id, workspace_id, prompt_key, label, prompt, skill, sort_order) VALUES (?, NULL, ?, ?, ?, ?, ?)",
+                (_rid, _item.get('prompt_key', ''), _item.get('label', ''), _item.get('prompt', ''),
+                 _item.get('skill', ''), _item.get('sort_order', 0)))
+        db.commit()
+        print("[seed] Seeded configs loaded from JSON")
+    except Exception as _e:
+        print(f"[seed] Failed to load seed configs from JSON: {_e}")
+
+
 def _copy_seed_configs(db, workspace_id: str):
     """Copy seed configs (workspace_id IS NULL) to a specific workspace.
-    Checks each table individually — skips tables that already have workspace data."""
+    Falls back to JSON if seed rows are empty (pre-existing DBs)."""
+    _ensure_seed_configs_from_json(db)
     for table, id_col in [
         ('column_configs', 'id'),
         ('speech_configs', 'id'),
