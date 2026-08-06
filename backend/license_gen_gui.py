@@ -288,6 +288,29 @@ class KeyGenApp:
         purchase_btn = ttk.Frame(purchase_frame); purchase_btn.pack(fill="x", pady=(8, 0))
         ttk.Button(purchase_btn, text="保存开关", command=self._save_purchase).pack(side="left")
 
+        download_frame = ttk.LabelFrame(tab, text="下载链接（左侧栏「下载桌面版」「下载服务器版」）", padding=8)
+        download_frame.pack(fill="x", padx=0, pady=(8, 0))
+
+        d_row1 = ttk.Frame(download_frame); d_row1.pack(fill="x", pady=(0, 4))
+        ttk.Label(d_row1, text="桌面版：", width=10).pack(side="left")
+        self.download_desktop_var = tk.StringVar()
+        ttk.Entry(d_row1, textvariable=self.download_desktop_var, font=("Consolas", 10)).pack(side="left", fill="x", expand=True)
+        ttk.Label(d_row1, text="  留空则使用默认 /api/download/desktop",
+                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(side="left")
+
+        d_row2 = ttk.Frame(download_frame); d_row2.pack(fill="x", pady=(0, 4))
+        ttk.Label(d_row2, text="服务器版：", width=10).pack(side="left")
+        self.download_server_var = tk.StringVar()
+        ttk.Entry(d_row2, textvariable=self.download_server_var, font=("Consolas", 10)).pack(side="left", fill="x", expand=True)
+        ttk.Label(d_row2, text="  留空则使用默认 /api/download/server",
+                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(side="left")
+
+        d_btn_row = ttk.Frame(download_frame); d_btn_row.pack(fill="x", pady=(6, 0))
+        ttk.Button(d_btn_row, text="保存下载链接", command=self._save_download_urls).pack(side="left")
+        self.download_status = tk.StringVar()
+        ttk.Label(d_btn_row, textvariable=self.download_status, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
     # ═══════════════════════════════════════════════════════════════
     # Tab 3: Plan Types
     # ═══════════════════════════════════════════════════════════════
@@ -748,6 +771,12 @@ class KeyGenApp:
             self.status_var.set("站点配置已加载")
             self.announce_status.set("")
             self.announce_enabled_status.set("")
+
+            # Also load download URLs from settings
+            settings = self._call_api("GET", "/api/settings")
+            s = settings.get("settings", {}) if isinstance(settings, dict) else {}
+            self.download_desktop_var.set(s.get("download_desktop_url", ""))
+            self.download_server_var.set(s.get("download_server_url", ""))
         except Exception as e:
             messagebox.showerror("加载失败", str(e))
             self.status_var.set(f"加载失败: {e}")
@@ -776,6 +805,19 @@ class KeyGenApp:
             self.purchase_status.set("已保存")
             self.status_var.set("购买开关已保存")
             self.root.after(3000, lambda: self.purchase_status.set(""))
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            self.status_var.set(f"保存失败: {e}")
+
+    def _save_download_urls(self):
+        try:
+            self._call_api("PUT", "/api/settings", {
+                "download_desktop_url": self.download_desktop_var.get().strip(),
+                "download_server_url": self.download_server_var.get().strip(),
+            })
+            self.download_status.set("已保存")
+            self.status_var.set("下载链接已保存")
+            self.root.after(3000, lambda: self.download_status.set(""))
         except Exception as e:
             messagebox.showerror("保存失败", str(e))
             self.status_var.set(f"保存失败: {e}")
