@@ -712,7 +712,7 @@ async def license_middleware(request: Request, call_next):
         or path in ("/api/login", "/api/auth/login", "/api/member/login",
                     "/api/member/register",
                     "/api/auth/change-password", "/api/setup/complete",
-                    "/api/auth/check",
+                    "/api/auth/check", "/api/auth/needs-setup", "/api/auth/setup",
                     "/api/verify-password", "/api/settings", "/api/version")
         or path.startswith("/api/logos/")
         or path.startswith("/api/help-manual/")
