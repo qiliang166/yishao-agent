@@ -39,7 +39,7 @@ import SetupWizard from './components/SetupWizard'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LicenseProvider } from './contexts/LicenseContext'
 import { usePermission } from './hooks/usePermission'
-import { api, Workspace } from './services/api'
+import { api, setOnNoProvider, Workspace } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
 
@@ -712,7 +712,7 @@ function AppShell() {
   const [wizardForced, setWizardForced] = useState(false)
 
   useEffect(() => {
-    api.setOnNoProvider(() => {
+    setOnNoProvider(() => {
       setWizardForced(true)
       setShowWizard(true)
     })
