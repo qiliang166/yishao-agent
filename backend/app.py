@@ -7692,6 +7692,7 @@ def get_settings(request: Request):
                         _v = (_site.get(_k) or "").strip()
                         if _v and not settings.get(_k):
                             settings[_k] = _v
+                            _log.info("Merged %s from activation server: %s", _k, _v)
         except Exception as _e:
             _log.warning("Failed to merge download URLs from activation server: %s", _e)
 
