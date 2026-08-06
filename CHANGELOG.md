@@ -1,5 +1,109 @@
 ﻿# 更新日志
 
+## 2026-08-06
+
+- fix: embed download URLs in EXE during build via default_download_urls.json
+
+## 2026-08-06
+
+- feat: add download URL fields to Settings page for manual configuration
+
+## 2026-08-06
+
+- fix: add more activation DB paths for PyInstaller EXE download URLs
+
+## 2026-08-06
+
+- fix: sync download URLs from activation server to main backend settings table
+- fix: check both /opt/ and /root/ paths for activation db
+- fix: read download URLs from activation DB via sqlite3, print errors to stderr
+- fix: add detailed debug logging for download URL merge
+
+## 2026-08-06
+
+- fix: add success logging for activation server download URL merge
+
+## 2026-08-06
+
+- fix: read download URLs from activation server via HTTP instead of direct SQLite
+
+## 2026-08-06
+
+- fix: connect KeyGen download URL settings through activation server to frontend
+- feat: add right-click context menu (cut/copy/paste/select all) to all KeyGen input fields
+- feat: KeyGen local config persistence + auto-load site config on tab switch
+- feat: add download URL fields to KeyGen site config tab, with save/load via /api/settings
+
+## 2026-08-06
+
+- fix: validate download URLs with safeUrl to prevent XSS in href
+
+## 2026-08-06
+
+- feat: download links on sidebar now configurable via settings (download_desktop_url/download_server_url); remove download row from login page
+
+## 2026-08-06
+
+- feat: download links on sidebar now configurable via settings (download_desktop_url/download_server_url); remove download row from login page
+
+## 2026-08-06
+
+- feat: double-click EXE when already running just opens browser instead of error
+- fix: _copy_seed_configs auto-loads from JSON when seed rows are empty (pre-existing DBs)
+
+## 2026-08-06
+
+- fix: change misleading "加载中..." to "暂无配置" for empty speech/tts configs in workspace settings
+
+## 2026-08-06
+
+- fix: remove all hardcoded seed configs from database.py, load from default_workspace_configs.json as single source of truth
+
+## 2026-08-06
+
+- feat: complete emoji sweep — all UI emojis replaced with SVG icons across entire frontend
+- feat: sidebar emoji icons replaced with clean SVG icons
+- fix: 默认工作区配置替换为一勺笔录的配置
+- fix: default workspace改名一勺笔录 + 研发端口8767 + license豁免
+- fix: exempt /api/auth/needs-setup and /api/auth/setup from license check
+
+## 2026-08-06
+
+- feat: first-run setup wizard — user sets own password instead of random initial password
+
+## 2026-08-06
+
+- fix: CRITICAL QA fixes — enabled=1 on create, filter disabled from styles, populate created_by
+
+## 2026-08-06
+
+- build: server + desktop packages with template CRUD fixes
+
+## 2026-08-06
+
+- fix: /api/ppt/styles now includes DB-only templates so they appear in stage 3 selector
+
+## 2026-08-06
+
+- fix: import conflict dialog now supports rename — enter new style_id or leave blank to overwrite
+- fix: new templates now visible in TemplateManager — merge DB-only styles into YAML list
+- fix: template export ZIP timestamp error — use writestr() instead of write()
+
+## 2026-08-06
+
+- fix: template CRUD endpoints use Pydantic models instead of dict/Body
+
+## 2026-08-06
+
+- feat: template CRUD + import/export — 5 new endpoints + UI
+
+## 2026-08-05
+
+- fix: member login redirect to search page, cover-thumb skip project check, card click goes to /app/booklets
+- fix: cover-thumb allows all booklets (not just recommended), validate homepagePath against // prefix
+- fix: middleware uses get_db() instead of nonexistent SessionLocal(), member login respects homepage_path
+- fix: member login redirects to homepage_path/search instead of /app backend
+
 ## 2026-08-05
 
 - fix: use real newline in homepage middleware instead of literal \n text

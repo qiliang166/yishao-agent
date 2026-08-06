@@ -7722,6 +7722,20 @@ def get_settings(request: Request):
             except Exception:
                 pass
 
+        # Highest priority: fetch live download URLs from activation server
+        # so admin can update URLs for ALL distributed EXEs without rebuild.
+        _act_srv = os.environ.get("ACTIVATION_SERVER_URL", "http://120.25.251.172:18777")
+        try:
+            import urllib.request as _ur
+            _req = _ur.Request(f"{_act_srv}/api/site-config")
+            with _ur.urlopen(_req, timeout=5) as _resp:
+                _config = json.loads(_resp.read().decode())
+            for _k in ("download_desktop_url", "download_server_url"):
+                if _config.get(_k):
+                    settings[_k] = _config[_k]
+        except Exception:
+            pass
+
         return JSONResponse(
             content={"settings": settings},
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
