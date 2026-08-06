@@ -10,6 +10,7 @@ const WIZARD_DONE_KEY = 'setup_wizard_done'
 interface WizardProps {
   embedded?: boolean
   onDone?: () => void
+  dismissible?: boolean
 }
 
 type WizardStep = 'check' | 'quick-llm' | 'quick-tts' | 'create' | 'stage1' | 'stage2' | 'stage3' | 'stage4' | 'done'
@@ -85,7 +86,7 @@ const SAMPLE_TEXT = `餐饮服务培训是新员工入职的必修课程。所�
 3. 顾客离店时致谢送别，提醒带好随身物品
 4. 收集顾客反馈，记录偏好信息建立客户档案`
 
-export default function SetupWizard({ embedded, onDone }: WizardProps) {
+export default function SetupWizard({ embedded, onDone, dismissible = true }: WizardProps) {
   const navigate = useNavigate()
   const { user } = useAuth()
 
@@ -173,7 +174,11 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
       const models = qlModels.split(',').map((s: string) => s.trim()).filter(Boolean)
       await api.createProvider({ name: qlName.trim(), api_key: qlKey.trim(), base_url: qlUrl.trim(), models })
       setHasProviders(true)
-      setStep('check')
+      if (!dismissible) {
+        onDone?.()
+      } else {
+        setStep('check')
+      }
     } catch (e: any) {
       setError(e.message || '添加失败')
     } finally {
@@ -335,6 +340,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
   }
 
   const handleClose = () => {
+    if (!dismissible) return
     setDismissed(true)
     localStorage.setItem(WIZARD_DONE_KEY, '1')
     document.body.style.overflow = ''
@@ -368,7 +374,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                 {isPaid ? '付费会员使用指南' : '试用会员使用指南'}
               </div>
             </div>
-            <button className="btn btn-ghost btn-sm" onClick={handleClose} style={{ fontSize: 20, padding: '2px 8px' }}>x</button>
+            {dismissible && <button className="btn btn-ghost btn-sm" onClick={handleClose} style={{ fontSize: 20, padding: '2px 8px' }}>x</button>}
           </div>
 
           {/* Step indicators */}
