@@ -712,22 +712,15 @@ function AppShell() {
   const [wizardForced, setWizardForced] = useState(false)
 
   useEffect(() => {
-    if (!user) return
-    api.listProviders().then(list => {
-      if (!list || list.length === 0) {
-        setWizardForced(true)
-        setShowWizard(true)
-      }
-    }).catch(() => {})
-  }, [user])
+    api.setOnNoProvider(() => {
+      setWizardForced(true)
+      setShowWizard(true)
+    })
+  }, [])
 
   const handleWizardDone = () => {
-    api.listProviders().then(list => {
-      if (list && list.length > 0) {
-        setShowWizard(false)
-        setWizardForced(false)
-      }
-    }).catch(() => {})
+    setShowWizard(false)
+    setWizardForced(false)
   }
 
   if (authLoading) {
