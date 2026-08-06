@@ -102,7 +102,8 @@ def init_db():
             value TEXT DEFAULT ''
         )
     """)
-    for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled"):
+    for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled",
+                 "download_desktop_url", "download_server_url"):
         db.execute(
             "INSERT OR IGNORE INTO site_config (key, value) VALUES (?, ?)",
             (key, "0" if key in ("announce_enabled", "purchase_enabled") else ""),
@@ -490,6 +491,8 @@ def get_site_config():
             "announce_html": config.get("announce_html", ""),
             "announce_enabled": config.get("announce_enabled", "0"),
             "purchase_enabled": config.get("purchase_enabled", "0"),
+            "download_desktop_url": config.get("download_desktop_url", ""),
+            "download_server_url": config.get("download_server_url", ""),
         }
     finally:
         db.close()
@@ -507,6 +510,8 @@ def admin_get_site_config(request: Request):
             "announce_html": config.get("announce_html", ""),
             "announce_enabled": config.get("announce_enabled", "0"),
             "purchase_enabled": config.get("purchase_enabled", "0"),
+            "download_desktop_url": config.get("download_desktop_url", ""),
+            "download_server_url": config.get("download_server_url", ""),
         }
     finally:
         db.close()
@@ -517,7 +522,8 @@ def admin_update_site_config(req: dict, request: Request):
     _check_admin(request)
     db = get_db()
     try:
-        for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled"):
+        for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled",
+                     "download_desktop_url", "download_server_url"):
             if key in req:
                 db.execute(
                     "INSERT OR REPLACE INTO site_config (key, value) VALUES (?, ?)",

@@ -881,15 +881,11 @@ class KeyGenApp:
             self.announce_text.insert("1.0", data.get("announce_html", ""))
             self.announce_enabled_var.set(data.get("announce_enabled", "0") == "1")
             self.purchase_enabled_var.set(data.get("purchase_enabled", "0") == "1")
+            self.download_desktop_var.set(data.get("download_desktop_url", ""))
+            self.download_server_var.set(data.get("download_server_url", ""))
             self.status_var.set("站点配置已加载")
             self.announce_status.set("")
             self.announce_enabled_status.set("")
-
-            # Also load download URLs from settings
-            settings = self._call_api("GET", "/api/settings")
-            s = settings.get("settings", {}) if isinstance(settings, dict) else {}
-            self.download_desktop_var.set(s.get("download_desktop_url", ""))
-            self.download_server_var.set(s.get("download_server_url", ""))
         except Exception as e:
             if not silent:
                 messagebox.showerror("加载失败", str(e))
@@ -925,7 +921,7 @@ class KeyGenApp:
 
     def _save_download_urls(self):
         try:
-            self._call_api("PUT", "/api/settings", {
+            self._call_api("PUT", "/api/admin/site-config", {
                 "download_desktop_url": self.download_desktop_var.get().strip(),
                 "download_server_url": self.download_server_var.get().strip(),
             })
