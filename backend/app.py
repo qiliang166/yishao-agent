@@ -7681,20 +7681,24 @@ def get_settings(request: Request):
         settings["new_user_points_deci"] = str(_new_user_bonus_deci())
 
         # Merge download URLs from activation server site_config (set via KeyGen)
+        _log.info("get_settings: fetching download URLs from activation server")
         try:
             import urllib.request as _ur
             import json as _json
             _req = _ur.Request("http://127.0.0.1:18777/api/site-config")
             with _ur.urlopen(_req, timeout=5) as _resp:
+                _raw = _resp.read().decode()
+                _log.info("get_settings: activation response status=%s body=%s", _resp.status, _raw[:200])
                 if _resp.status == 200:
-                    _site = _json.loads(_resp.read().decode())
+                    _site = _json.loads(_raw)
                     for _k in ("download_desktop_url", "download_server_url"):
                         _v = (_site.get(_k) or "").strip()
+                        _log.info("get_settings: key=%s val=%s settings_has=%s", _k, repr(_v), settings.get(_k) is not None)
                         if _v and not settings.get(_k):
                             settings[_k] = _v
-                            _log.info("Merged %s from activation server: %s", _k, _v)
+                            _log.info("get_settings: merged %s = %s", _k, _v)
         except Exception as _e:
-            _log.warning("Failed to merge download URLs from activation server: %s", _e)
+            _log.warning("get_settings: failed to merge download URLs: %s", _e)
 
         return JSONResponse(
             content={"settings": settings},
