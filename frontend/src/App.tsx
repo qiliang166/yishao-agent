@@ -43,6 +43,16 @@ import { api, Workspace } from './services/api'
 import { applyThemeToDOM, resetThemeToDefault } from './services/theme'
 import './App.css'
 
+function safeUrl(url: string, fallback: string): string {
+  if (!url) return fallback
+  if (url.startsWith('/') && !url.startsWith('//')) return url
+  try {
+    const p = new URL(url, window.location.origin)
+    if (p.protocol === 'https:' || p.protocol === 'http:') return url
+  } catch {}
+  return fallback
+}
+
 function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const location = useLocation()
   const navigate = useNavigate()
@@ -268,8 +278,8 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           </button>
         )}
         <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 8 }}>
-          <a href={downloadDesktopUrl || '/api/download/desktop'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
-          <a href={downloadServerUrl || '/api/download/server'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
+          <a href={safeUrl(downloadDesktopUrl, '/api/download/desktop')} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
+          <a href={safeUrl(downloadServerUrl, '/api/download/server')} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
         <div style={{ fontSize: 10, marginTop: 4 }}>
           <span onClick={() => setShowAbout(true)}
@@ -478,8 +488,8 @@ function MemberSidebar() {
           {brandName} {sidebarVersion}
         </div>
         <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 8 }}>
-          <a href={downloadDesktopUrl || '/api/download/desktop'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
-          <a href={downloadServerUrl || '/api/download/server'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
+          <a href={safeUrl(downloadDesktopUrl, '/api/download/desktop')} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
+          <a href={safeUrl(downloadServerUrl, '/api/download/server')} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
         <div style={{ fontSize: 10, marginTop: 4 }}>
           <span onClick={() => setShowAbout(true)}
