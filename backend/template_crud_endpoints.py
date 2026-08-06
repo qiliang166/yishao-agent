@@ -146,13 +146,14 @@ def create_template(data: TemplateCreateRequest, user=require_perm("template.man
         raise HTTPException(500, f"创建 VI 文件失败: {e}")
 
     rules = json.dumps({"style_id": style_id, "group": group}, ensure_ascii=False)
+    created_by = user.get("user_id", user.get("sub", ""))
     db = get_db()
     try:
         db.execute(
             "INSERT INTO templates (id, name, type, file_path, prompt, skill, rules, "
-            "thumbnail_path, linked_skill_id, branding_config, is_default, typography_profile, slide_plan) "
-            "VALUES (?, ?, 'style', '', '', '', ?, '', '', '', 0, '', '')",
-            (template_id, name, rules)
+            "thumbnail_path, linked_skill_id, branding_config, is_default, typography_profile, slide_plan, enabled, created_by) "
+            "VALUES (?, ?, 'style', '', '', '', ?, '', '', '', 0, '', '', 1, ?)",
+            (template_id, name, rules, created_by)
         )
         db.commit()
         row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
@@ -246,13 +247,14 @@ async def import_template(
 
         rules = json.dumps({"style_id": import_style_id, "group": import_group}, ensure_ascii=False)
         enabled_val = 1 if metadata.get("enabled", True) else 0
+        created_by = user.get("user_id", user.get("sub", ""))
         db = get_db()
         try:
             db.execute(
                 "INSERT INTO templates (id, name, type, file_path, prompt, skill, rules, "
-                "thumbnail_path, linked_skill_id, branding_config, is_default, typography_profile, slide_plan, enabled) "
-                "VALUES (?, ?, 'style', '', '', '', ?, '', '', '', 0, '', '', ?)",
-                (template_id, import_name, rules, enabled_val)
+                "thumbnail_path, linked_skill_id, branding_config, is_default, typography_profile, slide_plan, enabled, created_by) "
+                "VALUES (?, ?, 'style', '', '', '', ?, '', '', '', 0, '', '', ?, ?)",
+                (template_id, import_name, rules, enabled_val, created_by)
             )
             db.commit()
             row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()

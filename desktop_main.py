@@ -31,7 +31,6 @@ try:
     if sys.stderr is None:
         sys.stderr = io.StringIO()
 
-    import webbrowser
     from backend.app import app
     from backend.batch.scheduler import init as batch_init
     import uvicorn
@@ -55,8 +54,15 @@ def main():
         import threading
         def _open_browser():
             import time
-            time.sleep(1)
-            webbrowser.open(f"http://localhost:{port}")
+            url = f"http://localhost:{port}"
+            for i in range(5):
+                time.sleep(0.5)
+                try:
+                    os.startfile(url)
+                    return
+                except Exception:
+                    pass
+            _log_error("Browser auto-open failed after 5 attempts")
         threading.Thread(target=_open_browser, daemon=True).start()
         uvicorn.run(app, host="0.0.0.0", port=port, log_config=log_config)
     except Exception as e:
