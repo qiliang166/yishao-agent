@@ -4,6 +4,7 @@ site config (pricing & announcement), plan types, payment QR codes, order manage
 """
 import json
 import os
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import urllib.request
@@ -36,7 +37,41 @@ class KeyGenApp:
         self._all_plans = []
         self._all_orders = []
         self._orders_auto_refresh = None
+        if getattr(sys, 'frozen', False):
+            _cfg_dir = os.path.dirname(sys.executable)
+        else:
+            _cfg_dir = os.path.dirname(os.path.abspath(__file__))
+        self._config_path = os.path.join(_cfg_dir, "keygen_config.json")
         self._build_ui()
+        self._load_local_config()
+
+    def _load_local_config(self):
+        try:
+            if os.path.exists(self._config_path):
+                with open(self._config_path, 'r', encoding='utf-8') as f:
+                    cfg = json.load(f)
+                if cfg.get("server_url"):
+                    self.server_url.set(cfg["server_url"])
+                if cfg.get("admin_token"):
+                    self.admin_token.set(cfg["admin_token"])
+        except Exception:
+            pass
+
+    def _save_local_config(self):
+        try:
+            with open(self._config_path, 'w', encoding='utf-8') as f:
+                json.dump({
+                    "server_url": self.server_url.get().strip(),
+                    "admin_token": self.admin_token.get().strip(),
+                }, f, ensure_ascii=False, indent=2)
+            self.status_var.set("连接信息已保存到本地")
+        except Exception as e:
+            self.status_var.set(f"保存本地配置失败: {e}")
+
+    def _on_tab_changed(self, event):
+        selected = self.notebook.tab(self.notebook.select(), "text")
+        if selected == "站点配置":
+            self.root.after(100, lambda: self._load_site_config(silent=True))
 
     def _call_api(self, method: str, path: str, body: dict | None = None) -> dict:
         token = self.admin_token.get().strip()
@@ -110,8 +145,14 @@ class KeyGenApp:
         self._token_eye = ttk.Button(row2, text="显示", width=5, command=self._toggle_token_vis)
         self._token_eye.pack(side="right")
 
+        save_row = ttk.Frame(cfg); save_row.pack(fill="x", pady=(4, 0))
+        ttk.Button(save_row, text="保存连接信息到本地", command=self._save_local_config).pack(side="left")
+        ttk.Label(save_row, text="  下次打开自动回填地址和令牌",
+                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(side="left")
+
         # ── Notebook tabs ──
         self.notebook = ttk.Notebook(self.root)
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         self.notebook.pack(fill="both", expand=True, padx=12, pady=(0, 8))
 
         self._build_key_tab()
@@ -761,7 +802,7 @@ class KeyGenApp:
 
     # ── Site Config ─────────────────────────────────────────────
 
-    def _load_site_config(self):
+    def _load_site_config(self, silent=False):
         try:
             data = self._call_api("GET", "/api/admin/site-config")
             self.announce_text.delete("1.0", "end")
@@ -778,7 +819,8 @@ class KeyGenApp:
             self.download_desktop_var.set(s.get("download_desktop_url", ""))
             self.download_server_var.set(s.get("download_server_url", ""))
         except Exception as e:
-            messagebox.showerror("加载失败", str(e))
+            if not silent:
+                messagebox.showerror("加载失败", str(e))
             self.status_var.set(f"加载失败: {e}")
 
     def _save_announce(self):
