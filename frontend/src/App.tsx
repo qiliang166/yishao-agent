@@ -1,6 +1,7 @@
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
+import SvgIcon from './components/SvgIcon'
 import HomePage from './pages/HomePage'
 import ProjectDashboard from './pages/ProjectDashboard'
 import ProjectPage from './pages/ProjectPage'
@@ -136,60 +137,60 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
         <button
           className={`sidebar-item ${location.pathname === '/' || isWorkspace ? 'active' : ''}`}
           onClick={() => navigate('/')}>
-          <span className="ico">📋</span> 项目管理
+          <span className="ico"><SvgIcon name="clipboard" /></span> 项目管理
         </button>
         {effectiveWid ? (
           <button
             className={`sidebar-item ${location.pathname.startsWith('/workspace/' + effectiveWid + '/settings') ? 'active' : ''}`}
             onClick={() => navigate(`/workspace/${effectiveWid}/settings`)}>
-            <span className="ico">🔧</span> 项目配置
+            <span className="ico"><SvgIcon name="settings" /></span> 项目配置
           </button>
         ) : (
           <button
             className={`sidebar-item ${location.pathname === '/proj-settings' ? 'active' : ''}`}
             onClick={() => navigate('/proj-settings')}>
-            <span className="ico">🔧</span> 全局配置
+            <span className="ico"><SvgIcon name="settings" /></span> 全局配置
           </button>
         )}
         {canTemplate && (
           <button
             className={`sidebar-item ${location.pathname === '/templates' ? 'active' : ''}`}
             onClick={() => navigate('/templates')}>
-            <span className="ico">📄</span> 模板管理
+            <span className="ico"><SvgIcon name="file" /></span> 模板管理
           </button>
         )}
         {canPrompt && (
           <button
             className={`sidebar-item ${location.pathname === '/prompt-studio' ? 'active' : ''}`}
             onClick={() => navigate('/prompt-studio')}>
-            <span className="ico">🎨</span> 提示词工作室
+            <span className="ico"><SvgIcon name="palette" /></span> 提示词工作室
           </button>
         )}
         <button
           className={`sidebar-item ${location.pathname === '/search' ? 'active' : ''}`}
           onClick={() => navigate('/search')}>
-          <span className="ico">🔍</span> 浏览广场
+          <span className="ico"><SvgIcon name="search" /></span> 浏览广场
         </button>
         <button
           className={`sidebar-item ${location.pathname.startsWith('/booklets') ? 'active' : ''}`}
           onClick={() => navigate('/booklets')}>
-          <span className="ico">📚</span> 电子成册
+          <span className="ico"><SvgIcon name="book" /></span> 电子成册
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/manual' ? 'active' : ''}`}
           onClick={() => navigate('/manual')}>
-          <span className="ico">📖</span> 操作说明
+          <span className="ico"><SvgIcon name="book-open" /></span> 操作说明
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/settings' ? 'active' : ''}`}
           onClick={() => navigate('/settings')}>
-          <span className="ico">⚙</span> 全局设置
+          <span className="ico"><SvgIcon name="sliders" /></span> 全局设置
         </button>
         {user?.roles?.includes('开发体验员') && (
           <button
             className={`sidebar-item ${location.pathname === '/member-center' ? 'active' : ''}`}
             onClick={() => navigate('/member-center')}>
-            <span className="ico">👤</span> 会员中心
+            <span className="ico"><SvgIcon name="user" /></span> 会员中心
           </button>
         )}
         {(canMember || canRole) && (
@@ -199,35 +200,35 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
               <button
                 className={`sidebar-item ${location.pathname === '/roles' ? 'active' : ''}`}
                 onClick={() => navigate('/roles')}>
-                <span className="ico">🛡</span> 角色管理
+                <span className="ico"><SvgIcon name="shield" /></span> 角色管理
               </button>
             )}
             {(canMember || canRole) && (
               <button
                 className={`sidebar-item ${location.pathname === '/members' ? 'active' : ''}`}
                 onClick={() => navigate('/members')}>
-                <span className="ico">👥</span> 用户管理
+                <span className="ico"><SvgIcon name="users" /></span> 用户管理
               </button>
             )}
             {canMember && (
               <button
                 className={`sidebar-item ${location.pathname === '/members/pending' ? 'active' : ''}`}
                 onClick={() => navigate('/members/pending')}>
-                <span className="ico">✅</span> 会员审批
+                <span className="ico"><SvgIcon name="check-badge" /></span> 会员审批
               </button>
             )}
             {(canMember || canRole) && (
               <button
                 className={`sidebar-item ${location.pathname === '/members/stats' ? 'active' : ''}`}
                 onClick={() => navigate('/members/stats')}>
-                <span className="ico">📊</span> 下载统计
+                <span className="ico"><SvgIcon name="bar-chart" /></span> 下载统计
               </button>
             )}
             {canMember && (
               <button
                 className={`sidebar-item ${location.pathname === '/authors' ? 'active' : ''}`}
                 onClick={() => navigate('/authors')}>
-                <span className="ico">✍</span> 作者管理
+                <span className="ico"><SvgIcon name="edit" /></span> 作者管理
               </button>
             )}
           </>
@@ -281,7 +282,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
             }}
             style={{ fontSize: 11, padding: '3px 0' }}
           >
-            <span className="ico">🛒</span> 购买软件
+            <span className="ico"><SvgIcon name="cart" /></span> 购买软件
           </button>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
@@ -319,7 +320,7 @@ function LogoutButton() {
       }}
       title="退出登录"
     >
-      <span className="ico">🚪</span> 退出登录
+      <span className="ico"><SvgIcon name="log-out" /></span> 退出登录
     </button>
   )
 }
@@ -348,7 +349,7 @@ function MemberLogoutButton() {
       }}
       title="退出登录"
     >
-      <span className="ico">🚪</span> 退出登录
+      <span className="ico"><SvgIcon name="log-out" /></span> 退出登录
     </button>
   )
 }
@@ -426,27 +427,27 @@ function MemberSidebar() {
         <button
           className={`sidebar-item ${location.pathname === '/app/center' ? 'active' : ''}`}
           onClick={() => navigate('/app/center')}>
-          <span className="ico">👤</span> 会员中心
+          <span className="ico"><SvgIcon name="user" /></span> 会员中心
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/app/downloads' ? 'active' : ''}`}
           onClick={() => navigate('/app/downloads')}>
-          <span className="ico">📥</span> 下载文件
+          <span className="ico"><SvgIcon name="download" /></span> 下载文件
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/search' ? 'active' : ''}`}
           onClick={() => navigate('/search')}>
-          <span className="ico">🔍</span> 浏览广场
+          <span className="ico"><SvgIcon name="search" /></span> 浏览广场
         </button>
         <button
           className={`sidebar-item ${location.pathname.startsWith('/app/booklets') ? 'active' : ''}`}
           onClick={() => navigate('/app/booklets')}>
-          <span className="ico">📚</span> 我的册子
+          <span className="ico"><SvgIcon name="book" /></span> 我的册子
         </button>
         <button
           className={`sidebar-item ${location.pathname === '/app/manual' ? 'active' : ''}`}
           onClick={() => navigate('/app/manual')}>
-          <span className="ico">📖</span> 操作说明
+          <span className="ico"><SvgIcon name="book-open" /></span> 操作说明
         </button>
       </nav>
       <div className="sidebar-foot" style={{ padding: '8px 16px 8px 10px', marginBottom: 50, lineHeight: 2.2 }}>
@@ -487,7 +488,7 @@ function MemberSidebar() {
             }}
             style={{ fontSize: 11, padding: '3px 0' }}
           >
-            <span className="ico">🛒</span> 购买软件
+            <span className="ico"><SvgIcon name="cart" /></span> 购买软件
           </button>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
