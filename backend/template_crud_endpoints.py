@@ -1,7 +1,19 @@
 import os, json, io, zipfile, shutil, tempfile
-from fastapi import HTTPException, UploadFile, File, Body
+from pydantic import BaseModel
+from fastapi import HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from datetime import datetime
+
+
+class TemplateCreateRequest(BaseModel):
+    name: str
+    style_id: str
+    group: str = "Professional"
+
+
+class TemplateUpdateRequest(BaseModel):
+    name: str = None
+    group: str = None
 
 
 def _write_vi_skeleton(vi_dir: str, name: str):
@@ -85,12 +97,13 @@ color_schemes:
 """)
 
 
+
 @app.post("/api/templates")
-def create_template(data: dict = Body(...), user=require_perm("template.manage")):
+def create_template(data: TemplateCreateRequest, user=require_perm("template.manage")):
     """Create a new style template (DB row + VI directory skeleton)."""
-    name = (data.get("name") or "").strip()
-    style_id = (data.get("style_id") or "").strip()
-    group = (data.get("group") or "Professional").strip()
+    name = data.name.strip()
+    style_id = data.style_id.strip()
+    group = data.group.strip()
 
     if not name:
         raise HTTPException(400, "模板名称不能为空")
@@ -150,119 +163,6 @@ def create_template(data: dict = Body(...), user=require_perm("template.manage")
         raise HTTPException(500, f"创建模板失败: {e}")
     finally:
         db.close()
-
-
-@app.put("/api/templates/{template_id}")
-def update_template(template_id: str, data: dict = Body(...), user=require_perm("template.manage")):
-    """Update template metadata (name, group)."""
-    db = get_db()
-    try:
-        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "模板不存在")
-
-        row_dict = dict(row)
-        rules = json.loads(row_dict.get("rules") or "{}")
-
-        name = data.get("name")
-        group = data.get("group")
-
-        if name is not None:
-            row_dict["name"] = name.strip()
-        if group is not None:
-            rules["group"] = group.strip()
-
-        new_rules = json.dumps(rules, ensure_ascii=False)
-        db.execute("UPDATE templates SET name = ?, rules = ? WHERE id = ?",
-                   (row_dict["name"], new_rules, template_id))
-        db.commit()
-        row_dict["rules"] = new_rules
-        return {"ok": True, "template": row_dict}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"更新模板失败: {e}")
-    finally:
-        db.close()
-
-
-@app.delete("/api/templates/{template_id}")
-def delete_template(template_id: str, user=require_perm("template.manage")):
-    """Delete a template (DB row + VI directory)."""
-    db = get_db()
-    try:
-        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "模板不存在")
-
-        row_dict = dict(row)
-        rules = json.loads(row_dict.get("rules") or "{}")
-        style_id = rules.get("style_id", "")
-
-        db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
-        db.commit()
-
-        if style_id:
-            vi_dir = os.path.join(VI_DIR, style_id)
-            if os.path.exists(vi_dir):
-                shutil.rmtree(vi_dir, ignore_errors=True)
-
-        return {"ok": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, f"删除模板失败: {e}")
-    finally:
-        db.close()
-
-
-@app.get("/api/templates/{template_id}/export")
-def export_template(template_id: str, user=require_perm("template.manage")):
-    """Export a template as a ZIP file containing metadata.json + vi/ directory."""
-    db = get_db()
-    try:
-        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
-        if not row:
-            raise HTTPException(404, "模板不存在")
-    finally:
-        db.close()
-
-    row_dict = dict(row)
-    rules = json.loads(row_dict.get("rules") or "{}")
-    style_id = rules.get("style_id", "")
-
-    if not style_id:
-        raise HTTPException(400, "模板缺少 style_id，无法导出")
-
-    vi_dir = os.path.join(VI_DIR, style_id)
-    if not os.path.isdir(vi_dir):
-        raise HTTPException(404, f"VI 目录不存在: {style_id}")
-
-    metadata = {
-        "name": row_dict.get("name", ""),
-        "style_id": style_id,
-        "group": rules.get("group", ""),
-        "enabled": row_dict.get("enabled", 1) == 1,
-        "exported_at": datetime.utcnow().isoformat() + "Z",
-        "version": "1.0",
-    }
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
-        for root, dirs, files in os.walk(vi_dir):
-            for fname in files:
-                full = os.path.join(root, fname)
-                arcname = "vi/" + os.path.relpath(full, vi_dir).replace("\\", "/")
-                zf.write(full, arcname)
-
-    buf.seek(0)
-    safe_name = style_id.replace('"', '').replace("\\", "")
-    return StreamingResponse(
-        buf,
-        media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="template-{safe_name}.zip"'}
-    )
 
 
 @app.post("/api/templates/import")
@@ -370,3 +270,113 @@ async def import_template(
     finally:
         if tmp_dir and os.path.exists(tmp_dir):
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+@app.get("/api/templates/{template_id}/export")
+def export_template(template_id: str, user=require_perm("template.manage")):
+    """Export a template as a ZIP file containing metadata.json + vi/ directory."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "模板不存在")
+    finally:
+        db.close()
+
+    row_dict = dict(row)
+    rules = json.loads(row_dict.get("rules") or "{}")
+    style_id = rules.get("style_id", "")
+
+    if not style_id:
+        raise HTTPException(400, "模板缺少 style_id，无法导出")
+
+    vi_dir = os.path.join(VI_DIR, style_id)
+    if not os.path.isdir(vi_dir):
+        raise HTTPException(404, f"VI 目录不存在: {style_id}")
+
+    metadata = {
+        "name": row_dict.get("name", ""),
+        "style_id": style_id,
+        "group": rules.get("group", ""),
+        "enabled": row_dict.get("enabled", 1) == 1,
+        "exported_at": datetime.utcnow().isoformat() + "Z",
+        "version": "1.0",
+    }
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
+        for root, dirs, files in os.walk(vi_dir):
+            for fname in files:
+                full = os.path.join(root, fname)
+                arcname = "vi/" + os.path.relpath(full, vi_dir).replace("\\", "/")
+                zf.write(full, arcname)
+
+    buf.seek(0)
+    safe_name = style_id.replace('"', '').replace("\\", "")
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="template-{safe_name}.zip"'}
+    )
+
+
+@app.put("/api/templates/{template_id}")
+def update_template(template_id: str, data: TemplateUpdateRequest, user=require_perm("template.manage")):
+    """Update template metadata (name, group)."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "模板不存在")
+
+        row_dict = dict(row)
+        rules = json.loads(row_dict.get("rules") or "{}")
+
+        if data.name is not None:
+            row_dict["name"] = data.name.strip()
+        if data.group is not None:
+            rules["group"] = data.group.strip()
+
+        new_rules = json.dumps(rules, ensure_ascii=False)
+        db.execute("UPDATE templates SET name = ?, rules = ? WHERE id = ?",
+                   (row_dict["name"], new_rules, template_id))
+        db.commit()
+        row_dict["rules"] = new_rules
+        return {"ok": True, "template": row_dict}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"更新模板失败: {e}")
+    finally:
+        db.close()
+
+
+@app.delete("/api/templates/{template_id}")
+def delete_template(template_id: str, user=require_perm("template.manage")):
+    """Delete a template (DB row + VI directory)."""
+    db = get_db()
+    try:
+        row = db.execute("SELECT * FROM templates WHERE id = ?", (template_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "模板不存在")
+
+        row_dict = dict(row)
+        rules = json.loads(row_dict.get("rules") or "{}")
+        style_id = rules.get("style_id", "")
+
+        db.execute("DELETE FROM templates WHERE id = ?", (template_id,))
+        db.commit()
+
+        if style_id:
+            vi_dir = os.path.join(VI_DIR, style_id)
+            if os.path.exists(vi_dir):
+                shutil.rmtree(vi_dir, ignore_errors=True)
+
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"删除模板失败: {e}")
+    finally:
+        db.close()
