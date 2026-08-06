@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import AboutDialog from '../components/AboutDialog'
 import SvgIcon from '../components/SvgIcon'
 
 const isImagePath = (v: string) =>
@@ -26,7 +25,6 @@ export default function LoginPage() {
   const [phoneInput, setPhoneInput] = useState('')
   const [phoneError, setPhoneError] = useState('')
   const [phoneVerified, setPhoneVerified] = useState(false)
-  const [showAbout, setShowAbout] = useState(false)
 
   // Setup form state
   const [setupPassword, setSetupPassword] = useState('')
@@ -346,20 +344,7 @@ export default function LoginPage() {
           </span>
         </p>
 
-        <div style={{
-          fontSize: 11, color: 'var(--text-secondary)',
-          marginTop: 12, textAlign: 'center',
-          display: 'flex', gap: 12, justifyContent: 'center',
-          borderTop: '1px solid var(--border)', paddingTop: 12,
-        }}>
-          <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>下载桌面版</a>
-          <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>下载服务器版</a>
-          <span onClick={() => setShowAbout(true)}
-            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>关于软件</span>
-        </div>
       </div>
-
-      {showAbout && <AboutDialog onClose={() => setShowAbout(false)} />}
 
       {/* Hint Dialog */}
       {showHint && (

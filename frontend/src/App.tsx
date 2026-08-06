@@ -51,6 +51,8 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const [brandName, setBrandName] = useState('')
   const [brandSlogan, setBrandSlogan] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
+  const [downloadDesktopUrl, setDownloadDesktopUrl] = useState('')
+  const [downloadServerUrl, setDownloadServerUrl] = useState('')
   const [projName, setProjName] = useState('')
   const [sidebarWid, setSidebarWid] = useState('')
   const [showAbout, setShowAbout] = useState(false)
@@ -77,6 +79,8 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
       if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
       if ((ver as any).version) setSidebarVersion((ver as any).version)
       if (s.app_version) setSidebarVersion(s.app_version)
+      if (s.download_desktop_url) setDownloadDesktopUrl(s.download_desktop_url)
+      if (s.download_server_url) setDownloadServerUrl(s.download_server_url)
     }).catch(() => {})
   }, [])
 
@@ -264,8 +268,8 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           </button>
         )}
         <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 8 }}>
-          <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
-          <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
+          <a href={downloadDesktopUrl || '/api/download/desktop'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
+          <a href={downloadServerUrl || '/api/download/server'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
         <div style={{ fontSize: 10, marginTop: 4 }}>
           <span onClick={() => setShowAbout(true)}
@@ -364,6 +368,8 @@ function MemberSidebar() {
   const [brandName, setBrandName] = useState('')
   const [brandSlogan, setBrandSlogan] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
+  const [downloadDesktopUrl, setDownloadDesktopUrl] = useState('')
+  const [downloadServerUrl, setDownloadServerUrl] = useState('')
   const [projName, setProjName] = useState('')
   const [showAbout, setShowAbout] = useState(false)
   const [sidebarPricing, setSidebarPricing] = useState('')
@@ -381,6 +387,8 @@ function MemberSidebar() {
       if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
       if ((ver as any).version) setSidebarVersion((ver as any).version)
       if (s.app_version) setSidebarVersion(s.app_version)
+      if (s.download_desktop_url) setDownloadDesktopUrl(s.download_desktop_url)
+      if (s.download_server_url) setDownloadServerUrl(s.download_server_url)
     }).catch(() => {})
     api.getSiteConfig().then(cfg => {
       if (cfg.pricing_html) setSidebarPricing(cfg.pricing_html)
@@ -470,8 +478,8 @@ function MemberSidebar() {
           {brandName} {sidebarVersion}
         </div>
         <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 8 }}>
-          <a href="/api/download/desktop" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
-          <a href="/api/download/server" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
+          <a href={downloadDesktopUrl || '/api/download/desktop'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载桌面版」</a>
+          <a href={downloadServerUrl || '/api/download/server'} style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>「下载服务器版」</a>
         </div>
         <div style={{ fontSize: 10, marginTop: 4 }}>
           <span onClick={() => setShowAbout(true)}
