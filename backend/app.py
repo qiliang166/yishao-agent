@@ -7681,11 +7681,17 @@ def get_settings(request: Request):
         settings["new_user_points_deci"] = str(_new_user_bonus_deci())
 
         # Merge download URLs from activation server site_config (set via KeyGen)
-        # Try multiple possible paths — backend may run from /opt/ or /root/
-        for _act_db in (
+        # Try multiple paths — backend may run from dev tree, PyInstaller bundle,
+        # Linux server (/opt/ or /root/), or home directory deployment.
+        _act_candidates = [
             os.path.join(os.path.dirname(BASE_DIR), "activation_server", "data", "activation.db"),
+            os.path.join(os.path.dirname(sys.executable), "activation_server", "data", "activation.db"),
+            os.path.join(os.path.dirname(os.path.dirname(sys.executable)), "activation_server", "data", "activation.db"),
             "/root/yishao-agent/activation_server/data/activation.db",
-        ):
+            "/opt/yishao-agent/activation_server/data/activation.db",
+            "/home/activation_server/data/activation.db",
+        ]
+        for _act_db in _act_candidates:
             if os.path.exists(_act_db):
                 try:
                     import sqlite3 as _sqlite3
