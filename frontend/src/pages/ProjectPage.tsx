@@ -8,6 +8,7 @@ import TeachingDocPanel from '../components/TeachingDocPanel'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import SlideEditModal from '../components/SlideEditModal'
+import SvgIcon from '../components/SvgIcon'
 import Stage3TempSettings, { StageTemps, DEFAULT_STAGE_TEMPS } from '../components/Stage3TempSettings'
 import HelpButton from '../components/HelpButton'
 
@@ -103,7 +104,7 @@ const TemperatureInput = ({ value, onChange, id }: { value: number; onChange: (v
 const MODEL_KEYS_S2: Record<string, string> = {
   sop: '_model_s2_sop', dao: '_model_s2_dao', yanxi: '_model_s2_yanxi',
 }
-const DOC_ICONS: Record<string, string> = { sop: '📃', dao: '💡', yanxi: '📖' }
+const DOC_ICONS: Record<string, string> = { sop: 'file-text', dao: 'sparkles', yanxi: 'book-open' }
 const DOC_COLORS_S2: Record<string, string> = {
   sop: 'var(--success)', dao: 'var(--purple)', yanxi: 'var(--warning)',
 }
@@ -207,7 +208,7 @@ function Stage2Controls({
 
   return (
     <>
-      <div className="card-title" style={{ color }}>{icon} {label}生成
+      <div className="card-title" style={{ color }}><SvgIcon name={icon} size={14} /> {label}生成
         <HelpButton location={`project-stage-2${docType === 'sop' ? 'a' : docType === 'dao' ? 'b' : 'c'}`} />
       </div>
       <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成{label}</div>
@@ -237,7 +238,7 @@ function Stage2Controls({
       <button className="btn btn-primary btn-sm w-full"
         disabled={!getSourceText(dataSource) || !model || generating}
         onClick={handleGenerate}>
-        {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
+        {generating ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="sparkles" size={11} /> AI 生成 {label}</>}
       </button>
       )}
       {generating && (
@@ -248,7 +249,7 @@ function Stage2Controls({
         <div style={{ maxHeight: 180, overflowY: 'auto', background: 'var(--bg)', color: 'var(--text-secondary)', fontFamily: 'monospace', fontSize: 11, lineHeight: '18px', padding: '4px 8px', borderRadius: 4, border: '1px solid var(--border)', marginTop: 8 }}>
           {progress && (
             <div style={{ marginBottom: 4, color: 'var(--primary)', fontWeight: 500 }}>
-              ⏳ {progress}
+              <SvgIcon name="clock" size={11} /> {progress}
             </div>
           )}
           {(!logEntries || logEntries.length === 0) ? (
@@ -399,11 +400,11 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
 
   const fileIcon = (f: any) => {
     const cat = f.category || ''
-    if (cat.includes('素材输入')) return '📥'
-    if (cat.includes('文档生成')) return '📝'
-    if (cat.includes('课件输出')) return '📌'
-    if (cat.includes('演讲课件')) return '🎵'
-    return '📄'
+    if (cat.includes('素材输入')) return 'download'
+    if (cat.includes('文档生成')) return 'file-text'
+    if (cat.includes('课件输出')) return 'bookmark'
+    if (cat.includes('演讲课件')) return 'music'
+    return 'file'
   }
   const fileKey = (f: any) => f.download_url || f.filename
   const formatSize = (bytes?: number) => {
@@ -480,15 +481,15 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
   return (
     <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>📦 {projectName} 输出列表<HelpButton location="project-stage-5" /></span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><SvgIcon name="package" size={14} /> {projectName} 输出列表<HelpButton location="project-stage-5" /></span>
         <div style={{ display: 'flex', gap: 6 }}>
           <button className="btn btn-ghost btn-sm" onClick={loadFiles}
-            style={{ fontSize: 11 }} title="刷新列表">🔄 刷新</button>
+            style={{ fontSize: 11 }} title="刷新列表"><SvgIcon name="refresh-cw" size={11} /> 刷新</button>
           {files.length > 0 && (
             <button onClick={() => selected.size > 0 ? downloadSelected() : api.downloadAllFiles(projectId)}
               className="btn btn-outline btn-sm"
               style={{ fontSize: 11, padding: '4px 12px' }}>
-              {selected.size > 0 ? `📥 下载选中 (${selected.size})` : `📦 一键下载 (${files.length})`}
+              {selected.size > 0 ? <><SvgIcon name="download" size={11} /> 下载选中 ({selected.size})</> : <><SvgIcon name="package" size={11} /> 一键下载 ({files.length})</>}
             </button>
           )}
         </div>
@@ -529,8 +530,8 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
               <div key={category} style={{ marginBottom: 4 }}>
                 <div onClick={() => toggleGroup(category)}
                   style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', cursor: 'pointer', background: 'var(--bg-secondary)', borderRadius: 4, fontSize: 11, fontWeight: 600, color: 'var(--text-primary)' }}>
-                  <span style={{ fontSize: 10 }}>{isExpanded ? '▼' : '▶'}</span>
-                  <span>{fileIcon(catFiles[0])}</span>
+                  <span style={{ fontSize: 10 }}><SvgIcon name={isExpanded ? 'chevron-down' : 'chevron-right'} size={10} /></span>
+                  <span><SvgIcon name={fileIcon(catFiles[0])} size={12} /></span>
                   <span style={{ flex: 1 }}>{category}</span>
                   <span style={{ fontSize: 10, color: 'var(--text-secondary)', fontWeight: 400 }}>{catFiles.length} 个文件</span>
                 </div>
@@ -545,7 +546,7 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
                         <input type="checkbox" checked={selected.has(fileKey(f))}
                           onChange={() => toggleSelect(fileKey(f))}
                           style={{ flexShrink: 0 }} />
-                        <span style={{ flexShrink: 0 }}>{fileIcon(f)}</span>
+                        <span style={{ flexShrink: 0 }}><SvgIcon name={fileIcon(f)} size={12} /></span>
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }}>
                           {f.display_name || f.filename}
                         </span>
@@ -558,7 +559,7 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
                           <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--accent)', flexShrink: 0 }}
                             onClick={e => { e.stopPropagation(); handleAudioToggle(url) }}
                             title={isPlaying ? '暂停' : '播放'}>
-                            {isPlaying ? '⏸' : '▶'}
+                            <SvgIcon name={isPlaying ? 'music' : 'play'} size={12} />
                           </button>
                           )
                         })()}
@@ -578,7 +579,7 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
                           }}>下载</button>
                         {canEditOwn !== false && (
                         <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--warning)', flexShrink: 0 }}
-                          onClick={() => deleteFile(f)}>✕</button>
+                          onClick={() => deleteFile(f)}><SvgIcon name="x-mark" size={11} /></button>
                         )}
                       </div>
                     )})}
@@ -675,9 +676,9 @@ export default function ProjectPage() {
     setTimeout(() => setSavedFlash(0), 1500)
   }
   const getSaveBtnLabel = (content: string, savedKey: string) => {
-    if (!content.trim()) return '💾 保存'
-    if (content !== (savedSteps[savedKey] || '')) return '💾 保存'
-    return '✓ 已保存'
+    if (!content.trim()) return <><SvgIcon name="download" size={11} /> 保存</>
+    if (content !== (savedSteps[savedKey] || '')) return <><SvgIcon name="download" size={11} /> 保存</>
+    return <><SvgIcon name="check" size={11} /> 已保存</>
   }
   const getSaveBtnClass = (content: string, savedKey: string) => {
     if (savedFlash) return 'btn-saved-flash'
@@ -1062,7 +1063,7 @@ export default function ProjectPage() {
             id: t.id, name: t.name, isDefault: t.isDefault,
             meta: isStyle ? (sc?.mood || '') : t.prompt ? `提示词: ${t.prompt.slice(0, 30)}...` : '暂无提示词',
             color: sc?.primary || (isStyle ? '#e67e22' : '#7C3AED'),
-            icon: isStyle ? '' : t.hasFile ? '📌' : '📄',
+            icon: isStyle ? '' : t.hasFile ? 'bookmark' : 'file',
             colors: isStyle && sc ? [sc.primary, sc.accent, sc.background, sc.text].filter(Boolean) : undefined,
             previewHtml: '',
           }
@@ -1437,7 +1438,7 @@ export default function ProjectPage() {
       if (p.video_path) setVideoPath(p.video_path)
       if (p.status === 'completed') {
         setDlStatus('done')
-        modal.toast('✅ 视频处理完成', 'success')
+        modal.toast('视频处理完成', 'success')
         const rawText = p.merged_text || p.asr_text || p.text || ''
         if (rawText && id) {
           api.saveStep(id, 'raw_video', rawText)
@@ -1446,7 +1447,7 @@ export default function ProjectPage() {
         }
         return
       }
-      if (p.status === 'failed') { setDlStatus('failed'); modal.toast('❌ 下载失败', 'error'); return }
+      if (p.status === 'failed') { setDlStatus('failed'); modal.toast('下载失败', 'error'); return }
       setTimeout(poll, 1000)
     }
     poll()
@@ -1922,7 +1923,7 @@ export default function ProjectPage() {
     const plan = pptSlidePlans[stepKey]
     if (!plan?.previewUrl) {
       if (plan?.format === 'svg' && plan.zipUrl) {
-        modal.toast('SVG 格式请使用「⬇ SVG ZIP」下载完整包', 'error')
+        modal.toast('SVG 格式请使用「SVG ZIP」下载完整包', 'error')
       } else {
         modal.toast('此 PPT 暂无 HTML 预览（仅 SVG 格式支持 HTML 预览）', 'error')
       }
@@ -2378,10 +2379,10 @@ export default function ProjectPage() {
                 await api.updateProject(id, { name: v })
                 setProject(prev => prev ? { ...prev, name: v } : prev)
               }}
-              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--success)' }}>✓</button>
+              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--success)' }}><SvgIcon name="check" size={12} /></button>
             <button className="btn btn-ghost btn-sm"
               onClick={() => setEditName(false)}
-              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--text-secondary)' }}>✕</button>
+              style={{ fontSize: 11, padding: '2px 6px', color: 'var(--text-secondary)' }}><SvgIcon name="x-mark" size={12} /></button>
           </span>
         ) : (
           <span className="proj-header-name"
@@ -2415,7 +2416,7 @@ export default function ProjectPage() {
             await api.updateProject(id, { is_locked: locked } as any)
             setProject(prev => prev ? { ...prev, is_locked: locked } as any : prev)
           }}>
-          {(project as any)?.is_locked ? '🔒 已锁定' : '🔓 锁定'}
+          {(project as any)?.is_locked ? <><SvgIcon name="lock" size={11} /> 已锁定</> : <><SvgIcon name="lock" size={11} /> 锁定</>}
         </button>
         </CanEdit>
         {(hdrCategories.length > 0 || (project as any)?.category_id) && (
@@ -2455,7 +2456,7 @@ export default function ProjectPage() {
               }
             }}>
             <option value="">无署名</option>
-            {hdrAuthors.map(a => <option key={a.id} value={a.id}>✍ {a.name}</option>)}
+            {hdrAuthors.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
           </select>
         )}
         {readOnly && (
@@ -2467,7 +2468,7 @@ export default function ProjectPage() {
             background: 'var(--warning)', padding: '2px 10px', borderRadius: 4,
             animation: 'pulse 2s infinite',
           }}>
-            ⚠ {batchWarning}
+            <SvgIcon name="alert-triangle" size={11} /> {batchWarning}
           </span>
         )}
         {isGlobalGenerating && (
@@ -2480,7 +2481,7 @@ export default function ProjectPage() {
               display: 'inline-block', width: 8, height: 8, borderRadius: '50%',
               background: 'var(--primary)', animation: 'blink 0.8s infinite',
             }} />
-            ⏳ {globalGenLabel} (切换栏目不影响)
+            <SvgIcon name="clock" size={11} /> {globalGenLabel} (切换栏目不影响)
             {pptProgress && (
               <span style={{ fontWeight: 500, marginLeft: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
                 {pptProgress.phase_label}
@@ -2571,7 +2572,7 @@ export default function ProjectPage() {
               <span key={sn.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 {i > 0 && <span className="sn-sep">|</span>}
                 <div className={`sn-item${sub === sn.id ? ' active' : ''}`}
-                  onClick={() => setSub(sn.id)}>{sn.label}{busy && <span style={{ marginLeft: 4 }}>⏳</span>}</div>
+                  onClick={() => setSub(sn.id)}>{sn.label}{busy && <span style={{ marginLeft: 4 }}><SvgIcon name="clock" size={11} /></span>}</div>
               </span>
             )
           })}
@@ -2584,7 +2585,7 @@ export default function ProjectPage() {
         {stage === 1 && (
           <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12, color: 'var(--text-secondary)', flexShrink: 0 }}>
-            <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}>📁 保存路径</span>
+            <span style={{ fontWeight: 600, whiteSpace: 'nowrap' }}><SvgIcon name="folder" size={14} /> 保存路径</span>
             <input className="form-input" style={{ fontSize: 11, flex: 1, padding: '4px 8px' }}
               value={projStoragePath}
               onChange={e => setProjStoragePath(e.target.value)}
@@ -2593,7 +2594,7 @@ export default function ProjectPage() {
               onClick={async () => {
                 const p = (projStoragePath || project?.storage_path || '').replace(/\\/g, '/')
                 if (p) { try { await api.openFolder(p) } catch { modal.toast('无法打开文件夹', 'error') } }
-              }}>📂</button>
+              }}><SvgIcon name="folder" size={14} /></button>
             <button className="btn btn-sm" style={{ whiteSpace: 'nowrap', fontSize: 11, padding: '4px 10px', background: 'var(--primary)', color: '#fff' }}
               disabled={savingPath}
               onClick={async () => {
@@ -2614,7 +2615,7 @@ export default function ProjectPage() {
             <div className="panel-left">
               {/* Shared model selector */}
               <div className="card">
-                <div className="card-title">🤖 模型选择</div>
+                <div className="card-title"><SvgIcon name="sparkles" size={14} /> 模型选择</div>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <select className="form-select" style={{ flex: 1 }}
                     value={step1Model}
@@ -2637,7 +2638,7 @@ export default function ProjectPage() {
               {/* 1a: Video Link */}
               {mode1 === 'link' && <>
                 <div className="card">
-                  <div className="card-title">📺 视频提取<HelpButton location="project-stage-1a" /></div>
+                  <div className="card-title"><SvgIcon name="monitor" size={14} /> 视频提取<HelpButton location="project-stage-1a" /></div>
                   <div className="card-hint">粘贴视频链接或上传本地文件 → 下载 + 语音识别 → 提取内容在下方编辑</div>
                   <input className="form-input" placeholder="粘贴视频链接（支持抖音/B站/YouTube等）"
                     value={videoUrl} onChange={e => setVideoUrl(e.target.value)} style={{ marginBottom: 6 }} />
@@ -2673,7 +2674,7 @@ export default function ProjectPage() {
                   <CanEdit perm={canGenerate1}>
                   <button className="btn btn-primary btn-sm" style={{ flex: 1 }}
                     onClick={handleVideoDownload} disabled={dlStatus === 'downloading'}>
-                    ▶ 下载并识别
+                    <SvgIcon name="play" size={11} /> 下载并识别
                   </button>
                   </CanEdit>
                   <CanEdit perm={canGenerate1}>
@@ -2682,21 +2683,21 @@ export default function ProjectPage() {
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1 }}
                     disabled={dlStatus === 'downloading'}
                     onClick={() => videoFileRef.current?.click()}>
-                    📁 上传视频
+                    <SvgIcon name="folder" size={11} /> 上传视频
                   </button>
                   </CanEdit>
                   </div>
                   <div style={{ minHeight: 24, display: 'flex', alignItems: 'center' }}>
                     {(dlStatus && dlStatus !== 'done' && dlStatus !== 'failed' && !dlStatus.startsWith('error')) && (
                       <div style={{ width: '100%' }}>
-                        <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 2 }}>⏳ {dlMessage || '正在处理...'} {dlPercent}%</div>
+                        <div style={{ fontSize: 11, color: 'var(--primary)', marginBottom: 2 }}><SvgIcon name="clock" size={11} /> {dlMessage || '正在处理...'} {dlPercent}%</div>
                         <div style={{ background: 'var(--border)', height: 4, borderRadius: 2 }}>
                           <div style={{ width: Math.max(dlPercent, 2) + '%', height: '100%', background: 'var(--primary)', borderRadius: 2, transition: 'width .3s' }} />
                         </div>
                       </div>
                     )}
-                    {dlStatus === 'done' && <span style={{ fontSize: 11, color: 'var(--success)' }}>✅ 处理完成</span>}
-                    {dlStatus === 'failed' && <span style={{ fontSize: 11, color: 'var(--warning)' }}>❌ 下载失败</span>}
+                    {dlStatus === 'done' && <span style={{ fontSize: 11, color: 'var(--success)' }}><SvgIcon name="check" size={11} /> 处理完成</span>}
+                    {dlStatus === 'failed' && <span style={{ fontSize: 11, color: 'var(--warning)' }}><SvgIcon name="x-mark" size={11} /> 下载失败</span>}
                     {dlStatus.startsWith('error') && <span style={{ fontSize: 11, color: 'var(--warning)' }}>{dlStatus}</span>}
                   </div>
                   <button className="btn btn-ghost btn-sm w-full"
@@ -2709,13 +2710,13 @@ export default function ProjectPage() {
                       }
                       setVcOpen(true)
                     }} >
-                    📺 播放校验
+                    <SvgIcon name="monitor" size={11} /> 播放校验
                   </button>
                   <CanEdit perm={canGenerate1}>
                   <button className="btn btn-primary btn-sm w-full" style={{ marginTop: 6 }}
                     disabled={step1Generating['1a'] || !step1Model || !videoText.trim()}
                     onClick={doGenerateStep1}>
-                    {step1Generating['1a'] ? '⏳ 生成中...' : '⚙ 整理文档'}
+                    {step1Generating['1a'] ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="sparkles" size={11} /> 整理文档</>}
                   </button>
                   </CanEdit>
                   {step1Generating['1a'] && (
@@ -2725,7 +2726,7 @@ export default function ProjectPage() {
                 </div>
                 {videoText && (
                   <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                    <div className="card-title">📝 提取的原始文本</div>
+                    <div className="card-title"><SvgIcon name="file-text" size={14} /> 提取的原始文本</div>
                     <div className="card-hint">视频提取的原始字幕内容，可编辑后重新生成</div>
                     {(sourceMerged || sourceAsr || sourceSubtitle) && (
                       <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
@@ -2759,7 +2760,7 @@ export default function ProjectPage() {
                       placeholder="视频字幕将显示在此..." />
                     <CanEdit perm={canGenerate1}>
                     <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>🗑 清空</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}><SvgIcon name="trash" size={11} /> 清空</button>
                       <button className={`btn btn-primary btn-sm ${getSaveBtnClass(videoText, 'video_text')}`}
                         onClick={() => { if (id) { saveStep('video_text', videoText); saveStep('raw_video', videoText); flashSave() } }}>{getSaveBtnLabel(videoText, 'video_text')}</button>
                     </div>
@@ -2771,14 +2772,14 @@ export default function ProjectPage() {
               {/* 1b: Text Input */}
               {mode1 === 'text' && (<>
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                  <div className="card-title">✏️ 文字输入<HelpButton location="project-stage-1b" /></div>
+                  <div className="card-title"><SvgIcon name="edit" size={14} /> 文字输入<HelpButton location="project-stage-1b" /></div>
                   <div className="card-hint">直接粘贴或输入内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
                     placeholder="在此粘贴或输入内容..."
                     value={textInput} readOnly={readOnly} onChange={e => setTextInput(e.target.value)} />
                   <div style={{ display: 'flex', gap: 6, marginTop: 8, justifyContent: 'flex-end' }}>
                     <CanEdit>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}>🗑 清空</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setTextInput('')}><SvgIcon name="trash" size={11} /> 清空</button>
                       <button className={`btn btn-primary btn-sm ${getSaveBtnClass(textInput, 'raw_text')}`}
                         onClick={() => { if (id) { saveStep('raw_text', textInput); flashSave() } }}>{getSaveBtnLabel(textInput, 'raw_text')}</button>
                     </CanEdit>
@@ -2786,7 +2787,7 @@ export default function ProjectPage() {
                     <button className="btn btn-primary btn-sm"
                       disabled={step1Generating['1b'] || !step1Model || !textInput.trim()}
                       onClick={doGenerateStep1}>
-                      {step1Generating['1b'] ? '⏳ 生成中...' : '⚙ 整理文档'}
+                      {step1Generating['1b'] ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="sparkles" size={11} /> 整理文档</>}
                     </button>
                     </CanEdit>
                     {step1Generating['1b'] && (
@@ -2800,7 +2801,7 @@ export default function ProjectPage() {
               {/* 1c: File Upload */}
               {mode1 === 'file' && <>
                 <div className="card">
-                  <div className="card-title">📄 文件提取<HelpButton location="project-stage-1c" /></div>
+                  <div className="card-title"><SvgIcon name="file" size={14} /> 文件提取<HelpButton location="project-stage-1c" /></div>
                   <div className="card-hint">支持 .txt / .md / .docx 文件，读取后内容在下方编辑</div>
                   <input type="file" accept=".txt,.md,.docx" style={{ fontSize: 10, marginBottom: 6 }}
                     disabled={readOnly}
@@ -2825,7 +2826,7 @@ export default function ProjectPage() {
                   <button className="btn btn-primary btn-sm w-full"
                     disabled={step1Generating['1c'] || !step1Model || !fileText.trim()}
                     onClick={doGenerateStep1}>
-                    {step1Generating['1c'] ? '⏳ 生成中...' : '⚙ 整理文档'}
+                    {step1Generating['1c'] ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="sparkles" size={11} /> 整理文档</>}
                   </button>
                   </CanEdit>
                   {step1Generating['1c'] && (
@@ -2834,7 +2835,7 @@ export default function ProjectPage() {
                   )}
                 </div>
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                  <div className="card-title">📝 文件原始内容</div>
+                  <div className="card-title"><SvgIcon name="file-text" size={14} /> 文件原始内容</div>
                   <div className="card-hint">文件读取的原始内容，可编辑后重新生成</div>
                   <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
                     value={fileText} readOnly={readOnly}
@@ -2842,7 +2843,7 @@ export default function ProjectPage() {
                     placeholder="文件内容将显示在此..." />
                   <CanEdit perm={canGenerate1}>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setFileText('')}>🗑 清空</button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setFileText('')}><SvgIcon name="trash" size={11} /> 清空</button>
                     <button className={`btn btn-primary btn-sm ${getSaveBtnClass(fileText, 'raw_file')}`}
                       onClick={() => { if (id) { saveStep('raw_file', fileText); flashSave() } }}>{getSaveBtnLabel(fileText, 'raw_file')}</button>
                   </div>
@@ -2871,23 +2872,23 @@ export default function ProjectPage() {
                     color: s1View === 'edit' ? 'var(--primary)' : 'var(--text-secondary)',
                     borderBottom: s1View === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
                     fontWeight: s1View === 'edit' ? 600 : 400,
-                  }}>✏️ 编辑</button>
+                  }}><SvgIcon name="edit" size={11} /> 编辑</button>
                   <button onClick={() => setS1View('preview')} style={{
                     padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
                     color: s1View === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
                     borderBottom: s1View === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
                     fontWeight: s1View === 'preview' ? 600 : 400,
-                  }}>👁 预览</button>
+                  }}><SvgIcon name="eye" size={11} /> 预览</button>
                   {s1View === 'preview' && s1Content && (
                     <>
                       <button onClick={handleS1DownloadHtml} style={{
                         marginLeft: 'auto', padding: '5px 12px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>📥 下载 HTML</button>
+                      }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
                       <button onClick={handleS1Print} style={{
                         marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>🖨 打印</button>
+                      }}><SvgIcon name="printer" size={11} /> 打印</button>
                     </>
                   )}
                 </div>
@@ -2928,12 +2929,12 @@ export default function ProjectPage() {
                         } catch (e: any) {
                           modal.toast('保存失败: ' + e.message, 'error')
                         }
-                      }}>📥 保存到项目</button>
+                      }}><SvgIcon name="download" size={11} /> 保存到项目</button>
                     <CanEdit perm={canGenerate2}>
                     <button className="btn btn-outline btn-sm"
                       disabled={!!Object.values(step2Generating).some(Boolean) || !steps[step1Key()]}
                       onClick={doBatchGenerate}>
-                      {Object.values(step2Generating).some(Boolean) ? '⏳ 生成中...' : '⚡ 生成所有文案'}
+                      {Object.values(step2Generating).some(Boolean) ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="bolt" /> 生成所有文案</>}
                     </button>
                     </CanEdit>
                     {Object.values(step2Generating).some(Boolean) && (
@@ -2946,7 +2947,7 @@ export default function ProjectPage() {
                       onClick={() => { saveStep(step1Key(), steps[step1Key()] || ''); flashSave() }}>{getSaveBtnLabel(steps[step1Key()] || '', step1Key())}</button>
                     <button className="btn btn-ghost btn-sm"
                       disabled={!steps[step1Key()]}
-                      onClick={() => { setSteps(prev => ({ ...prev, [step1Key()]: '' })); saveStep(step1Key(), '') }}>✕ 清空</button>
+                      onClick={() => { setSteps(prev => ({ ...prev, [step1Key()]: '' })); saveStep(step1Key(), '') }}><SvgIcon name="x-mark" size={11} /> 清空</button>
                     </CanEdit>
                   </span>
                 </div>
@@ -3097,7 +3098,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card" style={{ overflow: 'hidden' }}>
-                <div className="card-title">📄 生成课件<HelpButton location="project-stage-3a" /></div>
+                <div className="card-title"><SvgIcon name="file" size={14} /> 生成课件<HelpButton location="project-stage-3a" /></div>
                 <div className="card-hint">基于标准文档，选择模板生成课件</div>
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={sopTemplates} selectedId={sopSelected}
@@ -3136,7 +3137,7 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <button className="btn btn-ghost btn-sm" onClick={() => setS3SopTempOpen(true)}>⚙温度设置</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setS3SopTempOpen(true)}><SvgIcon name="settings" size={11} /> 温度设置</button>
                 <label style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, userSelect: 'none', marginLeft: 8 }}>
                   <input type="checkbox" checked={forceRegenerate} onChange={(e) => setForceRegenerate(e.target.checked)} style={{ cursor: 'pointer' }} />
                   全新生成
@@ -3147,7 +3148,7 @@ export default function ProjectPage() {
                     style={{ flex: 1 }}
                     disabled={!sopSelected || !(steps.step2_sop || '') || !s3SopModel || pptOutlineLoading['step3_sop_doc']}
                     onClick={() => doGenerateOutline('step3_sop_doc', steps.step2_sop || '', sopSelected, s3SopModel, 'col3', s3SopTemp, s3SopTemps.outline, s3SopTemps.keyword, s3SopTemps.research, s3SopTemps.fill, s3SopTemps.stageOutline, s3SopTemps.stageGeneration, s3SopTemps.stageReview)}>
-                    {pptOutlineLoading['step3_sop_doc'] ? '⏳ 生成中...' : '📋 生成大纲'}
+                    {pptOutlineLoading['step3_sop_doc'] ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="clipboard" size={11} /> 生成大纲</>}
                   </button>
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
@@ -3162,7 +3163,7 @@ export default function ProjectPage() {
                       s3SopTemps.review, s3SopTemps.fix, s3SopTemps.holistic, s3SopTemps.holistic_fix,
                       s3SopTemps.stageOutline, s3SopTemps.stageGeneration, s3SopTemps.stageReview,
                       forceRegenerate)}>
-                    {pptGenerating['step3_sop_doc'] ? '⏳ 合成中...' : '📄 合成课件'}
+                    {pptGenerating['step3_sop_doc'] ? <><SvgIcon name="clock" size={11} /> 合成中...</> : <><SvgIcon name="file" size={11} /> 合成课件</>}
                   </button>
                 </div>
                 </CanEdit>
@@ -3229,11 +3230,11 @@ export default function ProjectPage() {
                       <button onClick={handleS3DownloadHtml} style={{
                         padding: '3px 10px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>📥 下载 HTML</button>
+                      }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
                       <button onClick={handleS3Print} style={{
                         padding: '3px 10px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>🖨 打印</button>
+                      }}><SvgIcon name="printer" size={11} /> 打印</button>
                     </div>
                   )}
                 </div>
@@ -3241,7 +3242,7 @@ export default function ProjectPage() {
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     {pptOutlineLoading['step3_sop_doc'] ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}><SvgIcon name="clock" size={24} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
                           AI 正在分析内容并生成大纲...<br />
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>预计 30-60 秒，请耐心等待</span>
@@ -3268,7 +3269,7 @@ export default function ProjectPage() {
                       />
                     ) : pptGenerating['step3_sop_doc'] ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}><SvgIcon name="clock" size={24} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
                           AI 正在合成课件...
                         </div>
@@ -3285,17 +3286,17 @@ export default function ProjectPage() {
                           {pptSlidePlans[step3Key()].format === 'svg' ? (
                             <button className="btn btn-ghost btn-sm"
                               onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
-                              ⬇ SVG ZIP
+                              <SvgIcon name="download" size={11} /> SVG ZIP
                             </button>
                           ) : (
                             <>
                               <button className="btn btn-ghost btn-sm"
                                 onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
-                                ⬇ PPTX
+                                <SvgIcon name="download" size={11} /> PPTX
                               </button>
                               <button className="btn btn-ghost btn-sm"
                                 onClick={() => handleDownloadHtml(step3Key())}>
-                                ⬇ HTML
+                                <SvgIcon name="download" size={11} /> HTML
                               </button>
                             </>
                           )}
@@ -3303,9 +3304,9 @@ export default function ProjectPage() {
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="clipboard" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
-                          点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span> 开始分析
+                          点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}><SvgIcon name="clipboard" size={11} /> 生成大纲</span> 开始分析
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>
                           生成大纲后可在此编辑精修<br />确认无误后再点击 合成课件
@@ -3318,7 +3319,7 @@ export default function ProjectPage() {
                           const key = step3Key()
                           setPptEditMode(prev => ({...prev, [key]: !prev[key]}))
                         }}>
-                        {pptEditMode[step3Key()] ? '👁 查看' : '✏ 编辑'}
+                        {pptEditMode[step3Key()] ? <><SvgIcon name="eye" size={11} /> 查看</> : <><SvgIcon name="edit" size={11} /> 编辑</>}
                       </button>
                       <button className="btn btn-ghost btn-sm"
                         disabled={!pptOutline[step3Key()] && !steps[step3Key()]}
@@ -3329,7 +3330,7 @@ export default function ProjectPage() {
                             const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_标准文档大纲.txt`, text)
                             modal.toast(`已保存到 ${resp.path}`, 'success')
                           } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
-                        }}>📥 保存到项目</button>
+                        }}><SvgIcon name="download" size={11} /> 保存到项目</button>
                       <button className={`btn btn-primary btn-sm ${getSaveBtnClass(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())} ${pptSavingOutline[step3Key()] ? 'btn-disabled' : ''}`}
                         disabled={pptSavingOutline[step3Key()]}
                         onClick={async () => {
@@ -3358,7 +3359,7 @@ export default function ProjectPage() {
                           saveStep(key, currentText);
                           flashSave();
                         }}>
-                        {pptSavingOutline[step3Key()] ? '⏳ 转换中...' : getSaveBtnLabel(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())}
+                        {pptSavingOutline[step3Key()] ? <><SvgIcon name="clock" size={11} /> 转换中...</> : getSaveBtnLabel(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())}
                       </button>
                       <button className="btn btn-ghost btn-sm" onClick={() => {
                         const key = step3Key()
@@ -3367,7 +3368,7 @@ export default function ProjectPage() {
                         setPreviewHtml(prev => { const n = { ...prev }; delete n[key]; return n })
                         setPreviewLoading(prev => { const n = { ...prev }; delete n[key]; return n })
                         setPptEditMode(prev => { const n = { ...prev }; delete n[key]; return n })
-                      }}>✕ 清空</button>
+                      }}><SvgIcon name="x-mark" size={11} /> 清空</button>
                       <span style={{ flex: 1 }} />
                       <button className="btn btn-ghost btn-sm"
                         onClick={() => {
@@ -3375,7 +3376,7 @@ export default function ProjectPage() {
                           setEditPanelOpen(prev => ({ ...prev, [key]: !prev[key] }))
                         }}
                         style={{ background: editPanelOpen[step3Key()] ? 'var(--primary)' : undefined, color: editPanelOpen[step3Key()] ? '#fff' : undefined }}>
-                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'HTML编辑'}
+                        {editPanelOpen[step3Key()] ? <><SvgIcon name="x-mark" size={11} /> 关闭</> : 'HTML编辑'}
                       </button>
                       {pptSlidePlans[step3Key()]?.previewUrl && (
                         <button className="btn btn-ghost btn-sm"
@@ -3386,17 +3387,17 @@ export default function ProjectPage() {
                       {pptSlidePlans[step3Key()]?.format === 'svg' ? (
                         <button className="btn btn-ghost btn-sm"
                           onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
-                          ⬇ SVG ZIP
+                          <SvgIcon name="download" size={11} /> SVG ZIP
                         </button>
                       ) : pptSlidePlans[step3Key()] ? (
                         <>
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
-                            ⬇ PPTX
+                            <SvgIcon name="download" size={11} /> PPTX
                           </button>
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => handleDownloadHtml(step3Key())}>
-                            ⬇ HTML
+                            <SvgIcon name="download" size={11} /> HTML
                           </button>
                         </>
                       ) : null}
@@ -3417,9 +3418,9 @@ export default function ProjectPage() {
                       />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="clipboard" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
-                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span>
+                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}><SvgIcon name="clipboard" size={11} /> 生成大纲</span>
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>生成大纲后才可合成课件</div>
                       </div>
@@ -3433,7 +3434,7 @@ export default function ProjectPage() {
                         dangerouslySetInnerHTML={{ __html: s3RenderedHtml }} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>👁</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="eye" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>暂无大纲内容</div>
                       </div>
                     )}
@@ -3468,7 +3469,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card" style={{ overflow: 'hidden' }}>
-                <div className="card-title">📌 分析PPT<HelpButton location="project-stage-3b" /></div>
+                <div className="card-title"><SvgIcon name="bookmark" size={14} /> 分析PPT<HelpButton location="project-stage-3b" /></div>
                 <div className="card-hint">基于分析文档，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={daoPptTemplates} selectedId={daoPptSelected}
@@ -3507,7 +3508,7 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <button className="btn btn-ghost btn-sm" onClick={() => setS3DaoTempOpen(true)}>⚙温度设置</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setS3DaoTempOpen(true)}><SvgIcon name="settings" size={11} /> 温度设置</button>
                 <label style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, userSelect: 'none', marginLeft: 8 }}>
                   <input type="checkbox" checked={forceRegenerate} onChange={(e) => setForceRegenerate(e.target.checked)} style={{ cursor: 'pointer' }} />
                   全新生成
@@ -3518,7 +3519,7 @@ export default function ProjectPage() {
                     style={{ flex: 1 }}
                     disabled={!daoPptSelected || !(steps.step2_daoshuyi || '') || !s3DaoPptModel || pptOutlineLoading['step3_dao_ppt']}
                     onClick={() => doGenerateOutline('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, s3DaoPptModel, 'col4', s3DaoPptTemp, s3DaoTemps.outline, s3DaoTemps.keyword, s3DaoTemps.research, s3DaoTemps.fill, s3DaoTemps.stageOutline, s3DaoTemps.stageGeneration, s3DaoTemps.stageReview)}>
-                    {pptOutlineLoading['step3_dao_ppt'] ? '⏳ 生成中...' : '📋 生成大纲'}
+                    {pptOutlineLoading['step3_dao_ppt'] ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="clipboard" size={11} /> 生成大纲</>}
                   </button>
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
@@ -3526,7 +3527,7 @@ export default function ProjectPage() {
                     onClick={() => doGeneratePPT('step3_dao_ppt', steps.step2_daoshuyi || '', daoPptSelected, '分析PPT',
                       stage3Prompts.daoPpt?.prompt || '请将分析文档内容转化为PPT大纲。',
                       s3DaoPptModel, 'col4', s3DaoPptTemp, s3DaoTemps.keyword, s3DaoTemps.research, s3DaoTemps.outline, s3DaoTemps.fill, s3DaoTemps.cards, s3DaoTemps.html, s3DaoTemps.svg_batch, s3DaoTemps.svg_single, s3DaoTemps.review, s3DaoTemps.fix, s3DaoTemps.holistic, s3DaoTemps.holistic_fix, s3DaoTemps.stageOutline, s3DaoTemps.stageGeneration, s3DaoTemps.stageReview, forceRegenerate)}>
-                    {pptGenerating['step3_dao_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
+                    {pptGenerating['step3_dao_ppt'] ? <><SvgIcon name="clock" size={11} /> 合成中...</> : <><SvgIcon name="bookmark" size={11} /> 合成PPT</>}
                   </button>
                 </div>
                 </CanEdit>
@@ -3593,11 +3594,11 @@ export default function ProjectPage() {
                       <button onClick={handleS3DownloadHtml} style={{
                         padding: '3px 10px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>📥 下载 HTML</button>
+                      }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
                       <button onClick={handleS3Print} style={{
                         padding: '3px 10px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>🖨 打印</button>
+                      }}><SvgIcon name="printer" size={11} /> 打印</button>
                     </div>
                   )}
                 </div>
@@ -3605,7 +3606,7 @@ export default function ProjectPage() {
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     {pptOutlineLoading['step3_dao_ppt'] ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}><SvgIcon name="clock" size={24} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
                           AI 正在分析内容并生成大纲...<br />
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>预计 30-60 秒，请耐心等待</span>
@@ -3632,7 +3633,7 @@ export default function ProjectPage() {
                       />
                     ) : pptGenerating['step3_dao_ppt'] ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}><SvgIcon name="clock" size={24} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
                           AI 正在合成幻灯片...
                         </div>
@@ -3649,17 +3650,17 @@ export default function ProjectPage() {
                           {pptSlidePlans[step3Key()].format === 'svg' ? (
                             <button className="btn btn-ghost btn-sm"
                               onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
-                              ⬇ SVG ZIP
+                              <SvgIcon name="download" size={11} /> SVG ZIP
                             </button>
                           ) : (
                             <>
                               <button className="btn btn-ghost btn-sm"
                                 onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
-                                ⬇ PPTX
+                                <SvgIcon name="download" size={11} /> PPTX
                               </button>
                               <button className="btn btn-ghost btn-sm"
                                 onClick={() => handleDownloadHtml(step3Key())}>
-                                ⬇ HTML
+                                <SvgIcon name="download" size={11} /> HTML
                               </button>
                             </>
                           )}
@@ -3667,9 +3668,9 @@ export default function ProjectPage() {
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="clipboard" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
-                          点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span> 开始分析
+                          点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}><SvgIcon name="clipboard" size={11} /> 生成大纲</span> 开始分析
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>
                           生成大纲后可在此编辑精修<br />确认无误后再点击 合成PPT
@@ -3682,7 +3683,7 @@ export default function ProjectPage() {
                           const key = step3Key()
                           setPptEditMode(prev => ({...prev, [key]: !prev[key]}))
                         }}>
-                        {pptEditMode[step3Key()] ? '👁 查看' : '✏ 编辑'}
+                        {pptEditMode[step3Key()] ? <><SvgIcon name="eye" size={11} /> 查看</> : <><SvgIcon name="edit" size={11} /> 编辑</>}
                       </button>
                       <button className="btn btn-ghost btn-sm"
                         disabled={!pptOutline[step3Key()] && !steps[step3Key()]}
@@ -3694,7 +3695,7 @@ export default function ProjectPage() {
                             const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_${label}大纲.txt`, text)
                             modal.toast(`已保存到 ${resp.path}`, 'success')
                           } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
-                        }}>📥 保存到项目</button>
+                        }}><SvgIcon name="download" size={11} /> 保存到项目</button>
                       <button className={`btn btn-primary btn-sm ${getSaveBtnClass(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())} ${pptSavingOutline[step3Key()] ? 'btn-disabled' : ''}`}
                         disabled={pptSavingOutline[step3Key()]}
                         onClick={async () => {
@@ -3723,7 +3724,7 @@ export default function ProjectPage() {
                           saveStep(key, currentText);
                           flashSave();
                         }}>
-                        {pptSavingOutline[step3Key()] ? '⏳ 转换中...' : getSaveBtnLabel(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())}
+                        {pptSavingOutline[step3Key()] ? <><SvgIcon name="clock" size={11} /> 转换中...</> : getSaveBtnLabel(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())}
                       </button>
                       <button className="btn btn-ghost btn-sm" onClick={() => {
                         const key = step3Key()
@@ -3732,7 +3733,7 @@ export default function ProjectPage() {
                         setPreviewHtml(prev => { const n = { ...prev }; delete n[key]; return n })
                         setPreviewLoading(prev => { const n = { ...prev }; delete n[key]; return n })
                         setPptEditMode(prev => { const n = { ...prev }; delete n[key]; return n })
-                      }}>✕ 清空</button>
+                      }}><SvgIcon name="x-mark" size={11} /> 清空</button>
                       <span style={{ flex: 1 }} />
                       <button className="btn btn-ghost btn-sm"
                         onClick={() => {
@@ -3740,7 +3741,7 @@ export default function ProjectPage() {
                           setEditPanelOpen(prev => ({ ...prev, [key]: !prev[key] }))
                         }}
                         style={{ background: editPanelOpen[step3Key()] ? 'var(--primary)' : undefined, color: editPanelOpen[step3Key()] ? '#fff' : undefined }}>
-                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'HTML编辑'}
+                        {editPanelOpen[step3Key()] ? <><SvgIcon name="x-mark" size={11} /> 关闭</> : 'HTML编辑'}
                       </button>
                       {pptSlidePlans[step3Key()]?.previewUrl && (
                         <button className="btn btn-ghost btn-sm"
@@ -3751,17 +3752,17 @@ export default function ProjectPage() {
                       {pptSlidePlans[step3Key()]?.format === 'svg' ? (
                         <button className="btn btn-ghost btn-sm"
                           onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
-                          ⬇ SVG ZIP
+                          <SvgIcon name="download" size={11} /> SVG ZIP
                         </button>
                       ) : pptSlidePlans[step3Key()] ? (
                         <>
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
-                            ⬇ PPTX
+                            <SvgIcon name="download" size={11} /> PPTX
                           </button>
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => handleDownloadHtml(step3Key())}>
-                            ⬇ HTML
+                            <SvgIcon name="download" size={11} /> HTML
                           </button>
                         </>
                       ) : null}
@@ -3781,9 +3782,9 @@ export default function ProjectPage() {
                       </pre>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="clipboard" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
-                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span>
+                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}><SvgIcon name="clipboard" size={11} /> 生成大纲</span>
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>生成大纲后才可合成PPT</div>
                       </div>
@@ -3797,7 +3798,7 @@ export default function ProjectPage() {
                         dangerouslySetInnerHTML={{ __html: s3RenderedHtml }} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>👁</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="eye" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>暂无大纲内容</div>
                       </div>
                     )}
@@ -3832,7 +3833,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card" style={{ overflow: 'hidden' }}>
-                <div className="card-title">📚 综合PPT<HelpButton location="project-stage-3c" /></div>
+                <div className="card-title"><SvgIcon name="book-open" size={14} /> 综合PPT<HelpButton location="project-stage-3c" /></div>
                 <div className="card-hint">基于综合文档，选择模板合成PPT</div>
                 <div className="form-label">选择模板</div>
                 <TemplateSelector items={yanxiPptTemplates} selectedId={yanxiPptSelected}
@@ -3871,7 +3872,7 @@ export default function ProjectPage() {
                     ))
                   )}
                 </select>
-                <button className="btn btn-ghost btn-sm" onClick={() => setS3YanxiTempOpen(true)}>⚙温度设置</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => setS3YanxiTempOpen(true)}><SvgIcon name="settings" size={11} /> 温度设置</button>
                 <label style={{ fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, userSelect: 'none', marginLeft: 8 }}>
                   <input type="checkbox" checked={forceRegenerate} onChange={(e) => setForceRegenerate(e.target.checked)} style={{ cursor: 'pointer' }} />
                   全新生成
@@ -3882,7 +3883,7 @@ export default function ProjectPage() {
                     style={{ flex: 1 }}
                     disabled={!yanxiPptSelected || !(steps.step2_yanxi || '') || !s3YanxiPptModel || pptOutlineLoading['step3_yan_ppt']}
                     onClick={() => doGenerateOutline('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, s3YanxiPptModel, 'col5', s3YanxiPptTemp, s3YanxiTemps.outline, s3YanxiTemps.keyword, s3YanxiTemps.research, s3YanxiTemps.fill, s3YanxiTemps.stageOutline, s3YanxiTemps.stageGeneration, s3YanxiTemps.stageReview)}>
-                    {pptOutlineLoading['step3_yan_ppt'] ? '⏳ 生成中...' : '📋 生成大纲'}
+                    {pptOutlineLoading['step3_yan_ppt'] ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="clipboard" size={11} /> 生成大纲</>}
                   </button>
                   <button className="btn btn-primary btn-sm"
                     style={{ flex: 1 }}
@@ -3890,7 +3891,7 @@ export default function ProjectPage() {
                     onClick={() => doGeneratePPT('step3_yan_ppt', steps.step2_yanxi || '', yanxiPptSelected, '综合PPT',
                       stage3Prompts.yanxiPpt?.prompt || '请将手册内容转化为PPT。',
                       s3YanxiPptModel, 'col5', s3YanxiPptTemp, s3YanxiTemps.keyword, s3YanxiTemps.research, s3YanxiTemps.outline, s3YanxiTemps.fill, s3YanxiTemps.cards, s3YanxiTemps.html, s3YanxiTemps.svg_batch, s3YanxiTemps.svg_single, s3YanxiTemps.review, s3YanxiTemps.fix, s3YanxiTemps.holistic, s3YanxiTemps.holistic_fix, s3YanxiTemps.stageOutline, s3YanxiTemps.stageGeneration, s3YanxiTemps.stageReview, forceRegenerate)}>
-                    {pptGenerating['step3_yan_ppt'] ? '⏳ 合成中...' : '📌 合成PPT'}
+                    {pptGenerating['step3_yan_ppt'] ? <><SvgIcon name="clock" size={11} /> 合成中...</> : <><SvgIcon name="bookmark" size={11} /> 合成PPT</>}
                   </button>
                 </div>
                 </CanEdit>
@@ -3957,11 +3958,11 @@ export default function ProjectPage() {
                       <button onClick={handleS3DownloadHtml} style={{
                         padding: '3px 10px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>📥 下载 HTML</button>
+                      }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
                       <button onClick={handleS3Print} style={{
                         padding: '3px 10px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}>🖨 打印</button>
+                      }}><SvgIcon name="printer" size={11} /> 打印</button>
                     </div>
                   )}
                 </div>
@@ -3969,7 +3970,7 @@ export default function ProjectPage() {
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                     {pptOutlineLoading['step3_yan_ppt'] ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}><SvgIcon name="clock" size={24} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
                           AI 正在分析内容并生成大纲...<br />
                           <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>预计 30-60 秒，请耐心等待</span>
@@ -3996,7 +3997,7 @@ export default function ProjectPage() {
                       />
                     ) : pptGenerating['step3_yan_ppt'] ? (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12 }}>
-                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}>⏳</div>
+                        <div style={{ fontSize: 24, animation: 'spin 2s linear infinite' }}><SvgIcon name="clock" size={24} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
                           AI 正在合成幻灯片...
                         </div>
@@ -4013,17 +4014,17 @@ export default function ProjectPage() {
                           {pptSlidePlans[step3Key()].format === 'svg' ? (
                             <button className="btn btn-ghost btn-sm"
                               onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, pptSlidePlans[step3Key()].filename + '.zip') }}>
-                              ⬇ SVG ZIP
+                              <SvgIcon name="download" size={11} /> SVG ZIP
                             </button>
                           ) : (
                             <>
                               <button className="btn btn-ghost btn-sm"
                                 onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
-                                ⬇ PPTX
+                                <SvgIcon name="download" size={11} /> PPTX
                               </button>
                               <button className="btn btn-ghost btn-sm"
                                 onClick={() => handleDownloadHtml(step3Key())}>
-                                ⬇ HTML
+                                <SvgIcon name="download" size={11} /> HTML
                               </button>
                             </>
                           )}
@@ -4031,9 +4032,9 @@ export default function ProjectPage() {
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="clipboard" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
-                          点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span> 开始分析
+                          点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}><SvgIcon name="clipboard" size={11} /> 生成大纲</span> 开始分析
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: 10, textAlign: 'center' }}>
                           生成大纲后可在此编辑精修<br />确认无误后再点击 合成PPT
@@ -4046,7 +4047,7 @@ export default function ProjectPage() {
                           const key = step3Key()
                           setPptEditMode(prev => ({...prev, [key]: !prev[key]}))
                         }}>
-                        {pptEditMode[step3Key()] ? '👁 查看' : '✏ 编辑'}
+                        {pptEditMode[step3Key()] ? <><SvgIcon name="eye" size={11} /> 查看</> : <><SvgIcon name="edit" size={11} /> 编辑</>}
                       </button>
                       <button className="btn btn-ghost btn-sm"
                         disabled={!pptOutline[step3Key()] && !steps[step3Key()]}
@@ -4057,7 +4058,7 @@ export default function ProjectPage() {
                             const resp = await api.saveFileToProject(id, `${project?.name || '文档'}_综合PPT大纲.txt`, text)
                             modal.toast(`已保存到 ${resp.path}`, 'success')
                           } catch (e: any) { modal.toast('保存失败: ' + e.message, 'error') }
-                        }}>📥 保存到项目</button>
+                        }}><SvgIcon name="download" size={11} /> 保存到项目</button>
                       <button className={`btn btn-primary btn-sm ${getSaveBtnClass(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())} ${pptSavingOutline[step3Key()] ? 'btn-disabled' : ''}`}
                         disabled={pptSavingOutline[step3Key()]}
                         onClick={async () => {
@@ -4086,7 +4087,7 @@ export default function ProjectPage() {
                           saveStep(key, currentText);
                           flashSave();
                         }}>
-                        {pptSavingOutline[step3Key()] ? '⏳ 转换中...' : getSaveBtnLabel(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())}
+                        {pptSavingOutline[step3Key()] ? <><SvgIcon name="clock" size={11} /> 转换中...</> : getSaveBtnLabel(pptOutline[step3Key()]?.outline_text || steps[step3Key()] || '', step3Key())}
                       </button>
                       <button className="btn btn-ghost btn-sm" onClick={() => {
                         const key = step3Key()
@@ -4095,7 +4096,7 @@ export default function ProjectPage() {
                         setPreviewHtml(prev => { const n = { ...prev }; delete n[key]; return n })
                         setPreviewLoading(prev => { const n = { ...prev }; delete n[key]; return n })
                         setPptEditMode(prev => { const n = { ...prev }; delete n[key]; return n })
-                      }}>✕ 清空</button>
+                      }}><SvgIcon name="x-mark" size={11} /> 清空</button>
                       <span style={{ flex: 1 }} />
                       <button className="btn btn-ghost btn-sm"
                         onClick={() => {
@@ -4103,7 +4104,7 @@ export default function ProjectPage() {
                           setEditPanelOpen(prev => ({ ...prev, [key]: !prev[key] }))
                         }}
                         style={{ background: editPanelOpen[step3Key()] ? 'var(--primary)' : undefined, color: editPanelOpen[step3Key()] ? '#fff' : undefined }}>
-                        {editPanelOpen[step3Key()] ? '✕ 关闭' : 'HTML编辑'}
+                        {editPanelOpen[step3Key()] ? <><SvgIcon name="x-mark" size={11} /> 关闭</> : 'HTML编辑'}
                       </button>
                       {pptSlidePlans[step3Key()]?.previewUrl && (
                         <button className="btn btn-ghost btn-sm"
@@ -4114,17 +4115,17 @@ export default function ProjectPage() {
                       {pptSlidePlans[step3Key()]?.format === 'svg' ? (
                         <button className="btn btn-ghost btn-sm"
                           onClick={async () => { const z = pptSlidePlans[step3Key()].zipUrl; if (z) downloadFile(z, (pptSlidePlans[step3Key()].filename || 'svg-deck') + '.zip') }}>
-                          ⬇ SVG ZIP
+                          <SvgIcon name="download" size={11} /> SVG ZIP
                         </button>
                       ) : pptSlidePlans[step3Key()] ? (
                         <>
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => downloadFile(pptSlidePlans[step3Key()].downloadUrl, pptSlidePlans[step3Key()].filename)}>
-                            ⬇ PPTX
+                            <SvgIcon name="download" size={11} /> PPTX
                           </button>
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => handleDownloadHtml(step3Key())}>
-                            ⬇ HTML
+                            <SvgIcon name="download" size={11} /> HTML
                           </button>
                         </>
                       ) : null}
@@ -4144,9 +4145,9 @@ export default function ProjectPage() {
                       </pre>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>📋</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="clipboard" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12, textAlign: 'center' }}>
-                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}>📋 生成大纲</span>
+                          请先点击左侧 <span style={{ fontWeight: 600, color: 'var(--primary)' }}><SvgIcon name="clipboard" size={11} /> 生成大纲</span>
                         </div>
                         <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>生成大纲后才可合成PPT</div>
                       </div>
@@ -4160,7 +4161,7 @@ export default function ProjectPage() {
                         dangerouslySetInnerHTML={{ __html: s3RenderedHtml }} />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
-                        <div style={{ fontSize: 36, opacity: 0.3 }}>👁</div>
+                        <div style={{ fontSize: 36, opacity: 0.3 }}><SvgIcon name="eye" size={36} /></div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: 12 }}>暂无大纲内容</div>
                       </div>
                     )}
@@ -4277,7 +4278,7 @@ export default function ProjectPage() {
                             delete abortRef.current[t.stepKey]
                           }
                         }}>
-                        {isGenerating ? '⏳ 生成中...' : '📢 生成演讲稿'}
+                        {isGenerating ? <><SvgIcon name="clock" size={11} /> 生成中...</> : <><SvgIcon name="music" size={11} /> 生成演讲稿</>}
                       </button>
                       </CanEdit>
                       {isGenerating && (
@@ -4308,7 +4309,7 @@ export default function ProjectPage() {
                               <button className="btn btn-ghost btn-sm"
                                 style={{ color: 'var(--warning)' }}
                                 onClick={() => setS4SourceEdits(prev => ({ ...prev, [editKey]: '' }))}>
-                                🗑 清空
+                                <SvgIcon name="trash" size={11} /> 清空
                               </button>
                             </div>
                           </div>
@@ -4328,23 +4329,23 @@ export default function ProjectPage() {
                       color: s4ViewMode === 'edit' ? 'var(--primary)' : 'var(--text-secondary)',
                       borderBottom: s4ViewMode === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
                       fontWeight: s4ViewMode === 'edit' ? 600 : 400,
-                    }}>✏️ 编辑</button>
+                    }}><SvgIcon name="edit" size={11} /> 编辑</button>
                     <button onClick={() => setS4ViewMode('preview')} style={{
                       padding: '3px 10px', fontSize: 11, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
                       color: s4ViewMode === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
                       borderBottom: s4ViewMode === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
                       fontWeight: s4ViewMode === 'preview' ? 600 : 400,
-                    }}>👁 预览</button>
+                    }}><SvgIcon name="eye" size={11} /> 预览</button>
                     {s4ViewMode === 'preview' && s4Content && (
                       <>
                         <button onClick={handleS4DownloadHtml} style={{
                           marginLeft: 'auto', padding: '3px 10px', fontSize: 10, cursor: 'pointer',
                           background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 3,
-                        }}>📥 下载 HTML</button>
+                        }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
                         <button onClick={handleS4Print} style={{
                           marginLeft: 4, padding: '3px 10px', fontSize: 10, cursor: 'pointer',
                           background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 3,
-                        }}>🖨 打印</button>
+                        }}><SvgIcon name="printer" size={11} /> 打印</button>
                       </>
                     )}
                   </div>
@@ -4402,7 +4403,7 @@ export default function ProjectPage() {
                           a.click(); URL.revokeObjectURL(url)
                         }
                       }}>
-                      📥 下载
+                      <SvgIcon name="download" size={11} /> 下载
                     </button>
                     <button className="btn btn-ghost btn-sm"
                       style={{ color: 'var(--warning)' }}
@@ -4414,7 +4415,7 @@ export default function ProjectPage() {
                           flashSave()
                         }
                       }}>
-                      🗑 清空
+                      <SvgIcon name="trash" size={11} /> 清空
                     </button>
                   </div>
                 </div>
@@ -4428,7 +4429,7 @@ export default function ProjectPage() {
           <div className="panel-grid">
             <div className="panel-left">
               <div className="card">
-                <div className="card-title">🎙 演讲口播<HelpButton location="project-stage-4b" /></div>
+                <div className="card-title"><SvgIcon name="music" size={14} /> 演讲口播<HelpButton location="project-stage-4b" /></div>
                 <div className="form-label">TTS 提供商</div>
                 <select className="form-select" style={{ marginBottom: 8 }}
                   value={ttsProviderId} onChange={e => {
@@ -4539,7 +4540,7 @@ export default function ProjectPage() {
                             <div style={{ display: 'flex', gap: 3, marginTop: 2, alignItems: 'center' }} onClick={e => e.stopPropagation()}>
                               {playingVoiceId === v.id ? (
                                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
-                                  onClick={stopAudio}>■</button>
+                                  onClick={stopAudio}><SvgIcon name="x-mark" size={10} /></button>
                               ) : (
                                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
                                   onClick={async () => {
@@ -4550,7 +4551,7 @@ export default function ProjectPage() {
                                       modal.toast('试听失败: ' + (e?.message || '未知错误'), 'error')
                                     }
                                   }}>
-                                ▶</button>
+                                <SvgIcon name="play" size={10} /></button>
                               )}
                               <input type="range" min="0" max="100" value={v.volume ?? 50}
                                 onClick={e => e.stopPropagation()}
@@ -4576,14 +4577,14 @@ export default function ProjectPage() {
                                     onClick={() => {
                                       api.updateVoice(v.id, { name: editVoiceName }).then(() => loadClonedVoices())
                                       setEditingVoiceId('')
-                                    }}>✓</button>
+                                    }}><SvgIcon name="check" size={10} /></button>
                                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--text-secondary)' }}
-                                    onClick={() => setEditingVoiceId('')}>✕</button>
+                                    onClick={() => setEditingVoiceId('')}><SvgIcon name="x-mark" size={10} /></button>
                                 </>
                               ) : (
                                 <>
                                   <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px' }}
-                                    onClick={() => { setEditingVoiceId(v.id); setEditVoiceName(v.name) }}>✏</button>
+                                    onClick={() => { setEditingVoiceId(v.id); setEditVoiceName(v.name) }}><SvgIcon name="edit" size={10} /></button>
                                   <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 9, padding: '0 3px', color: 'var(--warning)' }}
                                     onClick={async () => {
                                       if (!confirm('确定删除此音色？')) return
@@ -4596,7 +4597,7 @@ export default function ProjectPage() {
                                       } catch (e: any) {
                                         modal.toast('删除失败: ' + (e?.message || '未知错误'), 'error')
                                       }
-                                    }}>✕</button>
+                                    }}><SvgIcon name="x-mark" size={10} /></button>
                                 </>
                               )}
                             </div>
@@ -4654,7 +4655,7 @@ export default function ProjectPage() {
                             }
                           }}>
                           {S4_SPEECH_TABS.map(t => (
-                            <option key={t.key} value={t.key}>{t.label}{steps[t.stepKey] ? ' ✓' : ' (暂无内容)'}</option>
+                            <option key={t.key} value={t.key}>{t.label}{steps[t.stepKey] ? ' (已有内容)' : ' (暂无内容)'}</option>
                           ))}
                           <option value="blank">白板编辑</option>
                           {splitSegments.length > 0 && (
@@ -4686,10 +4687,10 @@ export default function ProjectPage() {
                           <CanEdit>
                             <button className="btn btn-ghost btn-sm"
                               style={{ color: 'var(--warning)' }}
-                              onClick={() => setTtsInputText('')}>🗑 清空</button>
+                              onClick={() => setTtsInputText('')}><SvgIcon name="trash" size={11} /> 清空</button>
                             <button className="btn btn-ghost btn-sm"
                               style={{ color: 'var(--primary)' }}
-                              onClick={doSplit}>✂ 分割</button>
+                              onClick={doSplit}><SvgIcon name="sparkles" size={11} /> 分割</button>
                           </CanEdit>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
                             <span>分割方式：</span>
@@ -4710,7 +4711,7 @@ export default function ProjectPage() {
                         <CanEdit perm={canGenerate4}>
                         <button className="btn btn-primary btn-sm w-full"
                           disabled={ttsGenerating} onClick={doTTS}>
-                          {ttsGenerating ? '⏳ 合成中...' : '🔊 语音合成'}
+                          {ttsGenerating ? <><SvgIcon name="clock" size={11} /> 合成中...</> : <><SvgIcon name="music" size={11} /> 语音合成</>}
                         </button>
                         </CanEdit>
                       </>
@@ -4718,7 +4719,7 @@ export default function ProjectPage() {
                       <>
                         {splitSegments.length === 0 ? (
                           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 12 }}>
-                            暂无分割段落，请先在"文案编辑"中点击"✂ 分割"
+                            暂无分割段落，请先在"文案编辑"中点击"分割"
                           </div>
                         ) : (
                           <>
@@ -4752,7 +4753,7 @@ export default function ProjectPage() {
                                           style={{ marginRight: 6, verticalAlign: 'middle', cursor: 'pointer' }}
                                           onClick={e => e.stopPropagation()} />
                                         段{seg.index}
-                                        {seg.audioUrl && <span style={{ color: 'var(--success)', marginLeft: 6, fontSize: 10 }}>✅</span>}
+                                        {seg.audioUrl && <span style={{ color: 'var(--success)', marginLeft: 6, fontSize: 10 }}><SvgIcon name="check" size={10} /></span>}
                                       </div>
                                       <textarea readOnly={readOnly}
                                         style={{ color: 'var(--text-secondary)', fontSize: 10, lineHeight: 1.4, width: '100%', minHeight: 36, height: 36, resize: 'vertical', background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 3, padding: '2px 4px', fontFamily: 'inherit' }}
@@ -4768,20 +4769,20 @@ export default function ProjectPage() {
                                         style={{ fontSize: 9, padding: '0 3px', color: 'var(--primary)' }}
                                         disabled={splitGenerating}
                                         onClick={e => { e.stopPropagation(); synthesizeSegment(seg.index) }}>
-                                        {splitGenerating ? '⏳' : '合成'}
+                                        {splitGenerating ? <SvgIcon name="clock" size={11} /> : '合成'}
                                       </button>
                                       <button type="button" className="btn btn-ghost btn-sm"
                                         style={{ fontSize: 9, padding: '0 2px', color: 'var(--text-secondary)' }}
                                         title="上移"
-                                        onClick={e => { e.stopPropagation(); moveSegmentUp(seg.index) }}>↑</button>
+                                        onClick={e => { e.stopPropagation(); moveSegmentUp(seg.index) }}>上</button>
                                       <button type="button" className="btn btn-ghost btn-sm"
                                         style={{ fontSize: 9, padding: '0 2px', color: 'var(--text-secondary)' }}
                                         title="下移"
-                                        onClick={e => { e.stopPropagation(); moveSegmentDown(seg.index) }}>↓</button>
+                                        onClick={e => { e.stopPropagation(); moveSegmentDown(seg.index) }}>下</button>
                                       <button type="button" className="btn btn-ghost btn-sm"
                                         style={{ fontSize: 9, padding: '0 2px', color: 'var(--danger)' }}
                                         title="删除"
-                                        onClick={e => { e.stopPropagation(); removeSegment(seg.index) }}>✕</button>
+                                        onClick={e => { e.stopPropagation(); removeSegment(seg.index) }}><SvgIcon name="x-mark" size={10} /></button>
                                     </div>
                                   </div>
                                 </div>
@@ -4790,7 +4791,7 @@ export default function ProjectPage() {
                             <button className="btn btn-primary btn-sm w-full"
                               disabled={splitGenerating || selectedSegments.size === 0}
                               onClick={synthesizeSelected}>
-                              {splitGenerating ? '⏳ 合成中...' : `🔊 合成选中段落 (${selectedSegments.size})`}
+                              {splitGenerating ? <><SvgIcon name="clock" size={11} /> 合成中...</> : <><SvgIcon name="music" size={11} /> 合成选中段落 ({selectedSegments.size})</>}
                             </button>
                             <button className="btn btn-ghost btn-sm w-full"
                               style={{ marginTop: 4, fontSize: 10, border: '1px dashed var(--border)' }}
@@ -4860,9 +4861,9 @@ export default function ProjectPage() {
                                 onClick={() => {
                                   api.updateTtsHistory(h.id, editHistoryName).then(() => loadTtsHistory())
                                   setEditingHistoryIdx(null)
-                                }}>✓</button>
+                                }}><SvgIcon name="check" size={10} /></button>
                               <button className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                                onClick={() => setEditingHistoryIdx(null)}>✕</button>
+                                onClick={() => setEditingHistoryIdx(null)}><SvgIcon name="x-mark" size={10} /></button>
                             </div>
                           ) : (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
@@ -4882,21 +4883,21 @@ export default function ProjectPage() {
                                 {h.audioUrl && (
                                   playingHistoryIdx === i ? (
                                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)', padding: '0 4px' }}
-                                      onClick={stopAudio}>■</button>
+                                      onClick={stopAudio}><SvgIcon name="x-mark" size={10} /></button>
                                   ) : (
                                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
-                                      onClick={() => playAudio(h.audioUrl, undefined, i)}>▶</button>
+                                      onClick={() => playAudio(h.audioUrl, undefined, i)}><SvgIcon name="play" size={10} /></button>
                                   )
                                 )}
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
-                                  onClick={() => downloadFile(h.audioUrl, h.filename)}>💾</button>
+                                  onClick={() => downloadFile(h.audioUrl, h.filename)}><SvgIcon name="download" size={10} /></button>
                                 <CanEdit perm={canGenerate4}>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px' }}
-                                  onClick={() => { setEditingHistoryIdx(i); setEditHistoryName(h.filename) }}>✏</button>
+                                  onClick={() => { setEditingHistoryIdx(i); setEditHistoryName(h.filename) }}><SvgIcon name="edit" size={10} /></button>
                                 </CanEdit>
                                 <CanEdit perm={canGenerate4}>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, color: 'var(--warning)', padding: '0 4px' }}
-                                  onClick={() => { if (confirm('确定删除此合成记录？')) { api.deleteTtsHistory(h.id).then(() => { setSplitSegments(prev => prev.map(s => s.audioUrl === h.audioUrl ? { ...s, audioUrl: undefined } : s)); loadTtsHistory() }) } }}>✕</button>
+                                  onClick={() => { if (confirm('确定删除此合成记录？')) { api.deleteTtsHistory(h.id).then(() => { setSplitSegments(prev => prev.map(s => s.audioUrl === h.audioUrl ? { ...s, audioUrl: undefined } : s)); loadTtsHistory() }) } }}><SvgIcon name="x-mark" size={10} /></button>
                                 </CanEdit>
                               </div>
                             </div>
@@ -5081,7 +5082,7 @@ export default function ProjectPage() {
 
       {/* ═══ Config Bar ═══ */}
       <div className="config-bar">
-        <span className="cb-label">⚙ 当前栏目配置：</span>
+        <span className="cb-label"><SvgIcon name="settings" size={11} /> 当前栏目配置：</span>
         <span>模型</span> <span className="cb-val">{CONFIG[stage]?.model}</span>
         <span className="cb-sep">|</span>
         <span>模板</span> <span className="cb-val">{CONFIG[stage]?.tmpl}</span>
@@ -5125,7 +5126,7 @@ export default function ProjectPage() {
                 document.addEventListener('mousemove', onMove)
                 document.addEventListener('mouseup', onUp)
               }}>
-              📺 视频播放校验 <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>确认字幕内容是否准确</span>
+              <SvgIcon name="monitor" size={14} /> 视频播放校验 <span style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 8 }}>确认字幕内容是否准确</span>
             </div>
             <div style={{ display: 'flex', gap: 16, flex: 1, minHeight: 0 }}>
               <div style={{ flex: 3, background: '#000', borderRadius: 8, minHeight: 360, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -5159,7 +5160,7 @@ export default function ProjectPage() {
                   onChange={e => setVideoText(e.target.value)} />
                 <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
                   <button className="btn btn-ghost btn-sm" onClick={() => setVideoText('')}>
-                    🗑 清空
+                    <SvgIcon name="trash" size={11} /> 清空
                   </button>
                   <button className={`btn btn-primary btn-sm ${getSaveBtnClass(videoText, 'video_text')}`} onClick={() => {
                     if (id && videoText.trim()) { saveStep('video_text', videoText); flashSave() }

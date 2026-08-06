@@ -89,7 +89,7 @@ function SettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
   // -- 通用设置 state --
-  const [brandLogo, setBrandLogo] = useState('⚡')
+  const [brandLogo, setBrandLogo] = useState('')
   const [brandName, setBrandName] = useState('')
   const [brandSlogan, setBrandSlogan] = useState('')
   const [savePath, setSavePath] = useState('D:\\YISHAOAGENT\\data\\output')

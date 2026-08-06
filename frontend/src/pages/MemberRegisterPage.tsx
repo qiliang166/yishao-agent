@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import SvgIcon from '../components/SvgIcon'
 
 export default function MemberRegisterPage() {
   const { memberRegister } = useAuth()
@@ -78,7 +79,7 @@ export default function MemberRegisterPage() {
           boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
           textAlign: 'center',
         }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="check" size={48} /></div>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>注册成功</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             {success}

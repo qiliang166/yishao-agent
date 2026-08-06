@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../services/api'
 import { MTopBar, mToast } from '../MobileApp'
+import SvgIcon from '../../components/SvgIcon'
 
 interface ProjectFile {
   filename: string
@@ -252,7 +253,7 @@ export default function MProject() {
                     return s
                   })
                 }}>
-                  <span>{expanded ? '▼' : '▶'}</span>
+                  <span><SvgIcon name={expanded ? 'chevron-down' : 'chevron-right'} size={12} /></span>
                   <span>{cat}</span>
                   <span style={{ fontWeight: 400, color: 'var(--text-secondary)', fontSize: 12 }}>({list.length})</span>
                 </div>
@@ -273,12 +274,12 @@ export default function MProject() {
                         <button className="m-icon-btn"
                           onClick={e => { e.stopPropagation(); handleAudioToggle(audioUrl) }}
                           title={isPlaying ? '暂停' : '播放'}>
-                          {isPlaying ? '⏸' : '▶'}
+                          <SvgIcon name={isPlaying ? 'x-mark' : 'play'} size={14} />
                         </button>
                       )}
                       <button className="m-icon-btn"
                         onClick={e => { e.stopPropagation(); openPreview(f) }}
-                        title="预览">👁</button>
+                        title="预览"><SvgIcon name="eye" size={14} /></button>
                       {f.download_url && (
                         <button className="m-icon-btn"
                           onClick={e => { e.stopPropagation(); handleDownload(f) }}

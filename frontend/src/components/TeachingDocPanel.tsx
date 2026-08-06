@@ -1,4 +1,5 @@
 import { useState, useEffect, forwardRef, useImperativeHandle, useCallback, useRef, useMemo } from 'react'
+import SvgIcon from './SvgIcon'
 import { api } from '../services/api'
 import { useModal } from './ModalProvider'
 import { marked } from 'marked'
@@ -30,7 +31,7 @@ const DOC_COLORS: Record<string, string> = {
   sop: 'var(--success)', dao: 'var(--purple)', yanxi: 'var(--warning)',
 }
 const DOC_ICONS: Record<string, string> = {
-  sop: '📃', dao: '💡', yanxi: '📖',
+  sop: 'file-text', dao: 'sparkles', yanxi: 'book-open',
 }
 const STEP_KEYS: Record<string, string> = {
   sop: 'step2_sop', dao: 'step2_daoshuyi', yanxi: 'step2_yanxi',
@@ -319,9 +320,9 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
 
   // ── Button helpers ──
   const getSaveLabel = () => {
-    if (!localContent.trim()) return '💾 保存'
-    if (localContent !== savedContent) return '💾 保存'
-    return '✓ 已保存'
+    if (!localContent.trim()) return <><SvgIcon name="download" size={12} /> 保存</>
+    if (localContent !== savedContent) return <><SvgIcon name="download" size={12} /> 保存</>
+    return <><SvgIcon name="check" size={12} /> 已保存</>
   }
   const getSaveClass = () => {
     if (savedFlash) return 'btn-saved-flash'
@@ -340,7 +341,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
 
   const controls = (
     <>
-      <div className="card-title" style={{ color }}>{icon} {label}生成</div>
+      <div className="card-title" style={{ color }}><SvgIcon name={icon} size={14} /> {label}生成</div>
       <div className="card-hint">基于文案提取结果，使用栏目配置中设定的提示词和SKILL生成{label}</div>
       <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 6 }}>
         <label className="form-label" htmlFor={`ds-${docType}`}>数据来源</label>
@@ -366,7 +367,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
       <button className="btn btn-primary btn-sm w-full"
         disabled={!getSourceText(dataSource) || !model || generating}
         onClick={handleGenerate}>
-        {generating ? '⏳ 生成中...' : `⚙ AI 生成 ${label}`}
+        {generating ? <><SvgIcon name="clock" size={12} /> 生成中...</> : <><SvgIcon name="sparkles" size={12} /> AI 生成 {label}</>}
       </button>
       {generating && (
         <button className="btn btn-sm" style={{ marginTop: 4, background: 'var(--warning)', color: '#fff', width: '100%' }}
@@ -387,7 +388,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
           borderBottom: viewMode === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
           fontWeight: viewMode === 'edit' ? 600 : 400,
         }}>
-        ✏️ 编辑
+        <SvgIcon name="pencil" size={12} /> 编辑
       </button>
       <button
         onClick={() => setViewMode('preview')}
@@ -398,7 +399,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
           borderBottom: viewMode === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
           fontWeight: viewMode === 'preview' ? 600 : 400,
         }}>
-        👁 预览
+        <SvgIcon name="eye" size={12} /> 预览
       </button>
       {viewMode === 'preview' && localContent && (
         <>
@@ -408,7 +409,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
               marginLeft: 'auto', padding: '5px 12px', fontSize: 11, cursor: 'pointer',
               background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
             }}>
-            📥 下载 HTML
+            <SvgIcon name="download" size={12} /> 下载 HTML
           </button>
           <button
             onClick={handlePrint}
@@ -416,7 +417,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
               marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
               background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
             }}>
-            🖨 打印
+            <SvgIcon name="printer" size={12} /> 打印
           </button>
         </>
       )}
@@ -462,9 +463,9 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
         </span>
         <span style={{ display: 'flex', gap: 5 }}>
           <button className="btn btn-ghost btn-sm" onClick={handleClear}
-            disabled={!localContent}>✕ 清空</button>
+            disabled={!localContent}><SvgIcon name="x-mark" size={12} /> 清空</button>
           <button className="btn btn-ghost btn-sm" onClick={handleSaveToProject}
-            disabled={!localContent}>📥 存到项目</button>
+            disabled={!localContent}><SvgIcon name="download" size={12} /> 存到项目</button>
           <button className={`btn btn-primary btn-sm ${getSaveClass()}`}
             disabled={!localContent.trim()}
             onClick={handleSave}>{getSaveLabel()}</button>

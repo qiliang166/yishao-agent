@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
+import SvgIcon from '../components/SvgIcon'
 
 const PAGE_SIZE = 20
 
@@ -407,7 +408,7 @@ export default function AuthorManagePage() {
             <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
           ) : authors.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>✍</div>
+              <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="edit" size={48} /></div>
               <p>暂无作者，点击右上角「新建作者」添加</p>
             </div>
           ) : (

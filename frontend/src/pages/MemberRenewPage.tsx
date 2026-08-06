@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
+import SvgIcon from '../components/SvgIcon'
 
 interface QRState {
   wechat: string
@@ -115,7 +116,7 @@ export default function MemberRenewPage() {
           boxShadow: '0 2px 16px rgba(0,0,0,0.08)',
           textAlign: 'center',
         }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✓</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="check" size={48} /></div>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>续费成功</h2>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             {success}

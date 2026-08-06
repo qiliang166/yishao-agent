@@ -1,5 +1,6 @@
 import { RefObject, useRef } from 'react'
 import { useModal } from '../../components/ModalProvider'
+import SvgIcon from '../../components/SvgIcon'
 
 interface Props {
   textareaRef: RefObject<HTMLTextAreaElement>
@@ -81,9 +82,9 @@ export default function MdToolbar({ textareaRef, value, onChange }: Props) {
       {btn('H3', '小标题', () => insert('\n### ', '', '标题'))}
       {btn('• 列表', '无序列表', () => insertBlock('- 第一项\n- 第二项\n- 第三项'))}
       {btn('1. 列表', '有序列表', () => insertBlock('1. 第一项\n2. 第二项\n3. 第三项'))}
-      {btn('❝ 引用', '引用块', () => insert('\n> ', '', '引用内容'))}
-      {btn('▦ 表格', '插入表格', () => { void handleTable() })}
-      {btn('🖼 图片', '插入本地图片（≤2MB，自动内嵌）', () => imgRef.current?.click())}
+      {btn('" 引用', '引用块', () => insert('\n> ', '', '引用内容'))}
+      {btn('# 表格', '插入表格', () => { void handleTable() })}
+      {btn('图片', '插入本地图片（≤2MB，自动内嵌）', () => imgRef.current?.click())}
       <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; if (f) handleImage(f); e.target.value = '' }} />
     </div>

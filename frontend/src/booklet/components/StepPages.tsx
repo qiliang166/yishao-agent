@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, type ReactNode } from 'react'
+import SvgIcon from '../../components/SvgIcon'
 import { api } from '../../services/api'
 import { BookletDraft, Chapter, PageMapChapter, Theme, mdToHtml, resolveDraftTheme } from '../types'
 import ProsePreview from './ProsePreview'
@@ -220,7 +221,7 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
   const eyeBtn = (hidden: boolean, onClick: () => void, title: string) => (
     <button className="btn btn-ghost btn-sm" title={title} onClick={onClick} disabled={readonly}
       style={{ fontSize: 10, padding: '1px 6px' }}>
-      {hidden ? '🚫 已隐藏' : '👁 显示中'}
+      {hidden ? <><SvgIcon name="alert-triangle" size={14} /> 已隐藏</> : <><SvgIcon name="eye" size={14} /> 显示中</>}
     </button>
   )
 
@@ -250,7 +251,7 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
 
   const draftChapterById = (id: string) => draft.chapters.find(c => c.id === id)
 
-  const fixedFallback = (icon: string, label: string, dark?: boolean) => (
+  const fixedFallback = (icon: ReactNode, label: string, dark?: boolean) => (
     <div style={{
       width: thumbW, height: thumbH, display: 'flex', alignItems: 'center', justifyContent: 'center',
       flexDirection: 'column', gap: 4, fontSize: 11,
@@ -263,7 +264,7 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
 
   return (
     <div className="card" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <div className="card-title" style={{ flexShrink: 0 }}>📑 页面编排</div>
+      <div className="card-title" style={{ flexShrink: 0 }}><SvgIcon name="book-open" size={14} /> 页面编排</div>
       <div className="card-hint" style={{ flexShrink: 0 }}>
         每一页可单独隐藏（不进合成产物），同一章节内的页可调整先后顺序；章节之间的顺序在第②步调整。
         {isFlow && <span style={{ color: 'var(--warning, #d97706)' }}> 当前为网页式合成：正文不分页，正文章节仅支持整章隐藏。</span>}
@@ -271,12 +272,12 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 4 }}>
 
         {/* 固定页 */}
-        <div style={{ fontSize: 12, fontWeight: 600, margin: '8px 0 6px' }}>📘 固定页</div>
+        <div style={{ fontSize: 12, fontWeight: 600, margin: '8px 0 6px' }}><SvgIcon name="book-open" size={14} /> 固定页</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <div style={cardStyle(false)}>
             {fixedDocs['cover']
               ? <Thumb doc={fixedDocs['cover']} pageW={pageW} pageH={pageH} thumbW={thumbW} />
-              : fixedFallback('📕', '封面', true)}
+              : fixedFallback(<SvgIcon name="book-open" size={18} />, '封面', true)}
             <div style={{ padding: '3px 6px', fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center' }}>封面 · 不可隐藏</div>
           </div>
           {fixedKeys.map(key => {
@@ -286,7 +287,7 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
                 {hidden && badge}
                 {fixedDocs[key]
                   ? <Thumb doc={fixedDocs[key]} pageW={pageW} pageH={pageH} thumbW={thumbW} />
-                  : fixedFallback(key === 'toc' ? '📋' : key === 'flyleaf' ? '📃' : '📄', FIXED_LABEL[key] || key)}
+                  : fixedFallback(key === 'toc' ? <SvgIcon name="clipboard" size={18} /> : key === 'flyleaf' ? <SvgIcon name="file-text" size={18} /> : <SvgIcon name="file-text" size={18} />, FIXED_LABEL[key] || key)}
                 <div style={{ padding: '3px 4px', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                   <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{FIXED_LABEL[key] || key}</span>
                   {!readonly && eyeBtn(hidden, () => toggleFixed(key), hidden ? '恢复显示该固定页' : '隐藏该固定页（不进合成产物）')}
@@ -363,9 +364,9 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
                           proseMulti ? (
                             <>
                               <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === 0}
-                                title="向前移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, -1)}>◀</button>
+                                title="向前移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, -1)}><SvgIcon name="chevron-right" size={14} /></button>
                               <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === order.length - 1}
-                                title="向后移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, 1)}>▶</button>
+                                title="向后移动" onClick={() => moveProsePage(pm.chapter_id, count, pos, 1)}><SvgIcon name="chevron-right" size={14} /></button>
                               {eyeBtn(hidden, () => toggleProsePage(pm.chapter_id, pageIdx), hidden ? '恢复显示该页' : '隐藏该页（不进合成产物）')}
                             </>
                           ) : (
@@ -373,9 +374,9 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
                               {!singlePage && (
                                 <>
                                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === 0}
-                                    title="向前移动" onClick={() => movePage(pm.chapter_id, count, pos, -1)}>◀</button>
+                                    title="向前移动" onClick={() => movePage(pm.chapter_id, count, pos, -1)}><SvgIcon name="chevron-right" size={14} /></button>
                                   <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 5px' }} disabled={pos === order.length - 1}
-                                    title="向后移动" onClick={() => movePage(pm.chapter_id, count, pos, 1)}>▶</button>
+                                    title="向后移动" onClick={() => movePage(pm.chapter_id, count, pos, 1)}><SvgIcon name="chevron-right" size={14} /></button>
                                 </>
                               )}
                               {eyeBtn(hidden, () => togglePage(pm.chapter_id, pageIdx), hidden ? '恢复显示该页' : '隐藏该页（不进合成产物）')}

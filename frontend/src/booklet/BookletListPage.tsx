@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import SvgIcon from '../components/SvgIcon'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { useAuth } from '../contexts/AuthContext'
@@ -241,7 +242,7 @@ export default function BookletListPage() {
                   </button>
                   {b.owner_id === userId && (
                     <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                      onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+                      onClick={(e) => handleDelete(b, e)}><SvgIcon name="trash" size={14} /> 删除</button>
                   )}
                 </span>
               </>
@@ -265,7 +266,7 @@ export default function BookletListPage() {
               <span>
                 {isAdmin && (
                   <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                    onClick={(e) => handleToggleRecommend(b, e)}>⭐ 推荐</button>
+                    onClick={(e) => handleToggleRecommend(b, e)}><SvgIcon name="star" size={14} /> 推荐</button>
                 )}
               </span>
               <span style={{ display: 'flex', gap: 4 }}>
@@ -275,7 +276,7 @@ export default function BookletListPage() {
                   {isDownloading ? '下载中...' : '下载'}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                  onClick={(e) => handleDelete(b, e)}>🗑 删除</button>
+                  onClick={(e) => handleDelete(b, e)}><SvgIcon name="trash" size={14} /> 删除</button>
               </span>
             </>
           )}
@@ -287,8 +288,8 @@ export default function BookletListPage() {
   return (
     <div style={{ padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, flex: 1 }}>📚 电子成册</h2>
-        <button type="button" className="btn btn-primary" onClick={(e) => { e.preventDefault(); setShowNew(true); }}>➕ 新建册子</button>
+        <h2 style={{ fontSize: 18, flex: 1 }}><SvgIcon name="book-open" size={14} /> 电子成册</h2>
+        <button type="button" className="btn btn-primary" onClick={(e) => { e.preventDefault(); setShowNew(true); }}><SvgIcon name="plus" size={14} /> 新建册子</button>
       </div>
       <div className="card-hint" style={{ marginBottom: 14 }}>
         把已生成的文档、课件、演讲稿汇编成一本可下载的电子书 — 选内容 → 排顺序 → 填封面 → 合成下载，四步完成。
@@ -298,13 +299,13 @@ export default function BookletListPage() {
         <div style={{ color: 'var(--text-secondary)', fontSize: 13, padding: 30, textAlign: 'center' }}>加载中...</div>
       ) : booklets.length === 0 ? (
         <div className="card" style={{ textAlign: 'center', padding: 40, color: 'var(--text-secondary)', fontSize: 13 }}>
-          还没有册子 — 点击右上角「➕ 新建册子」开始
+          还没有册子 — 点击右上角「<SvgIcon name="plus" size={14} /> 新建册子」开始
         </div>
       ) : (
         <>
           {recommended.length > 0 && (
             <div style={{ marginBottom: 24 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>⭐ 推荐画册</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}><SvgIcon name="star" size={14} /> 推荐画册</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                 {recommended.map(b => renderCard(b, true))}
               </div>
@@ -313,7 +314,7 @@ export default function BookletListPage() {
           {myBooklets.length > 0 && (
             <div style={{ marginBottom: userBooklets.length > 0 ? 24 : 0 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
-                {isAdmin ? '📝 我的画册' : '📝 我的画册'}
+                <SvgIcon name="file-text" size={14} /> 我的画册
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
                 {myBooklets.map(b => renderCard(b, false))}
@@ -322,7 +323,7 @@ export default function BookletListPage() {
           )}
           {userBooklets.length > 0 && (
             <div>
-              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>👥 用户画册</h3>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}><SvgIcon name="users" size={14} /> 用户画册</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
                 {userBooklets.map(b => renderCard(b, false))}
               </div>
@@ -352,7 +353,7 @@ export default function BookletListPage() {
                       border: `2px solid ${newType === t ? 'var(--primary)' : 'var(--border)'}`,
                       background: newType === t ? 'var(--bg-hover)' : 'transparent',
                     }}>
-                    <div style={{ fontWeight: 600 }}>{t === 'a4' ? '📕 A4 书册版' : '🖥 PPT 合辑版'}</div>
+                    <div style={{ fontWeight: 600 }}>{t === 'a4' ? <><SvgIcon name="book-open" size={14} /> A4 书册版</> : <><SvgIcon name="monitor" size={14} /> PPT 合辑版</>}</div>
                     <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 3 }}>
                       {t === 'a4' ? '竖版 A4 — 文档、演讲稿、文档课件，可打印装订' : '横版 16:9 — 分析PPT、综合PPT 合辑，键盘翻页'}
                     </div>

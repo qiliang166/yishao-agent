@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import SvgIcon from '../../components/SvgIcon'
 import { api } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { useModal } from '../../components/ModalProvider'
@@ -101,12 +102,12 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
     <div className="panel-grid">
       <div className="panel-left">
         <div className="card" style={{ flexShrink: 0 }}>
-          <div className="card-title">📦 合成信息</div>
+          <div className="card-title"><SvgIcon name="package" size={14} /> 合成信息</div>
           <div style={{ fontSize: 12, lineHeight: 2.1 }}>
             <div>书名：<strong>{draft.title || '—'}</strong></div>
             {draft.subtitle && <div>副标题：{draft.subtitle}</div>}
             <div>署名：{draft.author || '—'}</div>
-            <div>类型：{draft.book_type === 'ppt' ? '🖥 PPT 合辑版（横版 16:9）' : '📕 A4 书册版（可打印）'}</div>
+            <div>类型：{draft.book_type === 'ppt' ? <><SvgIcon name="monitor" size={14} /> PPT 合辑版（横版 16:9）</> : <><SvgIcon name="book-open" size={14} /> A4 书册版（可打印）</>}</div>
             <div>章节：{enabledCount} 章启用 / 共 {draft.chapters.length} 章</div>
           </div>
           {enabledCount === 0 && (
@@ -133,7 +134,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
         </div>
 
         <div className="card" style={{ flexShrink: 0 }}>
-          <div className="card-title">📥 合成下载</div>
+          <div className="card-title"><SvgIcon name="download" size={14} /> 合成下载</div>
           <div className="card-hint">
             产物是一个自包含 HTML 文件：双击用浏览器打开即可翻阅；
             {renderMode === 'paged'
@@ -150,7 +151,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
             <>
               <button className="btn btn-primary" style={{ width: '100%', padding: '10px 0', fontSize: 14 }}
                 disabled={downloading || enabledCount === 0} onClick={handleDownload}>
-                {downloading ? '⏳ 合成中...' : '📥 合成并下载电子书'}
+                {downloading ? <><SvgIcon name="clock" size={14} /> 合成中...</> : <><SvgIcon name="download" size={14} /> 合成并下载电子书</>}
               </button>
               {dirty && (
                 <div className="card-hint" style={{ marginTop: 8, marginBottom: 0 }}>
@@ -161,7 +162,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
           )}
           <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 8 }}
             disabled={previewing || enabledCount === 0} onClick={doPreview}>
-            {previewing ? '⏳ 生成预览中...' : '👁 整书预览'}
+            {previewing ? <><SvgIcon name="clock" size={14} /> 生成预览中...</> : <><SvgIcon name="eye" size={14} /> 整书预览</>}
           </button>
         </div>
       </div>
@@ -169,7 +170,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
       <div className="panel-right" style={{ overflow: 'hidden' }}>
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div className="card-title" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span>📖 整书预览</span>
+            <span><SvgIcon name="book-open" size={14} /> 整书预览</span>
             <span style={{ flex: 1 }} />
             {previewHtml && (renderMode === 'paged' ? (
               <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--text-secondary)' }}>翻页式自动适配窗口，无需缩放</span>
@@ -194,7 +195,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
             </div>
           ) : (
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-              点击左侧「👁 整书预览」查看合成效果
+              点击左侧「<SvgIcon name="eye" size={14} /> 整书预览」查看合成效果
             </div>
           )}
         </div>

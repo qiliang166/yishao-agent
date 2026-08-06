@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import DOMPurify from 'dompurify'
 import { api } from '../services/api'
+import SvgIcon from './SvgIcon'
 
 export default function AnnounceModal() {
   const [html, setHtml] = useState('')
@@ -33,7 +34,7 @@ export default function AnnounceModal() {
               background: 'transparent', border: 'none', fontSize: 18,
               cursor: 'pointer', color: 'var(--text-secondary)', padding: '2px 6px',
             }}
-          >✕</button>
+          ><SvgIcon name="x-mark" /></button>
         </div>
         <div
           style={{ fontSize: 12, lineHeight: 1.8, color: 'var(--text)' }}

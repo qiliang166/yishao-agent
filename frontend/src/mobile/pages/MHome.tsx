@@ -4,6 +4,7 @@ import { api } from '../../services/api'
 import type { Workspace } from '../../services/api'
 import { useAuth } from '../../contexts/AuthContext'
 import { MTopBar, mToast } from '../MobileApp'
+import SvgIcon from '../../components/SvgIcon'
 
 export default function MHome() {
   const { user, logout } = useAuth()
@@ -47,12 +48,12 @@ export default function MHome() {
         <div className="m-entry-grid">
           {canAdmin && (
             <button className="m-entry-card" onClick={() => navigate('/admin')}>
-              <span className="m-entry-icon">👥</span>
+              <span className="m-entry-icon"><SvgIcon name="users" size={24} /></span>
               <span>用户管理</span>
             </button>
           )}
           <button className="m-entry-card" onClick={() => navigate('/me')}>
-            <span className="m-entry-icon">👤</span>
+            <span className="m-entry-icon"><SvgIcon name="user" size={24} /></span>
             <span>个人中心</span>
           </button>
         </div>

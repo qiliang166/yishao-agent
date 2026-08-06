@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { api } from '../services/api'
+import SvgIcon from '../components/SvgIcon'
 
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
@@ -52,7 +53,7 @@ export default function LandingPage() {
   }
 
   const name = brandName || 'Yishao Agent'
-  const logo = brandLogo || '⚡'
+  const logo = brandLogo || ''
 
   const coverThumbUrl = useCallback((b: any) => {
     if (user && token) return `/api/booklets/${b.id}/cover-thumb?token=${encodeURIComponent(token)}`
@@ -70,8 +71,10 @@ export default function LandingPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isImagePath(logo) ? (
             <img src={logo} alt="Logo" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'cover' }} />
-          ) : (
+          ) : logo ? (
             <span style={{ fontSize: 24 }}>{logo}</span>
+          ) : (
+            <SvgIcon name="bolt" size={28} />
           )}
           <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{name}</span>
         </div>
@@ -106,8 +109,10 @@ export default function LandingPage() {
         <div style={{ marginBottom: 16 }}>
           {isImagePath(logo) ? (
             <img src={logo} alt="Logo" style={{ width: 64, height: 64, borderRadius: 12, objectFit: 'cover' }} />
-          ) : (
+          ) : logo ? (
             <span style={{ fontSize: 56 }}>{logo}</span>
+          ) : (
+            <SvgIcon name="bolt" size={56} />
           )}
         </div>
         <h1 style={{

@@ -47,7 +47,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [brandLogo, setBrandLogo] = useState('⚡')
+  const [brandLogo, setBrandLogo] = useState('')
   const [brandName, setBrandName] = useState('')
   const [brandSlogan, setBrandSlogan] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
@@ -106,7 +106,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
     if (isImagePath(brandLogo)) {
       return <img src={brandLogo} alt="Logo" className="sidebar-head-icon-img" />
     }
-    return <span className="sidebar-head-icon-emoji">{brandLogo || '🍽'}</span>
+    return <span className="sidebar-head-icon-emoji"><SvgIcon name="building" /></span>
   }
 
   const canTemplate = usePermission('template.manage')
@@ -260,7 +260,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
             background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             border: 'none', borderRadius: 6, textAlign: 'center',
           }}>
-            🚀 快速上手
+            <SvgIcon name="rocket" /> 快速上手
           </button>
         )}
         <div style={{ fontSize: 10, display: 'flex', gap: 8, marginTop: 8 }}>
@@ -269,7 +269,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
         </div>
         <div style={{ fontSize: 10, marginTop: 4 }}>
           <span onClick={() => setShowAbout(true)}
-            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>ℹ️ 关于软件</span>
+            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}><SvgIcon name="info" /> 关于软件</span>
         </div>
           <button
             className="sidebar-item"
@@ -286,7 +286,7 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           </button>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
-              👤 {user.display_name || user.username}
+              <SvgIcon name="user" /> {user.display_name || user.username}
             </div>
           )}
           <LogoutButton />
@@ -360,7 +360,7 @@ function MemberSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const [brandLogo, setBrandLogo] = useState('⚡')
+  const [brandLogo, setBrandLogo] = useState('')
   const [brandName, setBrandName] = useState('')
   const [brandSlogan, setBrandSlogan] = useState('')
   const [sidebarVersion, setSidebarVersion] = useState('1.0.0')
@@ -411,7 +411,7 @@ function MemberSidebar() {
     if (isImagePath(brandLogo)) {
       return <img src={brandLogo} alt="Logo" className="sidebar-head-icon-img" />
     }
-    return <span className="sidebar-head-icon-emoji">{brandLogo || '🍽'}</span>
+    return <span className="sidebar-head-icon-emoji"><SvgIcon name="building" /></span>
   }
 
   return (
@@ -475,7 +475,7 @@ function MemberSidebar() {
         </div>
         <div style={{ fontSize: 10, marginTop: 4 }}>
           <span onClick={() => setShowAbout(true)}
-            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}>ℹ️ 关于软件</span>
+            style={{ color: 'var(--text-secondary)', cursor: 'pointer' }}><SvgIcon name="info" /> 关于软件</span>
         </div>
           <button
             className="sidebar-item"
@@ -492,7 +492,7 @@ function MemberSidebar() {
           </button>
         {user && (
             <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 4 }}>
-              👤 {user.display_name || user.username}
+              <SvgIcon name="user" /> {user.display_name || user.username}
             </div>
           )}
           <MemberLogoutButton />
@@ -534,7 +534,7 @@ function MemberHomePage() {
         <p style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>加载中...</p>
       ) : workspaces.length === 0 ? (
         <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-secondary)' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
+          <div style={{ marginBottom: 12 }}><SvgIcon name="folder" size={40} /></div>
           <div style={{ fontSize: 14 }}>暂无可用项目，请联系管理员分配</div>
         </div>
       ) : (
@@ -572,7 +572,7 @@ function MemberHomePage() {
                   {w.logo ? (
                     <img src={w.logo} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} alt="" />
                   ) : (
-                    <span style={{ fontSize: 28, flexShrink: 0 }}>📁</span>
+                    <span style={{ fontSize: 28, flexShrink: 0 }}><SvgIcon name="folder" size={28} /></span>
                   )}
                   <span style={{ fontSize: 15, fontWeight: 600, wordBreak: 'break-word', minWidth: 0 }}>
                     {w.name}
@@ -593,7 +593,7 @@ function MemberHomePage() {
                   {(w as any).description || '暂无简介'}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-secondary)', textAlign: 'right' }}>
-                  📄 {(w as any).project_count ?? 0} 个明细
+                  <SvgIcon name="file" size={11} /> {(w as any).project_count ?? 0} 个明细
                 </div>
               </div>
             ))}

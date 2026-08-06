@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react'
+import SvgIcon from './SvgIcon'
 import { api } from '../services/api'
 
 interface ModalCtx {
@@ -194,7 +195,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 />
                 <button className="btn btn-ghost btn-sm" onClick={handleBrowse} title="浏览文件夹"
                   style={{ background: showBrowser ? 'var(--bg-secondary, #f1f5f9)' : undefined }}>
-                  📂
+                  <SvgIcon name="folder" size={14} />
                 </button>
               </div>
             </div>
@@ -207,14 +208,14 @@ export function ModalProvider({ children }: { children: ReactNode }) {
                 ) : (
                   <>
                     {parentDir !== null && (
-                      <div className="folder-item" onClick={handleGoParent}>📁 ..</div>
+                      <div className="folder-item" onClick={handleGoParent}><SvgIcon name="folder" size={14} /> ..</div>
                     )}
                     {dirs.map(d => (
-                      <div key={d} className="folder-item" onClick={() => handleEnterDir(d)}>📁 {d}</div>
+                      <div key={d} className="folder-item" onClick={() => handleEnterDir(d)}><SvgIcon name="folder" size={14} /> {d}</div>
                     ))}
                     <div className="folder-item" onClick={handleCreateFolder}
                       style={{ color: 'var(--primary)', fontWeight: 500 }}>
-                      📂 新建文件夹
+                      <SvgIcon name="folder" size={14} /> 新建文件夹
                     </div>
                   </>
                 )}

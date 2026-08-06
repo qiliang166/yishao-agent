@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import DOMPurify from 'dompurify'
+import SvgIcon from '../../components/SvgIcon'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Theme, mdToHtml, isProseChapter, resolveDraftTheme } from '../types'
@@ -324,7 +325,7 @@ ${PROSE_CSS}
     <div className="panel-grid">
       <div className="panel-left" style={{ overflow: 'hidden' }}>
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div className="card-title" style={{ flexShrink: 0 }}>🗂 章节顺序</div>
+          <div className="card-title" style={{ flexShrink: 0 }}><SvgIcon name="folder" size={14} /> 章节顺序</div>
           <div className="card-hint" style={{ flexShrink: 0 }}>点击章节在右侧编辑；停用的章节保留在草稿中但不进产物。</div>
           <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
             {draft.chapters.length === 0 && (
@@ -365,12 +366,12 @@ ${PROSE_CSS}
                       <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
                         disabled={refreshingId === c.id}
                         onClick={e => { e.stopPropagation(); handleRefresh(c.id) }}>
-                        {refreshingId === c.id ? '⏳' : '⟳ 从源刷新'}
+                        {refreshingId === c.id ? <><SvgIcon name="clock" size={14} /></> : '⟳ 从源刷新'}
                       </button>
                     )}
                     <span style={{ flex: 1 }} />
                     <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '1px 6px' }}
-                      onClick={e => { e.stopPropagation(); handleDelete(c.id, c.title) }}>🗑</button>
+                      onClick={e => { e.stopPropagation(); handleDelete(c.id, c.title) }}><SvgIcon name="trash" size={14} /></button>
                   </div>
                 )}
               </div>
@@ -389,7 +390,7 @@ ${PROSE_CSS}
           <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             {/* Toolbar */}
             <div className="card-title" style={{ flexShrink: 0, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-              <span>✏️ 编辑「{selected.title}」</span>
+              <span><SvgIcon name="edit" size={14} /> 编辑「{selected.title}」</span>
               <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-secondary)' }}>
                 （编辑册子里的副本，不影响原明细）
               </span>
@@ -432,7 +433,7 @@ ${PROSE_CSS}
               {/* Save */}
               {!readonly && (
                 <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }} onClick={handleSave}>
-                  💾 保存修改
+                  <SvgIcon name="download" size={14} /> 保存修改
                 </button>
               )}
             </div>
@@ -561,8 +562,8 @@ ${PROSE_CSS}
             {!readonly && (
               <div className="card-hint" style={{ marginTop: 6, marginBottom: 0, flexShrink: 0 }}>
                 {isProse
-                  ? '默认显示排版预览；点击「源码」可编辑 Markdown 原文，点击「💾 保存修改」存入草稿。'
-                  : `点击「编辑文字」可对页面内文字进行修改；点击「源码」可编辑原始 HTML。改动只存入本册子的副本${selected.source_type !== 'custom' ? '，「⟳ 从源刷新」可还原为明细最新内容' : ''}。`
+                  ? <>默认显示排版预览；点击「源码」可编辑 Markdown 原文，点击「<SvgIcon name="download" size={14} /> 保存修改」存入草稿。</>
+                  : <>点击「编辑文字」可对页面内文字进行修改；点击「源码」可编辑原始 HTML。改动只存入本册子的副本{selected.source_type !== 'custom' ? '，「⟳ 从源刷新」可还原为明细最新内容' : ''}。</>
                 }
               </div>
             )}

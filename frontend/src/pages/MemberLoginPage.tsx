@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Navigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import AboutDialog from '../components/AboutDialog'
+import SvgIcon from '../components/SvgIcon'
 
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
@@ -56,7 +57,7 @@ export default function MemberLoginPage() {
   }
 
   const name = brandName || ''
-  const logo = brandLogo || '⚡'
+  const logo = brandLogo || ''
 
   return (
     <div style={{
@@ -71,8 +72,10 @@ export default function MemberLoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 12 }}>
           {isImagePath(logo) ? (
             <img src={logo} alt="Logo" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
-          ) : (
+          ) : logo ? (
             <span style={{ fontSize: 40 }}>{logo}</span>
+          ) : (
+            <SvgIcon name="bolt" size={40} />
           )}
         </div>
         <h1 style={{

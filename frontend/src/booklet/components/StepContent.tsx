@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import SvgIcon from '../../components/SvgIcon'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Chapter, ContentProject, mdToHtml, newChapterId } from '../types'
@@ -153,7 +154,7 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
     <div className="panel-grid">
       <div className="panel-left" style={{ overflow: 'hidden' }}>
         <div className="card" style={{ flex: 1, minHeight: 120, display: 'flex', flexDirection: 'column' }}>
-          <div className="card-title" style={{ flexShrink: 0 }}>📂 从工作区调取内容</div>
+          <div className="card-title" style={{ flexShrink: 0 }}><SvgIcon name="folder" size={14} /> 从工作区调取内容</div>
           <div className="card-hint" style={{ flexShrink: 0 }}>勾选要装进册子的内容，可跨明细、跨工作区多选。</div>
           <select className="form-input" value={wsId} onChange={e => { setWsId(e.target.value); setCategoryId('') }} style={{ flexShrink: 0 }} disabled={readonly}>
             {workspaces.length === 0 && <option value="">（无可用工作区）</option>}
@@ -204,7 +205,7 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
                       <input type="checkbox" checked={added} disabled={readonly || !item.available || busy}
                         onChange={() => handleToggle(p, item)} />
                       <span>{item.label}</span>
-                      {busy && <span>⏳</span>}
+                      {busy && <span><SvgIcon name="clock" size={14} /></span>}
                       {!item.available && <span style={{ fontSize: 10 }}>（尚未生成）</span>}
                     </label>
                   )
@@ -216,9 +217,9 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
 
         {!readonly && (
           <div className="card" style={{ flexShrink: 0 }}>
-            <div className="card-title">✍ 自己写一章</div>
+            <div className="card-title"><SvgIcon name="edit" size={14} /> 自己写一章</div>
             {!showCustom ? (
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowCustom(true)}>➕ 新增自建章节</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowCustom(true)}><SvgIcon name="plus" size={14} /> 新增自建章节</button>
             ) : (
               <div>
                 <input className="form-input" placeholder="章节标题" value={customTitle}
@@ -240,7 +241,7 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
                 )}
                 <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                   <label className="btn btn-ghost btn-sm" style={{ cursor: importing ? 'wait' : 'pointer', opacity: importing ? 0.6 : 1 }}>
-                    {importing ? '⏳ 转换中...' : '📁 导入文件'}
+                    {importing ? <><SvgIcon name="clock" size={14} /> 转换中...</> : <><SvgIcon name="folder" size={14} /> 导入文件</>}
                     <input type="file" accept=".md,.txt,.html,.htm,.doc,.docx,.xlsx" style={{ display: 'none' }} disabled={importing}
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.target.value = '' }} />
                   </label>
@@ -257,7 +258,7 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
 
       <div className="panel-right">
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-          <div className="card-title">📖 已选内容（{draft.chapters.length} 章）</div>
+          <div className="card-title"><SvgIcon name="book-open" size={14} /> 已选内容（{draft.chapters.length} 章）</div>
           {draft.chapters.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: 20, textAlign: 'center' }}>
               左侧勾选内容或新增自建章节后，会显示在这里

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import SvgIcon from '../components/SvgIcon'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { useModal } from '../components/ModalProvider'
@@ -186,7 +187,7 @@ export default function BookletEditorPage() {
             style={{ fontSize: 14, fontWeight: 600, ...(isOwnerView ? { cursor: 'pointer' } : {}) }}
             onClick={isOwnerView ? startRename : undefined}
             title={isOwnerView ? '点击重命名' : undefined}
-          >📚 {draft.title || '未命名册子'}</span>
+          ><SvgIcon name="book-open" size={14} /> {draft.title || '未命名册子'}</span>
         )}
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{BOOK_TYPE_LABEL[draft.book_type]}</span>
         <span style={{ flex: 1 }} />
@@ -195,7 +196,7 @@ export default function BookletEditorPage() {
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer', marginRight: 8 }}>
             <input type="checkbox" checked={!!draft.is_recommended}
               onChange={e => onChange(d => ({ ...d, is_recommended: e.target.checked }))} />
-            ⭐ 推荐
+            <SvgIcon name="star" size={14} /> 推荐
           </label>
         )}
         {showUseRecommend && (
@@ -206,7 +207,7 @@ export default function BookletEditorPage() {
         )}
         {isOwnerView && (
           <button className="btn btn-primary btn-sm" disabled={saving} onClick={handleSave}>
-            {saving ? '保存中...' : '💾 保存草稿'}
+            {saving ? '保存中...' : <><SvgIcon name="download" size={14} /> 保存草稿</>}
           </button>
         )}
       </div>

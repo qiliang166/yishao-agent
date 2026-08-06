@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import SvgIcon from '../components/SvgIcon'
 
 export default function FirstTimeSetupPage() {
   const { user, token, logout } = useAuth()
@@ -251,7 +252,7 @@ export default function FirstTimeSetupPage() {
         {/* Step 3: Done */}
         {step === 3 && (
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🎉</div>
+            <div style={{ fontSize: 48, marginBottom: 12 }}><SvgIcon name="sparkles" size={48} /></div>
             <p style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.6 }}>
               设置完成！现在可以开始使用系统了。
             </p>

@@ -4,6 +4,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { api } from '../services/api'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
+import SvgIcon from '../components/SvgIcon'
 
 interface DlFile {
   filename: string
@@ -269,10 +270,10 @@ export default function MemberDownloadsPage() {
   // ── 工具函数 ──
 
   const fileIcon = (cat: string) => {
-    if (cat.includes('文档生成')) return '📝'
-    if (cat.includes('课件输出')) return '📌'
-    if (cat.includes('演讲课件')) return '🎵'
-    return '📄'
+    if (cat.includes('文档生成')) return 'file-text'
+    if (cat.includes('课件输出')) return 'bookmark'
+    if (cat.includes('演讲课件')) return 'music'
+    return 'file'
   }
 
   const formatSize = (bytes: number) => {
@@ -355,7 +356,7 @@ export default function MemberDownloadsPage() {
         </span>
         <button className="btn btn-primary btn-sm" disabled={busy || checkedCount === 0}
           onClick={downloadChecked}>
-          {busy ? '处理中...' : '📦 批量下载'}
+          {busy ? '处理中...' : <><SvgIcon name="package" size={14} /> 批量下载</>}
         </button>
       </div>
 
@@ -373,7 +374,7 @@ export default function MemberDownloadsPage() {
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>加载中...</div>
       ) : projects.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="download" size={48} /></div>
           <p>暂无可用下载</p>
         </div>
       ) : (
@@ -428,7 +429,7 @@ export default function MemberDownloadsPage() {
           <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
             {shownProjects.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>📥</div>
+                <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="download" size={48} /></div>
                 <p>从左侧勾选项目，这里显示可下载的文件明细</p>
               </div>
             ) : shownProjects.map(proj => {
@@ -466,7 +467,7 @@ export default function MemberDownloadsPage() {
                           style={{
                             fontSize: 10, color: 'var(--primary)', border: '1px solid var(--border)',
                             padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap', cursor: 'pointer',
-                          }}>✍ {proj.author_name}</span>
+                          }}><SvgIcon name="edit" size={14} /> {proj.author_name}</span>
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
@@ -489,7 +490,7 @@ export default function MemberDownloadsPage() {
                             padding: '4px 16px', fontSize: 10, fontWeight: 600,
                             color: 'var(--text-secondary)', textTransform: 'uppercase',
                           }}>
-                            {fileIcon(cat)} {cat}{multiProj ? ` — ${proj.name}` : ''}
+                            <SvgIcon name={fileIcon(cat)} size={14} /> {cat}{multiProj ? ` — ${proj.name}` : ''}
                           </div>
                           {files.map(f => {
                             const k = fileKey(proj.id, f.filename)
@@ -509,12 +510,12 @@ export default function MemberDownloadsPage() {
                                 </span>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, flexShrink: 0 }}
                                   onClick={() => setPreview({ project: proj, file: f })}>
-                                  👁 预览
+                                  <SvgIcon name="eye" size={14} /> 预览
                                 </button>
                                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, flexShrink: 0 }}
                                   disabled={busy}
                                   onClick={() => downloadSingle(proj, f)}>
-                                  ⬇ 下载
+                                  <SvgIcon name="download" size={14} /> 下载
                                 </button>
                               </div>
                             )
@@ -556,7 +557,7 @@ export default function MemberDownloadsPage() {
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexShrink: 0 }}>
                 <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={busy}
                   onClick={() => downloadSingle(preview.project, preview.file)}>
-                  ⬇ 下载
+                  <SvgIcon name="download" size={14} /> 下载
                 </button>
                 <button className="btn btn-primary btn-sm" style={{ fontSize: 11 }}
                   onClick={() => setPreview(null)}>关闭</button>
@@ -597,7 +598,7 @@ export default function MemberDownloadsPage() {
                   style={{ maxWidth: '96%', maxHeight: '96%' }} />
               ) : (
                 <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>📄</div>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}><SvgIcon name="file" size={48} /></div>
                   <p>该文件类型（.{previewExt || '未知'}）暂不支持在线预览</p>
                   <p style={{ fontSize: 11 }}>请下载后在本地查看</p>
                 </div>

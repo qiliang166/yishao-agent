@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import SvgIcon from '../components/SvgIcon'
 
 interface MemberWorkspace {
   id: string
@@ -63,7 +64,7 @@ export default function MemberDashboard() {
           textAlign: 'center', padding: 64,
           color: 'var(--text-secondary)', fontSize: 14,
         }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>📂</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="folder" size={48} /></div>
           <p>暂无可用项目，请联系管理员分配</p>
         </div>
       ) : (

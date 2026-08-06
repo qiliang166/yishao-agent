@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import SvgIcon from './SvgIcon'
 
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || !!v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
@@ -27,7 +28,7 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
     }).finally(() => setLoading(false))
   }, [])
 
-  const logo = brandLogo || '⚡'
+  const logo = brandLogo || ''
 
   return (
     <div style={{
@@ -47,8 +48,10 @@ export default function AboutDialog({ onClose }: { onClose: () => void }) {
             <div style={{ textAlign: 'center', marginBottom: 8 }}>
               {isImagePath(logo) ? (
                 <img src={logo} alt="Logo" style={{ width: 48, height: 48, borderRadius: 8, objectFit: 'cover' }} />
-              ) : (
+              ) : logo ? (
                 <span style={{ fontSize: 40 }}>{logo}</span>
+              ) : (
+                <SvgIcon name="bolt" size={40} />
               )}
             </div>
             <h2 style={{ fontSize: 17, fontWeight: 700, margin: '0 0 4px 0', textAlign: 'center' }}>

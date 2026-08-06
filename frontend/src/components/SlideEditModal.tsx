@@ -3,6 +3,7 @@ import { api } from '../services/api'
 import { useModal } from './ModalProvider'
 import { applyEditableDoc, clearEditableDoc } from '../utils/editableDoc'
 import { usePermission } from '../hooks/usePermission'
+import SvgIcon from './SvgIcon'
 
 interface Props {
   open: boolean
@@ -663,11 +664,11 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
             </button>
             {pptxDownloadUrl && (
               <button onClick={handleSaveZip} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>
-                {downloadFormat === 'svg' ? '⬇ SVG ZIP' : '⬇ PPTX'}
+                {downloadFormat === 'svg' ? <><SvgIcon name="download" size={14} /> SVG ZIP</> : <><SvgIcon name="download" size={14} /> PPTX</>}
               </button>
             )}
             <button onClick={handleSaveHtml} className="btn btn-ghost btn-sm" style={{ fontSize: 12 }}>
-              ⬇ HTML
+              <SvgIcon name="download" size={14} /> HTML
             </button>
             <button
               onClick={onClose}
@@ -677,7 +678,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
                 fontSize: 16, color: 'var(--text)', display: 'flex',
                 alignItems: 'center', justifyContent: 'center',
               }}
-            >✕</button>
+            ><SvgIcon name="x-mark" size={16} /></button>
           </div>
         </div>
 

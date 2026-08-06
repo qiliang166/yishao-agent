@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { api } from '../services/api'
+import SvgIcon from '../components/SvgIcon'
 
 const PAGE_SIZE = 20
 
@@ -139,7 +140,7 @@ export default function DownloadStatsPage() {
       ) : statsTab === 'projects' ? (
         projectStats.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
+            <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="bar-chart" size={48} /></div>
             <p>暂无下载记录</p>
           </div>
         ) : (
@@ -249,7 +250,7 @@ export default function DownloadStatsPage() {
       ) : (
         memberStats.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 64, color: 'var(--text-secondary)', fontSize: 12 }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>👥</div>
+            <div style={{ fontSize: 48, marginBottom: 16 }}><SvgIcon name="users" size={48} /></div>
             <p>暂无下载记录</p>
           </div>
         ) : (

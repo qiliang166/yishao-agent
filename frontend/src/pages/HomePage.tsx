@@ -6,6 +6,7 @@ import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
 import HelpButton from '../components/HelpButton'
 import SetupWizard from '../components/SetupWizard'
+import SvgIcon from '../components/SvgIcon'
 
 const PAGE_SIZE = 16
 
@@ -125,7 +126,7 @@ function HomePage() {
         <p style={{ padding: 40, textAlign: 'center', color: 'var(--text-secondary)', fontSize: 13 }}>加载中...</p>
       ) : filtered.length === 0 ? (
         <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-secondary)' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📂</div>
+          <div style={{ marginBottom: 12 }}><SvgIcon name="folder" size={40} /></div>
           <div style={{ fontSize: 14, marginBottom: 8 }}>暂无项目</div>
           <div style={{ fontSize: 12, marginBottom: 16 }}>点击「快速上手」跟随向导完成第一个培训项目</div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
@@ -169,7 +170,7 @@ function HomePage() {
                   {w.logo ? (
                     <img src={w.logo} style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} alt="" />
                   ) : (
-                    <span style={{ fontSize: 28, flexShrink: 0 }}>📁</span>
+                    <SvgIcon name="folder" size={28} />
                   )}
                   <span style={{ fontSize: 15, fontWeight: 600, wordBreak: 'break-word', minWidth: 0 }}>
                     {w.name}
@@ -198,7 +199,7 @@ function HomePage() {
                       onClick={() => deleteWorkspace(w.id, w.name)}>删除</button>
                   )}
                   <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)' }}>
-                    📄 {w.project_count ?? 0} 个明细
+                    <SvgIcon name="file" size={11} /> {w.project_count ?? 0} 个明细
                   </span>
                 </div>
               </div>
@@ -242,7 +243,7 @@ function HomePage() {
                     <button className="btn btn-ghost btn-sm" onClick={() => setCreateLogo('')}>移除</button>
                   </>
                 ) : (
-                  <span style={{ width: 48, height: 48, borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, color: 'var(--text-secondary)' }}>🖼</span>
+                  <span style={{ width: 48, height: 48, borderRadius: 8, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}><SvgIcon name="image" size={22} /></span>
                 )}
                 <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
                   {createLogoUploading ? '上传中...' : '上传图片'}

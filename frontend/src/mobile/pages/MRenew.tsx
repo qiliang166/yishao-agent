@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { MTopBar } from '../MobileApp'
+import SvgIcon from '../../components/SvgIcon'
 
 export default function MRenew() {
   const [params] = useSearchParams()
@@ -119,7 +120,7 @@ export default function MRenew() {
         <MTopBar title="会员续费" />
         <div className="m-login-wrap">
           <div className="m-login-card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 44, marginBottom: 12 }}>✓</div>
+            <div style={{ marginBottom: 12 }}><SvgIcon name="check" size={44} /></div>
             <div className="m-login-title">续费成功</div>
             <div className="m-login-sub" style={{ marginBottom: 16 }}>{success}</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 16 }}>

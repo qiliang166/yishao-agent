@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
+import SvgIcon from '../components/SvgIcon'
 
 interface Props {
   workspaceId?: string
@@ -395,13 +396,13 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   const renderBatchSummary = () => {
     if (!batchStatus) return null
     const statusLabel: Record<string, string> = {
-      pending: '⏳ 等待执行', running: '▶ 运行中', completed: '✓ 已完成',
-      cancelled: '✕ 已取消', stopped: '⊘ 已停止', failed: '✕ 失败',
+      pending: '等待执行', running: '运行中', completed: '已完成',
+      cancelled: '已取消', stopped: '已停止', failed: '失败',
     }
     return (
       <div className="card" style={{ marginTop: 16, padding: '14px 18px' }}>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 10 }}>
-          📋 批次 #{batchStatus.batch_id.slice(0, 12)}...
+          <SvgIcon name="clipboard" size={14} /> 批次 #{batchStatus.batch_id.slice(0, 12)}...
         </div>
         <div style={{ fontSize: 11, lineHeight: 2 }}>
           <div>状态：<strong>{statusLabel[batchStatus.status] || batchStatus.status}</strong></div>
@@ -571,7 +572,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                             onChange={() => setStep4SourceSub(p.id, s2.key)}
                                             style={{ marginRight: 3 }} />
                                           {s2.label}
-                                          {s2HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}>✓</span>}
+                                          {s2HasData && <span style={{ color: 'var(--success)', marginLeft: 2 }}><SvgIcon name="check" size={10} /></span>}
                                         </label>
                                       )
                                     })}
@@ -591,7 +592,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                             disabled={!canSelect}
                                             onChange={() => toggleStepSub(p.id, def.key, sub)} />
                                           {def.subLabels[i]}
-                                          {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据">✓</span>}
+                                          {hasData && <span style={{ color: 'var(--success)', fontSize: 10 }} title="已有数据"><SvgIcon name="check" size={10} /></span>}
                                         </label>
                                       )
                                     })}
@@ -627,7 +628,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                           <span style={{ color: 'var(--text-secondary)', fontSize: 9, marginLeft: 2 }}>(无内容)</span>
                                         )}
                                         {hasData && (
-                                          <span style={{ color: 'var(--success)', fontSize: 10, marginLeft: 2 }} title="已有数据">✓</span>
+                                          <span style={{ color: 'var(--success)', fontSize: 10, marginLeft: 2 }} title="已有数据"><SvgIcon name="check" size={10} /></span>
                                         )}
                                       </label>
                                     )
@@ -635,7 +636,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
                                 )}
                                 {locked && (
                                   <span style={{ color: 'var(--text-secondary)', marginLeft: 'auto', fontSize: 10 }}>
-                                    🔒 需上一步勾选
+                                    <SvgIcon name="lock" size={10} /> 需上一步勾选
                                   </span>
                                 )}
                               </div>
@@ -752,7 +753,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
         ) : (
           <button className="btn btn-primary btn-sm" disabled={!canExecute() || executing}
             onClick={handleExecute}>
-            {executing ? '提交中...' : '▶ 开始执行'}
+            {executing ? '提交中...' : <><SvgIcon name="play" size={11} /> 开始执行</>}
           </button>
         )}
       </div>

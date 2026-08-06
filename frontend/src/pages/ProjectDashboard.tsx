@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import HelpButton from '../components/HelpButton'
 import { BatchDialog } from '../batch/BatchDialog'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
+import SvgIcon from '../components/SvgIcon'
 
 const DEFAULT_PAGE_SIZE = 50
 
@@ -486,11 +487,11 @@ export default function ProjectDashboard() {
 
   const fileIcon = (f: any) => {
     const cat = f.category || ''
-    if (cat.includes('素材输入')) return '📥'
-    if (cat.includes('文档生成')) return '📝'
-    if (cat.includes('课件输出')) return '📌'
-    if (cat.includes('演讲课件')) return '🎵'
-    return '📄'
+    if (cat.includes('素材输入')) return 'download'
+    if (cat.includes('文档生成')) return 'file-text'
+    if (cat.includes('课件输出')) return 'bookmark'
+    if (cat.includes('演讲课件')) return 'music'
+    return 'file'
   }
 
   const groupedFiles = projectFiles.reduce((acc: Record<string, any[]>, f: any) => {
@@ -625,16 +626,16 @@ export default function ProjectDashboard() {
                   <span style={{
                     fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
                     padding: '1px 6px', borderRadius: 3, marginLeft: 2, whiteSpace: 'nowrap',
-                  }}>✍ {p.author_name}</span>
+                  }}><SvgIcon name="edit" size={14} /> {p.author_name}</span>
                 )}
                 {p.created_by_name && (
                   <span style={{
                     fontSize: 10, color: 'var(--text-secondary)', border: '1px solid var(--border)',
                     padding: '1px 6px', borderRadius: 3, marginLeft: 2, whiteSpace: 'nowrap',
-                  }}>👤 {p.created_by_name}</span>
+                  }}><SvgIcon name="users" size={14} /> {p.created_by_name}</span>
                 )}
                 {p.copied_from_project_id && (
-                  <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 4 }} title="从其他明细复制">📋</span>
+                  <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 4 }} title="从其他明细复制"><SvgIcon name="clipboard" size={14} /></span>
                 )}
                 <span className={`pc-status ${p.status}`}
                   style={{ cursor: (canEditOwn && isOwner(p.created_by)) ? 'pointer' : 'default' }}
@@ -651,13 +652,13 @@ export default function ProjectDashboard() {
                     <button className="btn btn-ghost btn-sm"
                       onClick={e => { e.stopPropagation(); toggleProjectExpand(p.id) }}
                       style={{ color: 'var(--accent)', fontSize: 11 }}
-                      title="查看和下载输出文件">📥 下载</button>
+                      title="查看和下载输出文件"><SvgIcon name="download" size={14} /> 下载</button>
                   )}
                   {expandedProject === p.id && selectedFiles.size > 0 && canDownload && (
                     <button className="btn btn-ghost btn-sm"
                       onClick={e => { e.stopPropagation(); downloadSelectedFiles() }}
                       style={{ color: 'var(--accent)', fontSize: 11 }}
-                      title="下载选中文件">📥 下载选中 ({selectedFiles.size})</button>
+                      title="下载选中文件"><SvgIcon name="download" size={14} /> 下载选中 ({selectedFiles.size})</button>
                   )}
                   {canCreate && (
                     <button className="btn btn-ghost btn-sm"
@@ -712,10 +713,10 @@ export default function ProjectDashboard() {
                             loadProjects(page)
                           }
                         }}
-                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--success)' }}>✓</button>
+                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--success)' }}><SvgIcon name="check" size={14} /></button>
                       <button className="btn btn-ghost btn-sm"
                         onClick={() => setEditPointProject('')}
-                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--text-secondary)' }}>✕</button>
+                        style={{ fontSize: 10, padding: '2px 6px', color: 'var(--text-secondary)' }}><SvgIcon name="x-mark" size={14} /></button>
                     </span>
                   ) : (
                     <span style={{
@@ -822,7 +823,7 @@ export default function ProjectDashboard() {
                                 color: 'var(--text-primary)',
                               }}>
                               <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{groupExpanded ? '▼' : '▶'}</span>
-                              <span>{fileIcon(visibleFiles[0])}</span>
+                              <span><SvgIcon name={fileIcon(visibleFiles[0])} size={14} /></span>
                               <span>{category}</span>
                               <span style={{ fontWeight: 400, color: 'var(--text-secondary)', fontSize: 11 }}>({visibleFiles.length})</span>
                             </div>
@@ -845,7 +846,7 @@ export default function ProjectDashboard() {
                                       onChange={() => toggleFileSelect(fkey)}
                                       onClick={e => e.stopPropagation()} />
                                     <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {fileIcon(f)} {f.display_name || f.filename}
+                                      <SvgIcon name={fileIcon(f)} size={14} /> {f.display_name || f.filename}
                                     </span>
                                     <span style={{ fontSize: 10, color: 'var(--text-secondary)', minWidth: 55, textAlign: 'right' }}>
                                       {dateStr}
@@ -861,7 +862,7 @@ export default function ProjectDashboard() {
                                         onClick={e => { e.stopPropagation(); handleAudioToggle(url) }}
                                         style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent)' }}
                                         title={isPlaying ? '暂停' : '播放'}>
-                                        {isPlaying ? '⏸' : '▶'}
+                                        {isPlaying ? <SvgIcon name="x-mark" size={14} /> : <SvgIcon name="play" size={14} />}
                                       </button>
                                       )
                                     })()}
@@ -869,7 +870,7 @@ export default function ProjectDashboard() {
                                       <button className="btn btn-ghost btn-sm"
                                         onClick={() => downloadFileWithCheck(f)}
                                         style={{ fontSize: 10, padding: '2px 6px', color: 'var(--accent)' }}
-                                        title="下载">⬇</button>
+                                        title="下载"><SvgIcon name="download" size={14} /></button>
                                     )}
                                     {canEditOwn && isOwner(projects.find(p => p.id === expandedProject)?.created_by) && (
                                       <button className="btn btn-ghost btn-sm"
@@ -878,7 +879,7 @@ export default function ProjectDashboard() {
                                           if (ok) deleteFile(expandedProject, f)
                                         }}
                                         style={{ fontSize: 10, padding: '2px 6px', color: 'var(--warning)' }}
-                                        title="删除">✕</button>
+                                        title="删除"><SvgIcon name="x-mark" size={14} /></button>
                                     )}
                                   </div>
                                 )})}
@@ -1038,7 +1039,7 @@ export default function ProjectDashboard() {
                           {p.status === 'completed' ? '已完成' : '草稿'} · {new Date(p.created_at).toLocaleDateString('zh-CN')}
                         </span>
                         {p.copied_from_project_id && (
-                          <span style={{ fontSize: 10, color: 'var(--accent)' }} title="副本">📋</span>
+                          <span style={{ fontSize: 10, color: 'var(--accent)' }} title="副本"><SvgIcon name="clipboard" size={14} /></span>
                         )}
                       </div>
                     ))}

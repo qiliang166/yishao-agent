@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import SvgIcon from './SvgIcon'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getRoleManual } from '../config/roleManuals'
@@ -396,7 +397,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                     color: active || done ? '#fff' : 'var(--text-secondary)',
                     fontSize: 11, fontWeight: 700,
                   }}>
-                    {done ? '✓' : idx + 1}
+                    {done ? <SvgIcon name="check" size={12} /> : idx + 1}
                   </span>
                   {s.label}
                   {i < MEMBER_STEPS.filter(s => s.key !== 'guide-download' || isPaid).length - 1 && (
@@ -476,9 +477,9 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                   <ul style={{ margin: '8px 0 0 0', paddingLeft: 18 }}>
                     <li><strong>左侧勾选项目</strong> — 选择要下载的项目（可多选）</li>
                     <li><strong>右侧勾选文件</strong> — 每个项目下的文件可逐个勾选</li>
-                    <li><strong>单文件下载</strong> — 点击文件旁的「⬇ 下载」按钮</li>
-                    <li><strong>批量下载</strong> — 勾选多个文件后点击「📦 批量下载」，打包为一个 zip</li>
-                    <li><strong>预览文件</strong> — 点击「👁 预览」可在下载前查看文件内容</li>
+                    <li><strong>单文件下载</strong> — 点击文件旁的「<SvgIcon name="download" size={14} /> 下载」按钮</li>
+                    <li><strong>批量下载</strong> — 勾选多个文件后点击「<SvgIcon name="package" size={14} /> 批量下载」，打包为一个 zip</li>
+                    <li><strong>预览文件</strong> — 点击「<SvgIcon name="eye" size={14} /> 预览」可在下载前查看文件内容</li>
                     <li>未解锁项目需先消耗积分解锁后才能下载</li>
                   </ul>
                 </div>
@@ -551,7 +552,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
 
             {memberStep === 'guide-done' && (
               <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center' }}><SvgIcon name="sparkles" size={48} /></div>
                 <h3 style={{ margin: '0 0 8px 0' }}>新手引导完成！</h3>
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 8 }}>
                   您已了解会员的核心功能操作流程。<br/>
@@ -562,16 +563,16 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                   marginBottom: 28, textAlign: 'center',
                 }}>
                   {[
-                    { icon: '📋', label: '浏览项目', desc: '查看内容' },
-                    { icon: '👁', label: '查看文件', desc: '预览产物' },
-                    ...(isPaid ? [{ icon: '⬇', label: '下载文件', desc: '保存到本地' }] : []),
-                    { icon: '📖', label: '电子成册', desc: '编排导出' },
+                    { icon: 'clipboard', label: '浏览项目', desc: '查看内容' },
+                    { icon: 'eye', label: '查看文件', desc: '预览产物' },
+                    ...(isPaid ? [{ icon: 'download', label: '下载文件', desc: '保存到本地' }] : []),
+                    { icon: 'book-open', label: '电子成册', desc: '编排导出' },
                   ].slice(0, 4).map(item => (
                     <div key={item.label} style={{
                       padding: 16, borderRadius: 8, background: '#e8f5e9',
                       border: '1px solid #a5d6a7',
                     }}>
-                      <div style={{ fontSize: 28 }}>{item.icon}</div>
+                      <div style={{ display: 'flex', justifyContent: 'center' }}><SvgIcon name={item.icon} size={28} /></div>
                       <div style={{ fontSize: 11, marginTop: 4 }}>{item.label}</div>
                       <div style={{ fontSize: 10, color: 'var(--success)' }}>{item.desc}</div>
                     </div>
@@ -698,7 +699,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                   color: active || done ? '#fff' : 'var(--text-secondary)',
                   fontSize: 11, fontWeight: 700,
                 }}>
-                  {done ? '✓' : idx + 1}
+                  {done ? <SvgIcon name="check" size={12} /> : idx + 1}
                 </span>
                 {s.label}
                 {i < visibleSteps.length - 1 && (
@@ -734,7 +735,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ color: hasProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
-                        {hasProviders ? '✓ 已配置' : '✗ 未配置'}
+                        {hasProviders ? <><SvgIcon name="check" size={12} /> 已配置</> : <><SvgIcon name="x-mark" size={12} /> 未配置</>}
                       </span>
                       {!hasProviders && (
                         <button className="btn btn-primary btn-sm" onClick={() => setStep('quick-llm')}>去配置</button>
@@ -757,7 +758,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       <span style={{ color: hasTemplates ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
-                        {hasTemplates ? '✓ 已配置' : '✗ 未配置'}
+                        {hasTemplates ? <><SvgIcon name="check" size={12} /> 已配置</> : <><SvgIcon name="x-mark" size={12} /> 未配置</>}
                       </span>
                       {!hasTemplates && (
                         <button className="btn btn-outline btn-sm" onClick={() => { handleClose(); navigate('/templates') }}>
@@ -783,7 +784,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ color: hasTtsProviders ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
-                          {hasTtsProviders ? '✓ 已配置' : '✗ 未配置'}
+                          {hasTtsProviders ? <><SvgIcon name="check" size={12} /> 已配置</> : <><SvgIcon name="x-mark" size={12} /> 未配置</>}
                         </span>
                         {!hasTtsProviders && (
                           <button className="btn btn-primary btn-sm" onClick={() => setStep('quick-tts')}>去配置</button>
@@ -806,7 +807,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                       </div>
                     </div>
                     <span style={{ color: hasSeeds ? 'var(--success)' : 'var(--warning)', fontWeight: 600 }}>
-                      {hasSeeds ? '✓ 已加载' : '✗ 未加载'}
+                      {hasSeeds ? <><SvgIcon name="check" size={12} /> 已加载</> : <><SvgIcon name="x-mark" size={12} /> 未加载</>}
                     </span>
                   </div>
 
@@ -1032,7 +1033,7 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
           {/* ── Step: done ── */}
           {step === 'done' && (
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-              <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+              <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center' }}><SvgIcon name="sparkles" size={48} /></div>
               <h3 style={{ margin: '0 0 8px 0' }}>恭喜！你已完成第一个培训项目</h3>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, marginBottom: 8 }}>
                 你已经体验了从素材整理、文档生成、课件制作到演讲稿撰写的完整流程。<br/>
@@ -1051,20 +1052,20 @@ export default function SetupWizard({ embedded, onDone }: WizardProps) {
                 marginBottom: 28, textAlign: 'center',
               }}>
                 {[
-                  { icon: '📝', label: '素材整理', done: !!stage1Result },
-                  { icon: '📄', label: '文档生成', done: !!stage2Result },
-                  { icon: '📊', label: '课件制作', done: !!stage3Result },
-                  { icon: '🎙', label: '演讲稿', done: !!stage4Result },
+                  { icon: 'file-text', label: '素材整理', done: !!stage1Result },
+                  { icon: 'file-text', label: '文档生成', done: !!stage2Result },
+                  { icon: 'bar-chart', label: '课件制作', done: !!stage3Result },
+                  { icon: 'music', label: '演讲稿', done: !!stage4Result },
                 ].map(item => (
                   <div key={item.label} style={{
                     padding: 16, borderRadius: 8,
                     background: item.done ? '#e8f5e9' : 'var(--card-bg)',
                     border: `1px solid ${item.done ? '#a5d6a7' : 'var(--border)'}`,
                   }}>
-                    <div style={{ fontSize: 28 }}>{item.icon}</div>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}><SvgIcon name={item.icon} size={28} /></div>
                     <div style={{ fontSize: 11, marginTop: 4 }}>{item.label}</div>
                     <div style={{ fontSize: 11, color: item.done ? 'var(--success)' : 'var(--text-secondary)' }}>
-                      {item.done ? '✓ 已完成' : '未完成'}
+                      {item.done ? <><SvgIcon name="check" size={12} /> 已完成</> : '未完成'}
                     </div>
                   </div>
                 ))}

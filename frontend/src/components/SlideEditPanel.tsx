@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { api } from '../services/api'
+import SvgIcon from './SvgIcon'
 
 interface Message {
   role: 'user' | 'system'
@@ -52,17 +53,17 @@ export default function SlideEditPanel({ runId, slideCount, providerId, model, o
         const detail = result.detail || result.violation || '未知错误'
         let hint = ''
         if (errType === 'content_overflow') {
-          hint = '💡 建议：减少内容条目，或指定使用更多卡片的布局'
+          hint = '建议：减少内容条目，或指定使用更多卡片的布局'
         } else if (errType === 'container_violation') {
-          hint = '💡 建议：说明内容区应使用标准 60px 边距'
+          hint = '建议：说明内容区应使用标准 60px 边距'
         } else if (errType === 'fullscreen_mask') {
-          hint = '💡 建议：删除覆盖层或改为半透明'
+          hint = '建议：删除覆盖层或改为半透明'
         } else if (errType === 'no_change') {
-          hint = '💡 建议：更具体地描述要修改的内容'
+          hint = '建议：更具体地描述要修改的内容'
         } else if (errType === 'parse_error') {
-          hint = '💡 建议：换一种说法描述修改要求'
+          hint = '建议：换一种说法描述修改要求'
         } else if (errType === 'chat_reply') {
-          hint = '💡 AI 无法直接修改，请换一种更具体的方式描述'
+          hint = 'AI 无法直接修改，请换一种更具体的方式描述'
         }
         setMessages(prev => [...prev, { role: 'system', text: `拒绝：${detail}\n${hint}`, ok: false }])
       }
@@ -125,7 +126,7 @@ export default function SlideEditPanel({ runId, slideCount, providerId, model, o
         ))}
         {editing && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 0' }}>
-            ⏳ 正在编辑...
+            <SvgIcon name="clock" size={14} /> 正在编辑...
           </div>
         )}
         <div ref={bottomRef} />

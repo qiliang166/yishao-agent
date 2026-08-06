@@ -4,6 +4,7 @@ import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
 import HelpButton from '../components/HelpButton'
 import Col3StructureEditor from '../components/Col3StructureEditor'
+import SvgIcon from '../components/SvgIcon'
 
 type MainTab = 'models' | 'defaults'
 type SeedSubTab = 'columns' | 'core'
@@ -1013,7 +1014,7 @@ export default function ProjSettingsPage() {
 
         </>) : (
           <div style={{ textAlign: 'center' as const, padding: 40, color: 'var(--text-secondary)' }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
+            <div style={{ fontSize: 32, marginBottom: 12 }}><SvgIcon name="lock" size={32} /></div>
             <div style={{ fontSize: 13, marginBottom: 8 }}>此页面需要密码验证</div>
             <button className="btn btn-primary btn-sm" onClick={() => {
               setPendingTab('models'); setShowPasswordDialog(true); setPasswordInput(''); setPasswordError('')

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import SvgIcon from '../../components/SvgIcon'
 import { api } from '../../services/api'
 import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Theme, isHtmlFirstChapter, PageHeaderFooter } from '../types'
@@ -139,7 +140,7 @@ export default function StepCover({ draft, onChange, readonly }: Props) {
     <div className="panel-grid">
       <div className="panel-left">
         <div className="card" style={{ flexShrink: 0 }}>
-          <div className="card-title">📝 封面与署名</div>
+          <div className="card-title"><SvgIcon name="file-text" size={14} /> 封面与署名</div>
           <div className="form-group">
             <label className="form-label">书名</label>
             <input className="form-input" value={draft.title} disabled={readonly}
@@ -173,7 +174,7 @@ export default function StepCover({ draft, onChange, readonly }: Props) {
                   <img src={draft.cover.logo_url} alt="logo" style={{ height: 32, maxWidth: 90, objectFit: 'contain' }} />
                 )}
                 <button className="btn btn-ghost btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
-                  {uploading ? '上传中...' : draft.cover.logo_url ? '更换' : '📁 上传 LOGO'}
+                  {uploading ? '上传中...' : draft.cover.logo_url ? '更换' : <><SvgIcon name="folder" size={14} /> 上传 LOGO</>}
                 </button>
                 {draft.cover.logo_url && (
                   <button className="btn btn-ghost btn-sm" onClick={() => setCover({ logo_url: '' })}>移除</button>
@@ -200,7 +201,7 @@ export default function StepCover({ draft, onChange, readonly }: Props) {
         {draft.book_type === 'a4' && (
           <div className="card" style={{ flexShrink: 0 }}>
             <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>📄 正文页眉页脚</span>
+              <span><SvgIcon name="file-text" size={14} /> 正文页眉页脚</span>
               {!readonly && (
                 <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, cursor: 'pointer', fontWeight: 400 }}>
                   <input type="checkbox" checked={hfEnabled}
@@ -237,7 +238,7 @@ export default function StepCover({ draft, onChange, readonly }: Props) {
                         <img src={hf.header_logo_url} alt="" style={{ height: 20, maxWidth: 60, objectFit: 'contain' }} />
                       )}
                       <button className="btn btn-ghost btn-sm" disabled={uploadingHfLogo} onClick={() => hfLogoRef.current?.click()}>
-                        {uploadingHfLogo ? '上传中...' : hf.header_logo_url ? '更换' : '📁 上传页眉 LOGO'}
+                        {uploadingHfLogo ? '上传中...' : hf.header_logo_url ? '更换' : <><SvgIcon name="folder" size={14} /> 上传页眉 LOGO</>}
                       </button>
                       {hf.header_logo_url && (
                         <button className="btn btn-ghost btn-sm" onClick={() => setPageHf({ header_logo_url: '' })}>移除</button>
@@ -291,7 +292,7 @@ export default function StepCover({ draft, onChange, readonly }: Props) {
         )}
 
         <div className="card" style={{ flexShrink: 0 }}>
-          <div className="card-title">🎨 主题配色</div>
+          <div className="card-title"><SvgIcon name="palette" size={14} /> 主题配色</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
             {themes.map(t => (
               <div key={t.id} onClick={() => { if (!readonly) setCover({ theme_id: t.id, theme_colors: {} }) }}
@@ -327,12 +328,12 @@ export default function StepCover({ draft, onChange, readonly }: Props) {
 
       <div className="panel-right" style={{ overflow: 'hidden' }}>
         <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
-          <div className="card-title">👁 封面实时预览</div>
+          <div className="card-title"><SvgIcon name="eye" size={14} /> 封面实时预览</div>
           <div ref={previewRef}
             style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16, minHeight: 0 }}>
             {coverError && !coverDoc ? (
               <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20 }}>
-                <div style={{ marginBottom: 8 }}>⚠️</div>
+                <div style={{ marginBottom: 8 }}><SvgIcon name="alert-triangle" size={14} /></div>
                 <div>{coverError}</div>
               </div>
             ) : (

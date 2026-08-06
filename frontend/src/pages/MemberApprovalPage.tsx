@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/api'
 import PaymentHistoryDialog from '../components/PaymentHistoryDialog'
+import SvgIcon from '../components/SvgIcon'
 
 interface PaymentInfo {
   plan_name: string
@@ -463,7 +464,7 @@ export default function MemberApprovalPage() {
           textAlign: 'center', padding: 64,
           color: 'var(--text-secondary)', fontSize: 12,
         }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>{statusFilter === 'pending' ? '✅' : '📭'}</div>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>{statusFilter === 'pending' ? <SvgIcon name="check" size={48} /> : <SvgIcon name="folder" size={48} />}</div>
           <p>{statusFilter === 'pending' ? '全部已处理' : '暂无记录'}</p>
         </div>
       ) : (
