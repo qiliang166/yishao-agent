@@ -1726,6 +1726,18 @@ function TemplateManager() {
   const [previewSchemeId, setPreviewSchemeId] = useState('')
   const modal = useModal()
 
+  // Create / Edit dialog state
+  const [showCreate, setShowCreate] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createStyleId, setCreateStyleId] = useState('')
+  const [createGroup, setCreateGroup] = useState('Professional')
+  const [createError, setCreateError] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [editingMetaId, setEditingMetaId] = useState<string | null>(null)
+  const [editMetaName, setEditMetaName] = useState('')
+  const [editMetaGroup, setEditMetaGroup] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   // ── Parse tokens.yaml → { schemes, activeId } ──
   function parseTokensYaml(yamlText: string): { schemes: Record<string, any>; activeId: string } {
     const schemes: Record<string, any> = {}
@@ -2033,6 +2045,105 @@ function TemplateManager() {
     }
   }
 
+  // ── Template CRUD handlers ──
+
+  const handleCreate = async () => {
+    setCreateError('')
+    if (!createName.trim()) { setCreateError('模板名称不能为空'); return }
+    if (!createStyleId.trim()) { setCreateError('style_id 不能为空'); return }
+    if (!/^[a-z0-9][a-z0-9_-]*$/.test(createStyleId.trim())) {
+      setCreateError('style_id 只能包含小写字母、数字、连字符和下划线，且必须以字母或数字开头')
+      return
+    }
+    setCreating(true)
+    try {
+      const res: any = await api.createTemplate({ name: createName.trim(), style_id: createStyleId.trim(), group: createGroup })
+      if (res?.ok) {
+        setShowCreate(false)
+        setCreateName(''); setCreateStyleId(''); setCreateGroup('Professional')
+        loadStyles()
+        modal.toast('模板创建成功', 'success')
+      }
+    } catch (e: any) {
+      setCreateError(e.message || '创建失败')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleDelete = async (styleId: string, name: string) => {
+    const ok = await modal.confirm(`确定删除模板「${name}」？此操作不可撤销。`)
+    if (!ok) return
+    try {
+      const templateId = `style-${styleId}`
+      await api.deleteTemplate(templateId)
+      loadStyles()
+      modal.toast('模板已删除', 'success')
+    } catch (e: any) {
+      modal.toast(`删除失败: ${e}`, 'error')
+    }
+  }
+
+  const handleExport = async (styleId: string) => {
+    try {
+      const templateId = `style-${styleId}`
+      await api.exportTemplate(templateId)
+    } catch (e: any) {
+      modal.toast(`导出失败: ${e}`, 'error')
+    }
+  }
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const res: any = await api.importTemplate(file)
+      if (res?.ok) {
+        loadStyles()
+        modal.toast('模板导入成功', 'success')
+      }
+    } catch (e: any) {
+      if (e.message?.includes('已存在')) {
+        const overwrite = await modal.confirm(e.message + '\n\n是否覆盖已有模板？')
+        if (overwrite) {
+          try {
+            const res2: any = await api.importTemplate(file, true)
+            if (res2?.ok) { loadStyles(); modal.toast('模板已覆盖', 'success') }
+          } catch (e2: any) { modal.toast(`覆盖失败: ${e2}`, 'error') }
+        }
+      } else {
+        modal.toast(`导入失败: ${e}`, 'error')
+      }
+    } finally {
+      // Reset input so same file can be re-selected
+      e.target.value = ''
+    }
+  }
+
+  const startEditMeta = (styleId: string, name: string, group: string) => {
+    setEditingMetaId(styleId)
+    setEditMetaName(name)
+    setEditMetaGroup(group)
+  }
+
+  const saveEditMeta = async () => {
+    if (!editingMetaId) return
+    try {
+      const templateId = `style-${editingMetaId}`
+      const res: any = await api.updateTemplate(templateId, {
+        name: editMetaName.trim(),
+        group: editMetaGroup,
+      })
+      if (res?.ok) {
+        setEditingMetaId(null)
+        loadStyles()
+        modal.toast('模板已更新', 'success')
+      }
+    } catch (e: any) {
+      modal.toast(`更新失败: ${e}`, 'error')
+    }
+  }
+
   const openEditor = async (styleId: string, styleName: string, mode: 'vi' | 'prompt') => {
     justOpened.current = true
     setEditorOpen(true)
@@ -2219,6 +2330,19 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
           )
         })}
         <div style={{ flex: 1 }} />
+        {canManageTemplate && (
+          <>
+            <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".zip" onChange={handleImportFile} />
+            <button className="btn btn-xs" style={{ fontSize: 10, padding: '4px 10px', marginRight: 6 }}
+              onClick={() => fileInputRef.current?.click()}>
+              导入模板
+            </button>
+            <button className="btn btn-xs btn-primary" style={{ fontSize: 10, padding: '4px 10px', marginRight: 6 }}
+              onClick={() => { setShowCreate(true); setCreateError('') }}>
+              新建模板
+            </button>
+          </>
+        )}
         <HelpButton location="templates" />
       </div>
 
@@ -2310,6 +2434,50 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
                               >提示词</button>
                             )}
                           </div>
+
+                          {/* CRUD actions */}
+                          {canManageTemplate && (
+                            <div style={{ display: 'flex', gap: 4, marginTop: 6 }}>
+                              <button className="btn btn-xs"
+                                style={{ flex: 1, fontSize: 9, padding: '2px 0', opacity: 0.7 }}
+                                onClick={(e) => { e.stopPropagation(); startEditMeta(style.id, style.name, style.group) }}>
+                                编辑
+                              </button>
+                              <button className="btn btn-xs"
+                                style={{ flex: 1, fontSize: 9, padding: '2px 0', opacity: 0.7 }}
+                                onClick={(e) => { e.stopPropagation(); handleExport(style.id) }}>
+                                导出
+                              </button>
+                              <button className="btn btn-xs"
+                                style={{ flex: 1, fontSize: 9, padding: '2px 0', opacity: 0.7, color: '#e74c3c' }}
+                                onClick={(e) => { e.stopPropagation(); handleDelete(style.id, style.name) }}>
+                                删除
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Inline edit metadata */}
+                          {editingMetaId === style.id && (
+                            <div style={{ marginTop: 6, padding: '6px', background: 'var(--bg)', borderRadius: 4 }}>
+                              <input value={editMetaName} onChange={e => setEditMetaName(e.target.value)}
+                                style={{ width: '100%', fontSize: 10, padding: '3px 6px', marginBottom: 4, border: '1px solid var(--border)', borderRadius: 3, background: 'var(--card-bg)', color: 'var(--text)' }}
+                                placeholder="模板名称" />
+                              <select value={editMetaGroup} onChange={e => setEditMetaGroup(e.target.value)}
+                                style={{ width: '100%', fontSize: 10, padding: '3px 6px', marginBottom: 4, border: '1px solid var(--border)', borderRadius: 3, background: 'var(--card-bg)', color: 'var(--text)' }}>
+                                <option value="Professional">Professional — 商务专业</option>
+                                <option value="Creative">Creative — 创意大胆</option>
+                                <option value="Tech / Dark">Tech / Dark — 科技暗色</option>
+                                <option value="Thematic">Thematic — 主题风格</option>
+                              </select>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-xs btn-primary" style={{ flex: 1, fontSize: 9, padding: '2px 0' }}
+                                  onClick={(e) => { e.stopPropagation(); saveEditMeta() }}>保存</button>
+                                <button className="btn btn-xs" style={{ flex: 1, fontSize: 9, padding: '2px 0' }}
+                                  onClick={(e) => { e.stopPropagation(); setEditingMetaId(null) }}>取消</button>
+                              </div>
+                            </div>
+                          )}
+
                           <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center' }}>
                             <span style={{ fontSize: 9, color: 'var(--text-muted)', flex: 1 }}>在模板选择中显示</span>
                             {canManageTemplate ? (
@@ -2516,6 +2684,51 @@ body{font:15px/1.7 Inter,'PingFang SC','Microsoft YaHei',sans-serif;color:var(--
           })()
         )}
       </div>
+
+      {/* Create Template Dialog */}
+      {showCreate && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={e => { if (e.target === e.currentTarget) setShowCreate(false) }}>
+          <div style={{ background: 'var(--card-bg)', borderRadius: 8, padding: 20, width: 420, maxWidth: '90vw', boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}>
+            <h4 style={{ margin: '0 0 16px 0', fontSize: 14, fontWeight: 600 }}>新建模板</h4>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>模板名称</label>
+              <input value={createName} onChange={e => setCreateName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
+                placeholder="例如：我的模板"
+                style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg)', color: 'var(--text)', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>Style ID <span style={{ opacity: 0.5 }}>(小写英文+数字+连字符)</span></label>
+              <input value={createStyleId} onChange={e => setCreateStyleId(e.target.value.replace(/[^a-z0-9_-]/g, ''))}
+                onKeyDown={e => { if (e.key === 'Enter') handleCreate() }}
+                placeholder="例如：my-template"
+                style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg)', color: 'var(--text)', boxSizing: 'border-box' }} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'block', marginBottom: 4 }}>分组</label>
+              <select value={createGroup} onChange={e => setCreateGroup(e.target.value)}
+                style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg)', color: 'var(--text)', boxSizing: 'border-box' }}>
+                <option value="Professional">Professional — 商务专业</option>
+                <option value="Creative">Creative — 创意大胆</option>
+                <option value="Tech / Dark">Tech / Dark — 科技暗色</option>
+                <option value="Thematic">Thematic — 主题风格</option>
+              </select>
+            </div>
+            {createError && (
+              <p style={{ fontSize: 11, color: '#e74c3c', margin: '0 0 10px 0' }}>{createError}</p>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-xs" style={{ fontSize: 11, padding: '6px 16px' }}
+                onClick={() => setShowCreate(false)}>取消</button>
+              <button className="btn btn-xs btn-primary" style={{ fontSize: 11, padding: '6px 16px' }}
+                disabled={creating} onClick={handleCreate}>
+                {creating ? '创建中...' : '创建'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Editor Modal — draggable + resizable */}
       {editorOpen && (() => {

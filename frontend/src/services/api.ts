@@ -66,6 +66,36 @@ async function request(path: string, options?: RequestInit & { timeoutMs?: numbe
   }
 }
 
+async function requestBlob(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<Blob> {
+  const ctrl = new AbortController()
+  const existingSignal = options?.signal
+  if (existingSignal) {
+    existingSignal.addEventListener('abort', () => ctrl.abort())
+  }
+  const timeoutMs = options?.timeoutMs ?? 30000
+  let timer: any = null
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => ctrl.abort(), timeoutMs)
+  }
+  try {
+    const { timeoutMs: _, ...fetchOpts } = (options || {})
+    const headers: Record<string, string> = { ...getAuthHeaders() }
+    if (fetchOpts.headers) {
+      Object.assign(headers, fetchOpts.headers as Record<string, string>)
+    }
+    const res = await fetch(BASE + path, { ...fetchOpts, headers, signal: ctrl.signal })
+    if (!res.ok) {
+      const text = await res.text()
+      let msg = text
+      try { msg = JSON.parse(text).detail || msg } catch {}
+      throw new Error(msg || `服务器错误 (${res.status})`)
+    }
+    return await res.blob()
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export interface LLMProvider {
   id: string
   name: string
@@ -961,6 +991,38 @@ export const api = {
     request(`/api/workspaces/${workspaceId}/copy-seed-configs`, { method: 'POST' }),
   toggleTemplateEnabled: (templateId: string) =>
     request(`/api/templates/${encodeURIComponent(templateId)}/toggle-enabled`, { method: 'PUT' }).then(d => d as { ok: boolean; enabled: boolean }),
+
+  // Template CRUD
+  createTemplate: (data: { name: string; style_id: string; group: string }) =>
+    request('/api/templates', { method: 'POST', body: JSON.stringify(data) }).then(d => d as { ok: boolean; template: any }),
+
+  updateTemplate: (templateId: string, data: { name?: string; group?: string }) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}`, { method: 'PUT', body: JSON.stringify(data) }).then(d => d as { ok: boolean; template: any }),
+
+  deleteTemplate: (templateId: string) =>
+    request(`/api/templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' }).then(d => d as { ok: boolean }),
+
+  exportTemplate: async (templateId: string) => {
+    const blob = await requestBlob(`/api/templates/${encodeURIComponent(templateId)}/export`)
+    const disposition = (blob as any).name || `template-${templateId}.zip`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = disposition
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+
+  importTemplate: (file: File, overwrite?: boolean, newStyleId?: string) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    let url = '/api/templates/import'
+    const params = new URLSearchParams()
+    if (overwrite) params.append('overwrite', 'true')
+    if (newStyleId) params.append('style_id', newStyleId)
+    if (params.toString()) url += '?' + params.toString()
+    return request(url, { method: 'POST', body: fd }).then(d => d as { ok: boolean; template: any })
+  },
 
   // Source Materials (multi-format input)
   listMaterials: (projectId: string) =>
