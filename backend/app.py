@@ -10364,7 +10364,7 @@ app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 if __name__ == "__main__":
     import uvicorn
     from batch.scheduler import init as batch_init, set_jwt_secret
-    port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8766
+    port = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 8767
     set_jwt_secret(SECRET_KEY)
     batch_init(port)
     workers = int(os.environ.get("WORKERS", "1"))
