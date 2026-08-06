@@ -1,11 +1,13 @@
 """
 Desktop entry point for PyInstaller-packaged application.
 Starts FastAPI backend and opens the browser.
+Double-clicking again when already running just opens the browser.
 """
 import sys
 import os
 import io
 import traceback
+import socket
 
 # Determine base dir for logging: next to exe (frozen) or next to this file (dev)
 if getattr(sys, 'frozen', False):
@@ -22,6 +24,25 @@ def _log_error(msg: str):
             f.write(msg + '\n')
     except Exception:
         pass
+
+
+def _port_in_use(port: int) -> bool:
+    """Check if a port is already bound."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            return s.connect_ex(('127.0.0.1', port)) == 0
+    except Exception:
+        return False
+
+
+PORT = 8766
+
+# If already running, just open browser and exit
+if _port_in_use(PORT):
+    import webbrowser
+    webbrowser.open(f'http://localhost:{PORT}')
+    sys.exit(0)
 
 
 try:
@@ -49,12 +70,11 @@ def main():
                 del _cfg["()"]
             _cfg.setdefault("use_colors", False)
 
-        port = 8766
-        batch_init(port)
+        batch_init(PORT)
         import threading
         def _open_browser():
             import time
-            url = f"http://localhost:{port}"
+            url = f"http://localhost:{PORT}"
             for i in range(5):
                 time.sleep(0.5)
                 try:
@@ -64,7 +84,7 @@ def main():
                     pass
             _log_error("Browser auto-open failed after 5 attempts")
         threading.Thread(target=_open_browser, daemon=True).start()
-        uvicorn.run(app, host="0.0.0.0", port=port, log_config=log_config)
+        uvicorn.run(app, host="0.0.0.0", port=PORT, log_config=log_config)
     except Exception as e:
         _log_error(f'Runtime error: {e}\n{traceback.format_exc()}')
 
