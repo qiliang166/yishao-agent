@@ -7681,26 +7681,27 @@ def get_settings(request: Request):
         settings["new_user_points_deci"] = str(_new_user_bonus_deci())
 
         # Merge download URLs from activation server site_config (set via KeyGen)
-        _act_db = os.path.join(os.path.dirname(BASE_DIR), "activation_server", "data", "activation.db")
-        if os.path.exists(_act_db):
-            try:
-                import sqlite3 as _sqlite3
-                _aconn = _sqlite3.connect(_act_db)
+        # Try multiple possible paths — backend may run from /opt/ or /root/
+        for _act_db in (
+            os.path.join(os.path.dirname(BASE_DIR), "activation_server", "data", "activation.db"),
+            "/root/yishao-agent/activation_server/data/activation.db",
+        ):
+            if os.path.exists(_act_db):
                 try:
-                    _arows = _aconn.execute(
-                        "SELECT key, value FROM site_config WHERE key IN ('download_desktop_url','download_server_url')"
-                    ).fetchall()
-                    for _r in _arows:
-                        if _r[1] and not settings.get(_r[0]):
-                            settings[_r[0]] = _r[1]
-                finally:
-                    _aconn.close()
-            except Exception as _e:
-                import sys
-                print(f"[get_settings] activation db read error: {_e}", file=sys.stderr)
-        else:
-            import sys
-            print(f"[get_settings] activation db not found at: {_act_db}", file=sys.stderr)
+                    import sqlite3 as _sqlite3
+                    _aconn = _sqlite3.connect(_act_db)
+                    try:
+                        _arows = _aconn.execute(
+                            "SELECT key, value FROM site_config WHERE key IN ('download_desktop_url','download_server_url')"
+                        ).fetchall()
+                        for _r in _arows:
+                            if _r[1] and not settings.get(_r[0]):
+                                settings[_r[0]] = _r[1]
+                    finally:
+                        _aconn.close()
+                except Exception:
+                    pass
+                break
 
         return JSONResponse(
             content={"settings": settings},
