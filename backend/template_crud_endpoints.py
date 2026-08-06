@@ -304,13 +304,14 @@ def export_template(template_id: str, user=require_perm("template.manage")):
     }
 
     buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as zf:
         zf.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
         for root, dirs, files in os.walk(vi_dir):
             for fname in files:
                 full = os.path.join(root, fname)
                 arcname = "vi/" + os.path.relpath(full, vi_dir).replace("\\", "/")
-                zf.write(full, arcname)
+                with open(full, "rb") as fh:
+                    zf.writestr(arcname, fh.read())
 
     buf.seek(0)
     safe_name = style_id.replace('"', '').replace("\\", "")
