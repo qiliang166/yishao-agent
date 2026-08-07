@@ -5,190 +5,534 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{{TITLE}}</title>
 <style>
-:root {
-  --accent: {{ACCENT_COLOR}};
-  --bg: #0b0b1a;
-  --card-bg: #12122e;
-  --text: #ccc;
-  --text-dim: #777;
-}
-*{margin:0;padding:0;box-sizing:border-box}
-body{
-  font-family:'PingFang SC','Microsoft YaHei',sans-serif;
-  background:var(--bg);color:var(--text);padding:20px;
-}
-.header{
-  text-align:center;padding:30px 20px 20px;
-  border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:16px;
-}
-.header h1{font-size:22px;color:#fff}
-.header .sub{font-size:12px;opacity:0.35;margin-top:4px}
-.logo-badge{
-  display:inline-block;padding:2px 10px;border-radius:4px;
-  font-size:10px;font-weight:700;background:var(--accent);color:#fff;margin-left:8px;
-}
+  * { margin: 0; padding: 0; box-sizing: border-box; }
 
-.mode-bar{
-  display:flex;justify-content:center;gap:8px;margin:18px 0 24px;
-}
-.mode-bar button{
-  padding:8px 20px;border:1px solid rgba(255,255,255,0.12);
-  background:transparent;color:var(--text-dim);border-radius:6px;
-  cursor:pointer;font-size:13px;font-family:inherit;
-  transition:all 0.15s;
-}
-.mode-bar button:hover{color:#fff;border-color:rgba(255,255,255,0.3)}
-.mode-bar button.active{
-  background:var(--accent);border-color:var(--accent);color:#fff;
-}
+  body {
+    background: #0a0a0a;
+    color: #fff;
+    font-family: system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    overflow-x: hidden;
+  }
 
-/* ── Gallery ── */
-#gallery{max-width:1200px;margin:0 auto}
-.slide-card{
-  background:var(--card-bg);border-radius:12px;overflow:hidden;
-  box-shadow:0 8px 32px rgba(0,0,0,0.45);margin-bottom:14px;
-}
-.slide-label{
-  padding:9px 18px;background:rgba(255,255,255,0.025);
-  font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;
-  border-bottom:1px solid rgba(255,255,255,0.05);
-}
-.slide-label .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-.slide-card img,.slide-card object{width:100%;height:auto;display:block}
+  /* ── Header ── */
+  .header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(10, 10, 10, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
 
-/* ── Scroll ── */
-#scroll-view{display:none;max-width:1200px;margin:0 auto}
-#scroll-view .slide-card{margin-bottom:40px}
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
 
-/* ── Present ── */
-#present-view{display:none;max-width:1200px;margin:0 auto;text-align:center}
-#present-view .slide-card{margin-bottom:0}
-.present-nav{
-  display:flex;align-items:center;justify-content:center;gap:20px;margin-top:16px;
-}
-.present-nav button{
-  padding:8px 24px;border:1px solid rgba(255,255,255,0.15);
-  background:transparent;color:var(--text-dim);border-radius:6px;
-  cursor:pointer;font-size:13px;font-family:inherit;
-  transition:all 0.15s;
-}
-.present-nav button:hover{color:#fff;border-color:var(--accent)}
-.present-nav .counter{font-size:14px;color:var(--text-dim);min-width:80px}
-#present-slide{display:flex;justify-content:center}
+  .header-logo {
+    width: 32px;
+    height: 32px;
+    background: var(--accent, #FF6900);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+  }
 
-/* ── Empty state ── */
-.empty-state{
-  text-align:center;padding:80px 20px;color:var(--text-dim);
-}
-.empty-state p{font-size:15px}
+  .header-title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+
+  .header-title span { color: var(--accent, #FF6900); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.5);
+  }
+
+  .slide-counter {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--accent, #FF6900);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .mode-btn {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: #fff;
+    padding: 6px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s;
+  }
+
+  .mode-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+
+  .mode-btn.active {
+    background: var(--accent, #FF6900);
+    border-color: var(--accent, #FF6900);
+  }
+
+  /* ── Gallery Mode ── */
+  .gallery {
+    padding: 80px 32px 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .gallery-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 20px;
+  }
+
+  .slide-card {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #1a1a1a;
+    border: 1px solid rgba(255,255,255,0.06);
+    transition: all 0.3s ease;
+    cursor: pointer;
+  }
+
+  .slide-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  .slide-card .slide-number {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 2;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(8px);
+    color: var(--accent, #FF6900);
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .slide-card .slide-label {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    padding: 32px 16px 12px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.85));
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.85);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .slide-card:hover .slide-label { opacity: 1; }
+
+  .slide-card object,
+  .slide-card img {
+    width: 100%;
+    aspect-ratio: 16/9;
+    display: block;
+    pointer-events: none;
+  }
+
+  /* ── Scroll Mode ── */
+  .scroll-view {
+    display: none;
+    padding: 80px 0 40px;
+  }
+
+  .scroll-view.active { display: block; }
+
+  .scroll-slide {
+    max-width: 960px;
+    margin: 0 auto 24px;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .scroll-slide object { width: 100%; display: block; }
+
+  .scroll-slide .scroll-number {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(8px);
+    color: var(--accent, #FF6900);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  /* ── Presentation Mode ── */
+  .presentation {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: #000;
+  }
+
+  .presentation.active {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .pres-toolbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 210;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(16px);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .presentation:hover .pres-toolbar { opacity: 1; }
+
+  .pres-btn {
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: #fff;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+  }
+
+  .pres-btn:hover { background: rgba(255,255,255,0.2); }
+
+  .pres-progress {
+    flex: 1;
+    max-width: 400px;
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .pres-progress-bar {
+    height: 100%;
+    background: var(--accent, #FF6900);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  .pres-counter {
+    color: rgba(255,255,255,0.6);
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  .pres-slide-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .pres-click-zone {
+    position: fixed;
+    top: 0;
+    bottom: 60px;
+    width: 50%;
+    z-index: 205;
+    cursor: pointer;
+  }
+
+  .pres-click-zone.left {
+    left: 0;
+    cursor: w-resize;
+  }
+
+  .pres-click-zone.right {
+    right: 0;
+    cursor: e-resize;
+  }
+
+  .pres-slide-container object {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    border-radius: 4px;
+    box-shadow: 0 4px 60px rgba(0,0,0,0.5);
+  }
+
+  /* ── Keyboard Hint ── */
+  .kbd-hint {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 50;
+    background: rgba(30,30,30,0.9);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    line-height: 1.8;
+  }
+
+  .kbd-hint kbd {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: inherit;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+  }
+
+  /* ── Notes Panel ── */
+  .notes-panel {
+    display: none;
+    position: fixed;
+    bottom: 60px;
+    left: 0;
+    right: 0;
+    z-index: 220;
+    background: rgba(10, 10, 10, 0.88);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 16px 32px;
+    max-height: 180px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .notes-panel.active { display: block; }
+
+  .notes-panel .notes-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--accent, #FF6900);
+    margin-bottom: 8px;
+  }
+
+  .notes-panel .notes-label {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+  }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>{{TITLE}}<span class="logo-badge">{{LOGO}}</span></h1>
-  <div class="sub">SVG 幻灯片预览 &middot; 1280×720</div>
-</div>
-
-<div class="mode-bar">
-  <button id="btn-gallery" class="active" onclick="switchMode('gallery')">Gallery</button>
-  <button id="btn-scroll" onclick="switchMode('scroll')">Scroll</button>
-  <button id="btn-present" onclick="switchMode('present')">Present</button>
-</div>
-
-<div id="gallery"></div>
-<div id="scroll-view"></div>
-<div id="present-view">
-  <div id="present-slide"></div>
-  <div class="present-nav">
-    <button onclick="prevSlide()">&larr; Prev</button>
-    <span class="counter" id="slide-counter"></span>
-    <button onclick="nextSlide()">Next &rarr;</button>
+  <div class="header-left">
+    <div class="header-logo">{{LOGO}}</div>
+    <div class="header-title"><span>{{TITLE}}</span> PPT</div>
+  </div>
+  <div class="header-right">
+    <span class="slide-counter" id="slideCounter"></span>
+    <button class="mode-btn active" onclick="setMode('gallery')">Gallery</button>
+    <button class="mode-btn" onclick="setMode('scroll')">Scroll</button>
+    <button class="mode-btn" onclick="startPresentation(0)">Present</button>
   </div>
 </div>
 
+<!-- Gallery Mode -->
+<div class="gallery" id="galleryView">
+  <div class="gallery-grid" id="galleryGrid"></div>
+</div>
+
+<!-- Scroll Mode -->
+<div class="scroll-view" id="scrollView"></div>
+
+<!-- Presentation Mode -->
+<div class="presentation" id="presView">
+  <div class="pres-click-zone left" onclick="presNav(-1)"></div>
+  <div class="pres-click-zone right" onclick="presNav(1)"></div>
+  <div class="pres-slide-container" id="presSlide"></div>
+  <div class="notes-panel" id="notesPanel">
+    <div class="notes-title">Speaker Notes</div>
+    <div class="notes-label" id="notesContent"></div>
+  </div>
+  <div class="pres-toolbar">
+    <button class="pres-btn" onclick="presNav(-1)">&#8592;</button>
+    <div class="pres-progress"><div class="pres-progress-bar" id="presProgress"></div></div>
+    <span class="pres-counter" id="presCounter"></span>
+    <button class="pres-btn" onclick="presNav(1)">&#8594;</button>
+    <button class="pres-btn" onclick="exitPresentation()">&#10005;</button>
+  </div>
+</div>
+
+<!-- Keyboard Hints -->
+<div class="kbd-hint" id="kbdHint">
+  <kbd>F</kbd> Fullscreen &nbsp; <kbd>P</kbd> Present &nbsp; <kbd>G</kbd> Gallery &nbsp; <kbd>S</kbd> Scroll &nbsp; <kbd>N</kbd> Notes
+</div>
+
 <script>
-var slides = {{SLIDES_JSON}};
-var currentMode = 'gallery';
-var currentSlide = 0;
+const SLIDES = {{SLIDES_JSON}};
+const TOTAL = SLIDES.length;
+const ACCENT = '{{ACCENT_COLOR}}' || '#FF6900';
 
-var dotColors = ['#e67e22','#2d5f8a','#c0392b','#27ae60','#8e44ad','#2980b9','#d35400','#16a085'];
+document.documentElement.style.setProperty('--accent', ACCENT);
+document.getElementById('slideCounter').textContent = `${TOTAL} slides`;
 
-function buildSlideCard(s, idx) {
-  var color = dotColors[idx % dotColors.length];
-  return '<div class="slide-card">' +
-    '<div class="slide-label">' +
-      '<span class="dot" style="background:' + color + '"></span> ' +
-      'Slide ' + (idx + 1) + ' &mdash; ' + escHtml(s.label) +
-    '</div>' +
-    '<img src="' + escAttr(s.file) + '" alt="' + escAttr(s.label) + '" loading="lazy">' +
-  '</div>';
-}
-
-function renderGallery() {
-  var el = document.getElementById('gallery');
-  if (!slides.length) {
-    el.innerHTML = '<div class="empty-state"><p>No slides to display</p></div>';
-    return;
-  }
-  el.innerHTML = slides.map(buildSlideCard).join('');
-}
-
-function renderScroll() {
-  var el = document.getElementById('scroll-view');
-  el.innerHTML = slides.map(buildSlideCard).join('');
-}
-
-function renderPresentSlide() {
-  var el = document.getElementById('present-slide');
-  var counter = document.getElementById('slide-counter');
-  if (!slides.length) {
-    el.innerHTML = '<div class="empty-state"><p>No slides</p></div>';
-    counter.textContent = '';
-    return;
-  }
-  el.innerHTML = buildSlideCard(slides[currentSlide], currentSlide);
-  counter.textContent = (currentSlide + 1) + ' / ' + slides.length;
-}
-
-function switchMode(mode) {
-  currentMode = mode;
-  document.getElementById('gallery').style.display = mode === 'gallery' ? 'block' : 'none';
-  document.getElementById('scroll-view').style.display = mode === 'scroll' ? 'block' : 'none';
-  document.getElementById('present-view').style.display = mode === 'present' ? 'block' : 'none';
-  ['btn-gallery','btn-scroll','btn-present'].forEach(function(id){
-    document.getElementById(id).classList.remove('active');
-  });
-  document.getElementById('btn-' + mode).classList.add('active');
-
-  if (mode === 'gallery' && !document.getElementById('gallery').innerHTML) renderGallery();
-  if (mode === 'scroll' && !document.getElementById('scroll-view').innerHTML) renderScroll();
-  if (mode === 'present') { currentSlide = 0; renderPresentSlide(); }
-}
-
-function nextSlide() {
-  if (currentSlide < slides.length - 1) { currentSlide++; renderPresentSlide(); }
-}
-function prevSlide() {
-  if (currentSlide > 0) { currentSlide--; renderPresentSlide(); }
-}
-
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function escAttr(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-// Keyboard navigation in present mode
-document.addEventListener('keydown', function(e) {
-  if (currentMode !== 'present') return;
-  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') nextSlide();
-  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') prevSlide();
+// ── Build Gallery ──
+const galleryGrid = document.getElementById('galleryGrid');
+SLIDES.forEach((s, i) => {
+  const card = document.createElement('div');
+  card.className = 'slide-card';
+  card.onclick = () => startPresentation(i);
+  card.innerHTML = `
+    <div class="slide-number">${String(i + 1).padStart(2, '0')}</div>
+    <object data="${s.file}" type="image/svg+xml"></object>
+    <div class="slide-label">${s.label}</div>
+  `;
+  galleryGrid.appendChild(card);
 });
 
-// Init
-renderGallery();
+// ── Build Scroll View ──
+const scrollView = document.getElementById('scrollView');
+SLIDES.forEach((s, i) => {
+  const div = document.createElement('div');
+  div.className = 'scroll-slide';
+  div.innerHTML = `
+    <div class="scroll-number">${String(i + 1).padStart(2, '0')} / ${TOTAL}</div>
+    <object data="${s.file}" type="image/svg+xml"></object>
+  `;
+  scrollView.appendChild(div);
+});
+
+// ── Mode Switching ──
+let currentMode = 'gallery';
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('galleryView').style.display = mode === 'gallery' ? 'block' : 'none';
+  document.getElementById('scrollView').className = mode === 'scroll' ? 'scroll-view active' : 'scroll-view';
+  document.getElementById('kbdHint').style.display = (mode === 'gallery' || mode === 'scroll') ? 'block' : 'none';
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.toLowerCase() === mode);
+  });
+  if (mode !== 'presentation') {
+    document.getElementById('presView').classList.remove('active');
+  }
+}
+
+// ── Presentation Mode ──
+let presIndex = 0;
+
+function startPresentation(index) {
+  presIndex = index || 0;
+  document.getElementById('presView').classList.add('active');
+  document.getElementById('kbdHint').style.display = 'none';
+  renderPresSlide();
+}
+
+function exitPresentation() {
+  document.getElementById('presView').classList.remove('active');
+  document.getElementById('kbdHint').style.display = 'block';
+}
+
+function presNav(dir) {
+  presIndex = Math.max(0, Math.min(TOTAL - 1, presIndex + dir));
+  renderPresSlide();
+}
+
+function renderPresSlide() {
+  const container = document.getElementById('presSlide');
+  const notesVisible = document.getElementById('notesPanel').classList.contains('active');
+  const maxH = notesVisible ? 'calc(100vh - 260px)' : 'calc(100vh - 80px)';
+  container.innerHTML = `<object data="${SLIDES[presIndex].file}" type="image/svg+xml" style="width:100%;max-height:${maxH};"></object>`;
+  document.getElementById('presCounter').textContent = `${presIndex + 1} / ${TOTAL}`;
+  document.getElementById('presProgress').style.width = `${((presIndex + 1) / TOTAL) * 100}%`;
+  updateNotesContent();
+}
+
+// ── Notes Panel ──
+let notesVisible = false;
+
+function toggleNotes() {
+  notesVisible = !notesVisible;
+  document.getElementById('notesPanel').classList.toggle('active', notesVisible);
+  renderPresSlide();
+}
+
+function updateNotesContent() {
+  const el = document.getElementById('notesContent');
+  const slide = SLIDES[presIndex];
+  const num = String(presIndex + 1).padStart(2, '0');
+  el.innerHTML = `Slide ${num}: ${slide.label}`;
+}
+
+// ── Keyboard Controls ──
+document.addEventListener('keydown', (e) => {
+  const pres = document.getElementById('presView').classList.contains('active');
+  if (pres) {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); presNav(1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'Backspace') { e.preventDefault(); presNav(-1); }
+    else if (e.key === 'Escape') { exitPresentation(); }
+    else if (e.key === 'n' || e.key === 'N') { toggleNotes(); }
+    else if (e.key === 'Home') { presIndex = 0; renderPresSlide(); }
+    else if (e.key === 'End') { presIndex = TOTAL - 1; renderPresSlide(); }
+  } else {
+    if (e.key === 'p' || e.key === 'P') startPresentation(0);
+    else if (e.key === 'g' || e.key === 'G') setMode('gallery');
+    else if (e.key === 's' || e.key === 'S') setMode('scroll');
+    else if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+  }
+});
 </script>
 </body>
 </html>
