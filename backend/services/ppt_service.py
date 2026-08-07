@@ -593,7 +593,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                            slide_data, style_id=style_id,
                                            temperature=st['cards'],
                                            column_id=column_id,
-                                           color_scheme=color_scheme)
+                                           color_scheme=color_scheme,
+                                           project_id=project_id)
             _logger.info(f"[PPT-TRACE-v2] _stage2_structure returned: {type(structure).__name__}, len={len(structure) if structure else 'None'}")
             print(f"[PPT-TRACE-v2] _stage2_structure returned: {type(structure).__name__}, len={len(structure) if structure else 'None'}", flush=True)
             if structure:
@@ -4675,6 +4676,15 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         if html.startswith("```"):
                             html = re.sub(r'^```\w*\n?', '', html)
                             html = re.sub(r'\n?```$', '', html)
+                        # Log fallback extraction (no code fences, no section tags) —
+                        # indicates LLM produced chain-of-thought instead of clean HTML
+                        try:
+                            _fd = os.path.join(BASE_DIR, "data", "debug")
+                            os.makedirs(_fd, exist_ok=True)
+                            with open(os.path.join(_fd, f"slide_{seq}_raw_response.txt"), "w", encoding="utf-8") as _fr:
+                                _fr.write(f"=== TAILORED SYSTEM ({len(tailored_system)} chars) ===\n{tailored_system}\n\n=== USER ({len(user)} chars) ===\n{user}\n\n=== RAW RESPONSE ({len(response)} chars) ===\n{response}")
+                        except Exception:
+                            pass
 
                 if html and len(html) > 300:
                     # ── DEBUG: monitor LLM output for hex leakage ──
