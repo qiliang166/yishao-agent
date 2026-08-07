@@ -1,5 +1,6 @@
 """Deck designer — renders SVG decks from AI-generated or code-structured slide data."""
 import os
+import sys
 import json
 import uuid
 import yaml
@@ -8,7 +9,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _resolve_preview_template():
-    p = os.path.join(BASE_DIR, "data", "assets", "preview-template.html")
+    if getattr(sys, 'frozen', False):
+        p = os.path.join(sys._MEIPASS, "backend", "data", "assets", "preview-template.html")
+    else:
+        p = os.path.join(BASE_DIR, "data", "assets", "preview-template.html")
     if os.path.exists(p):
         with open(p, "r", encoding="utf-8") as f:
             return f.read()
