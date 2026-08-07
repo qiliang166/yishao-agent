@@ -274,8 +274,10 @@ async def catch_all_exceptions(request: Request, call_next):
 @app.on_event("startup")
 async def startup_batch_scheduler():
     import os as _os
-    from batch.scheduler import init as batch_init, set_jwt_secret
-    port = int(_os.environ.get("PORT", "8766"))
+    from batch.scheduler import init as batch_init, set_jwt_secret, _initialized
+    if _initialized:
+        return
+    port = int(_os.environ.get("PORT", "8767"))
     set_jwt_secret(SECRET_KEY)
     batch_init(port)
     # Mark any batches that were "running" before restart as stopped (thread killed)

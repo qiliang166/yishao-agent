@@ -31,6 +31,7 @@ _batch_lock = threading.Lock()
 _log_lock = threading.Lock()
 _token_lock = threading.Lock()
 _active_batches: dict = {}
+_initialized: bool = False
 
 # Set by app.py on startup
 _port: int = 8766
@@ -40,7 +41,7 @@ _headers: dict = {}
 
 
 def init(port: int = 8766):
-    global _port, _base_url, _admin_token, _headers
+    global _port, _base_url, _admin_token, _headers, _initialized
     _port = port
     _base_url = f"http://127.0.0.1:{port}"
     _admin_token = _make_token()
@@ -48,6 +49,7 @@ def init(port: int = 8766):
         "Authorization": f"Bearer {_admin_token}",
         "Content-Type": "application/json",
     }
+    _initialized = True
 
 
 def _make_token() -> str:
