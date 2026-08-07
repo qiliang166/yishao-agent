@@ -72,41 +72,27 @@ Write-Host "[2/2] Packaging..."
 $distDir = "$root\dist_server"
 if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 
-# Create directory structure mirroring backend/ (auto-discovered)
-$backendDirs = Get-ChildItem -Path "$root\backend" -Directory -Recurse `
-    | Where-Object {
-        $rel = $_.FullName.Substring($root.Length + 1)
-        # Skip runtime-only / build-only directories
-        ($rel -notmatch '\\venv\\' -or $rel -notmatch '\\venv$') -and
-        ($rel -notmatch '\\__pycache__\\' -or $rel -notmatch '\\__pycache__$') -and
-        ($rel -notmatch '\\logs\\' -or $rel -notmatch '\\logs$')
-    }
-foreach ($d in $backendDirs) {
-    $rel = $d.FullName.Substring($root.Length + 1)
-    New-Item -ItemType Directory -Path (Join-Path $distDir $rel) -Force | Out-Null
-}
-# Also ensure frontend dist dir exists
+# Ensure destination dirs exist
+New-Item -ItemType Directory -Path "$distDir\backend" -Force | Out-Null
 New-Item -ItemType Directory -Path "$distDir\frontend\dist" -Force | Out-Null
 
-# Copy ALL backend files, then remove what should not ship
-Copy-Item "$root\backend\*" "$distDir\backend\" -Recurse -Force -ErrorAction SilentlyContinue
-
-# Remove runtime-only content from the staging copy
-$toStrip = @(
-    "$distDir\backend\venv",
-    "$distDir\backend\__pycache__",
-    "$distDir\backend\logs",
-    "$distDir\backend\*.db",
-    "$distDir\backend\*.log",
-    "$distDir\backend\.last_build_commit",
-    "$distDir\backend\data\*.db"
-)
-foreach ($pattern in $toStrip) {
-    Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
-}
-
-# Clean __pycache__ from all subdirectories
-Get-ChildItem -Path "$distDir\backend" -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+# Copy backend files, excluding runtime-only content at the source
+Get-ChildItem -Path "$root\backend" -Recurse -File `
+    | Where-Object {
+        $rel = $_.FullName.Substring($root.Length + 1)
+        ($rel -notmatch '\\venv\\' -and $rel -notmatch '\\venv$') -and
+        ($rel -notmatch '\\__pycache__\\' -and $rel -notmatch '\\__pycache__$') -and
+        ($rel -notmatch '\\logs\\' -and $rel -notmatch '\\logs$') -and
+        ($_.Name -notlike '*.db') -and
+        ($_.Name -notlike '*.log') -and
+        ($_.Name -ne '.last_build_commit')
+    } | ForEach-Object {
+        $rel = $_.FullName.Substring($root.Length + 1)
+        $dest = Join-Path $distDir $rel
+        $destDir = Split-Path $dest -Parent
+        if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
+        Copy-Item $_.FullName $dest -Force
+    }
 
 # Copy built frontend
 Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force

@@ -14,13 +14,12 @@ Write-Host "  BUILD ALL — Yishao Agent"
 Write-Host "========================================"
 Write-Host ""
 
-$serverArgs = if ($SkipFrontend) { "-SkipFrontend" } else { "" }
-$desktopArgs = if ($SkipFrontend) { "-SkipFrontend" } else { "" }
+$skipArg = if ($SkipFrontend) { @("-SkipFrontend") } else { @() }
 
 # ── Server ──
 Write-Host ">>> Building SERVER artifact..."
 $serverScript = Join-Path $root "build_server.ps1"
-& powershell -NoProfile -ExecutionPolicy Bypass -File $serverScript -SkipFrontend:$SkipFrontend
+& powershell -NoProfile -ExecutionPolicy Bypass -File $serverScript @skipArg
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host ">>> [FAIL] Server build failed (exit $LASTEXITCODE)" -ForegroundColor Red
@@ -32,7 +31,7 @@ Write-Host ""
 # ── Desktop ──
 Write-Host ">>> Building DESKTOP artifact..."
 $desktopScript = Join-Path $root "build_desktop.ps1"
-& powershell -NoProfile -ExecutionPolicy Bypass -File $desktopScript -SkipFrontend:$SkipFrontend
+& powershell -NoProfile -ExecutionPolicy Bypass -File $desktopScript @skipArg
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
     Write-Host ">>> [FAIL] Desktop build failed (exit $LASTEXITCODE)" -ForegroundColor Red
