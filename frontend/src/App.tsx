@@ -709,19 +709,12 @@ function AppShell() {
   const { user, loading: authLoading, authRequired } = useAuth()
   const isWorkspace = location.pathname.startsWith('/project/') || location.pathname.startsWith('/workspace/')
   const [showWizard, setShowWizard] = useState(false)
-  const [wizardForced, setWizardForced] = useState(false)
 
   useEffect(() => {
     setOnNoProvider(() => {
-      setWizardForced(true)
       setShowWizard(true)
     })
   }, [])
-
-  const handleWizardDone = () => {
-    setShowWizard(false)
-    setWizardForced(false)
-  }
 
   if (authLoading) {
     return (
@@ -742,7 +735,7 @@ function AppShell() {
     <>
       <PhoneReminder />
       <AnnounceModal />
-      {showWizard && <SetupWizard dismissible={!wizardForced} onDone={wizardForced ? handleWizardDone : () => setShowWizard(false)} />}
+      {showWizard && <SetupWizard dismissible onDone={() => setShowWizard(false)} />}
     <div className="app-layout">
       <Sidebar onOpenWizard={() => setShowWizard(true)} />
       <div className="main-area">

@@ -174,11 +174,8 @@ export default function SetupWizard({ embedded, onDone, dismissible = true }: Wi
       const models = qlModels.split(',').map((s: string) => s.trim()).filter(Boolean)
       await api.createProvider({ name: qlName.trim(), api_key: qlKey.trim(), base_url: qlUrl.trim(), models })
       setHasProviders(true)
-      if (!dismissible) {
-        onDone?.()
-      } else {
-        setStep('check')
-      }
+      onDone?.()
+      if (dismissible) setStep('check')
     } catch (e: any) {
       setError(e.message || '添加失败')
     } finally {
