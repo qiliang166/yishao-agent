@@ -89,6 +89,26 @@ if (-not (Test-Path $python)) { $python = "python" }
 if ($LASTEXITCODE -ne 0) { throw "prepare_build.py failed" }
 Write-Host "  Done"
 
+# Step 2.5: Pre-build verification
+Write-Host "[2.5/5] Verifying build inputs..."
+$preBuildOk = $true
+@(
+    "$root\frontend\dist",
+    "$root\backend\resources",
+    "$root\backend\data\styles",
+    "$root\backend\data\templates"
+) | ForEach-Object {
+    if (-not (Test-Path $_)) {
+        Write-Host "  [MISSING] $_" -ForegroundColor Red
+        $preBuildOk = $false
+    }
+}
+if (-not $preBuildOk) { throw "Pre-build verification failed — missing input directories" }
+$distFileCount = (Get-ChildItem "$root\frontend\dist" -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+if ($distFileCount -eq 0) { throw "frontend/dist is empty — frontend build may have failed" }
+Write-Host "  [OK] frontend/dist: $distFileCount files"
+Write-Host "  [OK] All input directories present"
+
 # Step 3: PyInstaller (portable exe)
 Write-Host "[3/5] Packaging desktop app (this may take a few minutes)..."
 pyinstaller build_temp.spec

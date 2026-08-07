@@ -63,3 +63,21 @@ setModel3((prev: string) => prev || defVal)
 - `build_desktop.ps1` → `YishaoAgent-Setup.exe`
 
 两个产物共享同一份代码，改一个不重建另一个 = 遗漏 bug。禁止只重建一个就说"完成"。
+
+## 规则 9：构建产物自动验证与模块发现
+
+### 服务端构建 (build_server.ps1)
+- 打包完成后自动调用 `verify_build.ps1`，对比 `git ls-files` 与构建输出，任何遗漏文件导致构建失败
+- 目录结构从实际文件树自动发现，不硬编码目录列表
+
+### 桌面端构建 (build_desktop.ps1)
+- `prepare_build.py` 自动扫描 `backend/` 所有 `.py` 文件并注入 PyInstaller `hiddenimports`
+- 构建前验证 `frontend/dist/`、`backend/resources/`、`backend/data/styles/`、`backend/data/templates/` 存在且非空
+- `build.spec` 不再手动维护 backend 模块列表 — 全部由 `prepare_build.py` 自动发现
+
+### 新增/重命名模块后
+- 新增或重命名 `backend/` 下的 Python 文件后，无需手动更新 `build.spec` 的 `hiddenimports`
+- 如果新增了静态资源目录（如 `backend/data/新目录/`），需要同步更新：
+  1. `verify_build.ps1` 中的静态数据检查（第 46 行）
+  2. `build.spec` 中的 `backend_datas` 列表
+  3. `build_desktop.ps1` 中的预构建验证目录列表

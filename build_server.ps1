@@ -66,64 +66,63 @@ if ($lastCommit -and $commit) {
 # Record current commit for next build
 [System.IO.File]::WriteAllText($lastBuildFile, $commit, [System.Text.Encoding]::UTF8)
 
-# Step 2: Package
+# Step 2: Package — copy backend tree (exclude runtime-only dirs), frontend dist, root config
 Write-Host "[2/2] Packaging..."
+
 $distDir = "$root\dist_server"
 if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 
-$dirs = @(
-    "$distDir\backend",
-    "$distDir\backend\batch",
-    "$distDir\backend\data\audio",
-    "$distDir\backend\data\exports",
-    "$distDir\backend\data\logos",
-    "$distDir\backend\data\downloads",
-    "$distDir\backend\data\styles",
-    "$distDir\backend\data\templates",
-    "$distDir\backend\resources",
-    "$distDir\backend\routers",
-    "$distDir\backend\services",
-    "$distDir\frontend\dist"
+# Create directory structure mirroring backend/ (auto-discovered)
+$backendDirs = Get-ChildItem -Path "$root\backend" -Directory -Recurse `
+    | Where-Object {
+        $rel = $_.FullName.Substring($root.Length + 1)
+        # Skip runtime-only / build-only directories
+        ($rel -notmatch '\\venv\\' -or $rel -notmatch '\\venv$') -and
+        ($rel -notmatch '\\__pycache__\\' -or $rel -notmatch '\\__pycache__$') -and
+        ($rel -notmatch '\\logs\\' -or $rel -notmatch '\\logs$')
+    }
+foreach ($d in $backendDirs) {
+    $rel = $d.FullName.Substring($root.Length + 1)
+    New-Item -ItemType Directory -Path (Join-Path $distDir $rel) -Force | Out-Null
+}
+# Also ensure frontend dist dir exists
+New-Item -ItemType Directory -Path "$distDir\frontend\dist" -Force | Out-Null
+
+# Copy ALL backend files, then remove what should not ship
+Copy-Item "$root\backend\*" "$distDir\backend\" -Recurse -Force -ErrorAction SilentlyContinue
+
+# Remove runtime-only content from the staging copy
+$toStrip = @(
+    "$distDir\backend\venv",
+    "$distDir\backend\__pycache__",
+    "$distDir\backend\logs",
+    "$distDir\backend\*.db",
+    "$distDir\backend\*.log",
+    "$distDir\backend\.last_build_commit",
+    "$distDir\backend\data\*.db"
 )
-foreach ($d in $dirs) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
-
-# Copy backend .py and .txt files
-Copy-Item "$root\backend\*.py", "$root\backend\*.txt" "$distDir\backend\" -ErrorAction SilentlyContinue
-
-# Copy routers
-Copy-Item "$root\backend\routers\*.py" "$distDir\backend\routers\" -ErrorAction SilentlyContinue
-
-# Copy services
-Copy-Item "$root\backend\services\*.py" "$distDir\backend\services\" -ErrorAction SilentlyContinue
-
-# Copy batch
-Copy-Item "$root\backend\batch\*.py" "$distDir\backend\batch\" -ErrorAction SilentlyContinue
-
-# Copy ffmpeg static binary for Linux (skip with -SkipFfmpeg for non-video deployments)
-if (-not $SkipFfmpeg) {
-    Copy-Item "$root\backend\ffmpeg" "$distDir\backend\ffmpeg" -Force -ErrorAction SilentlyContinue
-    Write-Host "  ffmpeg included"
-} else {
-    Write-Host "  ffmpeg skipped (-SkipFfmpeg)"
+foreach ($pattern in $toStrip) {
+    Remove-Item -Path $pattern -Recurse -Force -ErrorAction SilentlyContinue
 }
 
-# Copy resources (prompts, scenarios, templates, vi)
-Copy-Item "$root\backend\resources\*" "$distDir\backend\resources\" -Recurse -Force -ErrorAction SilentlyContinue
-
-# Copy data files
-Copy-Item "$root\backend\data\styles\*" "$distDir\backend\data\styles\" -Recurse -Force -ErrorAction SilentlyContinue
-Copy-Item "$root\backend\data\templates\*" "$distDir\backend\data\templates\" -Recurse -Force -ErrorAction SilentlyContinue
+# Clean __pycache__ from all subdirectories
+Get-ChildItem -Path "$distDir\backend" -Directory -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
 # Copy built frontend
 Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force
 
-# Copy production start scripts, install guide, changelog, and safe deploy
-Copy-Item "$root\start_prod.bat" "$distDir\" -ErrorAction SilentlyContinue
-Copy-Item "$root\start_prod.sh" "$distDir\" -ErrorAction SilentlyContinue
-Copy-Item "$root\INSTALL.txt" "$distDir\" -ErrorAction SilentlyContinue
-Copy-Item "$root\CHANGELOG.md" "$distDir\" -ErrorAction SilentlyContinue
-Copy-Item "$root\deploy_backup.sh" "$distDir\" -ErrorAction SilentlyContinue
-Copy-Item "$root\server_backup_cron.sh" "$distDir\" -ErrorAction SilentlyContinue
+# Copy root-level deployment files
+@('start_prod.bat', 'start_prod.sh', 'INSTALL.txt', 'CHANGELOG.md', 'deploy_backup.sh', 'server_backup_cron.sh') | ForEach-Object {
+    $src = Join-Path $root $_
+    if (Test-Path $src) { Copy-Item $src $distDir -Force }
+}
+
+# ── Verify completeness ──
+$verifyScript = Join-Path $root "verify_build.ps1"
+if (Test-Path $verifyScript) {
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $verifyScript -BuildDir $distDir -Label "server"
+    if ($LASTEXITCODE -ne 0) { throw "Build verification failed — missing files in artifact" }
+}
 
 # Build the server deployment zip
 $zipFile = "$root\yishao-agent-server.zip"
