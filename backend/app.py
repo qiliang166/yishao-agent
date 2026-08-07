@@ -282,7 +282,7 @@ async def startup_batch_scheduler():
         print(f"[batch-scheduler] Already initialized (port {_sched._port}), skipping startup init", flush=True)
         return
     port = int(_os.environ.get("PORT", "8767"))
-    set_jwt_secret(SECRET_KEY)
+    _sched.set_jwt_secret(SECRET_KEY)
     _sched.init(port)
     # Mark any batches that were "running" before restart as stopped (thread killed)
     try:
