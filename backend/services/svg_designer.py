@@ -5,7 +5,10 @@ import json
 import uuid
 import yaml
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _resolve_preview_template():
@@ -104,9 +107,9 @@ class DeckDesigner:
     def render_deck_from_ai_svg(self, ai_svg_slides: list, title: str,
                                 output_dir: str = None, dir_name: str = ""):
         """Write AI-generated SVGs to disk and create HTML preview."""
-        run_id = self._make_run_id()
+        run_id = dir_name if dir_name else self._make_run_id()
         target = output_dir or os.path.join(BASE_DIR, "data", "exports")
-        svg_dir = os.path.join(target, run_id) if not output_dir else output_dir
+        svg_dir = os.path.join(target, run_id)
         os.makedirs(svg_dir, exist_ok=True)
 
         slides_info = []
@@ -138,7 +141,7 @@ class DeckDesigner:
     def render_deck(self, slide_data: list, title: str,
                     output_dir: str = None, dir_name: str = ""):
         """Code-render SVGs from structured card data."""
-        run_id = self._make_run_id()
+        run_id = dir_name if dir_name else self._make_run_id()
         target = output_dir or os.path.join(BASE_DIR, "data", "exports")
         svg_dir = os.path.join(target, run_id)
         os.makedirs(svg_dir, exist_ok=True)
