@@ -77,12 +77,12 @@ New-Item -ItemType Directory -Path "$distDir\backend" -Force | Out-Null
 New-Item -ItemType Directory -Path "$distDir\frontend\dist" -Force | Out-Null
 
 # Copy backend files, excluding runtime-only content at the source
+# Only ship: .py source, resources/, data/styles/, data/templates/, data/logos/, data/audio/
 Get-ChildItem -Path "$root\backend" -Recurse -File `
     | Where-Object {
         $rel = $_.FullName.Substring($root.Length + 1)
-        ($rel -notmatch '\\venv\\' -and $rel -notmatch '\\venv$') -and
-        ($rel -notmatch '\\__pycache__\\' -and $rel -notmatch '\\__pycache__$') -and
-        ($rel -notmatch '\\logs\\' -and $rel -notmatch '\\logs$') -and
+        ($rel -notmatch '\\(venv|__pycache__|logs|videos|downloads|backups|exports|debug|ppt_cache|slides)\\') -and
+        ($rel -notmatch '\\(venv|__pycache__|logs|videos|downloads|backups|exports|debug|ppt_cache|slides)$') -and
         ($_.Name -notlike '*.db') -and
         ($_.Name -notlike '*.log') -and
         ($_.Name -ne '.last_build_commit')
