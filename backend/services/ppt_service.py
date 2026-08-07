@@ -402,7 +402,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
     All 12 stage temperatures follow the pattern: 0 = use `temperature` as fallback."""
 
     def _t(val, default=0.3):
-        return val if val > 0 else temperature
+        return val if val > 0 else (default if default > 0 else temperature)
 
     st = dict(
         keyword=_t(temp_keyword, 0.3),
@@ -1079,7 +1079,7 @@ def _generate_slides_staged(provider_id: str, model: str, rules: dict, sop_conte
                                          column_id=column_id,
                                          color_scheme=color_scheme,
                                          project_id=project_id,
-                                         force_regenerate=force_regenerate)
+                                         force_regenerate=False)
     if not html_slides:
         _logger.warning("Phase 2 HTML generation failed, using fallback")
         html_slides = _fallback_stage1_to_html_slides(stage1, style_id)
