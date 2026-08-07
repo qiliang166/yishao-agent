@@ -111,6 +111,8 @@ Write-Host "  [OK] All input directories present"
 
 # Step 3: PyInstaller (portable exe)
 Write-Host "[3/5] Packaging desktop app (this may take a few minutes)..."
+# Kill any running instance so the EXE isn't locked
+Stop-Process -Name YishaoAgent -Force -ErrorAction SilentlyContinue
 pyinstaller build_temp.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 

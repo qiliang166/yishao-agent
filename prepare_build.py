@@ -73,8 +73,8 @@ def _inject_missing_hiddenimports(content: str, discovered: list[str]) -> str:
         indent = leading if leading and leading[0] == " " else indent
         indent = indent[: -len(indent.lstrip())] + "        " if indent.lstrip() else "        "
 
-    new_entries = ",\n".join(f"{indent}'{m}'" for m in missing)
-    content = content[:close_idx] + ",\n" + new_entries + content[close_idx:]
+    new_entries = ",\n".join(f"{indent}'{m}'" for m in missing) + ","
+    content = content[:close_idx] + "\n" + new_entries + "\n" + indent[:-4] + content[close_idx:]
     print(f"[prepare] Injected {len(missing)} missing backend modules into hiddenimports")
     return content
 
