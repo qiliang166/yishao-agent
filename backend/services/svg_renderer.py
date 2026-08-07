@@ -6,6 +6,8 @@ import yaml
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
+    if not os.path.isdir(os.path.join(BASE_DIR, "resources")):
+        BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

@@ -10371,7 +10371,10 @@ def api_project_batch_status(project_id: str, user=require_perm("project.view_ow
 
 # Production mode: serve built frontend (after all API routes)
 if getattr(sys, 'frozen', False):
-    FRONTEND_DIST = os.path.join(sys._MEIPASS, "frontend", "dist")
+    _EXE_DIR = os.path.dirname(sys.executable)
+    FRONTEND_DIST = os.path.join(_EXE_DIR, "frontend", "dist")
+    if not os.path.isdir(FRONTEND_DIST):
+        FRONTEND_DIST = os.path.join(sys._MEIPASS, "frontend", "dist")
 else:
     FRONTEND_DIST = os.path.join(WORKSPACE_ROOT, "frontend", "dist")
 if os.path.isdir(FRONTEND_DIST):

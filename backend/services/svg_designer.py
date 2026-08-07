@@ -7,15 +7,14 @@ import yaml
 
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
+    if not os.path.isdir(os.path.join(BASE_DIR, "resources")):
+        BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _resolve_preview_template():
-    if getattr(sys, 'frozen', False):
-        p = os.path.join(os.path.dirname(sys.executable), "data", "assets", "preview-template.html")
-    else:
-        p = os.path.join(BASE_DIR, "data", "assets", "preview-template.html")
+    p = os.path.join(BASE_DIR, "data", "assets", "preview-template.html")
     if os.path.exists(p):
         with open(p, "r", encoding="utf-8") as f:
             return f.read()
