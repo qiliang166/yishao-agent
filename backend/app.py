@@ -277,12 +277,13 @@ async def catch_all_exceptions(request: Request, call_next):
 @app.on_event("startup")
 async def startup_batch_scheduler():
     import os as _os
-    from batch.scheduler import init as batch_init, set_jwt_secret, _initialized
-    if _initialized:
+    import batch.scheduler as _sched
+    if _sched._initialized:
+        print(f"[batch-scheduler] Already initialized (port {_sched._port}), skipping startup init", flush=True)
         return
     port = int(_os.environ.get("PORT", "8767"))
     set_jwt_secret(SECRET_KEY)
-    batch_init(port)
+    _sched.init(port)
     # Mark any batches that were "running" before restart as stopped (thread killed)
     try:
         from database import get_db
@@ -295,7 +296,7 @@ async def startup_batch_scheduler():
             db.close()
     except Exception:
         pass
-    print(f"[batch-scheduler] Initialized on port {port}")
+    print(f"[batch-scheduler] Initialized on port {port}", flush=True)
 
 app.include_router(prompts_router)
 app.include_router(users_router)

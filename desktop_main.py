@@ -58,7 +58,7 @@ try:
 
     from backend.app import app
     from backend.app import SECRET_KEY
-    from backend.batch.scheduler import init as batch_init, set_jwt_secret
+    from batch.scheduler import init as batch_init, set_jwt_secret
     import uvicorn
 except Exception as e:
     _log_error(f'Import error: {e}\n{traceback.format_exc()}')
