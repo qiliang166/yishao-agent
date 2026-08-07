@@ -227,17 +227,14 @@ def _set_font_all(run, font_name: str):
     ea.set("typeface", font_name)
 
 if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
-    # Writable data must go next to the exe, not inside read-only _MEIPASS
-    _WRITABLE_DATA = os.path.dirname(sys.executable)
+    BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _WRITABLE_DATA = BASE_DIR
 WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
-EXPORT_DIR = os.path.join(_WRITABLE_DATA, "data", "exports")
+EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
 
-PPT_CACHE_DIR = os.path.join(_WRITABLE_DATA, "data", "ppt_cache")
+PPT_CACHE_DIR = os.path.join(BASE_DIR, "data", "ppt_cache")
 os.makedirs(PPT_CACHE_DIR, exist_ok=True)
 
 

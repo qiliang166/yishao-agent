@@ -70,6 +70,22 @@ Section "Install"
     MessageBox MB_OK|MB_ICONSTOP "YishaoAgent.exe not found in dist\. Run build_desktop.ps1 first to build the portable exe, then rebuild the installer."
     Abort "Missing YishaoAgent.exe"
 
+  ; Copy static resources (templates, styles, prompts — same as server project dir)
+  SetOutPath "$INSTDIR\resources"
+  File /nonfatal /r "..\dist\resources\*.*"
+  SetOutPath "$INSTDIR\data\styles"
+  File /nonfatal /r "..\dist\data\styles\*.*"
+  SetOutPath "$INSTDIR\data\templates"
+  File /nonfatal /r "..\dist\data\templates\*.*"
+  SetOutPath "$INSTDIR\data\assets"
+  File /nonfatal /r "..\dist\data\assets\*.*"
+  SetOutPath "$INSTDIR\data\logos"
+  File /nonfatal /r "..\dist\data\logos\*.*"
+  SetOutPath "$INSTDIR\frontend\dist"
+  File /nonfatal /r "..\dist\frontend\dist\*.*"
+
+  SetOutPath "$INSTDIR"
+
   ; Create writable data directories (populated at runtime by the app)
   CreateDirectory "$INSTDIR\data"
   CreateDirectory "$INSTDIR\data\audio"

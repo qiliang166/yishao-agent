@@ -117,6 +117,25 @@ Stop-Process -Name YishaoAgent -Force -ErrorAction SilentlyContinue
 pyinstaller build_temp.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
+# Step 3.5: Copy resources & static data next to the EXE (so frozen BASE_DIR = EXE dir works like server)
+Write-Host "[3.5/5] Staging resources alongside the EXE..."
+@{
+    "$root\backend\resources" = "$root\dist\resources"
+    "$root\backend\data\styles" = "$root\dist\data\styles"
+    "$root\backend\data\templates" = "$root\dist\data\templates"
+    "$root\backend\data\assets" = "$root\dist\data\assets"
+    "$root\backend\data\logos" = "$root\dist\data\logos"
+    "$root\frontend\dist" = "$root\dist\frontend\dist"
+}.GetEnumerator() | ForEach-Object {
+    $src = $_.Key
+    $dst = $_.Value
+    if (Test-Path $dst) { Remove-Item $dst -Recurse -Force -ErrorAction SilentlyContinue }
+    Copy-Item $src $dst -Recurse -Force
+    $count = (Get-ChildItem $dst -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+    Write-Host "  Copied: $(Split-Path $src -Leaf) -> $(Resolve-Path $dst -Relative) ($count files)"
+}
+Write-Host "  [OK] Resources staged"
+
 # Clean up temp spec
 Remove-Item "$root\build_temp.spec" -Force -ErrorAction SilentlyContinue
 

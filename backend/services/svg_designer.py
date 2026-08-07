@@ -6,14 +6,14 @@ import uuid
 import yaml
 
 if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
+    BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _resolve_preview_template():
     if getattr(sys, 'frozen', False):
-        p = os.path.join(sys._MEIPASS, "backend", "data", "assets", "preview-template.html")
+        p = os.path.join(os.path.dirname(sys.executable), "data", "assets", "preview-template.html")
     else:
         p = os.path.join(BASE_DIR, "data", "assets", "preview-template.html")
     if os.path.exists(p):
