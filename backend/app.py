@@ -321,7 +321,7 @@ os.makedirs(LOGO_DIR, exist_ok=True)
 
 # Run-id → actual directory mapping for SVG preview serving
 # Persisted to data/run_dirs.json so it survives restarts
-_RUN_DIRS_FILE = os.path.join(BASE_DIR, "data", "run_dirs.json")
+_RUN_DIRS_FILE = os.path.join(_EXE_DIR, "data", "run_dirs.json") if getattr(sys, 'frozen', False) else os.path.join(BASE_DIR, "data", "run_dirs.json")
 
 def _load_run_dirs() -> dict[str, str]:
     try:
@@ -446,6 +446,8 @@ def _get_global_save_path() -> str:
                 return path
     finally:
         db.close()
+    if getattr(sys, 'frozen', False):
+        return os.path.join(_EXE_DIR, "data", "output")
     return os.path.join(BASE_DIR, "data", "output")
 
 
