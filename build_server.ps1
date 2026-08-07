@@ -76,16 +76,13 @@ if (Test-Path $distDir) { Remove-Item $distDir -Recurse -Force }
 New-Item -ItemType Directory -Path "$distDir\backend" -Force | Out-Null
 New-Item -ItemType Directory -Path "$distDir\frontend\dist" -Force | Out-Null
 
-# Copy backend files, excluding runtime-only content at the source
-# Only ship: .py source, resources/, data/styles/, data/templates/, data/logos/, data/audio/
-Get-ChildItem -Path "$root\backend" -Recurse -File `
+# ── Whitelist: only copy what ships to customers ──
+# 1) All .py source files (auto-discovered, excluding venv/__pycache__)
+Get-ChildItem -Path "$root\backend" -Recurse -File -Filter "*.py" `
     | Where-Object {
         $rel = $_.FullName.Substring($root.Length + 1)
-        ($rel -notmatch '\\(venv|__pycache__|logs|videos|downloads|backups|exports|debug|ppt_cache|slides)\\') -and
-        ($rel -notmatch '\\(venv|__pycache__|logs|videos|downloads|backups|exports|debug|ppt_cache|slides)$') -and
-        ($_.Name -notlike '*.db') -and
-        ($_.Name -notlike '*.log') -and
-        ($_.Name -ne '.last_build_commit')
+        ($rel -notmatch '\\(venv|__pycache__)\\') -and
+        ($rel -notmatch '\\(venv|__pycache__)$')
     } | ForEach-Object {
         $rel = $_.FullName.Substring($root.Length + 1)
         $dest = Join-Path $distDir $rel
@@ -93,6 +90,16 @@ Get-ChildItem -Path "$root\backend" -Recurse -File `
         if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir -Force | Out-Null }
         Copy-Item $_.FullName $dest -Force
     }
+
+# 2) Static resource directories (factory-default content only)
+@('backend\resources', 'backend\data\styles', 'backend\data\templates', 'backend\data\logos', 'backend\data\audio') | ForEach-Object {
+    $src = Join-Path $root $_
+    if (Test-Path $src) {
+        $dest = Join-Path $distDir $_
+        New-Item -ItemType Directory -Path $dest -Force | Out-Null
+        Copy-Item "$src\*" "$dest\" -Recurse -Force
+    }
+}
 
 # Copy built frontend
 Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force

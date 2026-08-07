@@ -1,6 +1,7 @@
 # Verify build artifact completeness
-# Compares git-tracked source files against what's in the build output.
+# Checks that all files meant to ship are present in the build output.
 # Usage: verify_build.ps1 -BuildDir <path>
+# Must stay in sync with build_server.ps1 whitelist.
 
 param(
     [Parameter(Mandatory=$true)]
@@ -15,9 +16,11 @@ $missing = @()
 Write-Host ""
 Write-Host "=== Build Verification: $Label ==="
 
-# ── Backend Python files ──
+# ── Backend Python files (all tracked .py excluding venv/__pycache__) ──
 Write-Host "  Checking backend Python files..."
-$backendPy = git -C $root ls-files backend/ | Where-Object { $_ -match '\.py$' }
+$backendPy = git -C $root ls-files backend/ `
+    | Where-Object { $_ -match '\.py$' } `
+    | Where-Object { $_ -notmatch '(\\|/)venv(\\|/)' -and $_ -notmatch '(\\|/)__pycache__(\\|/)' }
 foreach ($f in $backendPy) {
     $target = Join-Path $BuildDir $f
     if (-not (Test-Path $target)) {
@@ -25,33 +28,42 @@ foreach ($f in $backendPy) {
     }
 }
 
-# ── Backend resources ──
-Write-Host "  Checking backend resources..."
-$backendResources = git -C $root ls-files backend/resources/
-foreach ($f in $backendResources) {
-    $target = Join-Path $BuildDir $f
-    if (-not (Test-Path $target)) {
-        $missing += $f
-    }
-}
-
-# ── Backend data (static assets only, not runtime data) ──
-Write-Host "  Checking backend static data..."
-$staticData = git -C $root ls-files backend/data/styles/ backend/data/templates/ backend/data/logos/ backend/data/audio/
-foreach ($f in $staticData) {
-    $target = Join-Path $BuildDir $f
-    if (-not (Test-Path $target)) {
-        $missing += $f
+# ── Static resource directories (whitelist) ──
+$whitelistDirs = @(
+    'backend/resources',
+    'backend/data/styles',
+    'backend/data/templates',
+    'backend/data/logos',
+    'backend/data/audio'
+)
+foreach ($dir in $whitelistDirs) {
+    Write-Host "  Checking $dir ..."
+    $srcDir = Join-Path $root $dir
+    if (Test-Path $srcDir) {
+        $files = Get-ChildItem -Path $srcDir -Recurse -File | ForEach-Object {
+            $_.FullName.Substring($root.Length + 1)
+        }
+        foreach ($f in $files) {
+            $target = Join-Path $BuildDir $f
+            if (-not (Test-Path $target)) {
+                $missing += $f
+            }
+        }
     }
 }
 
 # ── Root-level config files ──
 Write-Host "  Checking root config files..."
-$rootFiles = git -C $root ls-files | Where-Object { $_ -match '^(requirements\.txt|start_prod\.(bat|sh)|INSTALL\.txt|CHANGELOG\.md|deploy_backup\.sh|server_backup_cron\.sh)$' }
+$rootFiles = @(
+    'requirements.txt', 'start_prod.bat', 'start_prod.sh',
+    'INSTALL.txt', 'CHANGELOG.md', 'deploy_backup.sh', 'server_backup_cron.sh'
+)
 foreach ($f in $rootFiles) {
-    $target = Join-Path $BuildDir $f
-    if (-not (Test-Path $target)) {
-        $missing += $f
+    if (Test-Path (Join-Path $root $f)) {
+        $target = Join-Path $BuildDir $f
+        if (-not (Test-Path $target)) {
+            $missing += $f
+        }
     }
 }
 
@@ -59,7 +71,9 @@ foreach ($f in $rootFiles) {
 Write-Host "  Checking frontend dist..."
 $frontendDist = Join-Path $root "frontend\dist"
 if (Test-Path $frontendDist) {
-    $distFiles = Get-ChildItem -Path $frontendDist -Recurse -File | ForEach-Object { $_.FullName.Substring($root.Length + 1) }
+    $distFiles = Get-ChildItem -Path $frontendDist -Recurse -File | ForEach-Object {
+        $_.FullName.Substring($root.Length + 1)
+    }
     foreach ($f in $distFiles) {
         $target = Join-Path $BuildDir $f
         if (-not (Test-Path $target)) {
@@ -72,15 +86,21 @@ if (Test-Path $frontendDist) {
 if ($missing.Count -gt 0) {
     Write-Host ""
     Write-Host "  [FAIL] $($missing.Count) files missing from $Label :" -ForegroundColor Red
-    foreach ($m in $missing) {
-        Write-Host "    - $m" -ForegroundColor Red
+    $showLimit = [Math]::Min(50, $missing.Count)
+    for ($i = 0; $i -lt $showLimit; $i++) {
+        Write-Host "    - $($missing[$i])" -ForegroundColor Red
+    }
+    if ($missing.Count -gt 50) {
+        Write-Host "    ... and $($missing.Count - 50) more" -ForegroundColor Red
     }
     Write-Host ""
-    Write-Host "  Action: add the missing files to the build script, then rebuild." -ForegroundColor Yellow
+    Write-Host "  Action: check if build_server.ps1 whitelist and verify_build.ps1 are in sync." -ForegroundColor Yellow
     exit 1
 }
 
-Write-Host "  [OK] All $($backendPy.Count + $backendResources.Count + $staticData.Count + $rootFiles.Count) source files accounted for" -ForegroundColor Green
+$totalChecked = $backendPy.Count + $rootFiles.Count + $distFiles.Count
+Write-Host "  [OK] All $totalChecked source files accounted for" -ForegroundColor Green
+Write-Host "  [OK] Static resource dirs: $($whitelistDirs -join ', ')" -ForegroundColor Green
 Write-Host "  [OK] Frontend dist: $($distFiles.Count) files" -ForegroundColor Green
 Write-Host ""
 exit 0
