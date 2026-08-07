@@ -16,6 +16,13 @@ os.makedirs(VIDEO_DIR, exist_ok=True)
 _progress = {}
 
 
+def _run(*args, **kwargs):
+    """subprocess.run wrapper that hides console window on Windows."""
+    if os.name == "nt":
+        kwargs.setdefault("creationflags", subprocess.CREATE_NO_WINDOW)
+    return subprocess.run(*args, **kwargs)
+
+
 def _find_yt_dlp():
     """Find yt-dlp executable. Install if not found."""
     import shutil as _shutil
@@ -127,7 +134,7 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
     task_id = uuid.uuid4().hex[:8]
     _progress[task_id] = {"status": "starting", "progress": 0, "message": "准备下载...", "project_id": project_id}
 
-    def _run():
+    def _run_thread():
         try:
             ytdlp = _find_yt_dlp()
             task_dir = os.path.join(VIDEO_DIR, task_id)
@@ -158,7 +165,7 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                 "--no-playlist",
                 "--no-warnings",
             ]
-            result = subprocess.run(base_cmd, capture_output=True, text=True, timeout=300, cwd=task_dir)
+            result = _run(base_cmd, capture_output=True, text=True, timeout=300, cwd=task_dir)
 
             # If cookies needed, try all common browsers
             if result.returncode != 0 and "cookie" in (result.stderr or "").lower():
@@ -166,7 +173,7 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
                 for browser in browsers:
                     _progress[task_id]["message"] = f"尝试 {browser} cookies..."
                     attempt = base_cmd + ["--cookies-from-browser", browser]
-                    result = subprocess.run(attempt, capture_output=True, text=True, timeout=300, cwd=task_dir)
+                    result = _run(attempt, capture_output=True, text=True, timeout=300, cwd=task_dir)
                     if result.returncode == 0:
                         break
 
@@ -283,7 +290,7 @@ def download_video(url: str, cookies_path: str = None, project_id: str = None, a
         except Exception as e:
             _progress[task_id] = {"status": "error", "progress": 0, "message": str(e)}
 
-    thread = threading.Thread(target=_run, daemon=True)
+    thread = threading.Thread(target=_run_thread, daemon=True)
     thread.start()
     return {"task_id": task_id}
 
@@ -293,7 +300,7 @@ def upload_video(file_path: str, filename: str, project_id: str = None, asr_mode
     task_id = uuid.uuid4().hex[:8]
     _progress[task_id] = {"status": "starting", "progress": 0, "message": "准备处理...", "project_id": project_id}
 
-    def _run():
+    def _run_upload():
         try:
             task_dir = os.path.join(VIDEO_DIR, task_id)
             os.makedirs(task_dir, exist_ok=True)
@@ -377,7 +384,7 @@ def upload_video(file_path: str, filename: str, project_id: str = None, asr_mode
         except Exception as e:
             _progress[task_id] = {"status": "error", "progress": 0, "message": str(e)}
 
-    thread = threading.Thread(target=_run, daemon=True)
+    thread = threading.Thread(target=_run_upload, daemon=True)
     thread.start()
     return {"task_id": task_id}
 
@@ -449,7 +456,7 @@ def _transcode_to_h264(video_path: str, task_dir: str) -> str:
         return video_path
 
     try:
-        result = subprocess.run(
+        result = _run(
             [ffprobe, "-v", "error", "-select_streams", "v:0",
              "-show_entries", "stream=codec_name", "-of", "default=noprint_wrappers=1:nokey=1",
              video_path],
@@ -470,7 +477,7 @@ def _transcode_to_h264(video_path: str, task_dir: str) -> str:
     cmd = [ffmpeg, "-y", "-i", video_path,
            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
            "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", output]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+    result = _run(cmd, capture_output=True, text=True, timeout=600)
     if result.returncode == 0 and os.path.exists(output) and os.path.getsize(output) > 1024:
         return output
     return video_path
@@ -527,7 +534,7 @@ def _transcribe_audio(video_path: str, task_dir: str, asr_model: str = "fun-asr"
         "-ar", "16000", "-ac", "1", "-b:a", "64k",
         "-f", "mp3", mp3_path
     ]
-    result = subprocess.run(extract_cmd, capture_output=True, text=True)
+    result = _run(extract_cmd, capture_output=True, text=True)
     if result.returncode != 0:
         return f"[音频提取失败: {result.stderr[:200]}]"
 
