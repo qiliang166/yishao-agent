@@ -1493,6 +1493,9 @@ def _list_project_files(project_id: str):
                 name_no_ext = os.path.splitext(f)[0]
                 if name_no_ext.endswith(_variant_suffixes):
                     continue
+                # Skip batch scheduler intermediate slide-list files
+                if '_幻灯片列表' in name_no_ext:
+                    continue
                 ext = os.path.splitext(f)[1].lower()
                 type_map = {'.pptx': 'PPT', '.docx': 'Word', '.txt': 'Text',
                            '.mp3': 'MP3', '.wav': 'Audio', '.mp4': 'Video'}
