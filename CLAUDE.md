@@ -58,11 +58,10 @@ setModel3((prev: string) => prev || defVal)
 
 ## 规则 8：共享代码改动后重建全部产物
 
-修改 `backend/app.py`、`backend/database.py` 或 `frontend/src/` 下的文件后，**必须同时重建**：
-- `build_server.ps1` → `yishao-agent-server.zip`
-- `build_desktop.ps1` → `YishaoAgent-Setup.exe`
+修改 `backend/app.py`、`backend/database.py` 或 `frontend/src/` 下的文件后，**必须运行**：
+- `.\build_all.ps1` → 同时产出 `yishao-agent-server.zip` + 桌面 EXE
 
-两个产物共享同一份代码，改一个不重建另一个 = 遗漏 bug。禁止只重建一个就说"完成"。
+两个产物共享同一份代码，改一个不重建另一个 = 遗漏 bug。禁止分别运行单个构建脚本，禁止只重建一个就说"完成"。
 
 ## 规则 9：构建产物自动验证与模块发现
 
