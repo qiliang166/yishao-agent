@@ -1,5 +1,88 @@
 ﻿# 更新日志
 
+## 2026-08-07
+
+- fix: add PPT-TRACE debug logging to trace pipeline decisions in frozen EXE
+- fix: auto-fill provider_id and model from first enabled LLM provider when empty
+
+## 2026-08-07
+
+- fix: Stage 3 model falls back to Stage 2 model when not saved
+- Revert "fix: frozen mode uses backend/data/ instead of dist/data/ for database"
+
+## 2026-08-07
+
+- fix: frozen mode uses backend/data/ instead of dist/data/ for database
+
+## 2026-08-07
+
+- fix: restore original preview-template.html from git history (deleted in 2fb38ad)
+
+## 2026-08-07
+
+- fix: add preview-template.html with JS slides rendering, include in all builds
+
+## 2026-08-07
+
+- fix: filter batch scheduler slide-list files from project output list
+
+## 2026-08-07
+
+- fix: persist run_dirs.json and default save_path to EXE dir on desktop
+
+## 2026-08-07
+
+- fix: hide ffmpeg console window on Windows via CREATE_NO_WINDOW
+
+## 2026-08-07
+
+- fix: include requirements.txt, default_download_urls.json, .env.example in server build
+- fix: add Stop-Process before PyInstaller, fix hiddenimports injection syntax
+
+## 2026-08-07
+
+- fix: switch build packaging from blacklist to whitelist
+
+## 2026-08-07
+
+- fix: exclude runtime data dirs (videos, downloads, backups, etc.) from server build
+
+## 2026-08-07
+
+- fix: build_server.ps1 excludes venv at copy time, not post-copy
+
+## 2026-08-07
+
+- fix: license offline fallback now checks locally-cached expires_at
+- build: add unified build_all.ps1 entry point, enforce in CLAUDE.md
+- build: auto-discover backend modules for PyInstaller, add verification to both build scripts
+
+## 2026-08-07
+
+- fix: license expiration now checked on every API call, displayed in settings
+
+## 2026-08-07
+
+- fix: wizard always dismissible, re-pops on next generate if no provider
+- fix: batch scheduler port mismatch — add _initialized guard, startup defaults to 8767
+
+## 2026-08-07
+
+- fix: import setOnNoProvider directly instead of api.setOnNoProvider
+- fix: check LLM provider at generation time instead of login
+
+## 2026-08-07
+
+- feat: force LLM provider setup after fresh install
+
+## 2026-08-06
+
+- Remove download URL fields from Settings page — managed via KeyGen only
+
+## 2026-08-06
+
+- fix: EXE fetches live download URLs from activation server at runtime
+
 ## 2026-08-06
 
 - fix: embed download URLs in EXE during build via default_download_urls.json
