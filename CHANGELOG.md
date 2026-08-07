@@ -2,6 +2,11 @@
 
 ## 2026-08-07
 
+- fix: BUILD-MARKER + PPT-TRACE-v2 using print() for frozen EXE debugging
+- build: EXE with PPT-TRACE debug logging, commit 2c4d607
+
+## 2026-08-07
+
 - fix: add PPT-TRACE debug logging to trace pipeline decisions in frozen EXE
 - fix: auto-fill provider_id and model from first enabled LLM provider when empty
 
