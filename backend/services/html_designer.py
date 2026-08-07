@@ -5,12 +5,16 @@ and card-level visual hierarchy. Each slide looks like a designed page,
 not an empty template.
 """
 import os
+import sys
 import json
 import re
 import uuid
 import yaml
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STYLES_DIR = os.path.join(BASE_DIR, "data", "styles")
 
 

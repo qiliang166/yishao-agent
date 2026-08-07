@@ -37,7 +37,12 @@ VALID_BOOK_TYPES = {"a4", "ppt"}
 
 # ── 资源目录（与 prompt_studio 同款定位方式） ──
 
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    _BASE_DIR = os.path.dirname(sys.executable)
+    if not os.path.isdir(os.path.join(_BASE_DIR, "resources")):
+        _BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
+else:
+    _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _BOOKLET_RES_DIR = os.path.join(_BASE_DIR, "resources", "booklet")
 
 # ── 占位符契约（代码即契约：模板占位符与本表一一对应；部分占位符仅存在于部分模板，replace 缺位为无操作） ──

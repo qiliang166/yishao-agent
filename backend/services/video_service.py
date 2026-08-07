@@ -1,5 +1,6 @@
 """Video download and subtitle extraction via yt-dlp."""
 import os
+import sys
 import re
 import json
 import subprocess
@@ -8,7 +9,10 @@ import threading
 import uuid
 import requests
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIDEO_DIR = os.path.join(BASE_DIR, "data", "videos")
 os.makedirs(VIDEO_DIR, exist_ok=True)
 

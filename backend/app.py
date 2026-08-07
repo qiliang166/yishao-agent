@@ -26,7 +26,10 @@ import json
 import logging
 
 # ── Structured logging setup ───────────────────────────────────────
-LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "server.log")
+if getattr(sys, 'frozen', False):
+    LOG_FILE = os.path.join(os.path.dirname(sys.executable), "data", "server.log")
+else:
+    LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "server.log")
 os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -300,20 +303,23 @@ app.include_router(prompt_studio_router)
 app.include_router(scenarios_router)
 app.include_router(booklets_router)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+    if not os.path.isdir(os.path.join(BASE_DIR, "resources")):
+        BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # In PyInstaller frozen mode, data dirs go next to the exe
 if getattr(sys, 'frozen', False):
     _EXE_DIR = os.path.dirname(sys.executable)
     WORKSPACE_ROOT = _EXE_DIR
-    AUDIO_DIR = os.path.join(_EXE_DIR, "data", "audio")
-    EXPORT_DIR = os.path.join(_EXE_DIR, "data", "exports")
-    LOGO_DIR = os.path.join(_EXE_DIR, "data", "logos")
 else:
     WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
-    AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
-    EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
-    LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
+
+AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
+EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
+LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -321,7 +327,7 @@ os.makedirs(LOGO_DIR, exist_ok=True)
 
 # Run-id → actual directory mapping for SVG preview serving
 # Persisted to data/run_dirs.json so it survives restarts
-_RUN_DIRS_FILE = os.path.join(_EXE_DIR, "data", "run_dirs.json") if getattr(sys, 'frozen', False) else os.path.join(BASE_DIR, "data", "run_dirs.json")
+_RUN_DIRS_FILE = os.path.join(BASE_DIR, "data", "run_dirs.json")
 
 def _load_run_dirs() -> dict[str, str]:
     try:
@@ -838,8 +844,7 @@ def list_workspaces(page: int = 1, page_size: int = 20, mine: int = 0, request: 
 
 def _ensure_seed_configs_from_json(db):
     """Load seed configs from default_workspace_configs.json if seed rows are empty."""
-    _cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                              "resources", "default_workspace_configs.json")
+    _cfg_path = os.path.join(BASE_DIR, "resources", "default_workspace_configs.json")
     if not os.path.exists(_cfg_path):
         return
     # Check if any seed table is empty
@@ -2097,7 +2102,7 @@ async def api_upload_recipe_file(file: UploadFile = File(...), user=Depends(get_
         raise HTTPException(400, f"不支持的文件类型: {ext}，允许: {', '.join(sorted(ALLOWED))}")
     import uuid as _uuid
     safe_name = f"recipe-{_uuid.uuid4().hex[:12]}{ext}"
-    save_dir = os.path.join(os.path.dirname(__file__), "data", "downloads")
+    save_dir = os.path.join(BASE_DIR, "data", "downloads")
     os.makedirs(save_dir, exist_ok=True)
     dest = os.path.join(save_dir, safe_name)
     content = await file.read()
@@ -4624,7 +4629,7 @@ class VideoDownloadRequest(BaseModel):
     asr_provider_id: Optional[str] = None
 
 
-COOKIES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cookies")
+COOKIES_DIR = os.path.join(BASE_DIR, "data", "cookies")
 os.makedirs(COOKIES_DIR, exist_ok=True)
 
 @app.post("/api/video/upload-cookies")
@@ -4704,9 +4709,8 @@ def api_video_file(path: str = "", task_id: str = ""):
             path = resolved  # fall through to unified validation below
     if not path:
         raise HTTPException(400, "Missing path or task_id")
-    base = _os.path.dirname(_os.path.abspath(__file__))
-    video_dir = _os.path.normcase(_os.path.normpath(_os.path.join(base, "data", "videos")))
-    data_dir = _os.path.normcase(_os.path.normpath(_os.path.join(base, "data")))
+    video_dir = _os.path.normcase(_os.path.normpath(_os.path.join(BASE_DIR, "data", "videos")))
+    data_dir = _os.path.normcase(_os.path.normpath(_os.path.join(BASE_DIR, "data")))
     save_root = _os.path.normcase(_os.path.normpath(_get_global_save_path()))
     full = _os.path.normcase(_os.path.normpath(_os.path.abspath(path)))
     if not (full.startswith(video_dir + _os.sep) or full.startswith(data_dir + _os.sep) or full.startswith(save_root + _os.sep)):
@@ -6140,8 +6144,7 @@ def api_ppt_styles():
 
 # ── VI & Prompt file editor (directory-aware) ──
 
-VI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                      "resources", "vi")
+VI_DIR = os.path.join(BASE_DIR, "resources", "vi")
 
 VI_SECTIONS = ["vi", "cover", "content", "data", "summary", "prompt"]
 
@@ -6253,7 +6256,7 @@ def api_save_style_vi_section(style_id: str, section: str, body: VIFileUpdate, u
 
 # ── Scenario prompt files (per-column design rule overrides) ──
 
-SCENARIOS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "scenarios")
+SCENARIOS_DIR = os.path.join(BASE_DIR, "resources", "scenarios")
 SCENARIO_FILES = [
     "design-system.md",
     "outline-architect.md",
@@ -9776,7 +9779,7 @@ UPDATE_CHECK_URL = "https://raw.githubusercontent.com/qiliang166/yishao-agent/ma
 import os as _os
 _BUILD_COMMIT = ""
 _BUILD_TIME = ""
-_version_file = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "build_version.txt")
+_version_file = _os.path.join(BASE_DIR, "build_version.txt")
 if _os.path.exists(_version_file):
     try:
         with open(_version_file, "r", encoding="utf-8-sig") as _f:
@@ -10380,7 +10383,7 @@ else:
 if os.path.isdir(FRONTEND_DIST):
     import os as _os
 
-    DOWNLOADS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "downloads")
+    DOWNLOADS_DIR = os.path.join(BASE_DIR, "data", "downloads")
     @app.get("/api/downloads/{filename:path}")
     async def serve_download(filename: str):
         from starlette.responses import FileResponse

@@ -1,13 +1,19 @@
 """Scenario file CRUD — per-workspace custom scenario files on disk."""
 
 import os
+import sys
 import json
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/ws-scenarios")
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+    if not os.path.isdir(os.path.join(BASE_DIR, "resources")):
+        BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCENARIOS_DIR = os.path.join(BASE_DIR, "resources", "scenarios")
 
 
