@@ -4,10 +4,9 @@ import sqlite3
 import shutil
 from datetime import datetime, timedelta
 
+# When running as PyInstaller bundle, data goes next to the exe
 if getattr(sys, 'frozen', False):
-    _EXE_DIR = os.path.dirname(sys.executable)
-    _WS_ROOT = os.path.dirname(_EXE_DIR)
-    BASE_DIR = os.path.join(_WS_ROOT, "backend")
+    BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
