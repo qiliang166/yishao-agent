@@ -101,6 +101,15 @@ Get-ChildItem -Path "$root\backend" -Recurse -File -Filter "*.py" `
     }
 }
 
+# 3) Critical runtime files at backend/ root
+@('backend\requirements.txt', 'backend\default_download_urls.json', 'backend\.env.example') | ForEach-Object {
+    $src = Join-Path $root $_
+    if (Test-Path $src) {
+        $dest = Join-Path $distDir $_
+        Copy-Item $src $dest -Force
+    }
+}
+
 # Copy built frontend
 Copy-Item "$root\frontend\dist\*" "$distDir\frontend\dist\" -Recurse -Force
 
