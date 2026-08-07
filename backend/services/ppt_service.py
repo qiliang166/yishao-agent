@@ -574,6 +574,8 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                                            temperature=st['cards'],
                                            column_id=column_id,
                                            color_scheme=color_scheme)
+            _logger.info(f"[PPT-TRACE] _stage2_structure returned: {type(structure).__name__}, len={len(structure) if structure else 'None'}")
+            print(f"[PPT-TRACE] _stage2_structure returned: {type(structure).__name__}, len={len(structure) if structure else 'None'}", flush=True)
             if structure:
                 if project_id:
                     _append_log(project_id, f"布局规划完成，共 {len(structure)} 页，开始并行生成 HTML")
@@ -590,8 +592,12 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
                     first = slide_data[0] if slide_data else {}
                     if project_id:
                         _append_log(project_id, f"PPT 生成完成，共 {len(html_slides)} 页")
+                else:
+                    _logger.warning(f"[PPT-TRACE] _stage2_html_per_slide returned None! Falling through to next check.")
+                    print(f"[PPT-TRACE] _stage2_html_per_slide returned None! Falling through to next check.", flush=True)
         if isinstance(first, dict) and "html" in first:
             # New HTML pipeline — slides already have complete HTML, just assemble
+            _logger.info(f"[PPT-TRACE] Entering HTML pipeline: first has html={('html' in first)}, keys={list(first.keys())[:5]}")
             print(f"[PPT-DBG] HTML pipeline: {len(slide_data)} slides with inline HTML", flush=True)
             title = first.get("heading", "") or "Presentation"
 
@@ -667,6 +673,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
             return html_path, slide_data
 
         # ── Old SVG path (legacy: slides have 'zones' field) ──
+        _logger.warning(f"[PPT-TRACE] FALLING BACK TO SVG! first type={type(first).__name__}, is_dict={isinstance(first, dict)}, has_html={'html' in first if isinstance(first, dict) else 'N/A'}, keys={list(first.keys())[:5] if isinstance(first, dict) else 'N/A'}")
         print(f"[PPT-DBG] Rendering SVG deck: {len(slide_data)} slides, style={style_id}", flush=True)
         from services.svg_designer import DeckDesigner
         from services.llm_service import generate as llm_generate
@@ -4893,12 +4900,17 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 r = f.result()
                 if r:
                     result.append(r)
+                else:
+                    _logger.warning(f"[PPT-TRACE] _gen_one returned None/falsy for slide idx={futures[f]}")
             except Exception as e:
-                _logger.error(f"Slide HTML generation crashed: {e}")
+                import traceback as _tb
+                _logger.error(f"[PPT-TRACE] Slide HTML generation crashed: {e}\n{_tb.format_exc()[-1000:]}")
 
     elapsed = __import__("time").time() - t0
     result.sort(key=lambda s: s.get("seq", 0))
     _logger.info(f"Stage 2 HTML: {len(result)}/{total} slides generated in {elapsed:.1f}s")
+    if not result:
+        _logger.error(f"[PPT-TRACE] ALL {total} slides failed, returning None!")
     return result if result else None
 
 
