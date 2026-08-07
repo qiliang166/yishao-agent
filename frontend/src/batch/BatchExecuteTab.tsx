@@ -769,12 +769,14 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
             <span>执行日志</span>
             <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--text-secondary)' }}>
               批次 #{batchStatus.batch_id} · {batchStatus.status === 'running' ? '运行中' : batchStatus.status}
+              {' '}· {progress}%（{batchStatus.completed_count + batchStatus.failed_count}/{batchStatus.total_count}）
             </span>
           </div>
-          <div style={{ height: 4, background: 'var(--border)', margin: '0 14px', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ height: 8, background: '#e0dcd6', margin: '6px 14px 2px', borderRadius: 4, overflow: 'hidden' }}>
             <div style={{
-              height: '100%', background: 'var(--primary)', borderRadius: 2,
+              height: '100%', background: 'var(--primary)', borderRadius: 4,
               width: `${progress}%`, transition: 'width .3s',
+              minWidth: progress > 0 ? '2px' : 0,
             }} />
           </div>
           <div style={{
