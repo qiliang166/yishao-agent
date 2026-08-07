@@ -3,6 +3,7 @@
 Uses PPT-Agent Bento Grid methodology: style YAML → AI outline → Bento Grid layout → SVG output.
 """
 import os
+import sys
 import re
 import json
 import html as _html_mod
@@ -16,6 +17,17 @@ from bs4 import BeautifulSoup
 from database import get_db
 
 _logger = logging.getLogger("uvicorn")
+
+def _write_trace(tag: str, detail: str = ""):
+    """Write trace marker to a file — survives PyInstaller noconsole stdout loss."""
+    try:
+        trace_dir = os.path.join(BASE_DIR, "data")
+        os.makedirs(trace_dir, exist_ok=True)
+        with open(os.path.join(trace_dir, "ppt_trace.log"), "a", encoding="utf-8") as _tf:
+            import datetime as _dt
+            _tf.write(f"[{_dt.datetime.now().isoformat()}] {tag} {detail}\n")
+    except Exception:
+        pass
 
 
 def _extract_typography(prs) -> dict:
@@ -214,7 +226,10 @@ def _set_font_all(run, font_name: str):
         ea = etree.SubElement(rPr, f"{{{_NS}}}ea")
     ea.set("typeface", font_name)
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.join(sys._MEIPASS, 'backend')
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKSPACE_ROOT = os.path.dirname(BASE_DIR)  # d:\YISHAOAGENT
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -566,6 +581,7 @@ def generate_ppt(content: str, template_id: str = None, branding: dict = None,
         first = slide_data[0]
         if isinstance(first, dict) and "html" not in first and "heading" in first and provider_id and model:
             # Outline format — need to run Phase 5a (Structure) + Phase 5b (HTML)
+            _write_trace("ENTER_STRUCTURE_HTML", f"slides={len(slide_data)} pid={provider_id} model={model}")
             print(f"[PPT-DBG] Outline input detected: {len(slide_data)} slides, running Structure+HTML", flush=True)
             if project_id:
                 _append_log(project_id, f"大纲已有 {len(slide_data)} 页，跳过分析，直接规划布局...")
