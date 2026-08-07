@@ -84,6 +84,10 @@ Section "Install"
   SetOutPath "$INSTDIR\frontend\dist"
   File /nonfatal /r "..\dist\frontend\dist\*.*"
 
+  ; Copy ffmpeg for video/audio processing
+  SetOutPath "$INSTDIR"
+  File /nonfatal "..\dist\ffmpeg.exe"
+
   SetOutPath "$INSTDIR"
 
   ; Create writable data directories (populated at runtime by the app)

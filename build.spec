@@ -22,6 +22,8 @@ a = Analysis(
     binaries=[],
     datas=backend_datas,
     hiddenimports=[
+        # SSL certificates for HTTPS in frozen mode
+        'certifi',
         # Web framework
         'fastapi',
         'uvicorn',

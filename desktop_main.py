@@ -12,6 +12,10 @@ import socket
 # Determine base dir for logging: next to exe (frozen) or next to this file (dev)
 if getattr(sys, 'frozen', False):
     _LOG_DIR = os.path.dirname(sys.executable)
+    # Ensure SSL CA certificates are accessible for HTTPS requests
+    import certifi
+    os.environ['SSL_CERT_FILE'] = certifi.where()
+    os.environ['REQUESTS_CA_BUNDLE'] = certifi.where()
 else:
     _LOG_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -53,7 +57,8 @@ try:
         sys.stderr = io.StringIO()
 
     from backend.app import app
-    from backend.batch.scheduler import init as batch_init
+    from backend.app import SECRET_KEY
+    from backend.batch.scheduler import init as batch_init, set_jwt_secret
     import uvicorn
 except Exception as e:
     _log_error(f'Import error: {e}\n{traceback.format_exc()}')
@@ -70,6 +75,7 @@ def main():
                 del _cfg["()"]
             _cfg.setdefault("use_colors", False)
 
+        set_jwt_secret(SECRET_KEY)
         batch_init(PORT)
         import threading
         def _open_browser():

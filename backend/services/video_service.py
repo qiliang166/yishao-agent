@@ -433,12 +433,20 @@ def _ensure_ffmpeg():
     import shutil as _shutil
     import stat as _stat
 
-    # Bundled binary (ffmpeg.exe on Windows, ffmpeg on Linux)
-    local = os.path.join(BASE_DIR, "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
+    exe_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+
+    # Bundled binary alongside the EXE (installed deployment)
+    local = os.path.join(BASE_DIR, exe_name)
     if os.path.exists(local):
         if os.name != "nt":
             os.chmod(local, _stat.S_IRWXU | _stat.S_IRGRP | _stat.S_IXGRP | _stat.S_IROTH | _stat.S_IXOTH)
         return local
+
+    # PyInstaller frozen: bundled inside _MEIPASS (portable EXE)
+    if getattr(sys, 'frozen', False):
+        meipass_local = os.path.join(sys._MEIPASS, exe_name)
+        if os.path.exists(meipass_local):
+            return meipass_local
 
     which = _shutil.which("ffmpeg")
     if which:

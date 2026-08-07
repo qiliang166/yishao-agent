@@ -126,6 +126,7 @@ Write-Host "[3.5/5] Staging resources alongside the EXE..."
     "$root\backend\data\assets" = "$root\dist\data\assets"
     "$root\backend\data\logos" = "$root\dist\data\logos"
     "$root\frontend\dist" = "$root\dist\frontend\dist"
+    "$root\backend\ffmpeg.exe" = "$root\dist\ffmpeg.exe"
 }.GetEnumerator() | ForEach-Object {
     $src = $_.Key
     $dst = $_.Value
