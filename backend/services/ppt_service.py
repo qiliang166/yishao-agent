@@ -3134,6 +3134,22 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
         if candidate and os.path.exists(candidate):
             chosen = candidate
             break
+    # ── DEBUG: trace VI file resolution for structural pages ──
+    if section in STRUCTURAL_PAGE_TYPES:
+        try:
+            _dd = os.path.join(BASE_DIR, "data", "debug")
+            os.makedirs(_dd, exist_ok=True)
+            _diag = {
+                "section": section, "style_id": style_id, "column_id": column_id,
+                "vi_dir": vi_dir, "is_a4": is_a4_prio,
+                "candidates": [c for c in candidates if c],
+                "candidates_exist": {c: os.path.exists(c) for c in candidates if c},
+                "chosen": chosen,
+            }
+            with open(os.path.join(_dd, f"vi_resolve_{section}.json"), "w", encoding="utf-8") as _df:
+                json.dump(_diag, _df, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
     if chosen:
         with open(chosen, "r", encoding="utf-8") as f:
             parts.append(f.read())
@@ -4337,6 +4353,23 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 # Fallback: old-style HTML template file (backward compat)
                 family = _detect_template_family(style_id, active_scheme)
                 template_html = _load_slide_template(family, stype) or ""
+            # ── DEBUG: trace structural page template decision ──
+            try:
+                _dd = os.path.join(BASE_DIR, "data", "debug")
+                os.makedirs(_dd, exist_ok=True)
+                _diag = {
+                    "seq": seq, "stype": stype, "is_a4": is_a4, "style_id": style_id,
+                    "column_id": column_id, "vi_cover_len": len(vi_cover) if vi_cover else 0,
+                    "has_html_template_header": ("## HTML 模板" in vi_cover) if vi_cover else False,
+                    "regex_matched": bool(template_html) if (vi_cover and "## HTML 模板" in vi_cover) else None,
+                    "template_html_len": len(template_html) if template_html else 0,
+                    "code_fill_path": bool(template_html),
+                    "active_scheme_keys": list(active_scheme.keys())[:5] if active_scheme else [],
+                }
+                with open(os.path.join(_dd, f"slide_{seq:02d}_codefill_diag.json"), "w", encoding="utf-8") as _df:
+                    json.dump(_diag, _df, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
             if template_html:
                 html = _fill_slide_template(template_html, slide, total)
                 # Run contrast fix pipeline on code-filled slides too —
@@ -4357,6 +4390,21 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 _logger.info(f"Slide {seq}: code-filled ({style_id}/{stype}), {len(html)} chars")
                 return {**slide, "html": html, "html_vars": html_vars}
             # No template available → fall through to LLM generation below
+        else:
+            # ── DEBUG: why structural page check was skipped ──
+            try:
+                _dd = os.path.join(BASE_DIR, "data", "debug")
+                os.makedirs(_dd, exist_ok=True)
+                _diag = {
+                    "seq": seq, "stype": stype, "is_a4": is_a4,
+                    "stype_in_structural": stype in STRUCTURAL_PAGE_TYPES,
+                    "structural_types": list(STRUCTURAL_PAGE_TYPES),
+                    "slide_keys": list(slide.keys()),
+                }
+                with open(os.path.join(_dd, f"slide_{seq:02d}_codefill_diag.json"), "w", encoding="utf-8") as _df:
+                    json.dump(_diag, _df, ensure_ascii=False, indent=2)
+            except Exception:
+                pass
 
         # ── Per-slide lean system prompt ──
         # Build a tailored system prompt: core rules + slide-type-specific sections
