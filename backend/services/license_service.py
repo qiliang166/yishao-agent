@@ -252,7 +252,7 @@ def activate(key: str) -> dict:
 
 
 def check_activation() -> dict:
-    """Verify activation at startup. Checks local state, then confirms with server."""
+    """Verify activation. Always checks with server — no cache for expired/revoked grace."""
     existing = _get_license_row()
     if existing is None:
         return {"activated": False}
@@ -261,30 +261,14 @@ def check_activation() -> dict:
     if existing.get("machine_id") != current_machine_id:
         return {"activated": False, "reason": "machine_mismatch"}
 
-    # Skip server verification if checked within the last hour
-    last_checked = existing.get("last_checked_at")
-    if last_checked:
-        try:
-            last_dt = datetime.fromisoformat(last_checked)
-            if (datetime.utcnow() - last_dt).total_seconds() < 3600:
-                return {
-                    "activated": True,
-                    "product_id": existing.get("product_id"),
-                    "serial_number": existing.get("serial_number"),
-                    "activated_at": existing.get("activated_at"),
-                    "last_checked_at": last_checked,
-                }
-        except Exception:
-            pass
-
     # Verify with activation server
     try:
         data = _api_post("/api/check", {
             "key": existing["license_key"],
             "machine_id": current_machine_id,
         }, timeout=5)
+        _update_last_checked()
         if data.get("activated"):
-            _update_last_checked()
             return {
                 "activated": True,
                 "product_id": data.get("product_id"),
@@ -297,7 +281,7 @@ def check_activation() -> dict:
     except Exception:
         pass
 
-    # Server unreachable — trust local state but flag
+    # Server unreachable — trust local state with warning
     _update_last_checked()
     return {
         "activated": True,
@@ -331,17 +315,13 @@ def deactivate() -> bool:
 
 
 def get_license_status() -> dict:
-    """Return current license info for display (local state only, no server call)."""
+    """Return current license info, verified against activation server."""
+    result = check_activation()
     existing = _get_license_row()
     if existing is None:
         return {"activated": False}
-
     return {
-        "activated": True,
+        **result,
         "license_key": existing.get("license_key"),
-        "product_id": existing.get("product_id"),
-        "serial_number": existing.get("serial_number"),
-        "activated_at": existing.get("activated_at"),
-        "last_checked_at": existing.get("last_checked_at"),
         "machine_match": existing.get("machine_id") == generate_machine_id(),
     }

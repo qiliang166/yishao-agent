@@ -722,6 +722,15 @@ function SettingsPage() {
 
             {licenseStatus?.activated ? (
               <>
+                {licenseStatus.warning === 'offline' && (
+                  <div style={{
+                    fontSize: 12, color: 'var(--warning)', marginBottom: 12,
+                    background: '#fef3c7', padding: '6px 10px', borderRadius: 6,
+                    display: 'inline-block',
+                  }}>
+                    ⚠ 无法连接激活服务器，当前使用离线许可
+                  </div>
+                )}
                 {licenseStatus.machine_match === false && (
                   <div style={{
                     fontSize: 12, color: 'var(--warning)', marginBottom: 12,
@@ -759,6 +768,50 @@ function SettingsPage() {
                   解除激活
                 </button>}
               </>
+            ) : licenseStatus?.license_key ? (
+              <>
+                <div style={{
+                  fontSize: 12, color: 'var(--danger)', marginBottom: 12,
+                  background: '#fce4e4', padding: '6px 10px', borderRadius: 6,
+                  display: 'inline-block',
+                }}>
+                  状态：<strong>{licenseStatus?.reason || '已过期，请续费'}</strong>
+                </div>
+                <div style={{ fontSize: 12, lineHeight: 1.8, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+                    {licenseStatus.serial_number != null && (
+                      <span>序列号：<strong>#{String(licenseStatus.serial_number).padStart(5, '0')}</strong></span>
+                    )}
+                    <span>产品：<strong>标准版</strong></span>
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    激活码：<code style={{
+                      fontSize: 11, fontFamily: 'var(--mono)',
+                      background: 'var(--primaryLight)', padding: '2px 6px',
+                      borderRadius: 4, wordBreak: 'break-all',
+                    }}>{licenseStatus.license_key}</code>
+                  </div>
+                  {licenseStatus.activated_at && (
+                    <div>激活时间：{licenseStatus.activated_at}</div>
+                  )}
+                </div>
+                <div className="settings-row">
+                  <label>重新激活</label>
+                  <input className="form-input" type="text" value={licenseKeyInput}
+                    onChange={e => { setLicenseKeyInput(e.target.value); setLicenseMsg('') }}
+                    placeholder="YSAG-XXXXX-XXXXX-..."
+                    style={{ maxWidth: 380, fontFamily: 'monospace', fontSize: 12 }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleLicenseActivate() }}
+                  />
+                </div>
+                <div className="settings-row">
+                  <label></label>
+                  <button className="btn btn-primary btn-sm" onClick={handleLicenseActivate}
+                    disabled={licenseLoading}>
+                    {licenseLoading ? '激活中...' : '激活'}
+                  </button>
+                </div>
+              </>
             ) : (
               <>
                 <div style={{
@@ -775,15 +828,14 @@ function SettingsPage() {
                     placeholder="YSAG-XXXXX-XXXXX-..."
                     style={{ maxWidth: 380, fontFamily: 'monospace', fontSize: 12 }}
                     onKeyDown={e => { if (e.key === 'Enter') handleLicenseActivate() }}
-                    disabled={!canSaveGlobal}
                   />
                 </div>
                 <div className="settings-row">
                   <label></label>
-                  {canSaveGlobal && <button className="btn btn-primary btn-sm" onClick={handleLicenseActivate}
+                  <button className="btn btn-primary btn-sm" onClick={handleLicenseActivate}
                     disabled={licenseLoading}>
                     {licenseLoading ? '激活中...' : '激活'}
-                  </button>}
+                  </button>
                 </div>
               </>
             )}
