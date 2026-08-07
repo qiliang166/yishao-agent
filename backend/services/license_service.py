@@ -166,16 +166,26 @@ def _get_license_row() -> dict | None:
         db.close()
 
 
+def _ensure_license_schema(db: sqlite3.Connection) -> None:
+    """Add expires_at column to license table if missing (migration-safe)."""
+    cols = [r[1] for r in db.execute("PRAGMA table_info(license)").fetchall()]
+    if "expires_at" not in cols:
+        db.execute("ALTER TABLE license ADD COLUMN expires_at TIMESTAMP")
+        db.commit()
+
+
 def _save_license_row(license_key: str, machine_id: str,
-                      product_id: int, serial_number: int) -> None:
+                      product_id: int, serial_number: int,
+                      expires_at: str | None = None) -> None:
     db = _get_db()
     try:
+        _ensure_license_schema(db)
         db.execute(
             """INSERT OR REPLACE INTO license
                (id, license_key, machine_id, product_id, serial_number,
-                activated_at, last_checked_at)
-               VALUES (1, ?, ?, ?, ?, datetime('now'), datetime('now'))""",
-            (license_key, machine_id, product_id, serial_number),
+                expires_at, activated_at, last_checked_at)
+               VALUES (1, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))""",
+            (license_key, machine_id, product_id, serial_number, expires_at),
         )
         db.commit()
     finally:
@@ -241,6 +251,7 @@ def activate(key: str) -> dict:
         machine_id=machine_id,
         product_id=data.get("product_id", 1),
         serial_number=data.get("serial_number", 0),
+        expires_at=data.get("expires_at"),
     )
 
     return {
@@ -269,6 +280,18 @@ def check_activation() -> dict:
         }, timeout=5)
         _update_last_checked()
         if data.get("activated"):
+            # Sync expires_at from server to local DB
+            if data.get("expires_at"):
+                _db = _get_db()
+                try:
+                    _ensure_license_schema(_db)
+                    _db.execute(
+                        "UPDATE license SET expires_at = ? WHERE id = 1",
+                        (data["expires_at"],),
+                    )
+                    _db.commit()
+                finally:
+                    _db.close()
             return {
                 "activated": True,
                 "product_id": data.get("product_id"),
@@ -281,8 +304,20 @@ def check_activation() -> dict:
     except Exception:
         pass
 
-    # Server unreachable — trust local state with warning
+    # Server unreachable — check local expires_at before trusting local state
     _update_last_checked()
+    local_expires = existing.get("expires_at")
+    if local_expires:
+        try:
+            exp = datetime.strptime(local_expires, "%Y-%m-%d %H:%M:%S")
+            if datetime.now() > exp:
+                return {
+                    "activated": False,
+                    "reason": "该许可证已过期",
+                    "warning": "offline",
+                }
+        except ValueError:
+            pass
     return {
         "activated": True,
         "product_id": existing.get("product_id"),

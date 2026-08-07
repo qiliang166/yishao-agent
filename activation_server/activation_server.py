@@ -605,6 +605,7 @@ def client_activate(req: dict):
             "activated": True,
             "product_id": payload["product_id"],
             "serial_number": payload["serial_number"],
+            "expires_at": key_row["expires_at"],
         }
     finally:
         db.close()
@@ -648,6 +649,7 @@ def client_check(req: dict):
             "product_id": key_row["product_id"],
             "serial_number": key_row["serial_number"],
             "activated_at": act["activated_at"],
+            "expires_at": key_row["expires_at"],
         }
     finally:
         db.close()
