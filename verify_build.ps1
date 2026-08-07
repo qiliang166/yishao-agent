@@ -34,7 +34,8 @@ $whitelistDirs = @(
     'backend/data/styles',
     'backend/data/templates',
     'backend/data/logos',
-    'backend/data/audio'
+    'backend/data/audio',
+    'backend/data/assets'
 )
 foreach ($dir in $whitelistDirs) {
     Write-Host "  Checking $dir ..."

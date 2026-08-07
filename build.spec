@@ -11,7 +11,9 @@ backend_datas = [
     ('backend/data/styles', 'backend/data/styles'),
     ('backend/data/templates', 'backend/data/templates'),
     ('backend/data/logos', 'backend/data/logos'),
+    ('backend/data/assets', 'backend/data/assets'),
     ('backend/default_download_urls.json', 'backend'),
+    ('backend/ffmpeg.exe', '.'),
 ]
 
 a = Analysis(

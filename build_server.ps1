@@ -92,7 +92,7 @@ Get-ChildItem -Path "$root\backend" -Recurse -File -Filter "*.py" `
     }
 
 # 2) Static resource directories (factory-default content only)
-@('backend\resources', 'backend\data\styles', 'backend\data\templates', 'backend\data\logos', 'backend\data\audio') | ForEach-Object {
+@('backend\resources', 'backend\data\styles', 'backend\data\templates', 'backend\data\logos', 'backend\data\audio', 'backend\data\assets') | ForEach-Object {
     $src = Join-Path $root $_
     if (Test-Path $src) {
         $dest = Join-Path $distDir $_

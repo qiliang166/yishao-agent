@@ -96,7 +96,8 @@ $preBuildOk = $true
     "$root\frontend\dist",
     "$root\backend\resources",
     "$root\backend\data\styles",
-    "$root\backend\data\templates"
+    "$root\backend\data\templates",
+    "$root\backend\data\assets"
 ) | ForEach-Object {
     if (-not (Test-Path $_)) {
         Write-Host "  [MISSING] $_" -ForegroundColor Red
