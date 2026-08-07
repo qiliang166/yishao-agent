@@ -4850,6 +4850,27 @@ def api_generate_ppt(req: PPTGenerateRequest, user=require_perm("stage3.generate
         if has_content_input:
             print(f"[PPT-REQ] AI regeneration with content ({len(req.content)} chars)", flush=True)
 
+        # Auto-fill provider/model from first enabled LLM provider if missing
+        if not req.provider_id or not req.model:
+            try:
+                db = get_db()
+                row = db.execute(
+                    "SELECT id, models FROM llm_providers WHERE is_enabled=1 ORDER BY created_at ASC LIMIT 1"
+                ).fetchone()
+                if row and row["models"]:
+                    try:
+                        models = json.loads(row["models"]) if row["models"].startswith("[") else [m.strip() for m in row["models"].split(",")]
+                    except Exception:
+                        models = [m.strip() for m in row["models"].split(",")]
+                    if models:
+                        if not req.provider_id:
+                            req.provider_id = row["id"]
+                        if not req.model:
+                            req.model = models[0]
+                db.close()
+            except Exception:
+                pass
+
         # Validate prerequisites BEFORE calling expensive pipeline
         if not has_content_input and not slide_plan:
             missing: list[str] = []
