@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { usePermission } from '../hooks/usePermission'
-import { api, Voice, TTSProvider, LLMProvider } from '../services/api'
+import { api, Voice, TTSProvider, LLMProvider, notifyNoProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import TeachingDocPanel from '../components/TeachingDocPanel'
 import { marked } from 'marked'
@@ -964,8 +964,11 @@ export default function ProjectPage() {
       if (map['_temp_s1_text']) { setS1Temperatures(prev => ({ ...prev, text: parseFloat(map['_temp_s1_text']) || 0.3 })) }
       if (map['_temp_s1_file']) { setS1Temperatures(prev => ({ ...prev, file: parseFloat(map['_temp_s1_file']) || 0.3 })) }
       if (map['_model_step3_sop']) { setS3SopModel(map['_model_step3_sop']); hasModelOverride = true }
+      else if (map['_model_s2_sop']) { setS3SopModel(map['_model_s2_sop']) }
       if (map['_model_step3_dao_ppt']) { setS3DaoPptModel(map['_model_step3_dao_ppt']); hasModelOverride = true }
+      else if (map['_model_s2_dao']) { setS3DaoPptModel(map['_model_s2_dao']) }
       if (map['_model_step3_yan_ppt']) { setS3YanxiPptModel(map['_model_step3_yan_ppt']); hasModelOverride = true }
+      else if (map['_model_s2_yanxi']) { setS3YanxiPptModel(map['_model_s2_yanxi']) }
       if (map['_model_s4_speech_doc']) { setS4SpeechModels(prev => ({ ...prev, doc: map['_model_s4_speech_doc'] })) }
       if (map['_model_s4_speech_analysis']) { setS4SpeechModels(prev => ({ ...prev, analysis: map['_model_s4_speech_analysis'] })) }
       if (map['_model_s4_speech_comprehensive']) { setS4SpeechModels(prev => ({ ...prev, comprehensive: map['_model_s4_speech_comprehensive'] })) }
@@ -1140,6 +1143,7 @@ export default function ProjectPage() {
     }).catch(() => {})
     api.listProviders().then((providers: LLMProvider[]) => {
       setLlmProviders(providers)
+      if (!providers || providers.length === 0) notifyNoProvider()
       const def = providers.find(p => p.is_enabled) || providers[0]
       const defModels = Array.isArray(def?.models) ? def.models : []
       const defVal = def && defModels.length > 0 ? `${def.id}:${defModels[0]}` : ''
