@@ -453,59 +453,54 @@ function SettingsPage() {
         {/* ═══ TAB: 通用设置 ═══ */}
         {activeTab === 'general' && (<>
           <div className="settings-section">
-            <h3>品牌信息</h3>
+            <h3>品牌信息 <span style={{fontSize:11,color:'var(--text-secondary)',fontWeight:400}}>— 由注册码管理器统一设置</span></h3>
+            <p style={{fontSize:11,color:'var(--warning, #b68b00)',margin:'2px 0 12px'}}>
+              品牌信息由注册码管理器（KeyGen）统一配置，此处只读。如需修改，请使用注册码管理器。
+            </p>
             <div className="settings-row">
               <label>LOGO 图标</label>
-              <input className="form-input" type="text" value={brandLogo}
-                onChange={e => setBrandLogo(e.target.value)} style={{ maxWidth: 200 }} disabled={!canSaveGlobal} />
-              <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={handleLogoUpload} />
-              {canSaveGlobal && <button className="btn btn-ghost btn-sm" onClick={() => fileInputRef.current?.click()}
-                disabled={logoUploading}>
-                {logoUploading ? '上传中...' : '本地上传'}
-              </button>}
+              <input className="form-input" type="text" value={brandLogo} readOnly
+                style={{ maxWidth: 280, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
               {isImagePath(brandLogo) && (
                 <img src={brandLogo} alt="Logo预览" style={{
                   width: 28, height: 28, borderRadius: 4, objectFit: 'cover',
                   border: '1px solid var(--border)',
                 }} />
               )}
-              <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>可输入 emoji、URL 或本地上传</span>
             </div>
             <div className="settings-row">
               <label>应用名称</label>
-              <input className="form-input" type="text" value={brandName}
-                onChange={e => setBrandName(e.target.value)} style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input className="form-input" type="text" value={brandName} readOnly
+                style={{ maxWidth: 300, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <div className="settings-row">
               <label>口号</label>
-              <input className="form-input" type="text" value={brandSlogan}
-                onChange={e => setBrandSlogan(e.target.value)} placeholder="展示在侧边栏品牌名称下方" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input className="form-input" type="text" value={brandSlogan} readOnly
+                placeholder="展示在侧边栏品牌名称下方" style={{ maxWidth: 300, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <div className="settings-row">
               <label>版本号</label>
-              <input className="form-input" type="text" value={appVersion}
-                onChange={e => setAppVersion(e.target.value)} style={{ maxWidth: 120 }} disabled={!canSaveGlobal} />
+              <input className="form-input" type="text" value={appVersion} readOnly
+                style={{ maxWidth: 120, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 8px' }}>
               以下信息将作为页脚嵌入导出的文档 / PPT 中。
             </p>
             <div className="settings-row">
               <label>版权信息</label>
-              <input className="form-input" type="text" value={brandingCopyright}
-                onChange={e => setBrandingCopyright(e.target.value)} placeholder="例如：© 2026 你的站点名称" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input className="form-input" type="text" value={brandingCopyright} readOnly
+                placeholder="例如：© 2026 你的站点名称" style={{ maxWidth: 300, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <div className="settings-row">
               <label>签名/作者</label>
-              <input className="form-input" type="text" value={brandingSignature}
-                onChange={e => setBrandingSignature(e.target.value)} placeholder="例如：作者名称" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input className="form-input" type="text" value={brandingSignature} readOnly
+                placeholder="例如：作者名称" style={{ maxWidth: 300, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <div className="settings-row" style={{ alignItems: 'flex-start' }}>
               <label>软件介绍</label>
-              <textarea className="form-textarea" rows={6} value={aboutContent}
-                onChange={e => setAboutContent(e.target.value)}
+              <textarea className="form-textarea" rows={6} value={aboutContent} readOnly
                 placeholder="展示在「关于软件」弹窗中，登录页和侧边栏均可查看..."
-                style={{ maxWidth: 480, width: '100%', resize: 'vertical' }} disabled={!canSaveGlobal} />
+                style={{ maxWidth: 480, width: '100%', resize: 'vertical', background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
           </div>
 

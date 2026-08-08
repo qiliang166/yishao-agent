@@ -194,7 +194,7 @@ class KeyGenApp:
     def _build_ui(self):
         ttk.Label(self.root, text="Yishao Agent 注册码管理器",
                   font=("Microsoft YaHei UI", 14, "bold")).pack(pady=(16, 2))
-        ttk.Label(self.root, text="注册码 / 站点配置 / 套餐 / 收款码 / 订单管理",
+        ttk.Label(self.root, text="注册码 / 站点配置 / 品牌信息 / 套餐 / 收款码 / 订单管理",
                   font=("Microsoft YaHei UI", 9)).pack(pady=(0, 12))
 
         # ── Server config ──
@@ -227,6 +227,7 @@ class KeyGenApp:
 
         self._build_key_tab()
         self._build_site_config_tab()
+        self._build_brand_tab()
         self._build_plan_tab()
         self._build_qrcode_tab()
         self._build_order_tab()
@@ -425,7 +426,74 @@ class KeyGenApp:
                   font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
 
     # ═══════════════════════════════════════════════════════════════
-    # Tab 3: Plan Types
+    # Tab 3: Brand Info（品牌信息）
+    # ═══════════════════════════════════════════════════════════════
+
+    def _build_brand_tab(self):
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text="品牌信息")
+
+        # Brand name + logo
+        row1 = ttk.Frame(tab); row1.pack(fill="x", padx=8, pady=(8, 4))
+        ttk.Label(row1, text="应用名称：", width=12).pack(side="left")
+        self.brand_name_var = tk.StringVar()
+        ttk.Entry(row1, textvariable=self.brand_name_var, font=("Microsoft YaHei UI", 10)).pack(side="left", fill="x", expand=True)
+
+        row1b = ttk.Frame(tab); row1b.pack(fill="x", padx=8, pady=(0, 4))
+        ttk.Label(row1b, text="LOGO URL：", width=12).pack(side="left")
+        self.brand_logo_var = tk.StringVar()
+        ttk.Entry(row1b, textvariable=self.brand_logo_var, font=("Consolas", 10)).pack(side="left", fill="x", expand=True)
+
+        # Slogan + version
+        row2 = ttk.Frame(tab); row2.pack(fill="x", padx=8, pady=(0, 4))
+        ttk.Label(row2, text="口号：", width=12).pack(side="left")
+        self.branding_slogan_var = tk.StringVar()
+        ttk.Entry(row2, textvariable=self.branding_slogan_var, font=("Microsoft YaHei UI", 10)).pack(side="left", fill="x", expand=True)
+
+        row2b = ttk.Frame(tab); row2b.pack(fill="x", padx=8, pady=(0, 4))
+        ttk.Label(row2b, text="版本号：", width=12).pack(side="left")
+        self.app_version_var = tk.StringVar()
+        ttk.Entry(row2b, textvariable=self.app_version_var, font=("Consolas", 10), width=15).pack(side="left")
+
+        # Copyright + signature
+        row3 = ttk.Frame(tab); row3.pack(fill="x", padx=8, pady=(0, 4))
+        ttk.Label(row3, text="版权信息：", width=12).pack(side="left")
+        self.branding_copyright_var = tk.StringVar()
+        ttk.Entry(row3, textvariable=self.branding_copyright_var, font=("Microsoft YaHei UI", 10)).pack(side="left", fill="x", expand=True)
+
+        row3b = ttk.Frame(tab); row3b.pack(fill="x", padx=8, pady=(0, 4))
+        ttk.Label(row3b, text="签名/作者：", width=12).pack(side="left")
+        self.branding_signature_var = tk.StringVar()
+        ttk.Entry(row3b, textvariable=self.branding_signature_var, font=("Microsoft YaHei UI", 10)).pack(side="left", fill="x", expand=True)
+
+        # About content
+        about_frame = ttk.LabelFrame(tab, text="软件介绍（展示在「关于软件」弹窗中）", padding=8)
+        about_frame.pack(fill="both", expand=True, padx=8, pady=(8, 4))
+        self.about_text = tk.Text(about_frame, height=5, font=("Microsoft YaHei UI", 10),
+                                  relief="flat", borderwidth=1, highlightthickness=1,
+                                  highlightbackground="#ccc", padx=8, pady=6, wrap="word")
+        self.about_text.pack(fill="both", expand=True)
+
+        # Contact info
+        row4 = ttk.Frame(tab); row4.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Label(row4, text="联系我们：", width=12).pack(side="left")
+        self.contact_info_var = tk.StringVar()
+        ttk.Entry(row4, textvariable=self.contact_info_var, font=("Microsoft YaHei UI", 10)).pack(side="left", fill="x", expand=True)
+
+        # Buttons
+        btn_row = ttk.Frame(tab); btn_row.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(btn_row, text="加载当前设置", command=self._load_brand_info).pack(side="left", padx=(0, 8))
+        ttk.Button(btn_row, text="保存品牌信息", command=self._save_brand_info).pack(side="left")
+        self.brand_status_var = tk.StringVar()
+        ttk.Label(btn_row, textvariable=self.brand_status_var, foreground="green",
+                  font=("Microsoft YaHei UI", 9)).pack(side="left", padx=(8, 0))
+
+        note_row = ttk.Frame(tab); note_row.pack(fill="x", padx=8)
+        ttk.Label(note_row, text="品牌信息统一由注册码管理器设置，软件内不可修改。修改后用户需重启软件生效。",
+                  foreground="gray", font=("Microsoft YaHei UI", 8)).pack(anchor="w")
+
+    # ═══════════════════════════════════════════════════════════════
+    # Tab 4: Plan Types
     # ═══════════════════════════════════════════════════════════════
 
     def _build_plan_tab(self):
@@ -465,7 +533,7 @@ class KeyGenApp:
         self.plan_tree.bind("<Double-1>", lambda e: self._edit_plan())
 
     # ═══════════════════════════════════════════════════════════════
-    # Tab 4: Payment QR Codes
+    # Tab 5: Payment QR Codes
     # ═══════════════════════════════════════════════════════════════
 
     def _build_qrcode_tab(self):
@@ -502,7 +570,7 @@ class KeyGenApp:
         self._qr_photos = {}
 
     # ═══════════════════════════════════════════════════════════════
-    # Tab 5: Order Management
+    # Tab 6: Order Management
     # ═══════════════════════════════════════════════════════════════
 
     def _build_order_tab(self):
@@ -928,6 +996,45 @@ class KeyGenApp:
             self.download_status.set("已保存")
             self.status_var.set("下载链接已保存")
             self.root.after(3000, lambda: self.download_status.set(""))
+        except Exception as e:
+            messagebox.showerror("保存失败", str(e))
+            self.status_var.set(f"保存失败: {e}")
+
+    # ── Brand Info ────────────────────────────────────────────────
+
+    def _load_brand_info(self):
+        try:
+            data = self._call_api("GET", "/api/admin/site-config")
+            self.brand_name_var.set(data.get("brand_name", ""))
+            self.brand_logo_var.set(data.get("brand_logo", ""))
+            self.branding_slogan_var.set(data.get("branding_slogan", ""))
+            self.app_version_var.set(data.get("app_version", ""))
+            self.branding_copyright_var.set(data.get("branding_copyright", ""))
+            self.branding_signature_var.set(data.get("branding_signature", ""))
+            self.about_text.delete("1.0", "end")
+            self.about_text.insert("1.0", data.get("about_content", ""))
+            self.contact_info_var.set(data.get("contact_info", ""))
+            self.status_var.set("品牌信息已加载")
+            self.brand_status_var.set("")
+        except Exception as e:
+            messagebox.showerror("加载失败", str(e))
+            self.status_var.set(f"加载失败: {e}")
+
+    def _save_brand_info(self):
+        try:
+            self._call_api("PUT", "/api/admin/site-config", {
+                "brand_name": self.brand_name_var.get().strip(),
+                "brand_logo": self.brand_logo_var.get().strip(),
+                "branding_slogan": self.branding_slogan_var.get().strip(),
+                "app_version": self.app_version_var.get().strip(),
+                "branding_copyright": self.branding_copyright_var.get().strip(),
+                "branding_signature": self.branding_signature_var.get().strip(),
+                "about_content": self.about_text.get("1.0", "end-1c"),
+                "contact_info": self.contact_info_var.get().strip(),
+            })
+            self.brand_status_var.set("已保存")
+            self.status_var.set("品牌信息已保存")
+            self.root.after(3000, lambda: self.brand_status_var.set(""))
         except Exception as e:
             messagebox.showerror("保存失败", str(e))
             self.status_var.set(f"保存失败: {e}")

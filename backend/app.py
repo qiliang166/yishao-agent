@@ -488,9 +488,16 @@ def _get_site_name() -> str:
 # ── JWT / Auth config ──────────────────────────────────────────────
 _SECRET = os.environ.get("JWT_SECRET", "").strip()
 if not _SECRET:
-    import secrets as _secrets
-    _SECRET = _secrets.token_hex(32)
-    print(f"[SECURITY] JWT_SECRET env var not set. Generated random key for this session.", flush=True)
+    try:
+        from services.license_service import generate_machine_id
+        import hashlib as _hashlib
+        _SECRET = _hashlib.sha256(
+            (generate_machine_id() + "jwt_secret_salt").encode()
+        ).hexdigest()
+    except Exception:
+        import secrets as _secrets
+        _SECRET = _secrets.token_hex(32)
+        print("[SECURITY] Machine ID unavailable, generated random key for this session.", flush=True)
 SECRET_KEY = _SECRET
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
@@ -7747,11 +7754,14 @@ def get_settings(request: Request):
                     _aconn = _sqlite3.connect(_act_db)
                     try:
                         _arows = _aconn.execute(
-                            "SELECT key, value FROM site_config WHERE key IN ('download_desktop_url','download_server_url')"
-                        ).fetchall()
-                        for _r in _arows:
-                            if _r[1] and not settings.get(_r[0]):
-                                settings[_r[0]] = _r[1]
+                        "SELECT key, value FROM site_config WHERE key IN "
+                        "('download_desktop_url','download_server_url',"
+                        "'brand_name','brand_logo','branding_slogan','app_version',"
+                        "'branding_copyright','branding_signature','about_content','contact_info')"
+                    ).fetchall()
+                    for _r in _arows:
+                        if _r[1] and not settings.get(_r[0]):
+                            settings[_r[0]] = _r[1]
                     finally:
                         _aconn.close()
                 except Exception:
@@ -7779,7 +7789,9 @@ def get_settings(request: Request):
             _req = _ur.Request(f"{_act_srv}/api/site-config")
             with _ur.urlopen(_req, timeout=5) as _resp:
                 _config = json.loads(_resp.read().decode())
-            for _k in ("download_desktop_url", "download_server_url"):
+            for _k in ("download_desktop_url", "download_server_url",
+                         "brand_name", "brand_logo", "branding_slogan", "app_version",
+                         "branding_copyright", "branding_signature", "about_content", "contact_info"):
                 if _config.get(_k):
                     settings[_k] = _config[_k]
         except Exception:

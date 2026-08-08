@@ -252,10 +252,13 @@ def _check_key_valid(db, key_row) -> Optional[str]:
     if key_row["expires_at"]:
         try:
             expires = datetime.strptime(key_row["expires_at"], "%Y-%m-%d %H:%M:%S")
-            if datetime.now() > expires:
-                return "该许可证已过期"
         except ValueError:
-            pass
+            try:
+                expires = datetime.strptime(key_row["expires_at"], "%Y-%m-%d")
+            except ValueError:
+                expires = None
+        if expires is not None and datetime.now() > expires:
+            return "该许可证已过期"
     return None
 
 
@@ -493,6 +496,14 @@ def get_site_config():
             "purchase_enabled": config.get("purchase_enabled", "0"),
             "download_desktop_url": config.get("download_desktop_url", ""),
             "download_server_url": config.get("download_server_url", ""),
+            "brand_name": config.get("brand_name", ""),
+            "brand_logo": config.get("brand_logo", ""),
+            "branding_slogan": config.get("branding_slogan", ""),
+            "app_version": config.get("app_version", ""),
+            "branding_copyright": config.get("branding_copyright", ""),
+            "branding_signature": config.get("branding_signature", ""),
+            "about_content": config.get("about_content", ""),
+            "contact_info": config.get("contact_info", ""),
         }
     finally:
         db.close()
@@ -512,6 +523,14 @@ def admin_get_site_config(request: Request):
             "purchase_enabled": config.get("purchase_enabled", "0"),
             "download_desktop_url": config.get("download_desktop_url", ""),
             "download_server_url": config.get("download_server_url", ""),
+            "brand_name": config.get("brand_name", ""),
+            "brand_logo": config.get("brand_logo", ""),
+            "branding_slogan": config.get("branding_slogan", ""),
+            "app_version": config.get("app_version", ""),
+            "branding_copyright": config.get("branding_copyright", ""),
+            "branding_signature": config.get("branding_signature", ""),
+            "about_content": config.get("about_content", ""),
+            "contact_info": config.get("contact_info", ""),
         }
     finally:
         db.close()
@@ -523,7 +542,9 @@ def admin_update_site_config(req: dict, request: Request):
     db = get_db()
     try:
         for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled",
-                     "download_desktop_url", "download_server_url"):
+                     "download_desktop_url", "download_server_url",
+                     "brand_name", "brand_logo", "branding_slogan", "app_version",
+                     "branding_copyright", "branding_signature", "about_content", "contact_info"):
             if key in req:
                 db.execute(
                     "INSERT OR REPLACE INTO site_config (key, value) VALUES (?, ?)",
