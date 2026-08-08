@@ -2,6 +2,71 @@
 
 ## 2026-08-08
 
+- feat: batch edit points & author in project list toolbar
+
+## 2026-08-08
+
+- chore: rebuild server-update with SQLite batch fix
+
+## 2026-08-08
+
+- fix: workspace_io security hardening (path traversal, SQL injection, resource limits) + indentation fix in app.py
+
+## 2026-08-08
+
+- feat: workspace full data export/import (ZIP with projects + files)
+
+## 2026-08-08
+
+- fix: add backend/__init__.py so PyInstaller recognizes backend as a package
+
+## 2026-08-08
+
+- fix: LLM recommended models changed to deepseek-v4-flash and deepseek-v4-pro
+
+## 2026-08-08
+
+- fix: JWT secret derived from machine ID, brand info migrated to KeyGen
+
+## 2026-08-08
+
+- fix: ensure download URLs use port 8767, remove stray .bak file
+
+## 2026-08-08
+
+- fix: build_desktop.ps1 cleans dist before staging — prevents dev data leakage
+
+## 2026-08-08
+
+- fix: factory default branding changed to 勺启 食谱 — DEFAULT_SITE_NAME and index.html title
+- fix: correct download URLs port 4321→8767, fix NSIS makensis path detection
+
+## 2026-08-08
+
+- fix: remove ref_max_len truncation from focused user messages
+
+## 2026-08-08
+
+- fix: set ref_max_len for C路 to 35K — core_prompt_configs ref is 30K, was truncated at 20K default
+
+## 2026-08-08
+
+- fix: root cause — reference JSON was truncated at 20K, c5 rules never reached LLM. Increase A路 ref_max_len to 50K.
+
+## 2026-08-08
+
+- fix: add _fixup_c5_rules fallback — auto-generate c5 rules if LLM returns empty {}
+
+## 2026-08-08
+
+- fix: strengthen c4/c5 rules constraint in A路 prompt — split into separate lines, add Non-empty and CRITICAL emphasis
+
+## 2026-08-08
+
+- perf: prompt studio 3-way parallel generation with partitioned system prompts
+
+## 2026-08-08
+
 - fix: move playwright from excludes to hiddenimports, use top-level import
 
 ## 2026-08-08
