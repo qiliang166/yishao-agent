@@ -473,7 +473,7 @@ async def generate_prompts(req: GenerateRequest):
     _emit(f"[prompt-studio] 并行调用 C: core_prompt_configs (25-40条) max_tokens=49152")
     msg_c = _build_focused_user_message(
         ref_configs, req.industry_topic, req.purpose_description,
-        ["core_prompt_configs"], "core_prompt_configs (25-40 entries)", 49152)
+        ["core_prompt_configs"], "core_prompt_configs (25-40 entries)", 49152, ref_max_len=35000)
 
     t_llm = time.time()
     task_a = _llm_call_with_heartbeat(provider_id, model, sys_a, msg_a, 32768, "A")
