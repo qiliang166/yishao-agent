@@ -530,6 +530,8 @@ async def generate_prompts(req: GenerateRequest):
     configs["core_prompt_configs"] = configs_c.get("core_prompt_configs", [])
     _emit(f"[prompt-studio] 合并完成")
 
+    _fixup_c5_rules(configs, req.industry_topic)
+
     try:
         _validate_configs(configs)
     except HTTPException as e:
@@ -544,6 +546,54 @@ async def generate_prompts(req: GenerateRequest):
     t_total = time.time() - t_start
     _emit(f"[prompt-studio] === 生成完成 总耗时={t_total:.1f}s ===")
     return {"configs": configs, "provider": {"id": provider_id, "model": model}}
+
+
+def _fixup_c5_rules(configs: dict, industry_topic: str):
+    """If c5 (comprehensive PPT) rules is empty, generate a fallback from c4 structure."""
+    cols = configs.get("column_configs", [])
+    c4 = next((c for c in cols if c.get("slot") == "c4"), None)
+    c5 = next((c for c in cols if c.get("slot") == "c5"), None)
+    if not c5:
+        return
+    try:
+        c5_rules = json.loads(c5["rules"]) if isinstance(c5["rules"], str) else c5["rules"]
+    except (json.JSONDecodeError, TypeError):
+        c5_rules = {}
+    if c5_rules and c5_rules != {}:
+        return  # already has content
+
+    _emit("[prompt-studio] c5 rules 为空，自动生成 fallback")
+    # Build fallback from c4 rules structure, adapted for comprehensive PPT
+    fallback = {
+        "design_rules": {
+            "typography_spec": {"body_font_size_pt": 18, "title_font_size_pt": 36, "line_height_ratio": 1.2}
+        },
+        "outline_architect_prompt": (
+            f"你是一名专业的{industry_topic}PPT结构架构师。"
+            f"使用金字塔原理为{industry_topic}综合培训PPT设计清晰、逻辑的大纲。"
+            f"应用结论先行、以上统下、归类分组、逻辑递进原则。"
+            f"目标受众：{industry_topic}从业人员。"
+            f"关键信息：管理全景、岗位剖析、流程优化、工具应用、问题诊断。"
+            f"期望页数：12-15页。输出JSON大纲。"
+        ),
+        "cognitive_design_principles": (
+            "应用认知设计原则：信息分块（每页一个观点），图文结合（流程图、表格），"
+            "对比强调（红绿灯标识），故事化引导（案例引入），"
+            f"确保{industry_topic}综合培训流程直观易懂。"
+        )
+    }
+    # If c4 has rules, borrow its structure as template (keep keys, adapt values)
+    if c4:
+        try:
+            c4_rules = json.loads(c4["rules"]) if isinstance(c4["rules"], str) else c4["rules"]
+            if c4_rules and isinstance(c4_rules, dict):
+                # Use c4's structure but adapt for comprehensive
+                if "design_rules" in c4_rules and c4_rules["design_rules"]:
+                    fallback["design_rules"] = c4_rules["design_rules"]
+        except (json.JSONDecodeError, TypeError):
+            pass
+    c5["rules"] = json.dumps(fallback, ensure_ascii=False)
+    _emit(f"[prompt-studio] c5 rules fallback 已设置")
 
 
 def _ensure_row_ids(configs: dict):
