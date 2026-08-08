@@ -15,6 +15,9 @@ import zipfile
 from datetime import datetime, timezone
 
 _EXCLUDE_FIELDS = {"created_at", "updated_at", "workspace_id", "sort_order"}
+
+# Tables that have a workspace_id FK column
+_TABLES_WITH_WS_ID = {"project_categories", "projects", "batch_jobs"}
 _COL_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 _SQLITE_MAX_VARS = 500  # batch size for IN (...) queries, well under SQLite's 999 limit
 
@@ -203,8 +206,9 @@ def _insert_rows(db, table: str, rows: list[dict], id_map: dict, new_ws_id: str,
 
         vals = {c: row.get(c, "") for c in cols}
 
-        # Always set workspace_id — it's excluded from cols but required for child tables
-        vals["workspace_id"] = new_ws_id
+        # Set workspace_id for tables that have this FK (it's stripped by _EXCLUDE_FIELDS during export)
+        if table in _TABLES_WITH_WS_ID:
+            vals["workspace_id"] = new_ws_id
 
         # Remap FK references
         if "project_id" in cols and vals.get("project_id") and vals["project_id"] in id_map:
