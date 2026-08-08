@@ -2,6 +2,15 @@
 
 ## 2026-08-09
 
+- fix: consistent overlay close pattern for ZIP import dialog
+
+## 2026-08-09
+
+- feat: add Enter key support for batch author select dialog
+- chore: rebuild all 3 packages with custom dialogs (8c444e5)
+
+## 2026-08-09
+
 - feat: custom dialogs for batch edit points/author & ZIP import, replace window.prompt & native file picker
 - chore: rebuild all 3 distribution packages with batch edit feature (330671b)
 
