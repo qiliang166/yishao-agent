@@ -332,7 +332,11 @@ RULES:
 - skill field: Output format template in Markdown (~300-1500 chars) with industry-appropriate sections, tables and fields
 - c3 skill: JSON array of page objects. Each has: seq, heading, page_type, optional title_format/subtitle/key_points/description. Allowed page_type values: cover, toc, content, table, chart, diagram, flowchart, closing. Design 5-10 pages whose headings/chapters fit the target industry
 - c4/c5 skill: MUST keep the structure "chapter table (章节 | page_type | 页数 | 说明) + output format instructions", but ALL chapter names and content descriptions must be redesigned for the target industry (do NOT reuse chapters from reference configs)
-- c4/c5 rules: JSON string with keys design_rules, outline_architect_prompt, cognitive_design_principles (industry-adapted content). Other slots rules="{{}}"
+- c4 rules: JSON string with keys design_rules, outline_architect_prompt, cognitive_design_principles (industry-adapted content). Non-empty.
+- c5 rules: JSON string with keys design_rules, outline_architect_prompt, cognitive_design_principles (industry-adapted content). Non-empty.
+- c1/c2/c3 rules: "{{}}" only (no design rules needed for non-PPT slots).
+
+CRITICAL: c4 and c5 MUST both have non-empty rules. This is the #1 quality issue to avoid.
 
 Output ONLY this JSON structure:
 {{"column_configs": [{{"slot": "c1_text", "column_id": "col1", "label": "...", "prompt": "...", "skill": "...", "has_template": 0, "template_path": null, "rules": "{{}}"}}, ... (9 entries total, one per slot)]}}"""
