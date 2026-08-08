@@ -45,9 +45,18 @@ This software is provided "as is", without warranty of any kind.
 "@ | Out-File -FilePath $licenseFile -Encoding UTF8
 }
 
-# Check for makensis
-$nsis = Get-Command makensis -ErrorAction SilentlyContinue
-if (-not $nsis) {
+# Check for makensis (PATH first, then default install locations)
+$makensisExe = (Get-Command makensis -ErrorAction SilentlyContinue).Source
+if (-not $makensisExe) {
+    $candidates = @(
+        "C:\Program Files (x86)\NSIS\makensis.exe",
+        "C:\Program Files\NSIS\makensis.exe"
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path $c) { $makensisExe = $c; break }
+    }
+}
+if (-not $makensisExe) {
     Write-Host "  [WARNING] makensis not found. Skipping NSIS installer."
     Write-Host "  Download NSIS: https://nsis.sourceforge.io/Download"
     if ($staged) { Remove-Item $stagingExe -Force -ErrorAction SilentlyContinue }
@@ -57,7 +66,7 @@ if (-not $nsis) {
 # Build the installer
 $installerScript = Join-Path $PSScriptRoot "installer.nsi"
 $nsisArgs = @("/V2", "/DVERSION=$VERSION", $installerScript)
-$result = & makensis @nsisArgs
+$result = & $makensisExe @nsisArgs
 
 # Clean up staging (only if it was a copy, not the original)
 if ($staged) { Remove-Item $stagingExe -Force -ErrorAction SilentlyContinue }

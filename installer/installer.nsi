@@ -1,4 +1,4 @@
-; YishaoAgent — NSIS Installer
+﻿; YishaoAgent — NSIS Installer
 ; Packages the PyInstaller-built portable exe into a proper Windows installer.
 ; Requirements: NSIS 3.x (https://nsis.sourceforge.io)
 
@@ -22,9 +22,6 @@ RequestExecutionLevel admin
 
 ; Allow silent install: /S and /D=<path>
 SilentInstall normal
-
-; Register in 64-bit registry hive (NSIS is 32-bit, redirected by default)
-SetRegView 64
 
 ; ── Interface Settings ──
 !define MUI_ABORTWARNING
@@ -61,6 +58,8 @@ FunctionEnd
 Section "Install"
   ; Machine-wide install: shortcuts go to All Users
   SetShellVarContext all
+  ; Register in 64-bit registry hive (NSIS is 32-bit, redirected by default)
+  SetRegView 64
   SetOutPath "$INSTDIR"
 
   ; Copy the PyInstaller-built portable executable
