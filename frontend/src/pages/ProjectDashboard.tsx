@@ -559,6 +559,30 @@ export default function ProjectDashboard() {
                   {canEditOwn && (
                     <>
                       <button className="btn btn-outline btn-sm" onClick={async () => {
+                        const val = window.prompt('请输入新的下载所需积分（如 0.5）：')
+                        if (val === null) return
+                        const deci = Math.round(parseFloat(val) * 10)
+                        if (isNaN(deci) || deci < 0) { modal.toast('请输入有效的积分值', 'error'); return }
+                        const ids = [...selected]
+                        await Promise.all(ids.map(id => api.updateProject(id, { point_cost_deci: deci })))
+                        loadProjects(page)
+                        setSelected(new Set())
+                        modal.toast(`已批量修改 ${ids.length} 个项目的下载积分为 ${(deci / 10).toFixed(1)}`, 'success')
+                      }}>批量修改积分</button>
+                      <button className="btn btn-outline btn-sm" onClick={async () => {
+                        const opts = authorOptions.map(a => `${a.id}: ${a.name}`).join('\n')
+                        const val = window.prompt(`请输入作者名称：\n\n${opts}`)
+                        if (val === null) return
+                        const match = authorOptions.find(a => a.id === val || a.name === val)
+                        const authorId = match ? match.id : val.trim()
+                        if (!authorId) { modal.toast('请输入有效的作者', 'error'); return }
+                        const ids = [...selected]
+                        await Promise.all(ids.map(id => api.updateProject(id, { author_id: authorId })))
+                        loadProjects(page)
+                        setSelected(new Set())
+                        modal.toast(`已批量修改 ${ids.length} 个项目的作者为 ${match ? match.name : authorId}`, 'success')
+                      }}>批量修改作者</button>
+                      <button className="btn btn-outline btn-sm" onClick={async () => {
                         const ids = [...selected]
                         await Promise.all(ids.map(id => api.updateProject(id, { status: 'completed' })))
                         loadProjects(page)
