@@ -25,6 +25,12 @@ from typing import Optional
 import json
 import logging
 
+# Top-level import so PyInstaller traces it (used inside api_save_slide_images._capture)
+try:
+    from playwright.sync_api import sync_playwright as _pw_sync_playwright
+except ImportError:
+    _pw_sync_playwright = None
+
 # ── Structured logging setup ───────────────────────────────────────
 if getattr(sys, 'frozen', False):
     LOG_FILE = os.path.join(os.path.dirname(sys.executable), "data", "server.log")
@@ -6450,13 +6456,11 @@ async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"
         raise HTTPException(status_code=404, detail="index.html not found")
 
     def _capture():
-        try:
-            from playwright.sync_api import sync_playwright
-        except ImportError:
+        if _pw_sync_playwright is None:
             raise HTTPException(status_code=500, detail="playwright not installed")
 
         saved = []
-        with sync_playwright() as pw:
+        with _pw_sync_playwright() as pw:
             # Try system Chrome/Edge first (no bundled binary needed for desktop EXE)
             browser = None
             for channel in ("chrome", "msedge", None):
