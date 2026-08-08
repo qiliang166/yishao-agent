@@ -2,6 +2,11 @@
 
 ## 2026-08-09
 
+- fix: workspace_id excluded by _EXCLUDE_FIELDS causing NOT NULL constraint on import
+- chore: rebuild all distribution packages (3708282)
+
+## 2026-08-09
+
 - chore: rebuild server packages with dialog overlay fix (834d982)
 
 ## 2026-08-09
