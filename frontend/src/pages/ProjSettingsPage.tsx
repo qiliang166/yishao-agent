@@ -16,7 +16,7 @@ function appendModel(current: string, model: string): string {
 }
 
 const RECOMMENDED_MODELS: Record<string, string[]> = {
-  llm: ['deepseek-chat', 'deepseek-reasoner', 'gpt-4o', 'gpt-4o-mini', 'claude-sonnet-4-6', 'claude-opus-4-7', 'claude-haiku-4-5', 'qwen3-max', 'qwen3-plus', 'glm-4-plus'],
+  llm: ['deepseek-v4-flash', 'deepseek-v4-pro'],
   tts: ['cosyvoice-v3-flash', 'cosyvoice-v3-plus', 'speech-1.0'],
   asr: ['fun-asr', 'qwen3-asr-flash', 'whisper-1'],
   image: ['wanx-v1', 'flux-dev', 'flux-schnell'],
