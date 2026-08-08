@@ -76,6 +76,9 @@ a = Analysis(
         'PIL',
         'numpy',
         're',
+        # HTML → PNG screenshot
+        'playwright',
+        'playwright.sync_api',
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -84,8 +87,6 @@ a = Analysis(
         'torchvision',
         'funasr',
         'modelscope',
-        'playwright',
-        'playwright.sync_api',
         'setuptools',
         'pip',
     ],
