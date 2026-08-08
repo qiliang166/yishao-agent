@@ -262,13 +262,10 @@ async def _llm_call_with_heartbeat(provider_id: str, model: str, system_prompt: 
 
 
 def _build_focused_user_message(ref_configs: dict, industry_topic: str, purpose_description: str,
-                                 target_keys: list, target_desc: str, max_tokens: int,
-                                 ref_max_len: int = 20000) -> str:
+                                 target_keys: list, target_desc: str, max_tokens: int) -> str:
     """Build a user message asking for only a subset of configs, with reference configs preserved."""
     ref_subset = {k: ref_configs.get(k, []) for k in target_keys if k in ref_configs}
     ref_json = json.dumps(ref_subset, ensure_ascii=False, indent=2)
-    if len(ref_json) > ref_max_len:
-        ref_json = ref_json[:ref_max_len] + "\n... (truncated)"
 
     inner = ", ".join(f'"{k}": [...]' for k in target_keys)
     return (
@@ -463,7 +460,7 @@ async def generate_prompts(req: GenerateRequest):
     _emit(f"[prompt-studio] 并行调用 A: column_configs (9条) max_tokens=32768")
     msg_a = _build_focused_user_message(
         ref_configs, req.industry_topic, req.purpose_description,
-        ["column_configs"], "column_configs (9 entries)", 32768, ref_max_len=50000)
+        ["column_configs"], "column_configs (9 entries)", 32768)
 
     _emit(f"[prompt-studio] 并行调用 B: speech+tts (6条) max_tokens=16384")
     msg_b = _build_focused_user_message(
@@ -473,7 +470,7 @@ async def generate_prompts(req: GenerateRequest):
     _emit(f"[prompt-studio] 并行调用 C: core_prompt_configs (25-40条) max_tokens=49152")
     msg_c = _build_focused_user_message(
         ref_configs, req.industry_topic, req.purpose_description,
-        ["core_prompt_configs"], "core_prompt_configs (25-40 entries)", 49152, ref_max_len=35000)
+        ["core_prompt_configs"], "core_prompt_configs (25-40 entries)", 49152)
 
     t_llm = time.time()
     task_a = _llm_call_with_heartbeat(provider_id, model, sys_a, msg_a, 32768, "A")
