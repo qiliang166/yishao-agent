@@ -1136,7 +1136,16 @@ export default function ProjectDashboard() {
             </div>
             <div className="form-group">
               <select className="form-input" value={batchAuthorId} autoFocus
-                onChange={e => setBatchAuthorId(e.target.value)} style={{ fontSize: 13 }}>
+                onChange={e => setBatchAuthorId(e.target.value)} style={{ fontSize: 13 }}
+                onKeyDown={e => { if (e.key === 'Enter') {
+                  const ids = [...selected]
+                  Promise.all(ids.map((id: string) => api.updateProject(id, { author_id: batchAuthorId }))).then(() => {
+                    loadProjects(page); setSelected(new Set())
+                    const name = authorOptions.find(a => a.id === batchAuthorId)?.name || '无署名'
+                    modal.toast(`已批量修改 ${ids.length} 个项目的作者为 ${name}`, 'success')
+                    setShowAuthorDialog(false)
+                  })
+                }}}>
                 <option value="">无署名</option>
                 {authorOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
