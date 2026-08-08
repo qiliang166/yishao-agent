@@ -1,5 +1,10 @@
 ﻿# 更新日志
 
+## 2026-08-09
+
+- feat: custom dialogs for batch edit points/author & ZIP import, replace window.prompt & native file picker
+- chore: rebuild all 3 distribution packages with batch edit feature (330671b)
+
 ## 2026-08-08
 
 - feat: batch edit points & author in project list toolbar
