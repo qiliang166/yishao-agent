@@ -117,8 +117,17 @@ Stop-Process -Name YishaoAgent -Force -ErrorAction SilentlyContinue
 pyinstaller build_temp.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed" }
 
-# Step 3.5: Copy resources & static data next to the EXE (so frozen BASE_DIR = EXE dir works like server)
-Write-Host "[3.5/5] Staging resources alongside the EXE..."
+# Step 3.5: Clean dist stale data, then stage factory resources
+Write-Host "[3.5/5] Cleaning dist and staging factory resources..."
+# Backup KeyGen (built separately, not part of this build)
+$keygenBackup = "$root\dist\YishaoAgent-KeyGen.exe"
+$keygenTemp = "$env:TEMP\YishaoAgent-KeyGen.bak"
+if (Test-Path $keygenBackup) { Copy-Item $keygenBackup $keygenTemp -Force }
+# Remove ALL stale data to prevent dev data leakage
+@("$root\dist\data", "$root\dist\resources", "$root\dist\frontend", "$root\dist\ffmpeg.exe",
+  "$root\dist\CHANGELOG.md", "$root\dist\startup_errors.log") | ForEach-Object {
+    if (Test-Path $_) { Remove-Item $_ -Recurse -Force -ErrorAction SilentlyContinue }
+}
 @{
     "$root\backend\resources" = "$root\dist\resources"
     "$root\backend\data\styles" = "$root\dist\data\styles"
@@ -135,7 +144,9 @@ Write-Host "[3.5/5] Staging resources alongside the EXE..."
     $count = (Get-ChildItem $dst -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
     Write-Host "  Copied: $(Split-Path $src -Leaf) -> $(Resolve-Path $dst -Relative) ($count files)"
 }
-Write-Host "  [OK] Resources staged"
+# Restore KeyGen
+if (Test-Path $keygenTemp) { Copy-Item $keygenTemp $keygenBackup -Force; Remove-Item $keygenTemp -Force }
+Write-Host "  [OK] Factory resources staged"
 
 # Clean up temp spec
 Remove-Item "$root\build_temp.spec" -Force -ErrorAction SilentlyContinue
