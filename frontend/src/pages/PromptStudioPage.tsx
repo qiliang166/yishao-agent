@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { api, LLMProvider } from '../services/api'
+import { api, LLMProvider, notifyNoProvider } from '../services/api'
 import { usePermission } from '../hooks/usePermission'
 import Col3StructureEditor from '../components/Col3StructureEditor'
 
@@ -50,6 +50,7 @@ export default function PromptStudioPage() {
 
   // ── Generation state ──
   const [generating, setGenerating] = useState(false)
+  const [progressLines, setProgressLines] = useState<string[]>([])
   const [configs, setConfigs] = useState<GeneratedConfigs | null>(null)
   const [provider, setProvider] = useState<{ id: string; model: string } | null>(null)
 
@@ -132,6 +133,7 @@ export default function PromptStudioPage() {
 
     api.listProviders().then(list => {
       setProviders(list)
+      if (!list || list.length === 0) notifyNoProvider()
       const savedPid = localStorage.getItem(DRAFT_KEY) ? JSON.parse(localStorage.getItem(DRAFT_KEY)!).selProviderId : ''
       const savedModel = localStorage.getItem(DRAFT_KEY) ? JSON.parse(localStorage.getItem(DRAFT_KEY)!).selModel : ''
       if (savedPid && list.find(p => p.id === savedPid && p.is_enabled)) {
@@ -198,6 +200,19 @@ export default function PromptStudioPage() {
     const p = providers.find(x => x.id === selProviderId)
     return _parseModels(p)
   })()
+
+  // ── Poll progress during generation ──
+  useEffect(() => {
+    if (!generating) return
+    setProgressLines([])
+    const timer = setInterval(async () => {
+      try {
+        const res = await api.getPromptStudioProgress()
+        if (res?.lines) setProgressLines(res.lines)
+      } catch {}
+    }, 2000)
+    return () => clearInterval(timer)
+  }, [generating])
 
   // ── Generate ──
   const handleGenerate = async () => {
@@ -694,14 +709,32 @@ export default function PromptStudioPage() {
           </div>
 
           {canManagePrompt && (
-          <button
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={generating || !industryTopic.trim() || !purposeDesc.trim() || !selProviderId || !selModel}
-            style={{ width: '100%', marginBottom: 8 }}
-          >
-            {generating ? '生成中...' : '生成全部配置'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button
+              className="btn btn-primary"
+              onClick={handleGenerate}
+              disabled={generating || !industryTopic.trim() || !purposeDesc.trim() || !selProviderId || !selModel}
+              style={{ flex: 1 }}
+            >
+              {generating ? '生成中...' : '生成全部配置'}
+            </button>
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setIndustryTopic('')
+                setPurposeDesc('')
+                setRefWorkspaceId('')
+                setConfigs(null)
+                setProgressLines([])
+                localStorage.removeItem(DRAFT_KEY)
+                toast('已清空')
+              }}
+              disabled={generating}
+              style={{ flex: 'none' }}
+            >
+              清空
+            </button>
+          </div>
           )}
 
           <div className="form-hint">
@@ -769,9 +802,19 @@ export default function PromptStudioPage() {
         )}
 
         {generating && (
-          <div className="card" style={{ padding: 60, textAlign: 'center' }}>
-            <div className="spinner" style={{ margin: '0 auto 16px' }} />
-            <div className="card-title">正在生成全部配置，请稍候...</div>
+          <div className="card" style={{ padding: 16 }}>
+            <div style={{
+              background: '#1e1e1e', color: '#d4d4d4', fontFamily: 'Consolas, monospace',
+              fontSize: 12, padding: 12, borderRadius: 6, maxHeight: 300, overflowY: 'auto',
+              lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+            }}>
+              {progressLines.length > 0
+                ? progressLines.map((line, i) => <div key={i}>{line}</div>)
+                : <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div className="spinner" /><span>正在生成全部配置，请稍候...</span>
+                  </div>
+              }
+            </div>
           </div>
         )}
 

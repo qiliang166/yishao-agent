@@ -15,17 +15,8 @@ export function setOnNoProvider(fn: (() => void) | null) {
   _onNoProvider = fn
 }
 
-async function ensureProvider(): Promise<boolean> {
-  try {
-    const data = await request('/api/llm/providers')
-    const list = (data as any).providers
-    if (list && list.length > 0) return true
-    _onNoProvider?.()
-    return false
-  } catch {
-    _onNoProvider?.()
-    return false
-  }
+export function notifyNoProvider() {
+  _onNoProvider?.()
 }
 
 function getAuthHeaders(): Record<string, string> {
@@ -521,26 +512,25 @@ export const api = {
     negative_prompt?: string; prompt_extend?: boolean; watermark?: boolean; seed?: number;
     reference_images?: string[];
   }) =>
-    ensureProvider().then(ok => ok ? request('/api/image/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }) : Promise.reject(new Error('请先配置大模型'))),
+    request('/api/image/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
 
   // LLM calls
   llmGenerate: (data: {
     provider_id: string; model: string; system_prompt: string;
     user_message: string; temperature?: number; signal?: AbortSignal
   }) =>
-    ensureProvider().then(ok => ok ? request('/api/llm/generate', {
+    request('/api/llm/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
       signal: data.signal,
       timeoutMs: 0,
-    }) : Promise.reject(new Error('请先配置大模型'))),
+    }),
   // LLM streaming generate (SSE)
   llmGenerateStream: async function* (data: {
     provider_id: string; model: string; system_prompt: string;
     user_message: string; temperature?: number; signal?: AbortSignal
   }): AsyncGenerator<string, void, unknown> {
-    if (!await ensureProvider()) throw new Error('请先配置大模型')
     const res = await fetch('/api/llm/generate-stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -581,11 +571,11 @@ export const api = {
     provider_id: string; model: string; instruction: string;
     selected_text: string; full_context?: string
   }) =>
-    ensureProvider().then(ok => ok ? request('/api/llm/refine', {
+    request('/api/llm/refine', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    }) : Promise.reject(new Error('请先配置大模型'))),
+    }),
 
   // Site config (from activation server)
   getSiteConfig: () => request('/api/site-config').then(d => d as {
@@ -766,18 +756,18 @@ export const api = {
 
   // PPT
   generateOutline: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempOutline?: number, tempKeyword?: number, tempResearch?: number, tempFill?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, projectId?: string) =>
-    ensureProvider().then(ok => ok ? request('/api/ppt/outline', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 1200000, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', project_id: projectId || null, temperature: temperature ?? 0.3, temp_outline: tempOutline || 0, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_fill: tempFill || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal })
-      .then(d => d as { outline_json: any[]; outline_text: string }) : Promise.reject(new Error('请先配置大模型'))),
+    request('/api/ppt/outline', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 1200000, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', project_id: projectId || null, temperature: temperature ?? 0.3, temp_outline: tempOutline || 0, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_fill: tempFill || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal })
+      .then(d => d as { outline_json: any[]; outline_text: string }),
 
   convertOutlineToJson: (text: string, originalJson: any[], providerId: string, model: string) =>
     request('/api/ppt/outline/convert', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 120000, body: JSON.stringify({content: text, slide_plan: originalJson, provider_id: providerId, model: model}) })
       .then(d => d as { outline_json: any[] }),
 
   generatePPTPlan: (content: string, templateId?: string, providerId?: string, model?: string, columnId?: string, signal?: AbortSignal, temperature?: number, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number) =>
-    ensureProvider().then(ok => ok ? request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 1200000, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal }) : Promise.reject(new Error('请先配置大模型'))),
+    request('/api/ppt/plan', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 1200000, body: JSON.stringify({content, template_id: templateId || '', provider_id: providerId || '', model: model || '', column_id: columnId || 'col4', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0}), signal }),
 
   generatePPT: (content: string, templateId?: string, branding?: Record<string, string>, projectId?: string, providerId?: string, model?: string, slidePlan?: any[], signal?: AbortSignal, columnId?: string, colorScheme?: string, temperature?: number, tempKeyword?: number, tempResearch?: number, tempOutline?: number, tempFill?: number, tempCards?: number, tempHtml?: number, tempSvgBatch?: number, tempSvgSingle?: number, tempReview?: number, tempFix?: number, tempHolistic?: number, tempHolisticFix?: number, tempStageOutline?: number, tempStageGeneration?: number, tempStageReview?: number, forceRegenerate?: boolean) =>
-    ensureProvider().then(ok => ok ? request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 1200000, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null, column_id: columnId || '', color_scheme: colorScheme || 'deep-blue', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_svg_batch: tempSvgBatch || 0, temp_svg_single: tempSvgSingle || 0, temp_review: tempReview || 0, temp_fix: tempFix || 0, temp_holistic: tempHolistic || 0, temp_holistic_fix: tempHolisticFix || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0, force_regenerate: forceRegenerate || false}), signal }) : Promise.reject(new Error('请先配置大模型'))),
+    request('/api/ppt/generate', { method: 'POST', headers: {'Content-Type': 'application/json'}, timeoutMs: 1200000, body: JSON.stringify({content, template_id: templateId || '', branding, project_id: projectId || null, provider_id: providerId || '', model: model || '', slide_plan: slidePlan || null, column_id: columnId || '', color_scheme: colorScheme || 'deep-blue', temperature: temperature ?? 0.3, temp_keyword: tempKeyword || 0, temp_research: tempResearch || 0, temp_outline: tempOutline || 0, temp_fill: tempFill || 0, temp_cards: tempCards || 0, temp_html: tempHtml || 0, temp_svg_batch: tempSvgBatch || 0, temp_svg_single: tempSvgSingle || 0, temp_review: tempReview || 0, temp_fix: tempFix || 0, temp_holistic: tempHolistic || 0, temp_holistic_fix: tempHolisticFix || 0, temp_stage_outline: tempStageOutline || 0, temp_stage_generation: tempStageGeneration || 0, temp_stage_review: tempStageReview || 0, force_regenerate: forceRegenerate || false}), signal }),
 
   // PPT Styles (17 PPT-Agent YAML styles)
   listStyles: () => request('/api/ppt/styles').then(d => d.styles as StyleItem[]),
@@ -1177,12 +1167,14 @@ export const api = {
   getDefaultProvider: () =>
     request('/api/prompt-studio/default-provider').then(d => d as { provider_id: string; model: string; name: string; available: boolean }),
   generatePrompts: (data: { industry_topic: string; purpose_description: string; reference_workspace_id?: string; provider_id?: string; model?: string }) =>
-    ensureProvider().then(ok => ok ? request('/api/prompt-studio/generate', {
+    request('/api/prompt-studio/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
       timeoutMs: 300000,
-    }).then(d => d as { configs: Record<string, any[]>; provider: { id: string; model: string } }) : Promise.reject(new Error('请先配置大模型'))),
+    }).then(d => d as { configs: Record<string, any[]>; provider: { id: string; model: string } }),
+  getPromptStudioProgress: () =>
+    request('/api/prompt-studio/generate-progress').then(d => d as { lines: string[] }),
   applyPrompts: (data: { workspace_id: string; configs: Record<string, any[]> }) =>
     request('/api/prompt-studio/apply', {
       method: 'POST',

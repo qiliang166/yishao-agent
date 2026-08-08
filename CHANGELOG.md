@@ -1,5 +1,67 @@
 ﻿# 更新日志
 
+## 2026-08-08
+
+- fix: move playwright from excludes to hiddenimports, use top-level import
+
+## 2026-08-08
+
+- fix: move playwright.sync_api import to module top-level for PyInstaller traceability
+- fix: add playwright.sync_api to hiddenimports for desktop EXE
+
+## 2026-08-08
+
+- fix: slide image save uses system Chrome/Edge browser, 4K resolution
+
+## 2026-08-08
+
+- fix: exclude data/debug/ from PyInstaller hiddenimports + fix IndentationError in ppt_service.py
+
+## 2026-08-08
+
+- fix: add column_id subdirectory to last_system_prompt.txt debug path for tab isolation
+
+## 2026-08-08
+
+- debug: add diagnostic logging for structural page code-fill path tracing
+
+## 2026-08-08
+
+- fix: _t() dead default parameter + force_regenerate NameError
+- fix: batch PPT pipeline missing project_id in _stage2_structure() call
+
+## 2026-08-08
+
+- fix: batch progress bar invisible — increase height 4→8px, darker track, add % text in header
+
+## 2026-08-08
+
+- fix: use _sched.set_jwt_secret() instead of undefined set_jwt_secret in startup event
+
+## 2026-08-07
+
+- fix: unify scheduler import path — desktop_main.py and app.py must use same 'batch.scheduler' module name to avoid dual-instance JWT/port mismatch
+
+## 2026-08-07
+
+- fix: desktop EXE fixes — ffmpeg _MEIPASS fallback, SSL certifi, JWT secret sync, textarea overflow
+
+## 2026-08-07
+
+- fix: add frozen BASE_DIR handling to all remaining files that used __file__
+
+## 2026-08-07
+
+- fix: add _MEIPASS fallback for portable EXE when external resources not found
+- fix: unify frozen BASE_DIR to os.path.dirname(sys.executable) across all services
+- fix: PPT_CACHE_DIR and EXPORT_DIR now use writable path in frozen mode
+- fix: svg_designer.py BASE_DIR frozen mode + project-based output naming
+
+## 2026-08-07
+
+- fix: ppt_service.py BASE_DIR now handles PyInstaller frozen mode
+- build: EXE with PPT-TRACE-v2 print-based debugging, commit 1ced68d
+
 ## 2026-08-07
 
 - fix: BUILD-MARKER + PPT-TRACE-v2 using print() for frozen EXE debugging

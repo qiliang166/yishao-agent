@@ -9,9 +9,13 @@
 - 应用 = 原子替换目标工作区全部配置；id 由服务端生成，杜绝跨工作区主键冲突
 """
 
+import asyncio
 import json
+import logging
 import os
+import re
 import sys
+import time
 import uuid
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
@@ -19,7 +23,17 @@ from pydantic import BaseModel
 from database import get_db
 from services.llm_service import generate
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/prompt-studio")
+
+# In-memory progress lines for frontend polling
+_progress: list[str] = []
+
+
+def _emit(msg: str):
+    """Log and store a progress message for the frontend to poll."""
+    logger.info(msg)
+    _progress.append(msg)
 
 # ── Template directory ──
 
@@ -30,6 +44,7 @@ if getattr(sys, 'frozen', False):
 else:
     _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _TEMPLATES_DIR = os.path.join(_BASE_DIR, "resources", "prompts", "prompt_studio")
+_DEBUG_DIR = os.path.join(_BASE_DIR, "data", "debug")
 
 VALID_TEMPLATES = {"system_prompt", "user_message"}
 
@@ -142,20 +157,6 @@ def _build_system_prompt(ref_configs: dict, industry_topic: str, purpose_descrip
             .replace("{{ref_summary}}", "\n".join(ref_summary_parts)))
 
 
-def _build_user_message(ref_configs: dict, industry_topic: str, purpose_description: str) -> str:
-    """Build the user message from the editable template file."""
-    ref_json = json.dumps(ref_configs, ensure_ascii=False, indent=2)
-    max_ref_len = 30000
-    if len(ref_json) > max_ref_len:
-        ref_json = ref_json[:max_ref_len] + "\n... (truncated)"
-
-    template = _load_prompt_template("user_message")
-    return (template
-            .replace("{{industry_topic}}", industry_topic)
-            .replace("{{purpose_description}}", purpose_description)
-            .replace("{{ref_json}}", ref_json))
-
-
 # ── Template management endpoints ──
 
 
@@ -190,6 +191,12 @@ def update_template(name: str, req: UpdateTemplateRequest):
 # ── LLM generation endpoints ──
 
 
+@router.get("/generate-progress")
+def get_generate_progress():
+    """Polled by frontend during generation to show live progress."""
+    return {"lines": list(_progress)}
+
+
 @router.get("/default-provider")
 def get_default_provider():
     """Return the first enabled LLM provider for the frontend to pre-select."""
@@ -211,13 +218,199 @@ def get_default_provider():
         db.close()
 
 
+def _build_user_message(ref_configs: dict, industry_topic: str, purpose_description: str) -> str:
+    """Build the user message from the editable template file."""
+    ref_json = json.dumps(ref_configs, ensure_ascii=False, indent=2)
+    max_ref_len = 30000
+    if len(ref_json) > max_ref_len:
+        ref_json = ref_json[:max_ref_len] + "\n... (truncated)"
+
+    template = _load_prompt_template("user_message")
+    return (template
+            .replace("{{industry_topic}}", industry_topic)
+            .replace("{{purpose_description}}", purpose_description)
+            .replace("{{ref_json}}", ref_json))
+
+
+async def _llm_call_with_heartbeat(provider_id: str, model: str, system_prompt: str,
+                                    user_message: str, max_tokens: int, label: str = "") -> str:
+    """Call LLM with a heartbeat that logs every 8s so the user can see it's alive."""
+    tag = f"[{label}] " if label else ""
+    heartbeat_running = True
+
+    async def _heartbeat():
+        while heartbeat_running:
+            await asyncio.sleep(8)
+            if heartbeat_running:
+                _emit(f"[prompt-studio] {tag}等待 LLM 响应中...")
+
+    heartbeat_task = asyncio.create_task(_heartbeat())
+    try:
+        raw = await generate(
+            provider_id=provider_id,
+            model=model,
+            system_prompt=system_prompt,
+            user_message=user_message,
+            temperature=0.7,
+            json_mode=True,
+            max_tokens=max_tokens,
+        )
+    finally:
+        heartbeat_running = False
+        heartbeat_task.cancel()
+    return raw
+
+
+def _build_focused_user_message(ref_configs: dict, industry_topic: str, purpose_description: str,
+                                 target_keys: list, target_desc: str, max_tokens: int) -> str:
+    """Build a user message asking for only a subset of configs, with reference configs preserved."""
+    ref_subset = {k: ref_configs.get(k, []) for k in target_keys if k in ref_configs}
+    ref_json = json.dumps(ref_subset, ensure_ascii=False, indent=2)
+    max_ref_len = 20000
+    if len(ref_json) > max_ref_len:
+        ref_json = ref_json[:max_ref_len] + "\n... (truncated)"
+
+    inner = ", ".join(f'"{k}": [...]' for k in target_keys)
+    return (
+        f"Generate ONLY {target_desc} for:\n"
+        f"Industry/Topic: {industry_topic}\n"
+        f"Purpose/Use Case: {purpose_description}\n\n"
+        f"Reference configs (format/depth reference only, do NOT copy content):\n"
+        f"```json\n{ref_json}\n```\n\n"
+        f"Output ONLY this JSON structure:\n{{{inner}}}\n\n"
+        f"No markdown code blocks, no explanations. Every prompt and skill field must be non-empty."
+    )
+
+
+# ── Specialized system prompts (partitioned from system_prompt.md by call responsibility) ──
+# Each preserves full precision — no rules are deleted, only partitioned to avoid duplication.
+
+_COMMON_PROMPT = """You are a prompt engineering expert. Generate AI prompt configurations for a content generation platform.
+
+Platform: multi-stage training-content generation system (works for ANY industry):
+- Stage 1: Raw material input → AI organizes and structures
+- Stage 2: Structured content → THREE full training documents (standard / analysis / comprehensive)
+- Stage 3: Training document → Slide outline (JSON) for PPT generation
+- Stage 4: Slide outline → Full PPT with HTML/SVG slides
+- Stage 5: PPT → Speech script → TTS voice synthesis
+
+CRITICAL ADAPTATION RULES:
+1. Format skeleton stays, industry semantics change — keep all JSON structures, field names, data schemas, and fixed labels unchanged
+2. Redesign for target industry: ALL role definitions (expert OF THE TARGET INDUSTRY), chapter names, section names, table columns, record fields, examples
+3. Do NOT copy any industry-specific concept from reference configs — reference shows FORMAT and DEPTH, not content
+
+Output ONLY valid JSON. No markdown code blocks, no explanations. Every prompt and skill field must be non-empty."""
+
+
+def _build_column_system_prompt(industry_topic: str, purpose_description: str) -> str:
+    return _COMMON_PROMPT + f"""
+
+Target Industry: {industry_topic}
+Purpose: {purpose_description}
+
+## column_configs (EXACTLY 9 entries — one per slot)
+Each entry has: slot, column_id, label, prompt, skill, has_template(=0), template_path(=null), rules(JSON string)
+
+The frontend consumes these by fixed position. You MUST generate all 9 slots:
+
+| slot | column_id | purpose | label rule |
+|------|-----------|---------|------------|
+| c1_text | col1 | Stage 1 — organize raw TEXT input | industry-appropriate |
+| c1_video | col1 | Stage 1 — organize content from VIDEO | industry-appropriate |
+| c1_file | col1 | Stage 1 — organize content from UPLOADED FILE | industry-appropriate |
+| c2_sop | col2 | Stage 2 — STANDARD document: normative/procedural | industry-appropriate |
+| c2_dao | col2 | Stage 2 — ANALYSIS document: principles + methods (why & how) | industry-appropriate |
+| c2_yanxi | col2 | Stage 2 — COMPREHENSIVE document: study handbook (background + principles + practice) | industry-appropriate |
+| c3 | col3 | Stage 3 — document → slide outline JSON | label MUST be exactly 文档课件 |
+| c4 | col4 | Stage 4 — analysis-style PPT generation | label MUST be exactly 分析PPT |
+| c5 | col5 | Stage 4 — comprehensive-style PPT generation | label MUST be exactly 综合PPT |
+
+RULES:
+- c1_* share the same output skill template (industry-appropriate structured note format) but differ in prompt (text vs video vs file source handling)
+- c2_* define THREE DIFFERENT document types. Design what "standard / analysis / comprehensive" means FOR THIS INDUSTRY
+- prompt field: Role definition + task instructions (~200-500 chars). Role must be an expert OF THE TARGET INDUSTRY
+- skill field: Output format template in Markdown (~300-1500 chars) with industry-appropriate sections, tables and fields
+- c3 skill: JSON array of page objects. Each has: seq, heading, page_type, optional title_format/subtitle/key_points/description. Allowed page_type values: cover, toc, content, table, chart, diagram, flowchart, closing. Design 5-10 pages whose headings/chapters fit the target industry
+- c4/c5 skill: MUST keep the structure "chapter table (章节 | page_type | 页数 | 说明) + output format instructions", but ALL chapter names and content descriptions must be redesigned for the target industry (do NOT reuse chapters from reference configs)
+- c4/c5 rules: JSON string with keys design_rules, outline_architect_prompt, cognitive_design_principles (industry-adapted content). Other slots rules="{{}}"
+
+Output ONLY this JSON structure:
+{{"column_configs": [{{"slot": "c1_text", "column_id": "col1", "label": "...", "prompt": "...", "skill": "...", "has_template": 0, "template_path": null, "rules": "{{}}"}}, ... (9 entries total, one per slot)]}}"""
+
+
+def _build_speech_tts_system_prompt(industry_topic: str, purpose_description: str) -> str:
+    return _COMMON_PROMPT + f"""
+
+Target Industry: {industry_topic}
+Purpose: {purpose_description}
+
+## speech_configs (EXACTLY 3 entries)
+Each entry has: label, prompt, skill
+- labels MUST be exactly: 文档演讲, 分析演讲, 综合演讲 (the frontend matches by these labels — do NOT rename)
+- prompt: speech-script-writing role & instructions for the corresponding document type, industry-adapted
+- skill: output format template for the speech script
+- 文档演讲 ↔ standard document (c2_sop), 分析演讲 ↔ analysis document (c2_dao), 综合演讲 ↔ comprehensive document (c2_yanxi)
+
+## tts_configs (EXACTLY 3 entries)
+Each entry has: label, prompt, skill (ALL fields must be non-empty)
+- labels MUST be exactly: 文档语音, 分析语音, 综合语音 (do NOT rename)
+- prompt: TTS voice style instructions (tone, pace, emphasis) suited to the industry content (~100-300 chars)
+- skill: TTS output format specification describing the voice output structure (~100-300 chars, MUST be non-empty)
+
+Output ONLY this JSON structure:
+{{"speech_configs": [{{"label": "文档演讲", "prompt": "...", "skill": "..."}}, {{"label": "分析演讲", "prompt": "...", "skill": "..."}}, {{"label": "综合演讲", "prompt": "...", "skill": "..."}}], "tts_configs": [{{"label": "文档语音", "prompt": "...", "skill": "..."}}, {{"label": "分析语音", "prompt": "...", "skill": "..."}}, {{"label": "综合语音", "prompt": "...", "skill": "..."}}]}}"""
+
+
+def _build_core_system_prompt(industry_topic: str, purpose_description: str) -> str:
+    return _COMMON_PROMPT + f"""
+
+Target Industry: {industry_topic}
+Purpose: {purpose_description}
+
+## core_prompt_configs (25-40 entries)
+Each entry has: prompt_key (unique), category, label, content, stage
+- Categories: root, always, by_type, by_feature, by_layout
+- Stages: stage1-outline, stage2-structure, stage3-html, aux
+- prompt_key uses "/" hierarchy: e.g. "always/language", "by_type/cover"
+- These are modular prompt fragments assembled during PPT generation
+- content: ~100-500 chars per fragment
+
+MANDATORY root prompt_keys (must ALWAYS be included, with content adapted to target industry):
+- research — Stage 1 research/analysis system prompt
+- outline-rules — Stage 3 outline extraction rules
+- fill-content — Stage 1 body fill system prompt (PPT slide content filling)
+- fill-user — Stage 1 body fill user prompt (configurable body fill instructions, MUST include body_rule handling)
+- text-to-json — Stage 1 text-to-JSON conversion prompt
+- structure-output — Stage 3 structure output format spec
+- html-output — Stage 3 HTML generation output spec
+- cards-system — Stage 3 cards subsystem prompt
+
+MUST REDESIGN FOR THE TARGET INDUSTRY (industry semantics):
+- ALL role definitions (no cooking/culinary roles unless the target industry is culinary)
+- ALL chapter names, section names, table columns and record fields
+- ALL examples in every content fragment
+- Industry-specific design principles (keep universal design principles as-is)
+
+Output ONLY this JSON structure:
+{{"core_prompt_configs": [{{"prompt_key": "always/language", "category": "always", "label": "...", "content": "...", "stage": "stage3-html"}}, ... (25-40 entries total, all 8 mandatory keys included)]}}"""
+
+
 @router.post("/generate")
 async def generate_prompts(req: GenerateRequest):
-    """Generate all prompt configs for a given industry topic + purpose."""
+    """Generate all prompt configs via 3 parallel LLM calls with specialized prompts.
+
+    Each call gets a dedicated system prompt containing only the schema it
+    needs — full precision, zero duplication. Reference configs preserved.
+    """
+    _progress.clear()
+    t_start = time.time()
+    _emit(f"[prompt-studio] === 开始生成 (3路并行) === topic={req.industry_topic!r}")
+
     db = get_db()
     try:
         ref_ws = req.reference_workspace_id.strip() if req.reference_workspace_id else ""
         ref_configs = _serialize_configs(db, ref_ws if ref_ws else None)
+        _emit(f"[prompt-studio] 参考配置加载完成 workspace={ref_ws or '(seed)'}")
     finally:
         db.close()
 
@@ -243,29 +436,109 @@ async def generate_prompts(req: GenerateRequest):
             if not models:
                 raise HTTPException(400, "LLM 提供商没有配置模型")
             model = models[0]
+        _emit(f"[prompt-studio] 提供商 provider={provider_row['name']} model={model}")
     finally:
         db2.close()
 
-    system_prompt = _build_system_prompt(ref_configs, req.industry_topic, req.purpose_description)
-    user_message = _build_user_message(ref_configs, req.industry_topic, req.purpose_description)
+    # Build 3 specialized system prompts (partitioned, full precision)
+    sys_a = _build_column_system_prompt(req.industry_topic, req.purpose_description)
+    sys_b = _build_speech_tts_system_prompt(req.industry_topic, req.purpose_description)
+    sys_c = _build_core_system_prompt(req.industry_topic, req.purpose_description)
+    _emit(f"[prompt-studio] 专用提示词 A={len(sys_a)}chars B={len(sys_b)}chars C={len(sys_c)}chars")
+
+    # Write debug prompts
+    os.makedirs(_DEBUG_DIR, exist_ok=True)
+    for tag, text in [("A_column", sys_a), ("B_speech_tts", sys_b), ("C_core", sys_c)]:
+        try:
+            with open(os.path.join(_DEBUG_DIR, f"ps_last_system_prompt_{tag}.txt"), "w", encoding="utf-8") as f:
+                f.write(text)
+        except Exception:
+            pass
+
+    # ── 3 parallel LLM calls ──
+    _emit(f"[prompt-studio] 并行调用 A: column_configs (9条) max_tokens=32768")
+    msg_a = _build_focused_user_message(
+        ref_configs, req.industry_topic, req.purpose_description,
+        ["column_configs"], "column_configs (9 entries)", 32768)
+
+    _emit(f"[prompt-studio] 并行调用 B: speech+tts (6条) max_tokens=16384")
+    msg_b = _build_focused_user_message(
+        ref_configs, req.industry_topic, req.purpose_description,
+        ["speech_configs", "tts_configs"], "speech_configs (3) + tts_configs (3)", 16384)
+
+    _emit(f"[prompt-studio] 并行调用 C: core_prompt_configs (25-40条) max_tokens=49152")
+    msg_c = _build_focused_user_message(
+        ref_configs, req.industry_topic, req.purpose_description,
+        ["core_prompt_configs"], "core_prompt_configs (25-40 entries)", 49152)
+
+    t_llm = time.time()
+    task_a = _llm_call_with_heartbeat(provider_id, model, sys_a, msg_a, 32768, "A")
+    task_b = _llm_call_with_heartbeat(provider_id, model, sys_b, msg_b, 16384, "B")
+    task_c = _llm_call_with_heartbeat(provider_id, model, sys_c, msg_c, 49152, "C")
 
     try:
-        raw = await generate(
-            provider_id=provider_id,
-            model=model,
-            system_prompt=system_prompt,
-            user_message=user_message,
-            temperature=0.7,
-            json_mode=True,
-            max_tokens=65536,
-        )
+        raw_a, raw_b, raw_c = await asyncio.gather(task_a, task_b, task_c)
     except Exception as e:
+        _emit(f"[prompt-studio] LLM 调用失败: {e}")
         raise HTTPException(500, f"LLM 调用失败: {str(e)}")
 
-    configs = _parse_llm_response(raw)
-    _validate_configs(configs)
+    t_llm_end = time.time()
+    _emit(f"[prompt-studio] 三路返回 A={len(raw_a)}chars B={len(raw_b)}chars C={len(raw_c)}chars 总耗时={t_llm_end - t_llm:.1f}s")
+
+    # Write debug responses
+    for tag, raw in [("A", raw_a), ("B", raw_b), ("C", raw_c)]:
+        try:
+            with open(os.path.join(_DEBUG_DIR, f"ps_last_response_{tag}.txt"), "w", encoding="utf-8") as f:
+                f.write(raw)
+        except Exception:
+            pass
+        if not raw.strip().endswith("}"):
+            last_brace = raw.rfind("}")
+            _emit(f"[prompt-studio] 响应{tag} 未以 '}}' 结尾（可能被截断），最后 '}}' 在位置 {last_brace}/{len(raw)}")
+
+    # Parse each response
+    try:
+        configs_a = _parse_llm_response(raw_a)
+    except HTTPException:
+        _emit(f"[prompt-studio] 响应A JSON 解析失败 raw_len={len(raw_a)}")
+        raise
+    _emit(f"[prompt-studio] 响应A JSON 解析成功")
+
+    try:
+        configs_b = _parse_llm_response(raw_b)
+    except HTTPException:
+        _emit(f"[prompt-studio] 响应B JSON 解析失败 raw_len={len(raw_b)}")
+        raise
+    _emit(f"[prompt-studio] 响应B JSON 解析成功")
+
+    try:
+        configs_c = _parse_llm_response(raw_c)
+    except HTTPException:
+        _emit(f"[prompt-studio] 响应C JSON 解析失败 raw_len={len(raw_c)}")
+        raise
+    _emit(f"[prompt-studio] 响应C JSON 解析成功")
+
+    # Merge results from 3 calls
+    configs = {}
+    configs["column_configs"] = configs_a.get("column_configs", [])
+    configs["speech_configs"] = configs_b.get("speech_configs", [])
+    configs["tts_configs"] = configs_b.get("tts_configs", [])
+    configs["core_prompt_configs"] = configs_c.get("core_prompt_configs", [])
+    _emit(f"[prompt-studio] 合并完成")
+
+    try:
+        _validate_configs(configs)
+    except HTTPException as e:
+        _emit(f"[prompt-studio] 配置校验失败: {e.detail}")
+        raise
+    _emit(f"[prompt-studio] 配置校验通过 column={len(configs.get('column_configs',[]))} "
+          f"speech={len(configs.get('speech_configs',[]))} tts={len(configs.get('tts_configs',[]))} "
+          f"core={len(configs.get('core_prompt_configs',[]))}")
+
     _ensure_row_ids(configs)
 
+    t_total = time.time() - t_start
+    _emit(f"[prompt-studio] === 生成完成 总耗时={t_total:.1f}s ===")
     return {"configs": configs, "provider": {"id": provider_id, "model": model}}
 
 
@@ -297,7 +570,6 @@ def _parse_llm_response(raw: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    import re
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
         try:
