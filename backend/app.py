@@ -6437,7 +6437,7 @@ def api_export_svg_zip(run_id: str):
 
 @app.post("/api/ppt/save-images/{run_id}")
 async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"), download: bool = False):
-    """Render each slide as a 2560x1440 PNG and save to the export directory.
+    """Render each slide as a 3840x2160 (4K) PNG and save to the export directory.
     If download=true, return a zip file instead of JSON."""
     import asyncio
 
@@ -6457,8 +6457,21 @@ async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"
 
         saved = []
         with sync_playwright() as pw:
-            browser = pw.chromium.launch()
-            page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=2)
+            # Try system Chrome/Edge first (no bundled binary needed for desktop EXE)
+            browser = None
+            for channel in ("chrome", "msedge", None):
+                try:
+                    kwargs = {"headless": True}
+                    if channel:
+                        kwargs["channel"] = channel
+                    browser = pw.chromium.launch(**kwargs)
+                    break
+                except Exception:
+                    continue
+            if browser is None:
+                raise HTTPException(status_code=500, detail="no browser found — install Chrome or Edge")
+
+            page = browser.new_page(viewport={"width": 1280, "height": 720}, device_scale_factor=3)
             page.goto("file:///" + html_path.replace("\\", "/"))
             page.wait_for_timeout(500)
 
