@@ -85,6 +85,7 @@ a = Analysis(
         'funasr',
         'modelscope',
         'playwright',
+        'playwright.sync_api',
         'setuptools',
         'pip',
     ],
