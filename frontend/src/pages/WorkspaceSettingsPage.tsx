@@ -152,6 +152,7 @@ export default function WorkspaceSettingsPage() {
   const fileInputFullRef = useRef<HTMLInputElement>(null)
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [importZipFile, setImportZipFile] = useState<File | null>(null)
+  const importOverlayRef = useRef(false)
 
   const loadAll = async () => {
     if (!wid) return
@@ -919,8 +920,8 @@ export default function WorkspaceSettingsPage() {
       {/* Import ZIP Dialog */}
       {showImportDialog && (
         <div className="dialog-overlay"
-          onMouseDown={(e: any) => { if (e.target === e.currentTarget) { setShowImportDialog(false); setImportZipFile(null) } }}
-          onClick={(e: any) => { if (e.target === e.currentTarget) { setShowImportDialog(false); setImportZipFile(null) } }}>
+          onMouseDown={(e: any) => { importOverlayRef.current = e.target === e.currentTarget }}
+          onClick={() => { if (importOverlayRef.current) { setShowImportDialog(false); setImportZipFile(null) } }}>
           <div className="dialog-box" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
             <div className="dialog-title">导入完整数据</div>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 16 }}>
