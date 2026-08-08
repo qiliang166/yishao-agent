@@ -19,13 +19,13 @@ def _discover_backend_modules(root: str) -> list[str]:
     backend_dir = os.path.join(root, "backend")
     modules = []
     for dirpath, dirnames, filenames in os.walk(backend_dir):
-        dirnames[:] = [d for d in dirnames if d not in ("venv", "__pycache__")]
+        dirnames[:] = [d for d in dirnames if d not in ("venv", "__pycache__", "debug")]
         for f in filenames:
             if not f.endswith(".py"):
                 continue
             full = os.path.join(dirpath, f)
             rel = os.path.relpath(full, root).replace("\\", "/")
-            if rel.startswith("venv") or "__pycache__" in rel:
+            if rel.startswith("venv") or "__pycache__" in rel or "data/debug/" in rel:
                 continue
             # backend/routers/prompt_studio.py → backend.routers.prompt_studio
             mod = rel[:-3].replace("/", ".")

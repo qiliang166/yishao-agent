@@ -4358,6 +4358,8 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
             # ── DEBUG: trace structural page template decision ──
             try:
                 _dd = os.path.join(BASE_DIR, "data", "debug", column_id or "unknown")
+                _diag = {
+                    "seq": seq, "stype": stype, "is_a4": is_a4,
                     "column_id": column_id, "vi_cover_len": len(vi_cover) if vi_cover else 0,
                     "has_html_template_header": ("## HTML 模板" in vi_cover) if vi_cover else False,
                     "regex_matched": bool(template_html) if (vi_cover and "## HTML 模板" in vi_cover) else None,
