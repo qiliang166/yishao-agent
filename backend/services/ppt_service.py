@@ -2935,7 +2935,9 @@ def _load_style_prompt(style_id: str, color_scheme: str = "deep-blue") -> str:
             with open(tokens_path, "r", encoding="utf-8") as f:
                 tokens = yaml.safe_load(f.read())
             schemes = tokens.get("color_schemes", {}) if isinstance(tokens, dict) else {}
-            scheme = schemes.get(color_scheme, {})
+            scheme = schemes.get(color_scheme)
+            if not isinstance(scheme, dict) and schemes:
+                scheme = next(iter(schemes.values()), {})
             if isinstance(scheme, dict):
                 hint = scheme.get("persona_hint", "")
                 if hint:
@@ -3137,7 +3139,7 @@ def _load_style_vi_section(style_id: str, section: str, color_scheme: str = "dee
     # ── DEBUG: trace VI file resolution for structural pages ──
     if section in STRUCTURAL_PAGE_TYPES:
         try:
-            _dd = os.path.join(BASE_DIR, "data", "debug")
+            _dd = os.path.join(BASE_DIR, "data", "debug", column_id or "unknown")
             os.makedirs(_dd, exist_ok=True)
             _diag = {
                 "section": section, "style_id": style_id, "column_id": column_id,
@@ -3965,7 +3967,7 @@ def _stage2_structure(provider_id, model, llm_generate, stage1_slides,
     import re as _re_mon3
     struct_hex = len(_re_mon3.findall(r'#[0-9a-fA-F]{6}', system))
     _logger.info(f"[MONITOR] Structure system prompt: {len(system)} chars, hex_count={struct_hex}")
-    debug_dir = os.path.join(BASE_DIR, "data", "debug")
+    debug_dir = os.path.join(BASE_DIR, "data", "debug", column_id or "unknown")
     os.makedirs(debug_dir, exist_ok=True)
     with open(os.path.join(debug_dir, "last_structure_prompt.txt"), "w", encoding="utf-8") as _df3:
         _df3.write(system)
@@ -4355,10 +4357,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                 template_html = _load_slide_template(family, stype) or ""
             # ── DEBUG: trace structural page template decision ──
             try:
-                _dd = os.path.join(BASE_DIR, "data", "debug")
-                os.makedirs(_dd, exist_ok=True)
-                _diag = {
-                    "seq": seq, "stype": stype, "is_a4": is_a4, "style_id": style_id,
+                _dd = os.path.join(BASE_DIR, "data", "debug", column_id or "unknown")
                     "column_id": column_id, "vi_cover_len": len(vi_cover) if vi_cover else 0,
                     "has_html_template_header": ("## HTML 模板" in vi_cover) if vi_cover else False,
                     "regex_matched": bool(template_html) if (vi_cover and "## HTML 模板" in vi_cover) else None,
@@ -4393,7 +4392,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
         else:
             # ── DEBUG: why structural page check was skipped ──
             try:
-                _dd = os.path.join(BASE_DIR, "data", "debug")
+                _dd = os.path.join(BASE_DIR, "data", "debug", column_id or "unknown")
                 os.makedirs(_dd, exist_ok=True)
                 _diag = {
                     "seq": seq, "stype": stype, "is_a4": is_a4,
@@ -4685,7 +4684,7 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                         f"hex_count={hex_count}, colors_md={has_colors_md}, "
                         f"color_semantics_md={has_semantics_md}, var_iron_law={has_var_law}")
             # Dump to file for inspection
-            debug_dir = os.path.join(BASE_DIR, "data", "debug")
+            debug_dir = os.path.join(BASE_DIR, "data", "debug", column_id or "unknown")
             os.makedirs(debug_dir, exist_ok=True)
             with open(os.path.join(debug_dir, "last_system_prompt.txt"), "w", encoding="utf-8") as _df:
                 _df.write(tailored_system)
@@ -6727,8 +6726,7 @@ def _wcag_contrast_ratio(hex1: str, hex2: str) -> float:
 
 STRUCTURAL_PAGE_TYPES = frozenset({"cover", "section", "summary", "closing", "toc"})
 
-TEMPLATE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                             "..", "resources", "templates")
+TEMPLATE_DIR = os.path.join(BASE_DIR, "resources", "templates")
 
 
 def _detect_template_family(style_id: str, scheme_data: dict) -> str:
