@@ -2,6 +2,10 @@
 
 ## 2026-08-09
 
+- chore: rebuild server packages with import fix (940a1cf)
+
+## 2026-08-09
+
 - fix: only set workspace_id for tables that actually have the column
 - chore: rebuild server packages with workspace_id fix (0ab59d8)
 
