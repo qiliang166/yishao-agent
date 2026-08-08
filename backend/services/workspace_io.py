@@ -8,11 +8,37 @@ Import: restore to a new workspace with fresh IDs.
 import io
 import json
 import os
+import re
+import shutil
 import uuid
 import zipfile
 from datetime import datetime, timezone
 
 _EXCLUDE_FIELDS = {"created_at", "updated_at", "workspace_id", "sort_order"}
+_COL_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+
+# Resource limits for import
+_MAX_ZIP_BYTES = 500 * 1024 * 1024      # 500MB compressed
+_MAX_DECOMPRESSED = 2 * 1024 * 1024 * 1024  # 2GB total decompressed
+_MAX_SINGLE_FILE = 100 * 1024 * 1024    # 100MB per extracted file
+
+
+def _validate_cols(columns: list[str]):
+    """Reject column names that don't match [a-zA-Z_][a-zA-Z0-9_]*."""
+    for c in columns:
+        if not _COL_RE.match(c):
+            raise ValueError(f"Invalid column name: {c}")
+
+
+def _safe_extract_path(save_root: str, zip_name: str) -> str:
+    """Resolve target path and validate it stays within save_root."""
+    rel = zip_name[len("files/"):]
+    # Normalize to prevent path traversal via .. segments
+    target = os.path.normpath(os.path.join(save_root, rel.replace("/", os.sep)))
+    save_root_resolved = os.path.normpath(save_root)
+    if os.path.commonpath([target, save_root_resolved]) != save_root_resolved:
+        raise ValueError(f"Path traversal blocked: {zip_name}")
+    return target
 
 
 def _row_dict(row, exclude=None) -> dict:
@@ -21,11 +47,6 @@ def _row_dict(row, exclude=None) -> dict:
     for k in (exclude or _EXCLUDE_FIELDS):
         d.pop(k, None)
     return d
-
-
-def _file_map_key(path: str) -> str:
-    """Normalize path for file_map lookups."""
-    return os.path.normcase(os.path.normpath(path)) if path else ""
 
 
 def _get_save_root(db) -> str:
@@ -53,9 +74,11 @@ def _collect_file_paths(projects_rows, pr_results_rows, save_root: str) -> dict:
         if not abs_path:
             return
         p = os.path.normcase(os.path.normpath(os.path.abspath(abs_path)))
-        if not os.path.exists(p) or not p.startswith(save_root_norm + os.sep):
+        # Validate path stays within save_root
+        if not os.path.exists(p):
             return
-        # Relative path inside the save root → store under files/
+        if os.path.commonpath([p, save_root_norm]) != save_root_norm:
+            return
         rel = os.path.relpath(p, save_root_norm).replace("\\", "/")
         file_map[p] = f"files/{rel}"
 
@@ -82,7 +105,6 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
         raise ValueError(f"Workspace {workspace_id} not found")
 
     ws_meta = _row_dict(ws)
-    # Keep workspace name/description/logo/status for import reference
     for k in ("created_at", "updated_at", "id"):
         ws_meta.pop(k, None)
 
@@ -166,9 +188,58 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
     return buf
 
 
+def _insert_rows(db, table: str, rows: list[dict], id_map: dict, new_ws_id: str,
+                 save_root: str = "", id_map_items: dict = None,
+                 id_map_batch: dict = None) -> dict:
+    """Insert a batch of rows with ID remapping. Validates all column names first.
+
+    On the first row, collects all column names and validates them against _COL_RE.
+    """
+    applied_count = 0
+    seen_cols = set()
+    for row in rows:
+        cols = [c for c in row.keys() if c not in _EXCLUDE_FIELDS]
+        # Validate new columns only
+        new_cols = [c for c in cols if c not in seen_cols]
+        if new_cols:
+            _validate_cols(new_cols)
+            seen_cols.update(new_cols)
+
+        vals = {c: row.get(c, "") for c in cols}
+
+        # Remap FK references
+        if "workspace_id" in cols:
+            vals["workspace_id"] = new_ws_id
+        if "project_id" in cols and vals.get("project_id") and vals["project_id"] in id_map:
+            vals["project_id"] = id_map[vals["project_id"]]
+        if "category_id" in cols and vals.get("category_id") and vals["category_id"] in id_map:
+            vals["category_id"] = id_map[vals["category_id"]]
+        if id_map_items and "source_item_id" in cols and vals.get("source_item_id") and vals["source_item_id"] in id_map_items:
+            vals["source_item_id"] = id_map_items[vals["source_item_id"]]
+        if id_map_batch and "batch_id" in cols and vals.get("batch_id") and vals["batch_id"] in id_map_batch:
+            vals["batch_id"] = id_map_batch[vals["batch_id"]]
+
+        all_cols = list(vals.keys())
+        placeholders = ",".join(["?"] * len(all_cols))
+        db.execute(
+            f"INSERT INTO {table} ({','.join(all_cols)}) VALUES ({placeholders})",
+            list(vals.values()),
+        )
+        applied_count += 1
+    return applied_count
+
+
 def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
     """Import a workspace ZIP and create a new workspace. Returns {ok, workspace_id, applied}."""
+    if len(zip_bytes) > _MAX_ZIP_BYTES:
+        raise ValueError(f"ZIP 文件过大（最大 {_MAX_ZIP_BYTES // (1024*1024)}MB）")
+
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+        # Validate total decompressed size upfront
+        total_size = sum(info.file_size for info in zf.infolist() if not info.is_dir())
+        if total_size > _MAX_DECOMPRESSED:
+            raise ValueError(f"解压后总大小超过限制（最大 {_MAX_DECOMPRESSED // (1024*1024)}MB）")
+
         # Read manifest
         try:
             ws_json_bytes = zf.read("workspace.json")
@@ -187,13 +258,12 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
             if key not in manifest:
                 raise ValueError(f"workspace.json 缺少字段: {key}")
 
-        # Validate configs
         required_tables = ["column_configs", "speech_configs", "tts_configs", "core_prompt_configs"]
         for tbl in required_tables:
             if tbl not in manifest["configs"] or not isinstance(manifest["configs"][tbl], list):
                 raise ValueError(f"configs 缺少必需的数组字段: {tbl}")
 
-    # Phase 1: create the new workspace
+    # Phase 1: create new workspace
     ws_data = manifest["workspace"]
     new_ws_id = uuid.uuid4().hex[:12]
     db.execute(
@@ -208,167 +278,73 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
 
     # Build ID mapping
     id_map = {manifest["source_workspace_id"]: new_ws_id}
-
-    # Map project ids
     for proj in manifest.get("projects", []):
-        new_pid = uuid.uuid4().hex[:12]
-        id_map[proj["id"]] = new_pid
-
-    # Map project_item ids
+        id_map[proj["id"]] = uuid.uuid4().hex[:12]
     for item in manifest.get("project_items", []):
-        new_piid = uuid.uuid4().hex[:12]
-        id_map[item["id"]] = new_piid
-
-    # Map batch_job ids
+        id_map[item["id"]] = uuid.uuid4().hex[:12]
     for bj in manifest.get("batch_jobs", []):
-        new_bid = uuid.uuid4().hex[:12]
-        id_map[bj["id"]] = new_bid
-
-    # Map project_category ids
+        id_map[bj["id"]] = uuid.uuid4().hex[:12]
     for cat in manifest.get("project_categories", []):
-        new_cid = uuid.uuid4().hex[:12]
-        id_map[cat["id"]] = new_cid
+        id_map[cat["id"]] = uuid.uuid4().hex[:12]
 
     save_root = _get_save_root(db)
     applied = {}
 
     try:
-        # Import project categories
-        count = 0
+        # Import project categories (assign fresh IDs)
         for cat in manifest.get("project_categories", []):
-            cols = [c for c in cat.keys() if c not in _EXCLUDE_FIELDS]
-            cat_vals = {c: cat.get(c, "") for c in cols}
-            cat_vals["id"] = id_map.get(cat.get("id"), uuid.uuid4().hex[:12])
-            cat_vals["workspace_id"] = new_ws_id
-            all_cols = list(cat_vals.keys())
-            placeholders = ",".join(["?"] * len(all_cols))
-            db.execute(
-                f"INSERT INTO project_categories ({','.join(all_cols)}) VALUES ({placeholders})",
-                list(cat_vals.values()),
-            )
-            count += 1
-        applied["project_categories"] = count
+            cat["id"] = id_map.get(cat.get("id"), uuid.uuid4().hex[:12])
+        applied["project_categories"] = _insert_rows(
+            db, "project_categories", manifest.get("project_categories", []),
+            id_map, new_ws_id)
 
-        # Import projects
-        count = 0
+        # Import projects (remap storage_path)
         for proj in manifest.get("projects", []):
-            cols = [c for c in proj.keys() if c not in _EXCLUDE_FIELDS]
-            vals = {c: proj.get(c, "") for c in cols}
-            vals["id"] = id_map.get(proj["id"], proj["id"])
-            vals["workspace_id"] = new_ws_id
-            if proj.get("category_id") and proj["category_id"] in id_map:
-                vals["category_id"] = id_map[proj["category_id"]]
-            # Remap storage_path
-            if vals.get("storage_path"):
-                vals["storage_path"] = _remap_path(
-                    proj["storage_path"], save_root, new_ws_id, vals["id"])
-            all_cols = list(vals.keys())
-            placeholders = ",".join(["?"] * len(all_cols))
-            db.execute(
-                f"INSERT INTO projects ({','.join(all_cols)}) VALUES ({placeholders})",
-                list(vals.values()),
-            )
-            count += 1
-        applied["projects"] = count
+            proj["id"] = id_map.get(proj["id"], proj["id"])
+        applied["projects"] = _insert_rows(
+            db, "projects", manifest.get("projects", []), id_map, new_ws_id)
 
         # Import source materials
-        count = 0
-        for sm in manifest.get("source_materials", []):
-            cols = [c for c in sm.keys() if c not in _EXCLUDE_FIELDS]
-            vals = {c: sm.get(c, "") for c in cols}
-            vals["id"] = uuid.uuid4().hex[:12]
-            if sm.get("project_id") and sm["project_id"] in id_map:
-                vals["project_id"] = id_map[sm["project_id"]]
-            all_cols = list(vals.keys())
-            placeholders = ",".join(["?"] * len(all_cols))
-            db.execute(
-                f"INSERT INTO source_materials ({','.join(all_cols)}) VALUES ({placeholders})",
-                list(vals.values()),
-            )
-            count += 1
-        applied["source_materials"] = count
+        applied["source_materials"] = _insert_rows(
+            db, "source_materials", manifest.get("source_materials", []),
+            id_map, new_ws_id)
 
-        # Import project items
-        id_map_items = {}  # old_id -> new_id for project_items specifically
+        # Import project items (own id_map for source_item_id cross-refs)
+        id_map_items = {}
         for item in manifest.get("project_items", []):
             new_piid = id_map.get(item["id"], uuid.uuid4().hex[:12])
             id_map_items[item["id"]] = new_piid
-            cols = [c for c in item.keys() if c not in _EXCLUDE_FIELDS]
-            vals = {c: item.get(c, "") for c in cols}
-            vals["id"] = new_piid
-            if item.get("project_id") and item["project_id"] in id_map:
-                vals["project_id"] = id_map[item["project_id"]]
-            if item.get("source_item_id") and item["source_item_id"] in id_map_items:
-                vals["source_item_id"] = id_map_items[item["source_item_id"]]
-            all_cols = list(vals.keys())
-            placeholders = ",".join(["?"] * len(all_cols))
-            db.execute(
-                f"INSERT INTO project_items ({','.join(all_cols)}) VALUES ({placeholders})",
-                list(vals.values()),
-            )
-        applied["project_items"] = len(manifest.get("project_items", []))
+            item["id"] = new_piid
+        applied["project_items"] = _insert_rows(
+            db, "project_items", manifest.get("project_items", []),
+            id_map, new_ws_id, id_map_items=id_map_items)
 
-        # Import project item results
-        count = 0
-        for pir in manifest.get("project_item_results", []):
-            # project_item_results uses AUTOINCREMENT id, so we skip id on insert
-            cols = [c for c in pir.keys() if c not in _EXCLUDE_FIELDS and c != "id"]
-            vals = {c: pir.get(c, "") for c in cols}
-            if pir.get("project_item_id") and pir["project_item_id"] in id_map_items:
-                vals["project_item_id"] = id_map_items[pir["project_item_id"]]
-            # Remap file_path
-            if vals.get("file_path"):
-                vals["file_path"] = _remap_result_path(pir["file_path"], save_root, new_ws_id)
-            all_cols = list(vals.keys())
-            placeholders = ",".join(["?"] * len(all_cols))
-            db.execute(
-                f"INSERT INTO project_item_results ({','.join(all_cols)}) VALUES ({placeholders})",
-                list(vals.values()),
-            )
-            count += 1
-        applied["project_item_results"] = count
+        # Import project item results (skip AUTOINCREMENT id)
+        applied["project_item_results"] = _insert_rows(
+            db, "project_item_results", manifest.get("project_item_results", []),
+            id_map, new_ws_id, id_map_items=id_map_items)
 
         # Import batch jobs
         id_map_batch = {}
         for bj in manifest.get("batch_jobs", []):
             new_bid = id_map.get(bj["id"], uuid.uuid4().hex[:12])
             id_map_batch[bj["id"]] = new_bid
-            cols = [c for c in bj.keys() if c not in _EXCLUDE_FIELDS]
-            vals = {c: bj.get(c, "") for c in cols}
-            vals["id"] = new_bid
-            vals["workspace_id"] = new_ws_id
-            all_cols = list(vals.keys())
-            placeholders = ",".join(["?"] * len(all_cols))
-            db.execute(
-                f"INSERT INTO batch_jobs ({','.join(all_cols)}) VALUES ({placeholders})",
-                list(vals.values()),
-            )
-        applied["batch_jobs"] = len(manifest.get("batch_jobs", []))
+            bj["id"] = new_bid
+        applied["batch_jobs"] = _insert_rows(
+            db, "batch_jobs", manifest.get("batch_jobs", []), id_map, new_ws_id)
 
         # Import batch job items
-        count = 0
-        for bi in manifest.get("batch_job_items", []):
-            cols = [c for c in bi.keys() if c not in _EXCLUDE_FIELDS and c != "id"]
-            vals = {c: bi.get(c, "") for c in cols}
-            if bi.get("batch_id") and bi["batch_id"] in id_map_batch:
-                vals["batch_id"] = id_map_batch[bi["batch_id"]]
-            if bi.get("project_id") and bi["project_id"] in id_map:
-                vals["project_id"] = id_map[bi["project_id"]]
-            all_cols = list(vals.keys())
-            placeholders = ",".join(["?"] * len(all_cols))
-            db.execute(
-                f"INSERT INTO batch_job_items ({','.join(all_cols)}) VALUES ({placeholders})",
-                list(vals.values()),
-            )
-            count += 1
-        applied["batch_job_items"] = count
+        applied["batch_job_items"] = _insert_rows(
+            db, "batch_job_items", manifest.get("batch_job_items", []),
+            id_map, new_ws_id, id_map_batch=id_map_batch)
 
-        # Import configs (following existing pattern from import-configs)
+        # Import configs (following existing import-configs pattern)
         configs = manifest["configs"]
         for tbl in required_tables:
             db.execute(f"DELETE FROM {tbl} WHERE workspace_id = ?", (new_ws_id,))
             for row in configs.get(tbl, []):
                 cols = list(row.keys())
+                _validate_cols(cols)
                 vals_list = [new_ws_id] + [row.get(k, "") for k in cols]
                 if "id" in row:
                     id_idx = cols.index("id") + 1
@@ -381,24 +357,24 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
 
         db.commit()
 
-        # Phase 2: extract file assets
+        # Phase 2: extract file assets with size guards
+        cumulative = 0
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-            for name in zf.namelist():
-                if not name.startswith("files/") or name.endswith("/"):
+            for info in zf.infolist():
+                if not info.filename.startswith("files/") or info.is_dir():
                     continue
-                # Determine target path: files/{project_id}/... or files/results/...
-                # We need to figure out the new path. The original storage_path was already remapped
-                # during DB insert. But we stored the new path in the DB. We need to extract files
-                # to those new paths.
-                # Strategy: use the zip relative path structure, but under the new save_root
-                # Look up corresponding DB row to find the new path
-                rel = name[len("files/"):]
-                target = os.path.join(save_root, rel.replace("/", os.sep))
+                if info.file_size > _MAX_SINGLE_FILE:
+                    raise ValueError(f"单个文件过大: {info.filename}")
+                cumulative += info.file_size
+                if cumulative > _MAX_DECOMPRESSED:
+                    raise ValueError("解压后文件总大小超过限制")
+
+                target = _safe_extract_path(save_root, info.filename)
                 target_dir = os.path.dirname(target)
                 if not os.path.exists(target_dir):
                     os.makedirs(target_dir, exist_ok=True)
-                with open(target, "wb") as f:
-                    f.write(zf.read(name))
+                with zf.open(info) as src, open(target, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
 
         return {"ok": True, "workspace_id": new_ws_id, "applied": applied}
 
@@ -408,17 +384,12 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
 
 
 def _remap_path(old_storage_path: str, save_root: str, new_ws_id: str, new_project_id: str) -> str:
-    """Compute new storage_path for an imported project.
-
-    Strategy: create a new path under save_root using new_ws_id/new_project_id,
-    but preserve the original leaf directory name if possible.
-    """
+    """Compute new storage_path for an imported project."""
     if not old_storage_path:
         return ""
     old_name = os.path.basename(os.path.normpath(old_storage_path))
     if not old_name:
         old_name = new_project_id
-    # Create a workspace-scoped project dir
     ws_dir = os.path.join(save_root, new_ws_id)
     return os.path.join(ws_dir, new_project_id, old_name)
 

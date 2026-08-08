@@ -300,7 +300,9 @@ def check_activation() -> dict:
                 "last_checked_at": datetime.now().isoformat(),
             }
         else:
-            return {"activated": False, "reason": data.get("reason", "server_denied")}
+            # Expired / revoked / suspended — clear license, revert to unactivated
+            _delete_license_row()
+            return {"activated": False}
     except Exception:
         pass
 
@@ -310,14 +312,14 @@ def check_activation() -> dict:
     if local_expires:
         try:
             exp = datetime.strptime(local_expires, "%Y-%m-%d %H:%M:%S")
-            if datetime.now() > exp:
-                return {
-                    "activated": False,
-                    "reason": "该许可证已过期",
-                    "warning": "offline",
-                }
         except ValueError:
-            pass
+            try:
+                exp = datetime.strptime(local_expires, "%Y-%m-%d")
+            except ValueError:
+                exp = None
+        if exp is not None and datetime.now() > exp:
+            _delete_license_row()
+            return {"activated": False}
     return {
         "activated": True,
         "product_id": existing.get("product_id"),

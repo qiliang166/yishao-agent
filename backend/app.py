@@ -7824,9 +7824,9 @@ def get_settings(request: Request):
                         "'brand_name','brand_logo','branding_slogan','app_version',"
                         "'branding_copyright','branding_signature','about_content','contact_info')"
                     ).fetchall()
-                    for _r in _arows:
-                        if _r[1] and not settings.get(_r[0]):
-                            settings[_r[0]] = _r[1]
+                        for _r in _arows:
+                            if _r[1] and not settings.get(_r[0]):
+                                settings[_r[0]] = _r[1]
                     finally:
                         _aconn.close()
                 except Exception:
