@@ -16,11 +16,26 @@ from datetime import datetime, timezone
 
 _EXCLUDE_FIELDS = {"created_at", "updated_at", "workspace_id", "sort_order"}
 _COL_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
+_SQLITE_MAX_VARS = 500  # batch size for IN (...) queries, well under SQLite's 999 limit
 
 # Resource limits for import
 _MAX_ZIP_BYTES = 500 * 1024 * 1024      # 500MB compressed
 _MAX_DECOMPRESSED = 2 * 1024 * 1024 * 1024  # 2GB total decompressed
 _MAX_SINGLE_FILE = 100 * 1024 * 1024    # 100MB per extracted file
+
+
+def _batch_in_select(db, table: str, id_column: str, ids: list[str], exclude_cols=None) -> list[dict]:
+    """SELECT * FROM table WHERE id_column IN (ids), batched to avoid SQLite 999-var limit."""
+    _validate_cols([table, id_column])
+    results = []
+    for i in range(0, len(ids), _SQLITE_MAX_VARS):
+        chunk = ids[i:i + _SQLITE_MAX_VARS]
+        placeholders = ",".join("?" * len(chunk))
+        rows = db.execute(
+            f"SELECT * FROM {table} WHERE {id_column} IN ({placeholders})",
+            chunk).fetchall()
+        results.extend(_row_dict(r, exclude_cols) for r in rows)
+    return results
 
 
 def _validate_cols(columns: list[str]):
@@ -121,43 +136,24 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
         "SELECT * FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchall()]
     project_ids = [p["id"] for p in projects]
 
-    # 5. Source materials (by project)
-    src_materials = []
-    if project_ids:
-        placeholders = ",".join("?" * len(project_ids))
-        src_materials = [_row_dict(r) for r in db.execute(
-            f"SELECT * FROM source_materials WHERE project_id IN ({placeholders})",
-            project_ids).fetchall()]
+    # 5. Source materials (by project, batched)
+    src_materials = _batch_in_select(db, "source_materials", "project_id", project_ids) if project_ids else []
 
-    # 6. Project items
-    p_items = []
-    if project_ids:
-        placeholders = ",".join("?" * len(project_ids))
-        p_items = [_row_dict(r) for r in db.execute(
-            f"SELECT * FROM project_items WHERE project_id IN ({placeholders}) ORDER BY sort_order",
-            project_ids).fetchall()]
+    # 6. Project items (by project, batched)
+    p_items = _batch_in_select(db, "project_items", "project_id", project_ids) if project_ids else []
+    p_items.sort(key=lambda it: it.get("sort_order", 0))
 
-    # 7. Project item results
-    pr_results = []
+    # 7. Project item results (by item, batched)
     item_ids = [it["id"] for it in p_items]
-    if item_ids:
-        placeholders = ",".join("?" * len(item_ids))
-        pr_results = [_row_dict(r, {"id"}) for r in db.execute(
-            f"SELECT * FROM project_item_results WHERE project_item_id IN ({placeholders})",
-            item_ids).fetchall()]
+    pr_results = _batch_in_select(db, "project_item_results", "project_item_id", item_ids, {"id"}) if item_ids else []
 
     # 8. Batch jobs
     batch_jobs = [_row_dict(r) for r in db.execute(
         "SELECT * FROM batch_jobs WHERE workspace_id = ?", (workspace_id,)).fetchall()]
     batch_ids = [b["id"] for b in batch_jobs]
 
-    # 9. Batch job items
-    batch_items = []
-    if batch_ids:
-        placeholders = ",".join("?" * len(batch_ids))
-        batch_items = [_row_dict(r, {"id"}) for r in db.execute(
-            f"SELECT * FROM batch_job_items WHERE batch_id IN ({placeholders})",
-            batch_ids).fetchall()]
+    # 9. Batch job items (batched)
+    batch_items = _batch_in_select(db, "batch_job_items", "batch_id", batch_ids, {"id"}) if batch_ids else []
 
     # 10. File map
     save_root = _get_save_root(db)
