@@ -44,6 +44,10 @@ export default function ProjectDashboard() {
   // Create dialog state
   const [showCreate, setShowCreate] = useState(false)
   const [showBatch, setShowBatch] = useState(false)
+  const [showPointsDialog, setShowPointsDialog] = useState(false)
+  const [batchPoints, setBatchPoints] = useState('0')
+  const [showAuthorDialog, setShowAuthorDialog] = useState(false)
+  const [batchAuthorId, setBatchAuthorId] = useState('')
   // Expand project row to show output files
   const [editPointProject, setEditPointProject] = useState('')
   const [editPointValue, setEditPointValue] = useState('')
@@ -558,30 +562,12 @@ export default function ProjectDashboard() {
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                   {canEditOwn && (
                     <>
-                      <button className="btn btn-outline btn-sm" onClick={async () => {
-                        const val = window.prompt('请输入新的下载所需积分（如 0.5）：')
-                        if (val === null) return
-                        const deci = Math.round(parseFloat(val) * 10)
-                        if (isNaN(deci) || deci < 0) { modal.toast('请输入有效的积分值', 'error'); return }
-                        const ids = [...selected]
-                        await Promise.all(ids.map(id => api.updateProject(id, { point_cost_deci: deci })))
-                        loadProjects(page)
-                        setSelected(new Set())
-                        modal.toast(`已批量修改 ${ids.length} 个项目的下载积分为 ${(deci / 10).toFixed(1)}`, 'success')
-                      }}>批量修改积分</button>
-                      <button className="btn btn-outline btn-sm" onClick={async () => {
-                        const opts = authorOptions.map(a => `${a.id}: ${a.name}`).join('\n')
-                        const val = window.prompt(`请输入作者名称：\n\n${opts}`)
-                        if (val === null) return
-                        const match = authorOptions.find(a => a.id === val || a.name === val)
-                        const authorId = match ? match.id : val.trim()
-                        if (!authorId) { modal.toast('请输入有效的作者', 'error'); return }
-                        const ids = [...selected]
-                        await Promise.all(ids.map(id => api.updateProject(id, { author_id: authorId })))
-                        loadProjects(page)
-                        setSelected(new Set())
-                        modal.toast(`已批量修改 ${ids.length} 个项目的作者为 ${match ? match.name : authorId}`, 'success')
-                      }}>批量修改作者</button>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setShowPointsDialog(true); setBatchPoints('0') }}>
+                        批量修改积分
+                      </button>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setShowAuthorDialog(true); setBatchAuthorId('') }}>
+                        批量修改作者
+                      </button>
                       <button className="btn btn-outline btn-sm" onClick={async () => {
                         const ids = [...selected]
                         await Promise.all(ids.map(id => api.updateProject(id, { status: 'completed' })))
@@ -1089,6 +1075,83 @@ export default function ProjectDashboard() {
                 disabled={!createName.trim() || creating}>
                 {creating ? '创建中...' : '创建'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Edit Points Dialog */}
+      {showPointsDialog && (
+        <div className="dialog-overlay"
+          onMouseDown={(e: any) => { overlayMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={() => { if (overlayMouseDownRef.current) setShowPointsDialog(false) }}>
+          <div className="dialog-box" style={{ width: 360 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量修改积分</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              将 {selected.size} 个项目的下载所需积分修改为：
+            </div>
+            <div className="form-group">
+              <input className="form-input" type="number" step="0.1" min="0"
+                value={batchPoints} autoFocus
+                onChange={e => setBatchPoints(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') {
+                  const val = parseFloat(batchPoints)
+                  if (isNaN(val) || val < 0) { modal.toast('请输入有效的积分值', 'error'); return }
+                  const deci = Math.round(val * 10)
+                  const ids = [...selected]
+                  Promise.all(ids.map((id: string) => api.updateProject(id, { point_cost_deci: deci }))).then(() => {
+                    loadProjects(page); setSelected(new Set())
+                    modal.toast(`已批量修改 ${ids.length} 个项目的下载积分为 ${(deci / 10).toFixed(1)}`, 'success')
+                    setShowPointsDialog(false)
+                  })
+                }}} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowPointsDialog(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={async () => {
+                const val = parseFloat(batchPoints)
+                if (isNaN(val) || val < 0) { modal.toast('请输入有效的积分值', 'error'); return }
+                const deci = Math.round(val * 10)
+                const ids = [...selected]
+                await Promise.all(ids.map((id: string) => api.updateProject(id, { point_cost_deci: deci })))
+                loadProjects(page)
+                setSelected(new Set())
+                modal.toast(`已批量修改 ${ids.length} 个项目的下载积分为 ${(deci / 10).toFixed(1)}`, 'success')
+                setShowPointsDialog(false)
+              }}>确认</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Edit Author Dialog */}
+      {showAuthorDialog && (
+        <div className="dialog-overlay"
+          onMouseDown={(e: any) => { overlayMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={() => { if (overlayMouseDownRef.current) setShowAuthorDialog(false) }}>
+          <div className="dialog-box" style={{ width: 360 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量修改作者</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              将 {selected.size} 个项目的作者修改为：
+            </div>
+            <div className="form-group">
+              <select className="form-input" value={batchAuthorId} autoFocus
+                onChange={e => setBatchAuthorId(e.target.value)} style={{ fontSize: 13 }}>
+                <option value="">无署名</option>
+                {authorOptions.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowAuthorDialog(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={async () => {
+                const ids = [...selected]
+                await Promise.all(ids.map((id: string) => api.updateProject(id, { author_id: batchAuthorId })))
+                loadProjects(page)
+                setSelected(new Set())
+                const name = authorOptions.find(a => a.id === batchAuthorId)?.name || '无署名'
+                modal.toast(`已批量修改 ${ids.length} 个项目的作者为 ${name}`, 'success')
+                setShowAuthorDialog(false)
+              }}>确认</button>
             </div>
           </div>
         </div>

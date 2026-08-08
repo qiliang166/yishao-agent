@@ -150,6 +150,8 @@ export default function WorkspaceSettingsPage() {
   const [exportingFull, setExportingFull] = useState(false)
   const [importingFull, setImportingFull] = useState(false)
   const fileInputFullRef = useRef<HTMLInputElement>(null)
+  const [showImportDialog, setShowImportDialog] = useState(false)
+  const [importZipFile, setImportZipFile] = useState<File | null>(null)
 
   const loadAll = async () => {
     if (!wid) return
@@ -351,14 +353,14 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const handleImportFull = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+  const doImportFull = async (file: File) => {
     setImportingFull(true)
     try {
       const result = await api.importWorkspaceFull(file)
       if (result.ok) {
-        modal.toast(`导入成功！新工作区: ${result.workspace_id}，数据: ${JSON.stringify(result.applied)}`, 'success')
+        modal.toast(`导入成功！新工作区: ${result.workspace_id}`, 'success')
+        setShowImportDialog(false)
+        setImportZipFile(null)
       }
     } catch (err: any) {
       modal.toast('导入失败: ' + err.message, 'error')
@@ -366,6 +368,12 @@ export default function WorkspaceSettingsPage() {
       setImportingFull(false)
       if (fileInputFullRef.current) fileInputFullRef.current.value = ''
     }
+  }
+
+  const handleImportFull = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await doImportFull(file)
   }
 
   const toggleCol = (id: string) => {
@@ -587,11 +595,9 @@ export default function WorkspaceSettingsPage() {
                 <button className="btn btn-ghost btn-sm" disabled={exportingFull} onClick={handleExportFull}>
                   {exportingFull ? '导出中...' : '导出完整数据 (ZIP)'}
                 </button>
-                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setShowImportDialog(true); setImportZipFile(null) }}>
                   {importingFull ? '导入中...' : '导入完整数据 (ZIP)'}
-                  <input ref={fileInputFullRef} type="file" accept=".zip" style={{ display: 'none' }}
-                    onChange={handleImportFull} />
-                </label>
+                </button>
               </div>
             </div>
           </div>
@@ -909,6 +915,51 @@ export default function WorkspaceSettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Import ZIP Dialog */}
+      {showImportDialog && (
+        <div className="dialog-overlay"
+          onMouseDown={(e: any) => { if (e.target === e.currentTarget) { setShowImportDialog(false); setImportZipFile(null) } }}
+          onClick={(e: any) => { if (e.target === e.currentTarget) { setShowImportDialog(false); setImportZipFile(null) } }}>
+          <div className="dialog-box" style={{ width: 420 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">导入完整数据</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              选择 ZIP 文件导入，将创建新工作区并还原全部项目数据和文件资源。
+            </div>
+            {!importZipFile ? (
+              <label style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                height: 100, border: '2px dashed var(--border)', borderRadius: 8,
+                cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 13
+              }}>
+                <input type="file" accept=".zip" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) setImportZipFile(f) }} />
+                点击选择 ZIP 文件，或拖拽到此处
+              </label>
+            ) : (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: 12,
+                background: 'var(--bg-secondary)', borderRadius: 8
+              }}>
+                <span style={{ fontSize: 13, flex: 1 }}>{importZipFile.name}</span>
+                <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                  {(importZipFile.size / 1024 / 1024).toFixed(1)} MB
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={() => { setImportZipFile(null); if (fileInputFullRef.current) fileInputFullRef.current.value = '' }}>
+                  换文件
+                </button>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setShowImportDialog(false); setImportZipFile(null) }}>取消</button>
+              <button className="btn btn-primary btn-sm" disabled={!importZipFile || importingFull}
+                onClick={() => { if (importZipFile) doImportFull(importZipFile) }}>
+                {importingFull ? '导入中...' : '确认导入'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
