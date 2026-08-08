@@ -2,6 +2,10 @@
 
 ## 2026-08-09
 
+- chore: rebuild server packages with dialog overlay fix (834d982)
+
+## 2026-08-09
+
 - fix: consistent overlay close pattern for ZIP import dialog
 
 ## 2026-08-09
