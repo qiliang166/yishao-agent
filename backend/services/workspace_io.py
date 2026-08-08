@@ -203,9 +203,10 @@ def _insert_rows(db, table: str, rows: list[dict], id_map: dict, new_ws_id: str,
 
         vals = {c: row.get(c, "") for c in cols}
 
+        # Always set workspace_id — it's excluded from cols but required for child tables
+        vals["workspace_id"] = new_ws_id
+
         # Remap FK references
-        if "workspace_id" in cols:
-            vals["workspace_id"] = new_ws_id
         if "project_id" in cols and vals.get("project_id") and vals["project_id"] in id_map:
             vals["project_id"] = id_map[vals["project_id"]]
         if "category_id" in cols and vals.get("category_id") and vals["category_id"] in id_map:
