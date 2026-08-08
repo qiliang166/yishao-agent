@@ -60,7 +60,7 @@ from services.license_service import (
     check_activation, deactivate as license_deactivate, get_license_status,
 )
 
-DEFAULT_SITE_NAME = "Yishao Agent"
+DEFAULT_SITE_NAME = "勺启 食谱"
 
 # Server-authoritative plan definitions — stored in settings table, editable via UI.
 # Falls back to default if not configured.
