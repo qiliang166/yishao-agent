@@ -147,6 +147,9 @@ export default function WorkspaceSettingsPage() {
   const [exporting, setExporting] = useState(false)
   const [importing, setImporting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [exportingFull, setExportingFull] = useState(false)
+  const [importingFull, setImportingFull] = useState(false)
+  const fileInputFullRef = useRef<HTMLInputElement>(null)
 
   const loadAll = async () => {
     if (!wid) return
@@ -324,6 +327,44 @@ export default function WorkspaceSettingsPage() {
     } finally {
       setImporting(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  const handleExportFull = async () => {
+    if (!wid) return
+    setExportingFull(true)
+    try {
+      const blob = await api.exportWorkspaceFull(wid)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `workspace-${wid}-full-${new Date().toISOString().slice(0, 10)}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      modal.toast('完整数据已导出', 'success')
+    } catch (e: any) {
+      modal.toast('导出失败: ' + e.message, 'error')
+    } finally {
+      setExportingFull(false)
+    }
+  }
+
+  const handleImportFull = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportingFull(true)
+    try {
+      const result = await api.importWorkspaceFull(file)
+      if (result.ok) {
+        modal.toast(`导入成功！新工作区: ${result.workspace_id}，数据: ${JSON.stringify(result.applied)}`, 'success')
+      }
+    } catch (err: any) {
+      modal.toast('导入失败: ' + err.message, 'error')
+    } finally {
+      setImportingFull(false)
+      if (fileInputFullRef.current) fileInputFullRef.current.value = ''
     }
   }
 
@@ -532,6 +573,24 @@ export default function WorkspaceSettingsPage() {
                   {importing ? '导入中...' : '导入配置'}
                   <input ref={fileInputRef} type="file" accept=".json" style={{ display: 'none' }}
                     onChange={handleImportConfigs} />
+                </label>
+              </div>
+            </div>
+
+            {/* Full data export/import */}
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>数据导出/导入</div>
+              <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                导出当前工作区的全部数据（项目、素材、结果、文件）为 ZIP 文件，或从 ZIP 文件导入创建新工作区。
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-ghost btn-sm" disabled={exportingFull} onClick={handleExportFull}>
+                  {exportingFull ? '导出中...' : '导出完整数据 (ZIP)'}
+                </button>
+                <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer' }}>
+                  {importingFull ? '导入中...' : '导入完整数据 (ZIP)'}
+                  <input ref={fileInputFullRef} type="file" accept=".zip" style={{ display: 'none' }}
+                    onChange={handleImportFull} />
                 </label>
               </div>
             </div>

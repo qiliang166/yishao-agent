@@ -263,6 +263,21 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(d => d as { ok: boolean; applied: Record<string, number> }),
+  exportWorkspaceFull: (wid: string) =>
+    fetch(`${BASE}/api/workspaces/${encodeURIComponent(wid)}/export`, { headers: getAuthHeaders() })
+      .then(async r => {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({ detail: '导出失败' }))
+          throw new Error((err as any).detail || '导出失败')
+        }
+        return r.blob()
+      }),
+  importWorkspaceFull: (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return request('/api/workspaces/import', { method: 'POST', body: fd, timeoutMs: 120_000 })
+      .then(d => d as { ok: boolean; workspace_id: string; applied: Record<string, number> })
+  },
 
   // Projects
   listProjects: (page?: number, pageSize?: number, workspaceId?: string) => {

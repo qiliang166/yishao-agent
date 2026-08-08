@@ -1200,6 +1200,71 @@ def import_workspace_configs(workspace_id: str, body: WorkspaceConfigImport,
         db.close()
 
 
+@app.get("/api/workspaces/{workspace_id}/export")
+def export_workspace_full(workspace_id: str, user=require_perm("project.edit_own")):
+    """Export all workspace data (projects, items, results, files) as a ZIP."""
+    db = get_db()
+    try:
+        ws = db.execute("SELECT created_by FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
+        if not ws:
+            raise HTTPException(404, "工作区不存在")
+        check_ownership(ws["created_by"], user)
+
+        from services.workspace_io import export_workspace_zip
+        buf = export_workspace_zip(db, workspace_id)
+        ws_name = db.execute("SELECT name FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()["name"]
+        from datetime import datetime
+        date_str = datetime.now().strftime("%Y%m%d")
+        import urllib.parse
+        filename = f"workspace-{ws_name}-{date_str}.zip"
+        from starlette.responses import StreamingResponse
+        return StreamingResponse(
+            buf,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(filename)}",
+                "Content-Length": str(buf.getbuffer().nbytes),
+            },
+        )
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"导出失败: {str(e)}")
+    finally:
+        db.close()
+
+
+@app.post("/api/workspaces/import")
+async def import_workspace_full(
+    file: UploadFile = File(...),
+    user=require_perm("project.edit_own"),
+):
+    """Import workspace data from a ZIP file. Creates a new workspace."""
+    db = get_db()
+    try:
+        if not file.filename or not file.filename.lower().endswith(".zip"):
+            raise HTTPException(400, "请上传 .zip 文件")
+
+        zip_bytes = await file.read()
+        if len(zip_bytes) > 500 * 1024 * 1024:  # 500MB limit
+            raise HTTPException(400, "ZIP 文件过大（最大 500MB）")
+
+        from services.workspace_io import import_workspace_zip
+        result = import_workspace_zip(db, zip_bytes, user.get("sub", "unknown"))
+        return result
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"导入失败: {str(e)}")
+    finally:
+        db.close()
+
+
 # ── Projects ──
 
 @app.get("/api/projects")
