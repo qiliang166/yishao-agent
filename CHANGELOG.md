@@ -2,6 +2,11 @@
 
 ## 2026-08-09
 
+- fix: only set workspace_id for tables that actually have the column
+- chore: rebuild server packages with workspace_id fix (0ab59d8)
+
+## 2026-08-09
+
 - fix: workspace_id excluded by _EXCLUDE_FIELDS causing NOT NULL constraint on import
 - chore: rebuild all distribution packages (3708282)
 
