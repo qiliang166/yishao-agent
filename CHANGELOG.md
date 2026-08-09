@@ -2,6 +2,11 @@
 
 ## 2026-08-09
 
+- feat: KeyGen brand info tab + logo upload with preview + PUT endpoint fix
+- chore: rebuild desktop package with import fix (940a1cf)
+
+## 2026-08-09
+
 - chore: rebuild server packages with import fix (940a1cf)
 
 ## 2026-08-09
