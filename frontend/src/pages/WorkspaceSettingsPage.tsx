@@ -341,17 +341,41 @@ export default function WorkspaceSettingsPage() {
   const doExportFull = async (projectIds?: string[]) => {
     if (!wid) return
     setExportingFull(true)
+    const suffix = projectIds && projectIds.length > 0 ? `-${projectIds.length}items` : '-full'
+    const filename = `workspace-${wid}${suffix}-${new Date().toISOString().slice(0, 10)}.zip`
     try {
       const blob = await api.exportWorkspaceFull(wid, projectIds)
+      // Try native Save As dialog first (secure context only: localhost or HTTPS)
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await (window as any).showSaveFilePicker({
+            suggestedName: filename,
+            types: [{ description: 'ZIP 文件', accept: { 'application/zip': ['.zip'] } }],
+          })
+          const writable = await handle.createWritable()
+          await writable.write(blob)
+          await writable.close()
+          setShowExportDialog(false)
+          setExportProjects([])
+          modal.toast(`已导出: ${filename}`, 'success')
+          return
+        } catch (e: any) {
+          // User cancelled or API not available — fall through to <a> download
+          if (e.name === 'AbortError') { setExportingFull(false); return }
+        }
+      }
+      // Fallback: download via <a> tag (saves to default Downloads folder)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      const suffix = projectIds && projectIds.length > 0 ? `-${projectIds.length}items` : '-full'
-      a.download = `workspace-${wid}${suffix}-${new Date().toISOString().slice(0, 10)}.zip`
+      a.href = url
+      a.download = filename
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      modal.toast('完整数据已导出', 'success')
+      setShowExportDialog(false)
+      setExportProjects([])
+      modal.toast(`已导出到下载文件夹: ${filename}`, 'success')
     } catch (e: any) {
       modal.toast('导出失败: ' + e.message, 'error')
     } finally {
