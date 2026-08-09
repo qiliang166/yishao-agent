@@ -222,13 +222,24 @@ def _collect_export_files(step_results_rows, save_root: str = "") -> dict:
         if not run_dir or not _safe_dir(run_dir):
             continue
 
-        for root, _dirs, files in os.walk(run_dir):
-            for f in files:
-                if _skip_file(f):
-                    continue
-                fp = os.path.join(root, f)
-                rel = os.path.relpath(fp, export_dir_norm).replace("\\", "/")
-                file_map[fp] = f"exports/{rel}"
+        for rf in sorted(os.listdir(run_dir)):
+            rfull = os.path.join(run_dir, rf)
+            if not os.path.isfile(rfull):
+                continue
+            if _skip_file(rf):
+                continue
+            rf_no_ext = os.path.splitext(rf)[0]
+            if rf_no_ext in ('index_vars', 'index_backup', 'index_regenerated',
+                              'index_regenerated_partial', 'index_regenerated_vars'):
+                continue
+            if rf_no_ext.endswith('_vars'):
+                continue
+            ext = os.path.splitext(rf)[1].lower()
+            if ext not in ('.html', '.svg', '.png', '.jpg'):
+                continue
+            if re.match(r'^slide_\d+$', rf_no_ext) and ext in ('.png', '.jpg'):
+                continue
+            file_map[rfull] = f"exports/{run_id}/{rf}"
 
     return file_map
 
