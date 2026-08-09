@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { api } from '../services/api'
+import { api, Project } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
 import { useAuth } from '../contexts/AuthContext'
@@ -153,6 +153,11 @@ export default function WorkspaceSettingsPage() {
   const [showImportDialog, setShowImportDialog] = useState(false)
   const [importZipFile, setImportZipFile] = useState<File | null>(null)
   const importOverlayRef = useRef(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [exportProjects, setExportProjects] = useState<Project[]>([])
+  const [exportSelectedIds, setExportSelectedIds] = useState<Set<string>>(new Set())
+  const [exportLoadingProjects, setExportLoadingProjects] = useState(false)
+  const exportOverlayRef = useRef(false)
 
   const loadAll = async () => {
     if (!wid) return
@@ -333,15 +338,15 @@ export default function WorkspaceSettingsPage() {
     }
   }
 
-  const handleExportFull = async () => {
+  const doExportFull = async (projectIds?: string[]) => {
     if (!wid) return
     setExportingFull(true)
     try {
-      const blob = await api.exportWorkspaceFull(wid)
+      const blob = await api.exportWorkspaceFull(wid, projectIds)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url
-      a.download = `workspace-${wid}-full-${new Date().toISOString().slice(0, 10)}.zip`
+      const suffix = projectIds && projectIds.length > 0 ? `-${projectIds.length}items` : '-full'
+      a.download = `workspace-${wid}${suffix}-${new Date().toISOString().slice(0, 10)}.zip`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -352,6 +357,18 @@ export default function WorkspaceSettingsPage() {
     } finally {
       setExportingFull(false)
     }
+  }
+
+  const handleExportFull = async () => {
+    if (!wid) return
+    setShowExportDialog(true)
+    setExportLoadingProjects(true)
+    setExportSelectedIds(new Set())
+    try {
+      const data = await api.listProjects(1, 9999, wid)
+      setExportProjects(data.projects || [])
+    } catch { modal.toast('加载项目列表失败', 'error') }
+    finally { setExportLoadingProjects(false) }
   }
 
   const doImportFull = async (file: File) => {
@@ -916,6 +933,81 @@ export default function WorkspaceSettingsPage() {
           </div>
         )}
       </div>
+
+      {/* Export ZIP Dialog */}
+      {showExportDialog && (
+        <div className="dialog-overlay"
+          onMouseDown={(e: any) => { exportOverlayRef.current = e.target === e.currentTarget }}
+          onClick={() => { if (exportOverlayRef.current) { setShowExportDialog(false); setExportProjects([]) } }}>
+          <div className="dialog-box" style={{ width: 460, maxHeight: '80vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">导出完整数据</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              选择要导出的项目，或直接导出全部数据。
+            </div>
+            {exportLoadingProjects ? (
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: 24 }}>加载项目列表...</p>
+            ) : (
+              <>
+                <div style={{ flex: 1, overflowY: 'auto', maxHeight: 360, border: '1px solid var(--border)', borderRadius: 6 }}>
+                  {exportProjects.length === 0 ? (
+                    <p style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', padding: 24 }}>暂无项目</p>
+                  ) : (
+                    <>
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                        background: 'var(--bg-hover)', borderBottom: '1px solid var(--border)',
+                        fontSize: 11, cursor: 'pointer', userSelect: 'none'
+                      }} onClick={() => {
+                        setExportSelectedIds(prev =>
+                          prev.size === exportProjects.length
+                            ? new Set()
+                            : new Set(exportProjects.map(p => p.id))
+                        )
+                      }}>
+                        <input type="checkbox" readOnly
+                          checked={exportProjects.length > 0 && exportSelectedIds.size === exportProjects.length}
+                          style={{ pointerEvents: 'none' }} />
+                        <span style={{ color: 'var(--text-secondary)' }}>
+                          {exportSelectedIds.size > 0 ? `已选 ${exportSelectedIds.size} / ${exportProjects.length} 项` : '全选'}
+                        </span>
+                      </div>
+                      {exportProjects.map(p => (
+                        <div key={p.id} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
+                          borderBottom: '1px solid var(--border)', fontSize: 12, cursor: 'pointer',
+                          background: exportSelectedIds.has(p.id) ? 'var(--primary-light)' : undefined,
+                        }} onClick={() => {
+                          setExportSelectedIds(prev => {
+                            const next = new Set(prev)
+                            next.has(p.id) ? next.delete(p.id) : next.add(p.id)
+                            return next
+                          })
+                        }}>
+                          <input type="checkbox" readOnly checked={exportSelectedIds.has(p.id)} style={{ pointerEvents: 'none' }} />
+                          <span style={{ color: 'var(--text-secondary)', minWidth: 28, textAlign: 'center' }}>{exportProjects.indexOf(p) + 1}</span>
+                          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{p.project_code || ''}</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => { setShowExportDialog(false); setExportProjects([]) }}>取消</button>
+              <button className="btn btn-ghost btn-sm" disabled={exportSelectedIds.size === 0 || exportingFull}
+                onClick={() => doExportFull([...exportSelectedIds])}>
+                {exportingFull ? '导出中...' : `导出选中 (${exportSelectedIds.size})`}
+              </button>
+              <button className="btn btn-primary btn-sm" disabled={exportingFull}
+                onClick={() => doExportFull()}>
+                {exportingFull ? '导出中...' : '导出全部'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Import ZIP Dialog */}
       {showImportDialog && (

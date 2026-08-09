@@ -560,22 +560,6 @@ export default function ProjectDashboard() {
               </span>
               {selected.size > 0 && (
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                  <button className="btn btn-outline btn-sm" onClick={async () => {
-                    try {
-                      const blob = await api.exportWorkspaceFull(wid!, [...selected])
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `workspace-${wid}-selected-${new Date().toISOString().slice(0, 10)}.zip`
-                      document.body.appendChild(a)
-                      a.click()
-                      document.body.removeChild(a)
-                      URL.revokeObjectURL(url)
-                      modal.toast(`已导出 ${selected.size} 条明细`, 'success')
-                    } catch (e: any) {
-                      modal.toast('导出失败: ' + e.message, 'error')
-                    }
-                  }}>导出选中({selected.size})</button>
                   {canEditOwn && (
                     <>
                       <button className="btn btn-outline btn-sm" onClick={() => { setShowPointsDialog(true); setBatchPoints('0') }}>
