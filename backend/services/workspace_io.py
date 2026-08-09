@@ -337,6 +337,9 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
         applied["projects"] = _insert_rows(
             db, "projects", manifest.get("projects", []), id_map, new_ws_id)
 
+        # Clear storage_path so projects regenerate paths on the new machine
+        db.execute("UPDATE projects SET storage_path = '' WHERE workspace_id = ?", (new_ws_id,))
+
         # Import project items (own id_map for source_item_id cross-refs)
         id_map_items = {}
         for item in manifest.get("project_items", []):
