@@ -43,8 +43,10 @@ TAG_LEN = 16
 DB_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(DB_DIR, "data", "activation.db")
 QRCODE_DIR = os.path.join(DB_DIR, "data", "qrcodes")
+BRANDING_DIR = os.path.join(DB_DIR, "data", "branding")
 os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 os.makedirs(QRCODE_DIR, exist_ok=True)
+os.makedirs(BRANDING_DIR, exist_ok=True)
 
 
 def get_db() -> sqlite3.Connection:
@@ -577,6 +579,26 @@ def admin_update_site_config(req: dict, request: Request):
         db.close()
 
 
+@app.put("/api/admin/upload-logo")
+async def admin_upload_logo(request: Request):
+    _check_admin(request)
+    form = await request.form()
+    file = form.get("logo")
+    if file is None or not hasattr(file, "filename") or not file.filename:
+        raise HTTPException(status_code=400, detail="请选择 LOGO 图片")
+    data = await file.read()
+    ext = _validate_image(data)
+    filename = f"logo_{_uuid.uuid4().hex[:8]}.{ext}"
+    filepath = os.path.join(BRANDING_DIR, filename)
+    with open(filepath, "wb") as f:
+        f.write(data)
+    # Return the full URL
+    host = request.headers.get("host", "localhost:18777")
+    scheme = "https" if request.headers.get("x-forwarded-proto") == "https" else "http"
+    url = f"{scheme}://{host}/api/branding/{filename}"
+    return {"ok": True, "url": url, "filename": filename}
+
+
 # ══════════════════════════════════════════════════════════════════════
 # Client: activate / check / deactivate
 # ══════════════════════════════════════════════════════════════════════
@@ -839,6 +861,16 @@ def public_qrcode(filename: str):
     filepath = os.path.join(QRCODE_DIR, filename)
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="收款码不存在")
+    return FileResponse(filepath)
+
+
+@app.get("/api/branding/{filename}")
+def public_branding(filename: str):
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="无效的文件名")
+    filepath = os.path.join(BRANDING_DIR, filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="品牌资源不存在")
     return FileResponse(filepath)
 
 

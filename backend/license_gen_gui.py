@@ -6,9 +6,11 @@ import json
 import os
 import sys
 import tkinter as tk
+from io import BytesIO
 from tkinter import ttk, messagebox, filedialog
 import urllib.request
 import urllib.error
+from PIL import Image, ImageTk
 
 
 STATUS_LABELS = {
@@ -443,6 +445,11 @@ class KeyGenApp:
         ttk.Label(row1b, text="LOGO URL：", width=12).pack(side="left")
         self.brand_logo_var = tk.StringVar()
         ttk.Entry(row1b, textvariable=self.brand_logo_var, font=("Consolas", 10)).pack(side="left", fill="x", expand=True)
+        self._logo_photo = None
+        self.logo_preview_label = ttk.Label(row1b)
+        self.logo_preview_label.pack(side="left", padx=(4, 0))
+        self.brand_logo_var.trace_add("write", lambda *_: self._update_logo_preview())
+        ttk.Button(row1b, text="本地上传", command=self._upload_logo).pack(side="left", padx=(4, 0))
 
         # Slogan + version
         row2 = ttk.Frame(tab); row2.pack(fill="x", padx=8, pady=(0, 4))
@@ -1038,6 +1045,42 @@ class KeyGenApp:
         except Exception as e:
             messagebox.showerror("保存失败", str(e))
             self.status_var.set(f"保存失败: {e}")
+
+    def _upload_logo(self):
+        filepath = filedialog.askopenfilename(
+            title="选择 LOGO 图片",
+            filetypes=[("图片文件", "*.png;*.jpg;*.jpeg"), ("所有文件", "*.*")]
+        )
+        if not filepath:
+            return
+        try:
+            result = self._upload_file("/api/admin/upload-logo", filepath, "logo")
+            url = result.get("url", "")
+            self.brand_logo_var.set(url)
+            self._update_logo_preview()
+            self.brand_status_var.set("LOGO 已上传")
+            self.status_var.set("LOGO 已上传到服务器")
+            self.root.after(3000, lambda: self.brand_status_var.set(""))
+        except Exception as e:
+            messagebox.showerror("上传失败", str(e))
+            self.status_var.set(f"LOGO 上传失败: {e}")
+
+    def _update_logo_preview(self):
+        url = self.brand_logo_var.get().strip()
+        if not url:
+            self.logo_preview_label.configure(image="", text="")
+            self._logo_photo = None
+            return
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = resp.read()
+            img = Image.open(BytesIO(data))
+            img.thumbnail((80, 28), Image.LANCZOS)
+            self._logo_photo = ImageTk.PhotoImage(img)
+            self.logo_preview_label.configure(image=self._logo_photo, text="")
+        except Exception:
+            self.logo_preview_label.configure(image="", text="(无法加载预览)")
 
     # ── Plan Management ──────────────────────────────────────────
 
