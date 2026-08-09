@@ -55,7 +55,7 @@ export default function LoginPage() {
 
   // Already logged in → redirect based on user_type
   if (!authLoading && user) {
-    if (user.user_type === 'member') {
+    if (user.user_type === 'member' && !user.roles?.includes('开发体验员')) {
       return <Navigate to="/app" replace />
     }
     return <Navigate to="/" replace />

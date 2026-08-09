@@ -37,7 +37,7 @@ export default function MemberLoginPage() {
   if (user) {
     const redirect = searchParams.get('redirect')
     const hp = (window as any).__HOMEPAGE_PATH__
-    return <Navigate to={user.user_type === 'member' ? (redirect || hp || '/') : '/'} replace />
+    return <Navigate to={(user.user_type === 'member' && !user.roles?.includes('开发体验员')) ? (redirect || hp || '/') : '/'} replace />
   }
 
   const handleSubmit = async () => {

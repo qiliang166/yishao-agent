@@ -80,11 +80,11 @@ export default function LandingPage() {
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           {user ? (
-            <Link to={user.user_type === 'member' ? '/app/center' : '/home'} style={{
+            <Link to={(user.user_type === 'member' && !user.roles?.includes('开发体验员')) ? '/app/center' : '/home'} style={{
               fontSize: 12, color: 'var(--primary)', textDecoration: 'none',
               padding: '4px 12px', border: '1px solid var(--primary)', borderRadius: 4,
             }}>
-              {user.user_type === 'member' ? '进入工作台' : '进入后台'}
+              {(user.user_type === 'member' && !user.roles?.includes('开发体验员')) ? '进入工作台' : '进入后台'}
             </Link>
           ) : (
             <>
