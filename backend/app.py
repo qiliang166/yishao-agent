@@ -1262,8 +1262,6 @@ async def import_workspace_full(
             raise HTTPException(400, "请上传 .zip 文件")
 
         zip_bytes = await file.read()
-        if len(zip_bytes) > 500 * 1024 * 1024:  # 500MB limit
-            raise HTTPException(400, "ZIP 文件过大（最大 500MB）")
 
         from services.workspace_io import import_workspace_zip
         result = import_workspace_zip(db, zip_bytes, user.get("sub", "unknown"))

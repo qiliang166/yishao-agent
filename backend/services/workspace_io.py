@@ -21,11 +21,6 @@ _TABLES_WITH_WS_ID = {"project_categories", "projects", "batch_jobs"}
 _COL_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 _SQLITE_MAX_VARS = 500  # batch size for IN (...) queries, well under SQLite's 999 limit
 
-# Resource limits for import
-_MAX_ZIP_BYTES = 500 * 1024 * 1024      # 500MB compressed
-_MAX_DECOMPRESSED = 2 * 1024 * 1024 * 1024  # 2GB total decompressed
-_MAX_SINGLE_FILE = 100 * 1024 * 1024    # 100MB per extracted file
-
 
 def _batch_in_select(db, table: str, id_column: str, ids: list[str], exclude_cols=None) -> list[dict]:
     """SELECT * FROM table WHERE id_column IN (ids), batched to avoid SQLite 999-var limit."""
@@ -234,15 +229,8 @@ def _insert_rows(db, table: str, rows: list[dict], id_map: dict, new_ws_id: str,
 
 def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
     """Import a workspace ZIP and create a new workspace. Returns {ok, workspace_id, applied}."""
-    if len(zip_bytes) > _MAX_ZIP_BYTES:
-        raise ValueError(f"ZIP 文件过大（最大 {_MAX_ZIP_BYTES // (1024*1024)}MB）")
 
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
-        # Validate total decompressed size upfront
-        total_size = sum(info.file_size for info in zf.infolist() if not info.is_dir())
-        if total_size > _MAX_DECOMPRESSED:
-            raise ValueError(f"解压后总大小超过限制（最大 {_MAX_DECOMPRESSED // (1024*1024)}MB）")
-
         # Read manifest
         try:
             ws_json_bytes = zf.read("workspace.json")
@@ -369,17 +357,11 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
 
         db.commit()
 
-        # Phase 2: extract file assets with size guards
-        cumulative = 0
+        # Phase 2: extract file assets
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
             for info in zf.infolist():
                 if not info.filename.startswith("files/") or info.is_dir():
                     continue
-                if info.file_size > _MAX_SINGLE_FILE:
-                    raise ValueError(f"单个文件过大: {info.filename}")
-                cumulative += info.file_size
-                if cumulative > _MAX_DECOMPRESSED:
-                    raise ValueError("解压后文件总大小超过限制")
 
                 target = _safe_extract_path(save_root, info.filename)
                 target_dir = os.path.dirname(target)
