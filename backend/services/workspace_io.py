@@ -217,6 +217,8 @@ def _insert_rows(db, table: str, rows: list[dict], id_map: dict, new_ws_id: str,
             vals["category_id"] = id_map[vals["category_id"]]
         if id_map_items and "source_item_id" in cols and vals.get("source_item_id") and vals["source_item_id"] in id_map_items:
             vals["source_item_id"] = id_map_items[vals["source_item_id"]]
+        if id_map_items and "project_item_id" in cols and vals.get("project_item_id") and vals["project_item_id"] in id_map_items:
+            vals["project_item_id"] = id_map_items[vals["project_item_id"]]
         if id_map_batch and "batch_id" in cols and vals.get("batch_id") and vals["batch_id"] in id_map_batch:
             vals["batch_id"] = id_map_batch[vals["batch_id"]]
 
