@@ -992,16 +992,16 @@ def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
                 [(wid, rid) for rid in req.role_ids]
             )
             db.commit()
-        # If no explicit roles assigned, auto-assign all member roles so the workspace
-        # is visible to all active roles (not just super admin)
+        # If no explicit roles assigned, auto-assign creator's own roles
         _existing_wroles = db.execute(
             "SELECT COUNT(*) FROM workspace_roles WHERE workspace_id = ?", (wid,)
         ).fetchone()[0]
         if _existing_wroles == 0:
-            _all_member_roles = db.execute(
-                "SELECT id FROM roles WHERE user_type = 'member'"
+            _uid = user.get("user_id", user.get("sub", ""))
+            _creator_roles = db.execute(
+                "SELECT role_id FROM user_roles WHERE user_id = ?", (_uid,)
             ).fetchall()
-            for _r in _all_member_roles:
+            for _r in _creator_roles:
                 db.execute(
                     "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
                     (wid, _r[0]))

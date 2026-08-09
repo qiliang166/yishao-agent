@@ -267,11 +267,11 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
          user_sub),
     )
 
-    # Auto-assign all member roles so non-admin users can see the imported workspace
-    _all_member_roles = db.execute(
-        "SELECT id FROM roles WHERE user_type = 'member'"
+    # Auto-assign the importer's own roles to the new workspace
+    _importer_roles = db.execute(
+        "SELECT role_id FROM user_roles WHERE user_id = ?", (user_sub,)
     ).fetchall()
-    for _r in _all_member_roles:
+    for _r in _importer_roles:
         db.execute(
             "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
             (new_ws_id, _r[0]))
