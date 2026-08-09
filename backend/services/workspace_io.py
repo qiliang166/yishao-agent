@@ -140,14 +140,17 @@ def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_r
                 continue
             _add_path(full)
 
+    def _safe_folder(name: str) -> str:
+        return re.sub(r'[<>:"/\\|?*]', '_', name).strip().rstrip('.') or "unnamed"
+
     for row in projects_rows:
         sp = (row.get("storage_path") or "").strip()
-        if sp and os.path.isabs(sp):
+        if sp and os.path.isabs(sp) and os.path.isdir(sp):
             _list_dir_visible(sp)
         else:
-            pid = row.get("id", "")
-            if pid:
-                candidate = os.path.join(save_root, pid)
+            proj_name = row.get("name", "") or row.get("id", "")
+            if proj_name:
+                candidate = os.path.join(save_root, _safe_folder(proj_name))
                 _list_dir_visible(candidate)
 
     for row in pr_results_rows:
