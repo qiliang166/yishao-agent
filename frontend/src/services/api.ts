@@ -263,15 +263,19 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(d => d as { ok: boolean; applied: Record<string, number> }),
-  exportWorkspaceFull: (wid: string) =>
-    fetch(`${BASE}/api/workspaces/${encodeURIComponent(wid)}/export`, { headers: getAuthHeaders() })
+  exportWorkspaceFull: (wid: string, projectIds?: string[]) => {
+    const params = projectIds && projectIds.length > 0
+      ? `?project_ids=${encodeURIComponent(projectIds.join(','))}`
+      : ''
+    return fetch(`${BASE}/api/workspaces/${encodeURIComponent(wid)}/export${params}`, { headers: getAuthHeaders() })
       .then(async r => {
         if (!r.ok) {
           const err = await r.json().catch(() => ({ detail: '导出失败' }))
           throw new Error((err as any).detail || '导出失败')
         }
         return r.blob()
-      }),
+      })
+  },
   importWorkspaceFull: (file: File) => {
     const fd = new FormData()
     fd.append('file', file)

@@ -1219,8 +1219,13 @@ def import_workspace_configs(workspace_id: str, body: WorkspaceConfigImport,
 
 
 @app.get("/api/workspaces/{workspace_id}/export")
-def export_workspace_full(workspace_id: str, user=require_perm("project.edit_own")):
-    """Export all workspace data (projects, items, results, files) as a ZIP."""
+def export_workspace_full(workspace_id: str, project_ids: str = "",
+                          user=require_perm("project.edit_own")):
+    """Export workspace data (projects, items, results, files) as a ZIP.
+
+    Optional query param: project_ids=id1,id2,id3 — only export those projects.
+    When omitted, exports all projects in the workspace.
+    """
     db = get_db()
     try:
         ws = db.execute("SELECT created_by FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()
@@ -1229,7 +1234,8 @@ def export_workspace_full(workspace_id: str, user=require_perm("project.edit_own
         check_ownership(ws["created_by"], user)
 
         from services.workspace_io import export_workspace_zip
-        buf = export_workspace_zip(db, workspace_id)
+        pid_list = [p.strip() for p in project_ids.split(",") if p.strip()] if project_ids else None
+        buf = export_workspace_zip(db, workspace_id, pid_list)
         ws_name = db.execute("SELECT name FROM workspaces WHERE id = ?", (workspace_id,)).fetchone()["name"]
         from datetime import datetime
         date_str = datetime.now().strftime("%Y%m%d")

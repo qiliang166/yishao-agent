@@ -150,33 +150,65 @@ def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_r
     return file_map
 
 
-def _collect_export_files(step_results_rows) -> dict:
-    """Collect HTML export run directories from EXPORT_DIR for PPT step_results.
+def _load_run_dirs_map() -> dict:
+    """Load run_dirs.json — maps run_id → actual directory path."""
+    import sys as _sys
+    if getattr(_sys, 'frozen', False):
+        exe_dir = os.path.dirname(_sys.executable)
+        path = os.path.join(exe_dir, "data", "run_dirs.json")
+    else:
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "run_dirs.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
 
+
+def _collect_export_files(step_results_rows, save_root: str = "") -> dict:
+    """Collect HTML export run directories for PPT step_results.
+
+    Uses run_dirs.json (authoritative) first, then falls back to EXPORT_DIR.
+    Also scans save_root project storage dirs.
     Returns {abs_path: zip_relative_path} with 'exports/' prefix.
     """
     export_dir = _get_export_dir()
     export_dir_norm = os.path.normcase(os.path.normpath(export_dir))
+    run_dirs_map = _load_run_dirs_map()
+    save_root_norm = os.path.normcase(os.path.normpath(save_root)) if save_root else ""
     file_map = {}
+
+    def _safe_dir(d: str) -> bool:
+        if not os.path.isdir(d):
+            return False
+        rd = os.path.realpath(d)
+        for base in [export_dir_norm, save_root_norm]:
+            if base and os.path.commonpath([rd, os.path.realpath(base)]) == os.path.realpath(base):
+                return True
+        return False
 
     for row in step_results_rows:
         step_name = (row.get("step_name") or "").strip()
         if not step_name.startswith("_ppt_result_"):
             continue
         run_id = step_name.replace("_ppt_result_", "", 1)
-        if not run_id:
-            continue
-        if ".." in run_id or "/" in run_id or "\\" in run_id:
+        if not run_id or ".." in run_id or "/" in run_id or "\\" in run_id:
             continue
         if os.path.isabs(run_id) or re.match(r'^[A-Za-z]:', run_id):
             continue
-        run_dir = os.path.join(export_dir, run_id)
-        run_dir = os.path.realpath(run_dir)
-        export_real = os.path.realpath(export_dir)
-        if os.path.commonpath([run_dir, export_real]) != export_real:
+
+        # Resolve run_dir: 1) run_dirs.json  2) EXPORT_DIR/<run_id>  3) EXPORT_DIR/html_decks/<run_id>
+        run_dir = run_dirs_map.get(run_id, "")
+        if not run_dir or not os.path.isdir(run_dir):
+            for base in [export_dir, os.path.join(export_dir, "html_decks")]:
+                candidate = os.path.join(base, run_id)
+                if os.path.isdir(candidate):
+                    run_dir = candidate
+                    break
+
+        if not run_dir or not _safe_dir(run_dir):
             continue
-        if not os.path.isdir(run_dir):
-            continue
+
         for root, _dirs, files in os.walk(run_dir):
             for f in files:
                 if _skip_file(f):
@@ -188,8 +220,12 @@ def _collect_export_files(step_results_rows) -> dict:
     return file_map
 
 
-def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
-    """Export all workspace data + file assets to an in-memory ZIP."""
+def export_workspace_zip(db, workspace_id: str, project_ids: list[str] = None) -> io.BytesIO:
+    """Export all workspace data + file assets to an in-memory ZIP.
+
+    If project_ids is provided, only those projects (and their related items/results/files)
+    are included in the export.
+    """
     from routers.prompt_studio import _serialize_configs
 
     # 1. Workspace metadata
@@ -209,13 +245,18 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
         "SELECT * FROM project_categories WHERE workspace_id = ? ORDER BY sort_order",
         (workspace_id,)).fetchall()]
 
-    # 4. Projects
-    projects = [_row_dict(r) for r in db.execute(
+    # 4. Projects (optionally filtered by project_ids)
+    all_projects = [_row_dict(r) for r in db.execute(
         "SELECT * FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchall()]
-    project_ids = [p["id"] for p in projects]
+    if project_ids is not None:
+        pid_set = set(project_ids)
+        projects = [p for p in all_projects if p["id"] in pid_set]
+    else:
+        projects = all_projects
+    export_project_ids = [p["id"] for p in projects]
 
     # 5. Project items (by project, batched)
-    p_items = _batch_in_select(db, "project_items", "project_id", project_ids) if project_ids else []
+    p_items = _batch_in_select(db, "project_items", "project_id", export_project_ids) if export_project_ids else []
     p_items.sort(key=lambda it: it.get("sort_order", 0))
 
     # 6. Project item results (by item, batched, exclude AUTOINCREMENT id)
@@ -223,7 +264,7 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
     pr_results = _batch_in_select(db, "project_item_results", "project_item_id", item_ids, {"id"}) if item_ids else []
 
     # 7. Step results (by project, batched, exclude AUTOINCREMENT id)
-    step_results = _batch_in_select(db, "step_results", "project_id", project_ids, {"id"}) if project_ids else []
+    step_results = _batch_in_select(db, "step_results", "project_id", export_project_ids, {"id"}) if export_project_ids else []
 
     # 8. Batch jobs
     batch_jobs = [_row_dict(r) for r in db.execute(
@@ -238,7 +279,7 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
     file_map = _collect_all_files(projects, pr_results, step_results, save_root)
 
     # 11. Export files — HTML export run directories for PPT step_results
-    export_map = _collect_export_files(step_results)
+    export_map = _collect_export_files(step_results, save_root)
 
     manifest = {
         "version": 2,
