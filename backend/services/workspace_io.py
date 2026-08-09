@@ -75,6 +75,15 @@ def _get_save_root(db) -> str:
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "output")
 
 
+def _get_export_dir() -> str:
+    """Return the absolute EXPORT_DIR path."""
+    import sys
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable) if hasattr(sys, 'executable') and sys.executable else os.path.dirname(os.path.abspath(sys.argv[0]))
+        return os.path.join(exe_dir, "data", "exports")
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "exports")
+
+
 def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_root: str) -> dict:
     """Collect all disk files: project dirs + result file_paths + step file_paths.
 
@@ -129,6 +138,34 @@ def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_r
     return file_map
 
 
+def _collect_export_files(step_results_rows) -> dict:
+    """Collect HTML export run directories from EXPORT_DIR for PPT step_results.
+
+    Returns {abs_path: zip_relative_path} with 'exports/' prefix.
+    """
+    export_dir = _get_export_dir()
+    export_dir_norm = os.path.normcase(os.path.normpath(export_dir))
+    file_map = {}
+
+    for row in step_results_rows:
+        step_name = (row.get("step_name") or "").strip()
+        if not step_name.startswith("_ppt_result_"):
+            continue
+        run_id = step_name.replace("_ppt_result_", "", 1)
+        if not run_id or ".." in run_id:
+            continue
+        run_dir = os.path.join(export_dir, run_id)
+        if not os.path.isdir(run_dir):
+            continue
+        for root, _dirs, files in os.walk(run_dir):
+            for f in files:
+                fp = os.path.join(root, f)
+                rel = os.path.relpath(fp, export_dir_norm).replace("\\", "/")
+                file_map[fp] = f"exports/{rel}"
+
+    return file_map
+
+
 def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
     """Export all workspace data + file assets to an in-memory ZIP."""
     from routers.prompt_studio import _serialize_configs
@@ -178,6 +215,9 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
     save_root = _get_save_root(db)
     file_map = _collect_all_files(projects, pr_results, step_results, save_root)
 
+    # 11. Export files — HTML export run directories for PPT step_results
+    export_map = _collect_export_files(step_results)
+
     manifest = {
         "version": 2,
         "exported_at": datetime.now(timezone.utc).isoformat(),
@@ -202,6 +242,7 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
         "batch_jobs": len(batch_jobs),
         "batch_job_items": len(batch_items),
         "file_assets": len(file_map),
+        "export_assets": len(export_map),
     }
     manifest["_summary"] = summary
 
@@ -210,6 +251,8 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
         manifest_json = json.dumps(manifest, ensure_ascii=False, indent=2)
         zf.writestr("workspace.json", manifest_json)
         for abs_path, zip_path in file_map.items():
+            zf.write(abs_path, zip_path)
+        for abs_path, zip_path in export_map.items():
             zf.write(abs_path, zip_path)
 
     buf.seek(0)
@@ -259,6 +302,16 @@ def _insert_rows(db, table: str, rows: list[dict], id_map: dict, new_ws_id: str,
         )
         applied_count += 1
     return applied_count
+
+
+def _safe_extract_export_path(export_dir: str, zip_name: str) -> str:
+    """Resolve target path for export assets and validate it stays within export_dir."""
+    rel = zip_name[len("exports/"):]
+    target = os.path.normpath(os.path.join(export_dir, rel.replace("/", os.sep)))
+    export_dir_resolved = os.path.normpath(export_dir)
+    if os.path.commonpath([target, export_dir_resolved]) != export_dir_resolved:
+        raise ValueError(f"Path traversal blocked: {zip_name}")
+    return target
 
 
 def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
@@ -321,6 +374,7 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
         id_map[cat["id"]] = uuid.uuid4().hex[:12]
 
     save_root = _get_save_root(db)
+    export_dir = _get_export_dir()
     applied = {}
 
     try:
@@ -397,15 +451,22 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
         # Phase 2: extract file assets
         with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
             for info in zf.infolist():
-                if not info.filename.startswith("files/") or info.is_dir():
+                if info.is_dir():
                     continue
-
-                target = _safe_extract_path(save_root, info.filename)
-                target_dir = os.path.dirname(target)
-                if not os.path.exists(target_dir):
-                    os.makedirs(target_dir, exist_ok=True)
-                with zf.open(info) as src, open(target, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
+                if info.filename.startswith("files/"):
+                    target = _safe_extract_path(save_root, info.filename)
+                    target_dir = os.path.dirname(target)
+                    if not os.path.exists(target_dir):
+                        os.makedirs(target_dir, exist_ok=True)
+                    with zf.open(info) as src, open(target, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                elif info.filename.startswith("exports/"):
+                    target = _safe_extract_export_path(export_dir, info.filename)
+                    target_dir = os.path.dirname(target)
+                    if not os.path.exists(target_dir):
+                        os.makedirs(target_dir, exist_ok=True)
+                    with zf.open(info) as src, open(target, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
 
         return {"ok": True, "workspace_id": new_ws_id, "applied": applied}
 
