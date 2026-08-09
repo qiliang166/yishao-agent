@@ -992,6 +992,17 @@ def create_workspace(req: WorkspaceCreate, user=require_perm("project.create")):
                 [(wid, rid) for rid in req.role_ids]
             )
             db.commit()
+        # Member creating workspace: auto-assign their own roles so they can see it
+        if user.get("user_type") == "member":
+            uid = user.get("user_id", user.get("sub", ""))
+            _member_roles = db.execute(
+                "SELECT role_id FROM user_roles WHERE user_id = ?", (uid,)
+            ).fetchall()
+            for _mr in _member_roles:
+                db.execute(
+                    "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
+                    (wid, _mr[0]))
+            db.commit()
 
         row = db.execute("SELECT * FROM workspaces WHERE id = ?", (wid,)).fetchone()
         result = dict(row)

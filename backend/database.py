@@ -1457,6 +1457,23 @@ def _migrate_v1_rbac(conn):
         _migrate_v1_create_tables(conn)
 
     _migrate_v1_seed_roles(conn)
+    # Ensure default workspace is role-assigned so non-admin roles can see it
+    try:
+        _ws_row = conn.execute("SELECT id FROM workspaces WHERE name = '食谱培训' LIMIT 1").fetchone()
+        _wroles_count = 0
+        if _ws_row:
+            _wroles_count = conn.execute(
+                "SELECT COUNT(*) FROM workspace_roles WHERE workspace_id = ?", (_ws_row[0],)
+            ).fetchone()[0]
+        if _wroles_count == 0:
+            _roles = conn.execute("SELECT id FROM roles WHERE user_type = 'member'").fetchall()
+            for _r in _roles:
+                conn.execute(
+                    "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
+                    (_ws_row[0], _r[0]))
+            print(f"[DB] Default workspace assigned to {len(_roles)} member roles")
+    except Exception:
+        pass
     _migrate_v1_create_admin(conn)
 
     conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('db_schema_version', '1')")
