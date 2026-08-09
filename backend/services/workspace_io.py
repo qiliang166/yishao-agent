@@ -92,8 +92,15 @@ def _skip_file(filename: str) -> bool:
     return os.path.splitext(filename)[1].lower() in _SKIP_EXTS
 
 
+# Variant / intermediate file suffixes to skip — mirrors _list_project_files in app.py
+_LIST_SKIP_SUFFIXES = ('_vars', '_backup', '_regenerated', '_regenerated_partial', '_regenerated_vars')
+
+
 def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_root: str) -> dict:
-    """Collect all disk files: project dirs + result file_paths + step file_paths.
+    """Collect output files visible in the project file list (mirrors _list_project_files).
+
+    Only includes non-variant files from the project directory root (not recursive),
+    plus individual result file_paths from project_item_results and step_results.
 
     Returns {abs_path: zip_relative_path}
     """
@@ -113,29 +120,35 @@ def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_r
         rel = os.path.relpath(p, save_root_norm).replace("\\", "/")
         file_map[p] = f"files/{rel}"
 
-    def _walk_dir(dir_path: str):
+    def _list_dir_visible(dir_path: str):
+        """List only files that _list_project_files would show (non-recursive, skip variants)."""
         if not dir_path or not os.path.isdir(dir_path):
             return
         p = os.path.normcase(os.path.normpath(os.path.abspath(dir_path)))
         if os.path.commonpath([p, save_root_norm]) != save_root_norm:
             return
-        for root, _dirs, files in os.walk(p):
-            for f in files:
-                if _skip_file(f):
-                    continue
-                fp = os.path.join(root, f)
-                _add_path(fp)
+        for f in sorted(os.listdir(p)):
+            full = os.path.join(p, f)
+            if not os.path.isfile(full):
+                continue
+            if _skip_file(f):
+                continue
+            name_no_ext = os.path.splitext(f)[0]
+            if name_no_ext.endswith(_LIST_SKIP_SUFFIXES):
+                continue
+            if '_幻灯片列表' in name_no_ext:
+                continue
+            _add_path(full)
 
     for row in projects_rows:
         sp = (row.get("storage_path") or "").strip()
         if sp and os.path.isabs(sp):
-            _walk_dir(sp)
+            _list_dir_visible(sp)
         else:
-            # Also try project_id-based dir
             pid = row.get("id", "")
             if pid:
                 candidate = os.path.join(save_root, pid)
-                _walk_dir(candidate)
+                _list_dir_visible(candidate)
 
     for row in pr_results_rows:
         fp = (row.get("file_path") or "").strip()
@@ -481,9 +494,13 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
             id_map, new_ws_id)
 
         # Import projects (strip project_code — regenerated below)
+        old_new_pid_map = {}  # old_project_id → new_project_id for Phase 3 rename
         for proj in manifest.get("projects", []):
-            proj["id"] = id_map.get(proj["id"], proj["id"])
+            old_pid = proj["id"]
+            proj["id"] = id_map.get(old_pid, old_pid)
             proj.pop("project_code", None)
+            if old_pid != proj["id"]:
+                old_new_pid_map[old_pid] = proj["id"]
         applied["projects"] = _insert_rows(
             db, "projects", manifest.get("projects", []), id_map, new_ws_id)
 
@@ -569,6 +586,34 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
                         os.makedirs(target_dir, exist_ok=True)
                     with zf.open(info) as src, open(target, "wb") as dst:
                         shutil.copyfileobj(src, dst)
+
+        # Phase 3: remap file directories from old project IDs to new project IDs
+        for old_pid, new_pid in old_new_pid_map.items():
+            old_dir = os.path.join(save_root, old_pid)
+            new_dir = os.path.join(save_root, new_pid)
+            if os.path.isdir(old_dir) and not os.path.exists(new_dir):
+                try:
+                    shutil.move(old_dir, new_dir)
+                except Exception:
+                    pass  # if rename fails, files stay at old path — not fatal
+
+        # Rewrite absolute file_path references in DB (handle both / and \)
+        for old_pid, new_pid in old_new_pid_map.items():
+            for table in ["project_item_results", "step_results"]:
+                rows = db.execute(
+                    f"SELECT rowid, file_path FROM {table} WHERE file_path LIKE ?",
+                    (f"%{old_pid}%",)).fetchall()
+                for r in rows:
+                    fp = r["file_path"] or ""
+                    if not fp:
+                        continue
+                    new_fp = fp.replace(f"\\{old_pid}\\", f"\\{new_pid}\\")
+                    new_fp = new_fp.replace(f"/{old_pid}/", f"/{new_pid}/")
+                    if new_fp != fp:
+                        db.execute(
+                            f"UPDATE {table} SET file_path = ? WHERE rowid = ?",
+                            (new_fp, r["rowid"]))
+        db.commit()
 
         return {"ok": True, "workspace_id": new_ws_id, "applied": applied}
 
