@@ -2,6 +2,22 @@
 
 ## 2026-08-10
 
+- fix: close export dialog before download + native Save As picker
+
+## 2026-08-10
+
+- fix: export dialog with project selection instead of separate button
+
+## 2026-08-10
+
+- fix: export workspace with selected projects + pass save_root to HTML export collector
+
+## 2026-08-10
+
+- chore: rebuild desktop package with clean factory DB
+
+## 2026-08-10
+
 - fix: enforce unique project_code with UNIQUE index + regenerate on import
 
 ## 2026-08-10
