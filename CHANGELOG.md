@@ -2,6 +2,10 @@
 
 ## 2026-08-10
 
+- fix: export dialog with project selection + Save As picker + deleteCategory/listRoles TS fixes
+
+## 2026-08-10
+
 - fix: close export dialog before download + native Save As picker
 
 ## 2026-08-10

@@ -439,7 +439,7 @@ export default function WorkspaceSettingsPage() {
   }
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: 40 }}>
+    <div style={{ padding: 40 }}>
       <h1 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 20px 0' }}>项目设置</h1>
 
       {/* Tab bar */}
