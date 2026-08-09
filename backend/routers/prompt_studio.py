@@ -16,7 +16,9 @@ import os
 import re
 import sys
 import time
+import traceback
 import uuid
+from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -29,12 +31,6 @@ router = APIRouter(prefix="/api/prompt-studio")
 # In-memory progress lines for frontend polling
 _progress: list[str] = []
 
-
-def _emit(msg: str):
-    """Log and store a progress message for the frontend to poll."""
-    logger.info(msg)
-    _progress.append(msg)
-
 # ── Template directory ──
 
 if getattr(sys, 'frozen', False):
@@ -45,8 +41,25 @@ else:
     _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _TEMPLATES_DIR = os.path.join(_BASE_DIR, "resources", "prompts", "prompt_studio")
 _DEBUG_DIR = os.path.join(_BASE_DIR, "data", "debug")
+_ERROR_LOG = os.path.join(_BASE_DIR, "data", "prompt_studio_errors.log")
 
 VALID_TEMPLATES = {"system_prompt", "user_message"}
+
+
+def _write_error_log(msg: str):
+    """Write a timestamped error entry to the persistent error log file."""
+    os.makedirs(os.path.dirname(_ERROR_LOG), exist_ok=True)
+    try:
+        with open(_ERROR_LOG, "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
+
+
+def _emit(msg: str):
+    """Log and store a progress message for the frontend to poll."""
+    logger.info(msg)
+    _progress.append(msg)
 
 
 def _load_prompt_template(name: str) -> str:
@@ -425,16 +438,19 @@ async def generate_prompts(req: GenerateRequest):
                 (provider_id,)
             ).fetchone()
             if not provider_row:
+                _write_error_log(f"LLM provider not found or disabled: id={provider_id}")
                 raise HTTPException(400, f"指定的 LLM 提供商不存在或未启用")
         else:
             provider_row = db2.execute(
                 "SELECT id, name, models FROM llm_providers WHERE is_enabled = 1 ORDER BY created_at LIMIT 1"
             ).fetchone()
             if not provider_row:
+                _write_error_log("No enabled LLM provider found")
                 raise HTTPException(400, "没有可用的 LLM 提供商，请先在全局设置中配置")
             provider_id = provider_row["id"]
             models = json.loads(provider_row["models"]) if isinstance(provider_row["models"], str) else (provider_row["models"] or [])
             if not models:
+                _write_error_log(f"LLM provider has no models configured: name={provider_row['name']}")
                 raise HTTPException(400, "LLM 提供商没有配置模型")
             model = models[0]
         _emit(f"[prompt-studio] 提供商 provider={provider_row['name']} model={model}")
@@ -480,8 +496,10 @@ async def generate_prompts(req: GenerateRequest):
     try:
         raw_a, raw_b, raw_c = await asyncio.gather(task_a, task_b, task_c)
     except Exception as e:
-        _emit(f"[prompt-studio] LLM 调用失败: {e}")
-        raise HTTPException(500, f"LLM 调用失败: {str(e)}")
+        err_detail = f"{type(e).__name__}: {e}"
+        _emit(f"[prompt-studio] LLM 调用失败: {err_detail}")
+        _write_error_log(f"LLM call failed: {err_detail}\n{traceback.format_exc()}")
+        raise HTTPException(500, f"LLM 调用失败: {err_detail}")
 
     t_llm_end = time.time()
     _emit(f"[prompt-studio] 三路返回 A={len(raw_a)}chars B={len(raw_b)}chars C={len(raw_c)}chars 总耗时={t_llm_end - t_llm:.1f}s")
@@ -502,6 +520,7 @@ async def generate_prompts(req: GenerateRequest):
         configs_a = _parse_llm_response(raw_a)
     except HTTPException:
         _emit(f"[prompt-studio] 响应A JSON 解析失败 raw_len={len(raw_a)}")
+        _write_error_log(f"Response A JSON parse failed raw_len={len(raw_a)} first_500={raw_a[:500]}")
         raise
     _emit(f"[prompt-studio] 响应A JSON 解析成功")
 
@@ -509,6 +528,7 @@ async def generate_prompts(req: GenerateRequest):
         configs_b = _parse_llm_response(raw_b)
     except HTTPException:
         _emit(f"[prompt-studio] 响应B JSON 解析失败 raw_len={len(raw_b)}")
+        _write_error_log(f"Response B JSON parse failed raw_len={len(raw_b)} first_500={raw_b[:500]}")
         raise
     _emit(f"[prompt-studio] 响应B JSON 解析成功")
 
@@ -516,6 +536,7 @@ async def generate_prompts(req: GenerateRequest):
         configs_c = _parse_llm_response(raw_c)
     except HTTPException:
         _emit(f"[prompt-studio] 响应C JSON 解析失败 raw_len={len(raw_c)}")
+        _write_error_log(f"Response C JSON parse failed raw_len={len(raw_c)} first_500={raw_c[:500]}")
         raise
     _emit(f"[prompt-studio] 响应C JSON 解析成功")
 
@@ -533,6 +554,7 @@ async def generate_prompts(req: GenerateRequest):
         _validate_configs(configs)
     except HTTPException as e:
         _emit(f"[prompt-studio] 配置校验失败: {e.detail}")
+        _write_error_log(f"Config validation failed: {e.detail}")
         raise
     _emit(f"[prompt-studio] 配置校验通过 column={len(configs.get('column_configs',[]))} "
           f"speech={len(configs.get('speech_configs',[]))} tts={len(configs.get('tts_configs',[]))} "

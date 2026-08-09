@@ -65,6 +65,8 @@ export default function PromptStudioPage() {
   const [sections, setSections] = useState<Record<string, SectionState>>({})
   const [resultTab, setResultTab] = useState('column_configs')
   const [toastMsg, setToastMsg] = useState('')
+  const [errorLog, setErrorLog] = useState<string[]>([])
+  const toastTimer = useRef<any>(null)
 
   // ── Save to list state ──
   const [saveName, setSaveName] = useState('')
@@ -171,7 +173,16 @@ export default function PromptStudioPage() {
 
   const toast = (msg: string) => {
     setToastMsg(msg)
-    setTimeout(() => setToastMsg(''), 3000)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    const isError = msg.includes('失败') || msg.includes('错误')
+    toastTimer.current = setTimeout(() => setToastMsg(''), isError ? 15000 : 5000)
+  }
+
+  const logError = (msg: string) => {
+    const ts = new Date().toLocaleTimeString('zh-CN')
+    const line = `[${ts}] ${msg}`
+    setErrorLog(prev => [...prev, line])
+    toast(msg)
   }
 
   // Initialize section states when configs are loaded
@@ -237,10 +248,11 @@ export default function PromptStudioPage() {
         setConfigs(result.configs as unknown as GeneratedConfigs)
         setProvider(result.provider)
         setSaveName(`${industryTopic.trim()} — 提示词配置`)
+        setErrorLog([]) // clear old errors on success
         toast('生成完成，请逐项审核后应用或保存到列表')
       }
     } catch (e: any) {
-      toast(`生成失败: ${e.message || e}`)
+      logError(`生成失败: ${e.message || e}`)
     } finally {
       setGenerating(false)
     }
@@ -259,7 +271,7 @@ export default function PromptStudioPage() {
       await api.applyPrompts({ workspace_id: applyTarget, configs: configs as unknown as Record<string, any[]> })
       toast('配置已应用到工作区')
     } catch (e: any) {
-      toast(`应用失败: ${e.message || e}`)
+      logError(`应用失败: ${e.message || e}`)
     } finally {
       setApplying(false)
     }
@@ -281,7 +293,7 @@ export default function PromptStudioPage() {
       })
       toast('已保存到列表')
     } catch (e: any) {
-      toast(`保存失败: ${e.message || e}`)
+      logError(`保存失败: ${e.message || e}`)
     } finally {
       setSaving(false)
     }
@@ -299,7 +311,7 @@ export default function PromptStudioPage() {
       setNewWsName('')
       toast(`工作区"${name}"已创建并选中`)
     } catch (e: any) {
-      toast(`创建工作区失败: ${e.message || e}`)
+      logError(`创建工作区失败: ${e.message || e}`)
     } finally {
       setCreatingWs(false)
     }
@@ -484,7 +496,7 @@ export default function PromptStudioPage() {
       const data = await api.listPromptSaves()
       setSaves(data.saves || [])
     } catch (e: any) {
-      toast(`加载列表失败: ${e.message || e}`)
+      logError(`加载列表失败: ${e.message || e}`)
     } finally {
       setSavesLoading(false)
     }
@@ -515,7 +527,7 @@ export default function PromptStudioPage() {
       setSaveResultTab('column_configs')
       setSaveEditing(false)
     } catch (e: any) {
-      toast(`加载详情失败: ${e.message || e}`)
+      logError(`加载详情失败: ${e.message || e}`)
     }
   }
 
@@ -554,7 +566,7 @@ export default function PromptStudioPage() {
       setSaveEditing(false)
       toast('修改已保存')
     } catch (e: any) {
-      toast(`更新失败: ${e.message || e}`)
+      logError(`更新失败: ${e.message || e}`)
     }
   }
 
@@ -573,7 +585,7 @@ export default function PromptStudioPage() {
       await api.applyPrompts({ workspace_id: saveApplyTarget, configs: cfg as unknown as Record<string, any[]> })
       toast('配置已应用到工作区')
     } catch (e: any) {
-      toast(`应用失败: ${e.message || e}`)
+      logError(`应用失败: ${e.message || e}`)
     } finally {
       setSaveApplying(false)
     }
@@ -592,7 +604,7 @@ export default function PromptStudioPage() {
       setSaves(prev => prev.filter(s => s.id !== saveId))
       toast('已删除')
     } catch (e: any) {
-      toast(`删除失败: ${e.message || e}`)
+      logError(`删除失败: ${e.message || e}`)
     }
   }
 
@@ -793,11 +805,29 @@ export default function PromptStudioPage() {
 
       {/* Right: Results */}
       <div style={{ flex: 1, minWidth: 0, padding: '0 16px 0 0' }}>
-        {!configs && !generating && (
+        {!configs && !generating && errorLog.length === 0 && (
           <div className="card" style={{ padding: 60, textAlign: 'center' }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎨</div>
             <div className="card-title">输入行业主题和用途，开始生成</div>
             <div className="form-hint" style={{ marginTop: 4 }}>所有编辑自动保存在浏览器本地，刷新页面不会丢失</div>
+          </div>
+        )}
+
+        {errorLog.length > 0 && (
+          <div className="card" style={{ padding: 12, marginBottom: 12, border: '1px solid var(--danger)', background: '#fff5f5' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontWeight: 600, color: 'var(--danger)', fontSize: 12 }}>错误日志（可截图发给管理员）</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setErrorLog([])} style={{ fontSize: 10, padding: '1px 6px' }}>
+                清除
+              </button>
+            </div>
+            <div style={{
+              background: '#1e1e1e', color: '#f48771', fontFamily: 'Consolas, monospace',
+              fontSize: 12, padding: 10, borderRadius: 4, maxHeight: 200, overflowY: 'auto',
+              lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-all',
+            }}>
+              {errorLog.map((line, i) => <div key={i}>{line}</div>)}
+            </div>
           </div>
         )}
 
