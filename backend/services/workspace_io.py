@@ -1,7 +1,7 @@
 """
 Workspace full data export/import — ZIP with workspace.json + file assets.
 
-Export: all project data + file assets in a portable ZIP.
+Export: all project data + step_results + file assets in a portable ZIP.
 Import: restore to a new workspace with fresh IDs.
 """
 
@@ -75,8 +75,8 @@ def _get_save_root(db) -> str:
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "output")
 
 
-def _collect_file_paths(projects_rows, pr_results_rows, save_root: str) -> dict:
-    """Scan storage_path / file_path columns for existing disk files.
+def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_root: str) -> dict:
+    """Collect all disk files: project dirs + result file_paths + step file_paths.
 
     Returns {abs_path: zip_relative_path}
     """
@@ -87,7 +87,6 @@ def _collect_file_paths(projects_rows, pr_results_rows, save_root: str) -> dict:
         if not abs_path:
             return
         p = os.path.normcase(os.path.normpath(os.path.abspath(abs_path)))
-        # Validate path stays within save_root
         if not os.path.exists(p):
             return
         if os.path.commonpath([p, save_root_norm]) != save_root_norm:
@@ -95,12 +94,34 @@ def _collect_file_paths(projects_rows, pr_results_rows, save_root: str) -> dict:
         rel = os.path.relpath(p, save_root_norm).replace("\\", "/")
         file_map[p] = f"files/{rel}"
 
+    def _walk_dir(dir_path: str):
+        if not dir_path or not os.path.isdir(dir_path):
+            return
+        p = os.path.normcase(os.path.normpath(os.path.abspath(dir_path)))
+        if os.path.commonpath([p, save_root_norm]) != save_root_norm:
+            return
+        for root, _dirs, files in os.walk(p):
+            for f in files:
+                fp = os.path.join(root, f)
+                _add_path(fp)
+
     for row in projects_rows:
         sp = (row.get("storage_path") or "").strip()
         if sp and os.path.isabs(sp):
-            _add_path(sp)
+            _walk_dir(sp)
+        else:
+            # Also try project_id-based dir
+            pid = row.get("id", "")
+            if pid:
+                candidate = os.path.join(save_root, pid)
+                _walk_dir(candidate)
 
     for row in pr_results_rows:
+        fp = (row.get("file_path") or "").strip()
+        if fp and os.path.isabs(fp):
+            _add_path(fp)
+
+    for row in step_results_rows:
         fp = (row.get("file_path") or "").strip()
         if fp and os.path.isabs(fp):
             _add_path(fp)
@@ -134,47 +155,60 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
         "SELECT * FROM projects WHERE workspace_id = ?", (workspace_id,)).fetchall()]
     project_ids = [p["id"] for p in projects]
 
-    # 5. Source materials (by project, batched)
-    src_materials = _batch_in_select(db, "source_materials", "project_id", project_ids) if project_ids else []
-
-    # 6. Project items (by project, batched)
+    # 5. Project items (by project, batched)
     p_items = _batch_in_select(db, "project_items", "project_id", project_ids) if project_ids else []
     p_items.sort(key=lambda it: it.get("sort_order", 0))
 
-    # 7. Project item results (by item, batched)
+    # 6. Project item results (by item, batched, exclude AUTOINCREMENT id)
     item_ids = [it["id"] for it in p_items]
     pr_results = _batch_in_select(db, "project_item_results", "project_item_id", item_ids, {"id"}) if item_ids else []
+
+    # 7. Step results (by project, batched, exclude AUTOINCREMENT id)
+    step_results = _batch_in_select(db, "step_results", "project_id", project_ids, {"id"}) if project_ids else []
 
     # 8. Batch jobs
     batch_jobs = [_row_dict(r) for r in db.execute(
         "SELECT * FROM batch_jobs WHERE workspace_id = ?", (workspace_id,)).fetchall()]
     batch_ids = [b["id"] for b in batch_jobs]
 
-    # 9. Batch job items (batched)
+    # 9. Batch job items (batched, exclude AUTOINCREMENT id)
     batch_items = _batch_in_select(db, "batch_job_items", "batch_id", batch_ids, {"id"}) if batch_ids else []
 
-    # 10. File map
+    # 10. File map — all project dirs + result files + step files
     save_root = _get_save_root(db)
-    file_map = _collect_file_paths(projects, pr_results, save_root)
+    file_map = _collect_all_files(projects, pr_results, step_results, save_root)
 
     manifest = {
-        "version": 1,
+        "version": 2,
         "exported_at": datetime.now(timezone.utc).isoformat(),
         "source_workspace_id": workspace_id,
         "workspace": ws_meta,
         "configs": configs,
         "project_categories": cats,
         "projects": projects,
-        "source_materials": src_materials,
         "project_items": p_items,
         "project_item_results": pr_results,
+        "step_results": step_results,
         "batch_jobs": batch_jobs,
         "batch_job_items": batch_items,
     }
 
+    # Diagnostic summary
+    summary = {
+        "projects": len(projects),
+        "project_items": len(p_items),
+        "project_item_results": len(pr_results),
+        "step_results": len(step_results),
+        "batch_jobs": len(batch_jobs),
+        "batch_job_items": len(batch_items),
+        "file_assets": len(file_map),
+    }
+    manifest["_summary"] = summary
+
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("workspace.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        manifest_json = json.dumps(manifest, ensure_ascii=False, indent=2)
+        zf.writestr("workspace.json", manifest_json)
         for abs_path, zip_path in file_map.items():
             zf.write(abs_path, zip_path)
 
@@ -242,10 +276,13 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
         except json.JSONDecodeError:
             raise ValueError("workspace.json 格式无效")
 
+        ver = manifest.get("version", 1)
+
         # Validate structure
-        for key in ("workspace", "configs", "projects", "source_materials",
-                     "project_items", "project_item_results", "batch_jobs",
-                     "batch_job_items", "project_categories"):
+        required_keys = ["workspace", "configs", "projects",
+                        "project_items", "project_item_results", "batch_jobs",
+                        "batch_job_items", "project_categories"]
+        for key in required_keys:
             if key not in manifest:
                 raise ValueError(f"workspace.json 缺少字段: {key}")
 
@@ -294,16 +331,11 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
             db, "project_categories", manifest.get("project_categories", []),
             id_map, new_ws_id)
 
-        # Import projects (remap storage_path)
+        # Import projects
         for proj in manifest.get("projects", []):
             proj["id"] = id_map.get(proj["id"], proj["id"])
         applied["projects"] = _insert_rows(
             db, "projects", manifest.get("projects", []), id_map, new_ws_id)
-
-        # Import source materials
-        applied["source_materials"] = _insert_rows(
-            db, "source_materials", manifest.get("source_materials", []),
-            id_map, new_ws_id)
 
         # Import project items (own id_map for source_item_id cross-refs)
         id_map_items = {}
@@ -315,10 +347,16 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
             db, "project_items", manifest.get("project_items", []),
             id_map, new_ws_id, id_map_items=id_map_items)
 
-        # Import project item results (skip AUTOINCREMENT id)
+        # Import project item results
         applied["project_item_results"] = _insert_rows(
             db, "project_item_results", manifest.get("project_item_results", []),
             id_map, new_ws_id, id_map_items=id_map_items)
+
+        # Import step results (v2+; v1 exports don't have this key → skip)
+        if manifest.get("step_results"):
+            applied["step_results"] = _insert_rows(
+                db, "step_results", manifest["step_results"],
+                id_map, new_ws_id)
 
         # Import batch jobs
         id_map_batch = {}
@@ -371,23 +409,3 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
     except Exception:
         db.rollback()
         raise
-
-
-def _remap_path(old_storage_path: str, save_root: str, new_ws_id: str, new_project_id: str) -> str:
-    """Compute new storage_path for an imported project."""
-    if not old_storage_path:
-        return ""
-    old_name = os.path.basename(os.path.normpath(old_storage_path))
-    if not old_name:
-        old_name = new_project_id
-    ws_dir = os.path.join(save_root, new_ws_id)
-    return os.path.join(ws_dir, new_project_id, old_name)
-
-
-def _remap_result_path(old_file_path: str, save_root: str, new_ws_id: str) -> str:
-    """Compute new file_path for an imported project_item_result."""
-    if not old_file_path:
-        return ""
-    old_name = os.path.basename(os.path.normpath(old_file_path))
-    results_dir = os.path.join(save_root, new_ws_id, "results")
-    return os.path.join(results_dir, old_name)
