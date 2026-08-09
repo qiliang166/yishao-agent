@@ -277,6 +277,15 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
          user_sub),
     )
 
+    # Auto-assign all member roles so non-admin users can see the imported workspace
+    _all_member_roles = db.execute(
+        "SELECT id FROM roles WHERE user_type = 'member'"
+    ).fetchall()
+    for _r in _all_member_roles:
+        db.execute(
+            "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
+            (new_ws_id, _r[0]))
+
     # Build ID mapping
     id_map = {manifest["source_workspace_id"]: new_ws_id}
     for proj in manifest.get("projects", []):
