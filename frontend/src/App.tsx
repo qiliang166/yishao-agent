@@ -200,6 +200,11 @@ function Sidebar({ onOpenWizard }: { onOpenWizard?: () => void }) {
           onClick={() => navigate('/settings')}>
           <span className="ico"><SvgIcon name="sliders" /></span> 全局设置
         </button>
+        <button
+          className={`sidebar-item ${location.pathname === '/downloads' ? 'active' : ''}`}
+          onClick={() => navigate('/downloads')}>
+          <span className="ico"><SvgIcon name="download" /></span> 下载文件
+        </button>
         {user?.roles?.includes('开发体验员') && (
           <button
             className={`sidebar-item ${location.pathname === '/member-center' ? 'active' : ''}`}
@@ -756,6 +761,7 @@ function AppShell() {
             <Route path="/members" element={<UserManagePage />} />
             <Route path="/members/pending" element={<MemberApprovalPage />} />
             <Route path="/members/stats" element={<DownloadStatsPage />} />
+            <Route path="/downloads" element={<MemberDownloadsPage />} />
             <Route path="/authors" element={<AuthorManagePage />} />
             <Route path="/roles" element={<RoleManagePage />} />
             <Route path="/settings" element={<SettingsLock><SettingsPage /></SettingsLock>} />
