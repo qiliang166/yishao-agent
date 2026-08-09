@@ -8,6 +8,7 @@ import os
 import io
 import traceback
 import socket
+import urllib.request
 
 # Determine base dir for logging: next to exe (frozen) or next to this file (dev)
 if getattr(sys, 'frozen', False):
@@ -40,13 +41,40 @@ def _port_in_use(port: int) -> bool:
         return False
 
 
-PORT = 8766
+_PRIMARY_PORT = 8766
+_FALLBACK_PORTS = [8765, 8764, 8763]
 
-# If already running, just open browser and exit
-if _port_in_use(PORT):
+
+def _is_self_already_running(port: int) -> bool:
+    """Check if a YishaoAgent desktop instance is already serving on this port."""
+    if not _port_in_use(port):
+        return False
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            f'http://localhost:{port}/api/health',
+            headers={'User-Agent': 'YishaoAgent-Desktop/1.0'}
+        )
+        resp = urllib.request.urlopen(req, timeout=2)
+        return resp.status == 200
+    except Exception:
+        return False
+
+
+# If desktop already running, just open browser and exit
+if _is_self_already_running(_PRIMARY_PORT):
     import webbrowser
-    webbrowser.open(f'http://localhost:{PORT}')
+    webbrowser.open(f'http://localhost:{_PRIMARY_PORT}')
     sys.exit(0)
+
+# Pick a free port
+PORT = _PRIMARY_PORT
+for p in _FALLBACK_PORTS:
+    if not _port_in_use(PORT):
+        break
+    if not _port_in_use(p):
+        PORT = p
+        break
 
 
 try:
