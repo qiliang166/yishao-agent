@@ -115,6 +115,12 @@ async def generate(
         kwargs["response_format"] = {"type": "json_object"}
 
     response = await client.chat.completions.create(**kwargs)
+    finish_reason = getattr(response.choices[0], 'finish_reason', None)
+    if finish_reason == "length":
+        logger.warning(
+            f"LLM response truncated (finish_reason=length) "
+            f"model={model} max_tokens={max_tokens}"
+        )
     content = response.choices[0].message.content
     if not content:
         rc = getattr(response.choices[0].message, 'reasoning_content', None)
