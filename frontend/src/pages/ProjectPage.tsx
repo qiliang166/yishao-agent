@@ -604,7 +604,7 @@ export default function ProjectPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const readOnly = user?.user_type === 'member'
+  const readOnly = user?.user_type === 'member' && !user?.roles?.includes('开发体验员')
   const canViewStage1 = usePermission('stage1.view')
   const canViewStage2 = usePermission('stage2.view')
   const canViewStage3 = usePermission('stage3.view')
