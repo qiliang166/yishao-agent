@@ -1,5 +1,99 @@
 ﻿# 更新日志
 
+## 2026-08-10
+
+- fix: enforce unique project_code with UNIQUE index + regenerate on import
+
+## 2026-08-10
+
+- fix: also skip audio files (mp3/wav/ogg/flac/aac/wma) in workspace export
+
+## 2026-08-10
+
+- fix: skip video files (mp4/mkv/webm/avi/mov/flv) in workspace export
+
+## 2026-08-10
+
+- fix: strengthen run_id path traversal validation in _collect_export_files
+
+## 2026-08-09
+
+- fix: include HTML export run dirs in workspace ZIP export/import
+
+## 2026-08-09
+
+- fix: content admins exclude member-created workspaces + create_project workspace access check
+
+## 2026-08-09
+
+- fix: exclude 开发体验员 from member routing in LandingPage, LoginPage, MemberLoginPage
+
+## 2026-08-09
+
+- fix: exclude 开发体验员 from readOnly mode — they have CONTENT_ADMIN_PERMS
+
+## 2026-08-09
+
+- fix: clear storage_path on import — prevents cross-machine path mismatch, regenerates from local save_root
+
+## 2026-08-09
+
+- fix: exclude upgrade payments from pending-renewals list — upgrade record was appearing in both tabs
+
+## 2026-08-09
+
+- fix: exclude source_materials from export — input box content (video URLs, text, file paths) should not be exported; videos on disk still collected via _collect_all_files
+
+## 2026-08-09
+
+- fix: use member_workspaces (user-level) instead of workspace_roles (role-level) for auto-assign
+
+## 2026-08-09
+
+- fix: auto-assign only creator's own roles, not all member roles
+
+## 2026-08-09
+
+- fix: add 下载文件 menu item + route to admin sidebar
+- fix: remove import size limits + add project_item_id remap for correct import
+- fix: remap project_item_id on import so project_item_results link to correct items
+- fix: auto-assign member roles on workspace create + import so non-admin users can see them
+
+## 2026-08-09
+
+- fix: member-created workspaces invisible to creator + default workspace has no role assignment
+
+## 2026-08-09
+
+- chore: remove redundant inline import in desktop_main.py
+- fix: desktop port conflict now checks if self is running instead of blindly connecting
+
+## 2026-08-09
+
+- fix: log finish_reason in OpenAI path to detect truncated LLM responses
+- exclude KeyGen exe and keygen_config.json from desktop ZIP
+
+## 2026-08-09
+
+- revert brand name as EXE filename — Chinese filename breaks execution
+
+## 2026-08-09
+
+- remove broken NSIS installer step from desktop build
+
+## 2026-08-09
+
+- fix: apply brand_name to spec + replace single-EXE copy with proper desktop ZIP
+
+## 2026-08-09
+
+- feat: prompt studio persistent error log + frontend error display
+
+## 2026-08-09
+
+- chore: rebuild packages with contact_info moved to admin settings (59e7c65)
+- fix: move contact_info from KeyGen brand info to local admin settings
+
 ## 2026-08-09
 
 - fix: persist purchase order_no + license_key to localStorage across refresh
