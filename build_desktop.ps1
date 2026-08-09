@@ -165,7 +165,8 @@ if (Test-Path "$root\CHANGELOG.md") {
 # Remove any runtime artifacts (DB, logs, password file) that should NOT ship to users
 @("$root\dist\data\yishao.db", "$root\dist\data\yishao.db-journal",
   "$root\dist\data\yishao.db-wal", "$root\dist\data\yishao.db-shm",
-  "$root\dist\initial_admin_password.txt", "$root\dist\startup_errors.log") | ForEach-Object {
+  "$root\dist\initial_admin_password.txt", "$root\dist\startup_errors.log",
+  "$root\dist\YishaoAgent-KeyGen.exe", "$root\dist\keygen_config.json") | ForEach-Object {
     if (Test-Path $_) { Remove-Item $_ -Force -ErrorAction SilentlyContinue }
 }
 
