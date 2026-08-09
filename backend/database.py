@@ -1425,6 +1425,45 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rsub_author ON recipe_submissions(author_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rsub_status ON recipe_submissions(status)")
 
+        # Deduplicate project_code and add UNIQUE index (2026-08-10)
+        try:
+            dup_rows = conn.execute(
+                "SELECT project_code, COUNT(*) as cnt FROM projects "
+                "WHERE project_code IS NOT NULL AND project_code != '' "
+                "GROUP BY project_code HAVING cnt > 1"
+            ).fetchall()
+            if dup_rows:
+                today = datetime.now().strftime("%y%m%d")
+                today_prefix = f"KH{today}-%"
+                today_count = conn.execute(
+                    "SELECT COUNT(*) FROM projects WHERE project_code LIKE ?", (today_prefix,)
+                ).fetchone()[0]
+                seq = today_count + 1
+                for code, _ in dup_rows:
+                    rows = conn.execute(
+                        "SELECT id, created_at FROM projects WHERE project_code = ? ORDER BY created_at ASC",
+                        (code,)
+                    ).fetchall()
+                    for idx, (pid, _created_at) in enumerate(rows):
+                        if idx == 0:
+                            continue  # keep first
+                        # Find unique code (avoid collisions with existing)
+                        while True:
+                            new_code = f"KH{today}-{seq:04d}"
+                            if not conn.execute(
+                                "SELECT 1 FROM projects WHERE project_code = ?", (new_code,)
+                            ).fetchone():
+                                break
+                            seq += 1
+                        conn.execute("UPDATE projects SET project_code = ? WHERE id = ?", (new_code, pid))
+                        seq += 1
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_project_code "
+                "ON projects(project_code) WHERE project_code IS NOT NULL AND project_code != ''"
+            )
+        except Exception:
+            pass
+
         conn.commit()
     finally:
         conn.close()

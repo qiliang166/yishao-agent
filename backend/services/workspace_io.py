@@ -326,6 +326,38 @@ def _insert_rows(db, table: str, rows: list[dict], id_map: dict, new_ws_id: str,
     return applied_count
 
 
+# Session cache to avoid duplicate codes within a single process/transaction
+_GEN_CODE_CACHE: set = set()
+
+
+def _generate_project_code(db) -> str:
+    """Generate a unique project code KH{YYMMDD}-{seq} with collision avoidance."""
+    from datetime import date
+    today = date.today().strftime("%y%m%d")
+    today_prefix = f"KH{today}-%"
+    for attempt in range(100):
+        max_row = db.execute(
+            "SELECT MAX(project_code) FROM projects WHERE project_code LIKE ?", (today_prefix,)
+        ).fetchone()[0]
+        if max_row:
+            try:
+                seq = int(max_row[9:]) + 1 + attempt
+            except (ValueError, IndexError):
+                seq = 1 + attempt
+        else:
+            seq = 1 + attempt
+        code = f"KH{today}-{seq:04d}"
+        if code in _GEN_CODE_CACHE:
+            continue
+        exists = db.execute(
+            "SELECT 1 FROM projects WHERE project_code = ?", (code,)
+        ).fetchone()
+        if not exists:
+            _GEN_CODE_CACHE.add(code)
+            return code
+    raise RuntimeError("Failed to generate unique project code after 100 attempts")
+
+
 def _safe_extract_export_path(export_dir: str, zip_name: str) -> str:
     """Resolve target path for export assets and validate it stays within export_dir."""
     rel = zip_name[len("exports/"):]
@@ -407,11 +439,18 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
             db, "project_categories", manifest.get("project_categories", []),
             id_map, new_ws_id)
 
-        # Import projects
+        # Import projects (strip project_code — regenerated below)
         for proj in manifest.get("projects", []):
             proj["id"] = id_map.get(proj["id"], proj["id"])
+            proj.pop("project_code", None)
         applied["projects"] = _insert_rows(
             db, "projects", manifest.get("projects", []), id_map, new_ws_id)
+
+        # Regenerate project_codes for imported projects
+        for proj in manifest.get("projects", []):
+            new_pid = proj["id"]  # already remapped by id_map above
+            code = _generate_project_code(db)
+            db.execute("UPDATE projects SET project_code = ? WHERE id = ?", (code, new_pid))
 
         # Clear storage_path so projects regenerate paths on the new machine
         db.execute("UPDATE projects SET storage_path = '' WHERE workspace_id = ?", (new_ws_id,))

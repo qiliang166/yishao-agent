@@ -1479,14 +1479,9 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         storage_path = os.path.normpath(req.storage_path or os.path.join(base, folder))
         os.makedirs(storage_path, exist_ok=True)
 
-        # Generate project code KH{YYMMDD}-{seq} (seq resets daily)
-        from datetime import date
-        today = date.today().strftime("%y%m%d")  # "260627"
-        today_prefix = f"KH{today}-%"
-        today_count = db.execute(
-            "SELECT COUNT(*) FROM projects WHERE project_code LIKE ?", (today_prefix,)
-        ).fetchone()[0]
-        project_code = f"KH{today}-{today_count + 1:04d}"
+        # Generate project code KH{YYMMDD}-{seq} (unique, with retry)
+        from services.workspace_io import _generate_project_code
+        project_code = _generate_project_code(db)
 
         db.execute(
             "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable, category_id, author_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -3200,13 +3195,8 @@ def copy_project(project_id: str, user=require_perm("project.create")):
         if not src:
             raise HTTPException(404, "Source project not found")
         new_id = uuid.uuid4().hex[:12]
-        from datetime import date
-        today = date.today().strftime("%y%m%d")
-        today_prefix = f"KH{today}-%"
-        today_count = db.execute(
-            "SELECT COUNT(*) FROM projects WHERE project_code LIKE ?", (today_prefix,)
-        ).fetchone()[0]
-        project_code = f"KH{today}-{today_count + 1:04d}"
+        from services.workspace_io import _generate_project_code
+        project_code = _generate_project_code(db)
         db.execute(
             "INSERT INTO projects (id, name, storage_path, copied_from_project_id, project_code) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -10197,13 +10187,9 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
 
                 proj_id = uuid.uuid4().hex[:12]
 
-                # Generate project_code (KH{date}-{seq})
-                today = datetime.now().strftime("%y%m%d")
-                today_prefix = f"KH{today}%"
-                today_count = db.execute(
-                    "SELECT COUNT(*) FROM projects WHERE project_code LIKE ?", (today_prefix,)
-                ).fetchone()[0]
-                project_code = f"KH{today}-{today_count + 1:04d}"
+                # Generate project_code (KH{date}-{seq}, unique with retry)
+                from services.workspace_io import _generate_project_code
+                project_code = _generate_project_code(db)
 
                 db.execute(
                     "INSERT INTO projects (id, workspace_id, name, source_type, status, project_code, "
