@@ -505,7 +505,6 @@ def get_site_config():
             "branding_copyright": config.get("branding_copyright", ""),
             "branding_signature": config.get("branding_signature", ""),
             "about_content": config.get("about_content", ""),
-            "contact_info": config.get("contact_info", ""),
         }
     finally:
         db.close()
@@ -532,7 +531,6 @@ def admin_get_site_config(request: Request):
             "branding_copyright": config.get("branding_copyright", ""),
             "branding_signature": config.get("branding_signature", ""),
             "about_content": config.get("about_content", ""),
-            "contact_info": config.get("contact_info", ""),
         }
     finally:
         db.close()
@@ -546,7 +544,7 @@ def admin_update_site_config(req: dict, request: Request):
         for key in ("pricing_html", "announce_html", "announce_enabled", "purchase_enabled",
                      "download_desktop_url", "download_server_url",
                      "brand_name", "brand_logo", "branding_slogan", "app_version",
-                     "branding_copyright", "branding_signature", "about_content", "contact_info"):
+                     "branding_copyright", "branding_signature", "about_content"):
             if key in req:
                 db.execute(
                     "INSERT OR REPLACE INTO site_config (key, value) VALUES (?, ?)",

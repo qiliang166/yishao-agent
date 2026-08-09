@@ -481,12 +481,6 @@ class KeyGenApp:
                                   highlightbackground="#ccc", padx=8, pady=6, wrap="word")
         self.about_text.pack(fill="both", expand=True)
 
-        # Contact info
-        row4 = ttk.Frame(tab); row4.pack(fill="x", padx=8, pady=(0, 8))
-        ttk.Label(row4, text="联系我们：", width=12).pack(side="left")
-        self.contact_info_var = tk.StringVar()
-        ttk.Entry(row4, textvariable=self.contact_info_var, font=("Microsoft YaHei UI", 10)).pack(side="left", fill="x", expand=True)
-
         # Buttons
         btn_row = ttk.Frame(tab); btn_row.pack(fill="x", padx=8, pady=(0, 8))
         ttk.Button(btn_row, text="加载当前设置", command=self._load_brand_info).pack(side="left", padx=(0, 8))
@@ -1020,7 +1014,6 @@ class KeyGenApp:
             self.branding_signature_var.set(data.get("branding_signature", ""))
             self.about_text.delete("1.0", "end")
             self.about_text.insert("1.0", data.get("about_content", ""))
-            self.contact_info_var.set(data.get("contact_info", ""))
             self.status_var.set("品牌信息已加载")
             self.brand_status_var.set("")
         except Exception as e:
@@ -1037,7 +1030,6 @@ class KeyGenApp:
                 "branding_copyright": self.branding_copyright_var.get().strip(),
                 "branding_signature": self.branding_signature_var.get().strip(),
                 "about_content": self.about_text.get("1.0", "end-1c"),
-                "contact_info": self.contact_info_var.get().strip(),
             })
             self.brand_status_var.set("已保存")
             self.status_var.set("品牌信息已保存")

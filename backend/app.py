@@ -7822,7 +7822,7 @@ def get_settings(request: Request):
                         "SELECT key, value FROM site_config WHERE key IN "
                         "('download_desktop_url','download_server_url',"
                         "'brand_name','brand_logo','branding_slogan','app_version',"
-                        "'branding_copyright','branding_signature','about_content','contact_info')"
+                        "'branding_copyright','branding_signature','about_content')"
                     ).fetchall()
                         for _r in _arows:
                             if _r[1] and not settings.get(_r[0]):
@@ -7856,7 +7856,7 @@ def get_settings(request: Request):
                 _config = json.loads(_resp.read().decode())
             for _k in ("download_desktop_url", "download_server_url",
                          "brand_name", "brand_logo", "branding_slogan", "app_version",
-                         "branding_copyright", "branding_signature", "about_content", "contact_info"):
+                         "branding_copyright", "branding_signature", "about_content"):
                 if _config.get(_k):
                     settings[_k] = _config[_k]
         except Exception:
