@@ -9564,6 +9564,8 @@ def list_pending_renewals(user=require_perm("member.manage")):
     """List users who have pending renewal payments (recorded_by IS NULL on an approved member)."""
     db = get_db()
     try:
+        plans = _load_plans()
+        upgrade_plan_name = plans.get("upgrade", {}).get("name", "体验管理员升级")
         rows = db.execute(
             """SELECT pr.id as payment_id, pr.amount_cents, pr.plan_name, pr.duration_days,
                       pr.payment_method, pr.payment_ref, pr.paid_at, pr.points_granted_deci,
@@ -9572,7 +9574,9 @@ def list_pending_renewals(user=require_perm("member.manage")):
                FROM payment_records pr
                JOIN users u ON u.id = pr.user_id
                WHERE pr.recorded_by IS NULL AND u.is_approved = 1 AND u.user_type = 'member'
+                 AND pr.plan_name != ?
                ORDER BY pr.paid_at DESC""",
+            (upgrade_plan_name,),
         ).fetchall()
         members = []
         for r in rows:
