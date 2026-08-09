@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 
+const SAVED_ORDER_KEY = 'purchase_order_no'
+const SAVED_LICENSE_KEY = 'purchase_license_key'
+
 interface Plan {
   id: number
   name: string
@@ -57,8 +60,22 @@ export default function PurchasePage() {
       .catch(e => setError(`加载套餐失败: ${e.message}`))
       .finally(() => setLoading(false))
 
-    // Load QR code URLs
     api.getQrcodeUrls().then(d => setQrcodes({ wechat: d.wechat_qr, alipay: d.alipay_qr })).catch(() => {})
+
+    // Restore saved order on page load (survives refresh)
+    const savedOrder = localStorage.getItem(SAVED_ORDER_KEY)
+    const savedLicense = localStorage.getItem(SAVED_LICENSE_KEY)
+    if (savedLicense) {
+      setLicenseKey(savedLicense)
+      setStep(4)
+    }
+    if (savedOrder) {
+      setOrderNo(savedOrder)
+      if (!savedLicense) {
+        setStep(4)
+        setTimeout(() => startPolling(savedOrder), 100)
+      }
+    }
   }, [])
 
   useEffect(() => {
@@ -82,6 +99,7 @@ export default function PurchasePage() {
       const result = await api.createOrder({ phone: phone.trim(), plan_type_id: selectedPlan.id })
       if (result?.ok) {
         setOrderNo(result.order_no)
+        localStorage.setItem(SAVED_ORDER_KEY, result.order_no)
         setAmountYuan(result.amount_yuan)
         setPlanName(result.plan_name)
         setStep(3)
@@ -110,7 +128,9 @@ export default function PurchasePage() {
     }
   }
 
-  const startPolling = () => {
+  const startPolling = (savedOrderNo?: string) => {
+    const oid = savedOrderNo || orderNo
+    if (!oid) return
     if (pollRef.current) clearInterval(pollRef.current)
     pollErrorsRef.current = 0
     setPollError(false)
@@ -118,13 +138,16 @@ export default function PurchasePage() {
     pollRef.current = setInterval(async () => {
       attempts++
       try {
-        const order = await api.getOrder(orderNo)
+        const order = await api.getOrder(oid)
         pollErrorsRef.current = 0
         setOrderStatus(order.status)
         if (order.status === 'completed' && order.license_key) {
           setLicenseKey(order.license_key)
+          localStorage.setItem(SAVED_LICENSE_KEY, order.license_key)
           if (pollRef.current) clearInterval(pollRef.current)
         } else if (order.status === 'cancelled' || order.status === 'expired') {
+          localStorage.removeItem(SAVED_ORDER_KEY)
+          localStorage.removeItem(SAVED_LICENSE_KEY)
           if (pollRef.current) clearInterval(pollRef.current)
         } else if (attempts > 120) {
           if (pollRef.current) clearInterval(pollRef.current)
@@ -491,7 +514,7 @@ export default function PurchasePage() {
               <button
                 className="btn btn-primary"
                 style={{ width: '100%' }}
-                onClick={() => { setStep(1); setSelectedPlan(null); setPhone(''); setOrderNo(''); }}
+                onClick={() => { setStep(1); setSelectedPlan(null); setPhone(''); setOrderNo(''); localStorage.removeItem(SAVED_ORDER_KEY); localStorage.removeItem(SAVED_LICENSE_KEY); }}
               >
                 重新购买
               </button>
