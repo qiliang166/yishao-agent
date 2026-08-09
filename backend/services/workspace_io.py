@@ -152,9 +152,17 @@ def _collect_export_files(step_results_rows) -> dict:
         if not step_name.startswith("_ppt_result_"):
             continue
         run_id = step_name.replace("_ppt_result_", "", 1)
-        if not run_id or ".." in run_id:
+        if not run_id:
+            continue
+        if ".." in run_id or "/" in run_id or "\\" in run_id:
+            continue
+        if os.path.isabs(run_id) or re.match(r'^[A-Za-z]:', run_id):
             continue
         run_dir = os.path.join(export_dir, run_id)
+        run_dir = os.path.realpath(run_dir)
+        export_real = os.path.realpath(export_dir)
+        if os.path.commonpath([run_dir, export_real]) != export_real:
+            continue
         if not os.path.isdir(run_dir):
             continue
         for root, _dirs, files in os.walk(run_dir):
