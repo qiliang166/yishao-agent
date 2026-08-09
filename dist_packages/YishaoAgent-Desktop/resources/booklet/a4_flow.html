@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{BOOK_TITLE}}</title>
+<style>
+/* ═══ 主题变量（全部经 THEME_CSS_VARS 注入，禁止写死实值） ═══ */
+:root { {{THEME_CSS_VARS}} }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { background: var(--desk); overflow-x: hidden; }
+body {
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ═══ 网页式：连续长页，不做固定页高 ═══ */
+.bk-sheet {
+  width: min(880px, 96vw);
+  margin: 26px auto;
+  background: var(--background);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bk-sheet-inner { flex: 1; padding: 40px 48px; display: flex; flex-direction: column; }
+
+/* ═══ 封面（横幅式，不占整页） ═══ */
+.bk-cover .bk-sheet-inner { align-items: center; text-align: center; padding: 64px 48px; }
+.bk-cover-band { width: 100%; height: 8px; background: var(--accent); flex-shrink: 0; }
+.bk-cover-logo { max-height: 90px; max-width: 240px; object-fit: contain; margin-bottom: 28px; }
+.bk-cover-title { font-size: 38px; font-weight: 700; color: var(--ink); line-height: 1.35; letter-spacing: 0.08em; }
+.bk-cover-subtitle { margin-top: 16px; font-size: 18px; color: var(--text); opacity: 0.75; letter-spacing: 0.2em; }
+.bk-cover-rule { width: 130px; height: 2px; background: var(--accent); margin: 26px auto 0; }
+.bk-cover-meta { margin-top: 30px; font-size: 15px; line-height: 2; color: var(--text); }
+.bk-cover-author { font-size: 17px; font-weight: 600; color: var(--ink); }
+
+/* ═══ 扉页说明块 ═══ */
+.bk-flyleaf .bk-sheet-inner { align-items: center; text-align: center; }
+.bk-flyleaf-title { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: 0.15em; }
+.bk-flyleaf-text { margin-top: 18px; font-size: 15px; line-height: 2.1; max-width: 640px; white-space: pre-wrap; }
+.bk-flyleaf-info { margin-top: 22px; font-size: 13px; line-height: 2.1; color: var(--text); opacity: 0.8; }
+.bk-flyleaf-brand { margin-top: 16px; font-size: 12px; opacity: 0.6; line-height: 1.9; }
+
+/* ═══ 目录 ═══ */
+.bk-toc-title { font-size: 24px; font-weight: 700; color: var(--ink); text-align: center; letter-spacing: 0.3em; margin-bottom: 26px; }
+.bk-toc-table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.bk-toc-table td { padding: 7px 0; vertical-align: top; }
+.bk-toc-table a { color: inherit; text-decoration: none; }
+.bk-toc-num { width: 44px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); }
+.bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 40px; font-size: 13px; }
+
+/* ═══ 章节正文 ═══ */
+.bk-chapter-head { border-left: 5px solid var(--accent); padding: 6px 0 6px 16px; margin-bottom: 22px; }
+.bk-chapter-no { font-size: 13px; color: var(--accent); font-weight: 600; letter-spacing: 0.2em; }
+.bk-chapter-title { font-size: 23px; font-weight: 700; color: var(--ink); margin-top: 4px; line-height: 1.4; }
+.bk-chapter-src { font-size: 11px; opacity: 0.55; margin-top: 4px; }
+
+.bk-prose { font-size: 15px; line-height: 1.95; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--ink); margin: 20px 0 10px; line-height: 1.5; }
+.bk-prose h1 { font-size: 21px; } .bk-prose h2 { font-size: 19px; } .bk-prose h3 { font-size: 17px; } .bk-prose h4 { font-size: 16px; }
+.bk-prose p { margin: 8px 0; }
+.bk-prose ul, .bk-prose ol { margin: 8px 0 8px 22px; }
+.bk-prose li { margin: 4px 0; }
+.bk-prose table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
+.bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 6px 9px; }
+.bk-prose th { background: var(--card-bg); color: var(--ink); }
+.bk-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 8px 14px; margin: 12px 0; }
+.bk-prose code { background: var(--card-bg); padding: 1px 5px; border-radius: 2px; font-size: 13px; }
+.bk-prose pre { background: var(--card-bg); padding: 12px; overflow-x: auto; margin: 12px 0; }
+.bk-prose img { max-width: 100%; }
+.bk-prose hr { border: none; border-top: 1px solid var(--text); opacity: 0.25; margin: 18px 0; }
+
+/* ═══ 课件嵌入页（iframe 隔离，避免样式互染） ═══ */
+.bk-embed-sheet { padding: 0; align-items: center; justify-content: center; }
+.bk-embed-frame { border: none; width: 794px; height: 1123px; display: block; margin: 0 auto; max-width: 100%; }
+
+/* ═══ 封底 ═══ */
+.bk-back .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
+.bk-back-band { width: 100%; height: 8px; background: var(--primary); flex-shrink: 0; margin-top: auto; }
+.bk-back-text { font-size: 15px; line-height: 2.3; max-width: 640px; white-space: pre-wrap; }
+.bk-back-brand { margin-top: 26px; font-size: 12px; opacity: 0.6; line-height: 1.9; }
+
+/* ═══ VI A4 版式（第一章为 HTML 课件时 body 注入 bk-vi；规则源自 VI 手册 A4：封面/封底 var(--primary) 纯色禁渐变，深底白字 #ffffff 为唯一硬编码例外） ═══ */
+.bk-vi-pagehead, .bk-vi-tocline, .bk-vi-rule, .bk-vi-decor { display: none; }
+.bk-vi .bk-cover { background: var(--primary); }
+.bk-vi .bk-cover-band { height: 10px; }
+.bk-vi .bk-cover-title { color: #ffffff; }
+.bk-vi .bk-cover-subtitle { color: #ffffff; order: 2; }
+.bk-vi .bk-cover-rule { width: 48px; height: 4px; order: 1; margin: 22px auto 0; }
+.bk-vi .bk-cover-meta { color: rgba(255, 255, 255, 0.6); order: 3; }
+.bk-vi .bk-cover-author { color: #ffffff; }
+.bk-vi .bk-cover .bk-vi-decor { display: block; position: absolute; left: -110px; bottom: -110px; width: 320px; height: 320px; }
+.bk-vi .bk-vi-pagehead {
+  display: flex; position: absolute; top: 0; left: 48px; right: 48px; height: 45px;
+  align-items: center; justify-content: space-between;
+  font-size: 12px; color: rgba(var(--text-rgb), 0.45);
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.08);
+}
+.bk-vi .bk-flyleaf .bk-sheet-inner, .bk-vi .bk-toc .bk-sheet-inner { padding-top: 64px; }
+.bk-vi .bk-toc .bk-vi-tocline { display: block; width: 100%; height: 4px; background: var(--accent); margin-bottom: 20px; flex-shrink: 0; }
+.bk-vi .bk-toc-title { text-align: left; font-size: 28px; color: var(--primary); letter-spacing: 0.08em; }
+.bk-vi .bk-back { background: var(--primary); }
+.bk-vi .bk-back-band { order: -1; margin-top: 0; height: 10px; background: var(--accent); }
+.bk-vi .bk-back-text { color: #ffffff; font-size: 20px; font-weight: 600; line-height: 2; }
+.bk-vi .bk-back .bk-vi-rule { display: block; width: 48px; height: 4px; background: var(--accent); margin: 22px auto 0; }
+.bk-vi .bk-back-brand { color: #ffffff; }
+.bk-vi .bk-back .bk-vi-decor { display: block; position: absolute; right: -110px; top: -110px; width: 320px; height: 320px; }
+
+	/* === 页眉页脚（绝对定位在页边距区内，不占内容流） === */
+	.bk-page-header {
+	  position: absolute; top: 0; left: 20mm; right: 20mm; height: 16mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 10pt; color: rgba(var(--text-rgb), 0.5);
+	  border-bottom: 1px solid rgba(var(--text-rgb), 0.1);
+	  z-index: 1; pointer-events: none;
+	}
+	.bk-page-header.no-divider { border-bottom: none; }
+	.bk-page-header-logo { height: 11mm; width: auto; vertical-align: middle; margin-right: 3mm; }
+	.bk-page-footer {
+	  position: absolute; bottom: 0; left: 20mm; right: 20mm; height: 14mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 9pt; color: rgba(var(--text-rgb), 0.4);
+	  z-index: 1; pointer-events: none;
+	}
+	/* 页眉页脚占位：网页式 inner padding 仅 40px，需为绝对定位的页眉/页脚留出空间 */
+	.bk-sheet:has(.bk-page-header) .bk-sheet-inner {
+	  padding-top: calc(16mm + 8px);
+	}
+	.bk-sheet:has(.bk-page-footer) .bk-sheet-inner {
+	  padding-bottom: calc(14mm + 8px);
+	}
+
+/* ═══ 打印：连续内容自然分页 ═══ */
+@page {
+  size: A4;
+  margin: 14mm 12mm;
+  @bottom-center { content: counter(page) " / " counter(pages); font-size: 8.5pt; color: #888; }
+}
+@media print {
+  html { background: none; }
+  .bk-sheet { width: 100%; margin: 0 0 8mm; box-shadow: none; border-radius: 0; }
+  .bk-prose table, .bk-prose blockquote, .bk-prose pre, .bk-prose img { break-inside: avoid; }
+  .bk-embed-sheet { break-inside: avoid; }
+  .bk-toc, .bk-cover, .bk-flyleaf { break-inside: avoid; }
+}
+</style>
+</head>
+<body class="{{BOOK_BODY_CLASS}}">
+
+<!-- ═══ 封面横幅 ═══ -->
+<section class="bk-sheet bk-cover">
+  <div class="bk-cover-band"></div>
+  <svg class="bk-vi-decor" viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="78" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+    <circle cx="100" cy="100" r="52" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.18"/>
+  </svg>
+  <div class="bk-sheet-inner">
+    {{BOOK_LOGO}}
+    <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
+    <div class="bk-cover-subtitle">{{BOOK_SUBTITLE}}</div>
+    <div class="bk-cover-rule"></div>
+    <div class="bk-cover-meta">
+      <div class="bk-cover-author">{{BOOK_AUTHOR}}</div>
+      <div>{{BOOK_ORG}}</div>
+      <div>{{BOOK_DATE}}</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 编制说明块 ═══ -->
+<!--BK:FLYLEAF-->
+<section class="bk-sheet bk-flyleaf">
+  <div class="bk-vi-pagehead"><span>{{BOOK_TITLE}}</span><span>{{BOOK_DATE}}</span></div>
+  <div class="bk-sheet-inner">
+    <div class="bk-flyleaf-title">{{BOOK_TITLE}}</div>
+    <div class="bk-flyleaf-text">{{FLYLEAF_TEXT}}</div>
+    <div class="bk-flyleaf-info">
+      编著：{{BOOK_AUTHOR}}<br>
+      单位：{{BOOK_ORG}}<br>
+      日期：{{BOOK_DATE}}<br>
+      全书共 {{PAGE_TOTAL}} 章
+    </div>
+    <div class="bk-flyleaf-brand">{{BRAND_COPYRIGHT}}<br>{{BRAND_SIGNATURE}}</div>
+  </div>
+</section>
+<!--/BK:FLYLEAF-->
+
+<!-- ═══ 目录 ═══ -->
+  <!-- ═══ 目录 ═══ -->
+  <!--BK:TOC-->
+  <section class="bk-sheet bk-toc">
+    <div class="bk-vi-pagehead"><span>{{BOOK_TITLE}}</span><span>{{BOOK_DATE}}</span></div>
+    <div class="bk-sheet-inner">
+      <div class="bk-vi-tocline"></div>
+      <div class="bk-toc-title">目 录</div>
+      <table class="bk-toc-table">
+        {{TOC_ENTRIES}}
+      </table>
+    </div>
+  </section>
+  <!--/BK:TOC-->
+
+<!-- ═══ 章节正文（连续排布） ═══ -->
+{{CHAPTERS}}
+
+<!-- ═══ 封底 ═══ -->
+<!--BK:BACK-->
+<section class="bk-sheet bk-back">
+  <svg class="bk-vi-decor" viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="78" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+    <circle cx="100" cy="100" r="52" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.18"/>
+  </svg>
+  <div class="bk-sheet-inner">
+    <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
+    <div class="bk-vi-rule"></div>
+    <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}</div>
+  </div>
+  <div class="bk-back-band"></div>
+</section>
+<!--/BK:BACK-->
+
+<script>
+/* ═══ 页脚页码填充（网页式无拆页，DOM 就绪后直接注入） ═══ */
+(function() {
+  var sheets = document.querySelectorAll('.bk-sheet');
+  var total = sheets.length;
+  sheets.forEach(function(s, i) {
+    var cur = s.querySelector('.bk-page-cur');
+    var tot = s.querySelector('.bk-page-total');
+    if (cur) cur.textContent = i + 1;
+    if (tot) tot.textContent = total;
+  });
+})();
+</script>
+
+</body>
+</html>

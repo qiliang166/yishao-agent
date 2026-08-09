@@ -1,0 +1,458 @@
+# 蓝图 — Blueprint Engineering Design Tokens
+# 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
+
+# 当前激活的色系（兼容字段）
+color_scheme: classic-blueprint
+
+# 文档模板映射 — 从 chart_colors 引用，避免破坏13色码结构
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "226,232,240"
+  white: "#ffffff"
+
+color_schemes:
+  classic-blueprint:
+    label: "经典蓝图"
+    primary: "#1e3a5f"
+    secondary: "#2c5282"
+    accent: "#63b3ed"
+    background: "#0d2137"
+    text: "#e2e8f0"
+    card_bg: "#1a3352"
+    chart_colors:
+      - "#63b3ed"
+      - "#48bb78"
+      - "#f6ad55"
+      - "#fc8181"
+      - "#b794f4"
+      - "#4fd1c5"
+      - "#fbb6ce"
+      - "#faf089"
+    semantic:
+      positive: "#48bb78"
+      negative: "#fc8181"
+    persona_hint: "深蓝底色（#0d2137）+ 亮蓝高光（#63b3ed），模拟工程蓝图。等宽字体传递精确感，发光边框营造屏幕显示技术氛围。"
+  emerald-schematic:
+    label: "翡翠电路"
+    primary: "#0d2818"
+    secondary: "#1a4d2e"
+    accent: "#4ade80"
+    background: "#07120d"
+    text: "#d1fae5"
+    card_bg: "#0f2a1a"
+    chart_colors:
+      - "#4ade80"
+      - "#60a5fa"
+      - "#fbbf24"
+      - "#f87171"
+      - "#c084fc"
+      - "#2dd4bf"
+      - "#fda4af"
+      - "#fef08a"
+    semantic:
+      positive: "#4ade80"
+      negative: "#f87171"
+    persona_hint: "深绿底色（#07120d）+ 翡翠绿高光（#4ade80），电路板绿意。等宽字体+发光边框，绿色CRT终端美学。"
+  amber-circuit:
+    label: "琥珀线路"
+    primary: "#1a1408"
+    secondary: "#3d2e0f"
+    accent: "#fbbf24"
+    background: "#0f0d07"
+    text: "#fef3c7"
+    card_bg: "#1f180a"
+    chart_colors:
+      - "#fbbf24"
+      - "#60a5fa"
+      - "#34d399"
+      - "#f87171"
+      - "#a78bfa"
+      - "#22d3ee"
+      - "#fda4af"
+      - "#fde68a"
+    semantic:
+      positive: "#34d399"
+      negative: "#f87171"
+    persona_hint: "深棕底色（#0f0d07）+ 琥珀发光（#fbbf24），老旧终端暖屏。等宽字体+暖色荧光，复古计算机房氛围。"
+  violet-wireframe:
+    label: "紫晶线框"
+    primary: "#1a0f2e"
+    secondary: "#2d1b4e"
+    accent: "#c084fc"
+    background: "#0d071a"
+    text: "#ede9fe"
+    card_bg: "#180f2a"
+    chart_colors:
+      - "#c084fc"
+      - "#60a5fa"
+      - "#34d399"
+      - "#fb923c"
+      - "#f87171"
+      - "#22d3ee"
+      - "#f9a8d4"
+      - "#fef08a"
+    semantic:
+      positive: "#34d399"
+      negative: "#f87171"
+    persona_hint: "深紫底色（#0d071a）+ 紫罗兰发光（#c084fc），未来主义线框。等宽字体+紫光边框，赛博空间设计稿美学。"
+  coral-prototype:
+    label: "珊瑚原型"
+    primary: "#1a0d10"
+    secondary: "#3d1a20"
+    accent: "#fb7185"
+    background: "#0f080a"
+    text: "#ffe4e6"
+    card_bg: "#1f0f13"
+    chart_colors:
+      - "#fb7185"
+      - "#60a5fa"
+      - "#34d399"
+      - "#fbbf24"
+      - "#c084fc"
+      - "#22d3ee"
+      - "#fda4af"
+      - "#fde68a"
+    semantic:
+      positive: "#34d399"
+      negative: "#fb7185"
+    persona_hint: "深红底色（#0f080a）+ 珊瑚粉发光（#fb7185），硬件原型机。等宽字体+暖粉荧光，创客工坊示波器风格。"
+
+typography:
+  heading_font: "JetBrains Mono, 'Courier New', 'PingFang SC', 'Microsoft YaHei', monospace"
+  body_font: "JetBrains Mono, 'Courier New', 'PingFang SC', 'Microsoft YaHei', monospace"
+  cover_title:
+    size: "48-56px"
+    weight: 700
+  page_title:
+    size: "32-40px"
+    weight: 700
+  card_title:
+    size: "18-22px"
+    weight: 600
+  body:
+    size: "14-16px"
+    weight: 400
+  caption:
+    size: "11-12px"
+    weight: 400
+  line_height:
+    heading: 1.2-1.3
+    body: 1.6-1.8
+  letter_spacing:
+    heading: "0.5~1px"
+
+card_style:
+  border_radius: 4
+  shadow: "0 0 8px rgba(99,179,237,0.1)"
+  border: "1px solid rgba(99,179,237,0.3)"
+  gap: 20
+  left_stripe_width: 4
+
+gradients:
+  hero_bg: "linear-gradient(180deg, {{background}} 0%, {{primary}} 100%)"
+  card_highlight: "linear-gradient(180deg, {{card_bg}} 0%, {{background}} 100%)"
+
+elevation:
+  shadow_sm: "0 0 0 rgba(0,0,0,0)"
+  shadow_md: "0 0 8px rgba(99,179,237,0.1)"
+  shadow_lg: "0 0 20px rgba(99,179,237,0.15)"
+
+slide_type_overrides:
+  cover:
+    card_bg: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.2
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "{{card_bg}}"
+    text: "{{accent}}"
+    body_font_style: normal
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "{{primary}}"
+    text: "#ffffff"
+    layout: full_bleed
+  summary:
+    background: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "© YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.4-0.5
+  content:
+    background: "{{background}}"
+    layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "1px solid rgba({{text_rgb}}, 0.12)"
+    cell_border: "1px solid rgba(99,179,237, 0.15)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.05-0.08"
+    accent_stripe_height: 5
+
+layout_types:
+  - id: full_bleed
+    cards: "1-3"
+    description: "垂直居中，全屏"
+    use: "封面、章节分隔、总结"
+  - id: three_column
+    cards: 3
+    description: "水平等分，每栏 ~373px"
+    use: "并列要点、三大优势"
+  - id: two_column
+    cards: 2
+    description: "水平等分，每栏 ~550px"
+    use: "对比分析、优劣对比"
+  - id: two_column_asymmetric
+    cards: 2
+    description: "左宽 62% + 右窄 38%"
+    use: "主次内容、问题+方案"
+  - id: dashboard
+    cards: "3-5"
+    description: "顶行 metric 卡 + 底行 summary"
+    use: "数据总览、KPI 展示"
+  - id: mixed_grid
+    cards: "3-4"
+    description: "顶行 hero(全宽) + 底行 2-3 小卡"
+    use: "核心观点+支撑论据"
+  - id: hero_grid
+    cards: "2-4"
+    description: "左 hero 大卡 + 右 1-2 小卡堆叠"
+    use: "论点+数据佐证"
+  - id: single_focus
+    cards: 1
+    description: "居中大卡 ~900px"
+    use: "核心结论、金句"
+  - id: timeline
+    cards: "2-5"
+    description: "水平排列，步骤节点+连接线"
+    use: "流程步骤、时间线"
+  - id: horizontal_split
+    cards: "3-4"
+    description: "顶全宽 hero + 底行 2-3 小卡"
+    use: "标题+支撑指标"
+
+card_roles:
+  - role: hero
+    visual: "大卡，大面积，核心信息，hero_bg 渐变背景"
+    required: [title, body]
+    optional: [chart]
+  - role: metric
+    visual: "居中大数字/进度条，顶部短色条"
+    required: [chart]
+    optional: []
+  - role: card_0
+    visual: "标准卡，圆角 4px，左侧 4px 色条(chart_colors[0])，发光边框"
+    required: [title or body]
+    optional: [chart]
+  - role: card_1
+    visual: "标准卡，圆角 4px，左侧 4px 色条(chart_colors[1])，发光边框"
+    required: [title or body]
+    optional: [chart]
+  - role: card_2
+    visual: "标准卡，圆角 4px，左侧 4px 色条(chart_colors[2])，发光边框"
+    required: [title or body]
+    optional: [chart]
+  - role: card_3
+    visual: "标准卡，圆角 4px，左侧 4px 色条(chart_colors[3])，发光边框"
+    required: [title or body]
+    optional: [chart]
+  - role: card_4
+    visual: "标准卡，圆角 4px，左侧 4px 色条(chart_colors[4])，发光边框"
+    required: [title or body]
+    optional: [chart]
+  - role: left
+    visual: "绿色顶条 + ▲ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比左/正面/优势"
+  - role: right
+    visual: "红色顶条 + ▼ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比右/反面/劣势"
+  - role: summary
+    visual: "全宽半透明卡"
+    required: [title or body]
+    optional: [chart]
+    use: "数据总结、页面收尾"
+  - role: step_N
+    visual: "方形编号 + 标题 + 描述"
+    required: [title, body]
+    optional: []
+    use: "时间线步骤 1~5"
+
+decoration:
+  accent_stripe: "4px solid {{accent}}"
+  title_underline: "40×2px {{accent}}"
+  page_dot: "6px {{accent}}"
+  layers: ["背景层", "网格纹理层", "结构层", "内容层", "发光层"]
+  types:
+    - id: type_a
+      name: "蓝图网格"
+      description: "网格纹理(8%透明度) + 发光边框 + 顶部色条 + 方形页码"
+    - id: type_b
+      name: "技术图纸"
+      description: "半透明几何图形 + 虚线网格 + 发光光晕"
+
+icons:
+  style: "outline"
+  stroke_width: "1.5px"
+  card_size: 18
+  hero_size: 32
+  metric_size: 14
+  color_rule: "跟随所在卡片的 chart_color, opacity: 0.85"
+
+illustrations:
+  label_align: "text-anchor=middle, label_x=graphic_cx"
+  label_spacing: "≥22px from graphic bottom to label baseline"
+  guide_spacing: "≥20px"
+  min_stroke: "1px"
+  min_font: "14px"
+
+quality_checklist:
+  - "5 层结构完整"
+  - "≥3 个 SVG 元素"
+  - "≥4 种不同 chart_color"
+  - "≥1 个网格纹理装饰"
+  - "每卡: SVG图标 + 标题 + 正文"
+  - "数字→图表形态"
+  - "顶部 accent 色条(4px)"
+  - "标题短线(40×2px)"
+  - "页码(dot + 页号)"
+  - "标题 primary 色"
+  - "正文 text 色"
+  - "卡片 card_bg 色"
+  - "背景 background 色"
+  - "字体 typography token"
+  - "圆角 4px"
+  - "阴影 elevation token"
+  - "插图标签居中"
+  - "插图间距 ≥22px"
+  - "插图字号 ≥14px"
+  - "SVG描边 ≥1px"
+  - "封面/总结无卡片容器"
+  - "色条轮换"
+  - "禁止圆角>4px"
+  - "禁止暖色调"
+  - "禁止重阴影（仅发光）"
+
+font_thresholds:
+  slide_title: { min: 28, max: 44 }
+  card_title: { min: 18, max: 32 }
+  body: { min: 14, max: 20 }
+  label: { min: 14, max: 14 }
+  absolute_min: 14
+
+safe_area:
+  x_min: 40
+  y_min: 28
+  y_max: 710
+
+visual_richness:
+  min_svg_elements: 3
+  min_colors: 4
+  min_cards: 3
+  min_decorations: 2
+  min_layers: 5
+
+block_types:
+  header:
+    description: "文档头部（LOGO/编号/日期），全宽合并，可选段落"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba({{text_rgb}}, 0.55)"
+    border_bottom: "1px solid rgba(99,179,237, 0.15)"
+    columns: "2-4"
+  title:
+    description: "文档主标题，hero 渐变背景 + accent 下划线，必有段落"
+    colspan: full
+    background: "linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)"
+    color: "#ffffff"
+    font_size: "20-24px"
+    font_weight: 700
+    letter_spacing: "2-3px"
+    border_bottom: "2px solid {{accent}}"
+  info_block:
+    description: "键值对信息表，标签列 + 值列，可选图片占位区"
+    colspan: auto
+    label_bg: "{{card_bg}}"
+    label_color: "{{accent}}"
+    label_weight: 600
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "1.5px dashed rgba(99,179,237, 0.3)"
+    image_placeholder_radius: 4
+  table_block:
+    description: "多列数据网格，含表头和交替行数据"
+    colspan: auto
+    header_bg_default: "{{chart_0}}"
+    header_bg_alt_0: "{{chart_1}}"
+    header_bg_alt_2: "{{chart_2}}"
+    header_color: "#0d2137"
+    header_weight: 600
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba(99,179,237, 0.05)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "1px solid rgba(99,179,237, 0.15)"
+    header_border_top: "2px solid rgba(99,179,237, 0.3)"
+    header_rotation: "chart_0 → chart_1 → chart_2"
+  text_block:
+    description: "自由段落文字，全宽合并"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba(99,179,237, 0.1)"
+  list_block:
+    description: "编号或项目符号列表"
+    colspan: full
+    number_color: "{{accent}}"
+    number_weight: 600
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba(99,179,237, 0.1)"
+  closing:
+    description: "文档收束区域（结论/签名/落款），可选段落"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "1.5px solid rgba(99,179,237, 0.2)"
+    layouts: ["center", "split"]
+  footer:
+    description: "文档底部声明区（版权/备注）"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba({{text_rgb}}, 0.45)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "1.5px solid rgba(99,179,237, 0.2)"
+    align: center

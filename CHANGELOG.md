@@ -2,6 +2,10 @@
 
 ## 2026-08-10
 
+- fix: restore left-aligned layout on workspace settings page
+
+## 2026-08-10
+
 - fix: export dialog with project selection + Save As picker + deleteCategory/listRoles TS fixes
 
 ## 2026-08-10

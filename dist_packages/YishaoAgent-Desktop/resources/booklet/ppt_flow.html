@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{BOOK_TITLE}}</title>
+<style>
+/* ═══ 主题变量（全部经 THEME_CSS_VARS 注入，禁止写死实值） ═══ */
+:root { {{THEME_CSS_VARS}} }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { background: var(--desk); overflow-x: hidden; }
+body {
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  padding: 28px 0;
+}
+
+/* ═══ 网页式：幻灯片纵向堆叠，滚动浏览 ═══ */
+.bk-slide {
+  width: 1280px; height: 720px; background: var(--background);
+  position: relative; display: flex; flex-direction: column;
+  margin: 0 auto 28px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.35);
+  overflow: hidden;
+  transform-origin: top center;
+}
+/* 文字内容页允许随内容变高 */
+.bk-prose-slide { height: auto; min-height: 720px; }
+
+/* ═══ 封面页：渐变主视觉，匹配内容片 hero 暗色渐变风格 ═══ */
+.bk-cover { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary, var(--primary)) 100%); }
+.bk-cover-band { position: absolute; top: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--accent), var(--chart-3, var(--accent)), var(--accent)); }
+.bk-cover-logo { max-height: 110px; max-width: 300px; object-fit: contain; margin-bottom: 36px; position: relative; z-index: 1; }
+.bk-cover-title { font-size: 58px; font-weight: 700; color: var(--on-primary); letter-spacing: 0.06em; line-height: 1.3; max-width: 1080px; position: relative; z-index: 1; }
+.bk-cover-subtitle { margin-top: 22px; font-size: 24px; color: var(--on-primary); opacity: 0.8; letter-spacing: 0.2em; position: relative; z-index: 1; }
+.bk-cover-rule { width: 140px; height: 3px; background: var(--accent); margin: 34px auto 0; position: relative; z-index: 1; }
+.bk-cover-meta { margin-top: 40px; font-size: 19px; line-height: 1.9; color: var(--on-primary); opacity: 0.75; position: relative; z-index: 1; }
+.bk-cover-author { font-size: 23px; font-weight: 600; color: var(--on-primary); }
+/* 右下角旋转菱形装饰 */
+.bk-cover::after { content: ''; position: absolute; bottom: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--accent); opacity: 0.15; transform: rotate(45deg); border-radius: 6px; }
+
+/* ═══ 目录页：VI 规范 table 布局 + SVG 装饰 ═══ */
+.bk-toc { padding: 80px 80px 60px; }
+.bk-toc-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+.bk-toc-accent-bar { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--accent); z-index: 1; }
+.bk-toc-heading { font-size: 40px; font-weight: 700; color: var(--ink); letter-spacing: -1px; margin-bottom: 12px; position: relative; z-index: 1; }
+.bk-toc-heading::after { content: ''; display: block; width: 60px; height: 4px; margin: 8px 0 44px; background: var(--accent); border-radius: 2px; }
+.bk-toc-table { width: 100%; border-collapse: collapse; font-size: 16px; position: relative; z-index: 1; }
+.bk-toc-table td { padding: 12px 0; vertical-align: middle; }
+.bk-toc-num { width: 48px; }
+.bk-toc-num div { width: 32px; height: 32px; border-radius: 50%; color: #ffffff; font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); font-weight: 600; }
+.bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 40px; font-size: 13px; }
+.bk-toc-footer { position: absolute; bottom: 40px; right: 60px; z-index: 1; display: flex; align-items: center; gap: 8px; }
+.bk-toc-footer-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.bk-toc-footer-text { font-size: 14px; color: rgba(var(--text-rgb), 0.45); }
+
+/* ═══ 章节隔页：渐变背景 + 大菱形水印 + 底部点缀线 ═══ */
+.bk-chapter-divider { align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary, var(--primary)) 100%); }
+/* 中央大菱形水印 */
+.bk-chapter-divider::before { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(45deg); width: 320px; height: 320px; border: 2px solid var(--accent); opacity: 0.07; border-radius: 8px; }
+/* 底部 accent 短划线 */
+.bk-chapter-divider::after { content: ''; position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%); width: 100px; height: 3px; background: var(--accent); opacity: 0.5; }
+.bk-chapter-divider .bk-chapter-no { font-size: 22px; color: var(--chart-0, var(--accent)); letter-spacing: 0.35em; font-weight: 600; position: relative; z-index: 1; }
+.bk-chapter-divider .bk-chapter-title { margin-top: 26px; font-size: 46px; font-weight: 700; color: var(--on-primary); max-width: 1000px; line-height: 1.4; position: relative; z-index: 1; }
+.bk-chapter-divider .bk-chapter-src { margin-top: 20px; font-size: 17px; color: var(--on-primary); opacity: 0.6; position: relative; z-index: 1; }
+
+/* ═══ 嵌入幻灯片（iframe 隔离，不同 PPT 源样式互不污染） ═══ */
+.bk-embed-frame { border: none; width: 1280px; height: 720px; display: block; }
+
+/* ═══ 文字内容页（custom/md 章节） ═══ */
+.bk-prose-slide { padding: 60px 110px; }
+.bk-prose { font-size: 20px; line-height: 1.9; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3 { color: var(--ink); margin: 22px 0 12px; }
+.bk-prose h1 { font-size: 32px; } .bk-prose h2 { font-size: 27px; } .bk-prose h3 { font-size: 23px; }
+.bk-prose p { margin: 10px 0; }
+.bk-prose ul, .bk-prose ol { margin: 10px 0 10px 26px; }
+.bk-prose table { border-collapse: collapse; width: 100%; margin: 14px 0; }
+.bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 8px 12px; }
+.bk-prose th { background: var(--card-bg); color: var(--ink); }
+.bk-prose blockquote { border-left: 4px solid var(--accent); background: var(--card-bg); padding: 12px 18px; margin: 14px 0; }
+.bk-prose img { max-width: 100%; }
+
+/* ═══ 封底页：镜面渐变 + 渐变点缀条 ═══ */
+.bk-back { align-items: center; justify-content: center; text-align: center; background: linear-gradient(225deg, var(--primary) 0%, var(--secondary, var(--primary)) 100%); }
+.bk-back::after { content: ''; position: absolute; top: 50px; right: 80px; width: 120px; height: 120px; border: 2px solid var(--accent); opacity: 0.12; transform: rotate(45deg); border-radius: 6px; }
+.bk-back-band { position: absolute; bottom: 0; left: 0; right: 0; height: 6px; background: linear-gradient(90deg, var(--accent), var(--primary), var(--accent)); }
+.bk-back-text { font-size: 22px; line-height: 2.2; max-width: 900px; white-space: pre-wrap; color: var(--on-primary); opacity: 0.85; position: relative; z-index: 1; }
+.bk-back-brand { margin-top: 60px; font-size: 16px; color: var(--on-primary); opacity: 0.55; line-height: 1.9; position: relative; z-index: 1; }
+
+/* ═══ 打印：横版每页一屏 ═══ */
+@page { size: 1280px 720px; margin: 0; }
+@media print {
+  html, body { background: none; padding: 0; }
+  .bk-slide {
+    transform: none !important; margin: 0 !important;
+    box-shadow: none; page-break-after: always; break-after: page;
+  }
+  .bk-slide:last-of-type { page-break-after: auto; break-after: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ 封面 ═══ -->
+<section class="bk-slide bk-cover">
+  <div class="bk-cover-band"></div>
+  {{BOOK_LOGO}}
+  <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
+  <div class="bk-cover-subtitle">{{BOOK_SUBTITLE}}</div>
+  <div class="bk-cover-rule"></div>
+  <div class="bk-cover-meta">
+    <div class="bk-cover-author">{{BOOK_AUTHOR}}</div>
+    <div>{{BOOK_ORG}} · {{BOOK_DATE}}</div>
+    <div style="opacity:0.6;font-size:15px;margin-top:10px;">{{FLYLEAF_TEXT}}</div>
+  </div>
+</section>
+
+<!-- ═══ 目录 ═══ -->
+  <!-- ═══ 目录 ═══ -->
+  <!--BK:TOC-->
+  <section class="bk-slide bk-toc">
+    <svg class="bk-toc-svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="bkGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(var(--text-rgb),0.03)" stroke-width="0.5"/>
+        </pattern>
+        <radialGradient id="bkGlow" cx="85%" cy="20%" r="45%">
+          <stop offset="0%" stop-color="rgba(var(--primary-rgb),0.06)"/>
+          <stop offset="100%" stop-color="rgba(var(--primary-rgb),0)"/>
+        </radialGradient>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#bkGrid)"/>
+      <circle cx="1080" cy="150" r="260" fill="url(#bkGlow)"/>
+      <circle cx="1120" cy="580" r="90" fill="none" stroke="rgba(var(--primary-rgb),0.06)" stroke-width="1.5"/>
+    </svg>
+    <div class="bk-toc-accent-bar"></div>
+    <h2 class="bk-toc-heading">目 录</h2>
+    <table class="bk-toc-table">
+      {{TOC_ENTRIES}}
+    </table>
+    <div class="bk-toc-footer">
+      <div class="bk-toc-footer-dot"></div>
+      <span class="bk-toc-footer-text">{{PAGE_TOTAL}} 章</span>
+    </div>
+  </section>
+  <!--/BK:TOC-->
+
+<!-- ═══ 章节内容（隔页 + 幻灯片序列，纵向连续） ═══ -->
+{{CHAPTERS}}
+
+<!-- ═══ 封底 ═══ -->
+<!--BK:BACK-->
+<section class="bk-slide bk-back">
+  <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
+  <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}<br>全书共 {{PAGE_TOTAL}} 章</div>
+  <div class="bk-back-band"></div>
+</section>
+<!--/BK:BACK-->
+
+<script>
+(function () {
+  // 窄屏适配：按可视宽度整体缩放幻灯片，并补偿缩放后的空隙
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.bk-slide'));
+
+  function fit() {
+    var scale = Math.min(1, (window.innerWidth - 24) / 1280);
+    slides.forEach(function (s) {
+      if (scale >= 1) {
+        s.style.transform = '';
+        s.style.transformOrigin = '';
+        s.style.marginBottom = '';
+        return;
+      }
+      /* origin 改 top left + 平移到视口中心：origin top center 会把视觉中心钉在版面中心 1280/2 处，窄窗口下左侧留白右侧溢出 */
+      var tx = (window.innerWidth - 1280 * scale) / 2 - s.offsetLeft;
+      s.style.transformOrigin = 'top left';
+      s.style.transform = 'translateX(' + tx + 'px) scale(' + scale + ')';
+      var gap = s.offsetHeight * (1 - scale);
+      s.style.marginBottom = (28 - gap) + 'px';
+    });
+  }
+
+  // 目录点击滚动到对应章节隔页
+  document.querySelectorAll('.bk-toc-table tr[data-slide-target]').forEach(function (tr) {
+    tr.style.cursor = 'pointer';
+    tr.addEventListener('click', function () {
+      var target = document.getElementById(tr.getAttribute('data-slide-target'));
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  window.addEventListener('resize', fit);
+  fit();
+})();
+</script>
+
+</body>
+</html>

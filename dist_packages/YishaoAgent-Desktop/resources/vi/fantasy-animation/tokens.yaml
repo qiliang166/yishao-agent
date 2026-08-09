@@ -1,0 +1,360 @@
+# 幻想动画 — Fantasy Animation Design Tokens
+# 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
+
+color_scheme: starry-night
+
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "240,230,255"
+  white: "#ffffff"
+
+color_schemes:
+  starry-night:
+    label: "星夜奇幻"
+    primary: "#4a1a6b"
+    secondary: "#6b3fa0"
+    accent: "#ffd700"
+    background: "#1a0a2e"
+    text: "#f0e6ff"
+    card_bg: "#2d1450"
+    chart_colors:
+      - "#ffd700"
+      - "#c084fc"
+      - "#f472b6"
+      - "#60a5fa"
+      - "#34d399"
+      - "#fbbf24"
+      - "#e879f9"
+      - "#38bdf8"
+    semantic:
+      positive: "#34d399"
+      negative: "#f472b6"
+    persona_hint: "深紫午夜底（#1a0a2e）+ 金色光芒（#ffd700），奇幻魔法美学。Cinzel 衬线标题+Quicksand 圆体正文，圆角20px+金色发光阴影，金色占比≤8%。"
+  enchant-forest:
+    label: "魔法森林"
+    primary: "#1a3a2a"
+    secondary: "#2d5a3e"
+    accent: "#4ade80"
+    background: "#0a1a10"
+    text: "#d1fae5"
+    card_bg: "#143020"
+    chart_colors:
+      - "#4ade80"
+      - "#fbbf24"
+      - "#c084fc"
+      - "#60a5fa"
+      - "#f472b6"
+      - "#34d399"
+      - "#e879f9"
+      - "#38bdf8"
+    semantic:
+      positive: "#4ade80"
+      negative: "#f472b6"
+    persona_hint: "深绿森林底（#0a1a10）+ 翡翠绿光（#4ade80），精灵森林魔法。Cinzel+Quicksand，圆角20px+绿色发光阴影，翡翠色占比≤8%。"
+  ocean-abyss:
+    label: "深海奇境"
+    primary: "#0c2d3a"
+    secondary: "#1a4d5e"
+    accent: "#22d3ee"
+    background: "#051620"
+    text: "#cffafe"
+    card_bg: "#0f3545"
+    chart_colors:
+      - "#22d3ee"
+      - "#fbbf24"
+      - "#c084fc"
+      - "#f472b6"
+      - "#4ade80"
+      - "#60a5fa"
+      - "#e879f9"
+      - "#fb7185"
+    semantic:
+      positive: "#4ade80"
+      negative: "#fb7185"
+    persona_hint: "深海蓝底（#051620）+ 青蓝荧光（#22d3ee），海底王国奇幻风。Cinzel+Quicksand，圆角20px+青蓝发光阴影，荧光占比≤8%。"
+  crimson-realm:
+    label: "绯红王国"
+    primary: "#3a1020"
+    secondary: "#5e1a35"
+    accent: "#fb7185"
+    background: "#1a0810"
+    text: "#ffe4e6"
+    card_bg: "#301420"
+    chart_colors:
+      - "#fb7185"
+      - "#fbbf24"
+      - "#c084fc"
+      - "#60a5fa"
+      - "#34d399"
+      - "#f472b6"
+      - "#e879f9"
+      - "#38bdf8"
+    semantic:
+      positive: "#34d399"
+      negative: "#fb7185"
+    persona_hint: "深红古堡底（#1a0810）+ 玫瑰金光（#fb7185），黑暗童话/哥特奇幻。Cinzel+Quicksand，圆角20px+玫瑰发光阴影，玫瑰色占比≤8%。"
+  cosmic-horizon:
+    label: "宇宙地平线"
+    primary: "#1a1a3a"
+    secondary: "#2d2d5e"
+    accent: "#818cf8"
+    background: "#0a0a20"
+    text: "#e0e7ff"
+    card_bg: "#181835"
+    chart_colors:
+      - "#818cf8"
+      - "#fbbf24"
+      - "#34d399"
+      - "#f472b6"
+      - "#60a5fa"
+      - "#c084fc"
+      - "#e879f9"
+      - "#38bdf8"
+    semantic:
+      positive: "#34d399"
+      negative: "#f472b6"
+    persona_hint: "深空靛蓝底（#0a0a20）+ 星云紫光（#818cf8），宇宙星际奇幻。Cinzel+Quicksand，圆角20px+靛蓝发光阴影，星云色占比≤8%。"
+
+typography:
+  heading_font: "Cinzel, Georgia, 'PingFang SC', 'Microsoft YaHei', serif"
+  body_font: "Quicksand, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+  cover_title: { size: "52-60px", weight: 700 }
+  page_title: { size: "32-40px", weight: 700 }
+  card_title: { size: "18-22px", weight: 600 }
+  body: { size: "15-17px", weight: 400 }
+  caption: { size: "12-13px", weight: 400 }
+  line_height: { heading: 1.2-1.4, body: 1.6-1.8 }
+  letter_spacing: { heading: "0.5~1px" }
+
+card_style:
+  border_radius: 20
+  shadow: "0 4px 20px rgba(255,215,0,0.15)"
+  border: "1px solid rgba(255,215,0,0.2)"
+  gap: 24
+  left_stripe_width: 4
+
+gradients:
+  hero_bg: "linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)"
+  card_highlight: "linear-gradient(180deg, {{card_bg}} 0%, rgba({{primary_rgb}}, 0.5) 100%)"
+
+elevation:
+  shadow_sm: "0 2px 8px rgba(255,215,0,0.06)"
+  shadow_md: "0 4px 20px rgba(255,215,0,0.15)"
+  shadow_lg: "0 12px 40px rgba(255,215,0,0.25)"
+
+slide_type_overrides:
+  cover:
+    card_bg: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.3
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "{{secondary}}"
+    text: "{{accent}}"
+    body_font_style: italic
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "{{primary}}"
+    text: "#ffffff"
+    layout: full_bleed
+  summary:
+    background: "{{primary}}"
+    text: "#ffffff"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "© YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.4-0.5
+  content:
+    background: "{{background}}"
+    layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "1px solid rgba({{text_rgb}}, 0.1)"
+    cell_border: "1px solid rgba(255,215,0, 0.08)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.05-0.08"
+    accent_stripe_height: 5
+
+layout_types:
+  - { id: full_bleed, cards: "1-3", description: "垂直居中，全屏", use: "封面、章节分隔、总结" }
+  - { id: three_column, cards: 3, description: "水平等分", use: "并列要点" }
+  - { id: two_column, cards: 2, description: "水平等分", use: "对比分析" }
+  - { id: two_column_asymmetric, cards: 2, description: "左62%+右38%", use: "主次内容" }
+  - { id: dashboard, cards: "3-5", description: "metric+summary", use: "数据总览" }
+  - { id: mixed_grid, cards: "3-4", description: "hero+小卡", use: "核心观点" }
+  - { id: hero_grid, cards: "2-4", description: "左hero+右小卡", use: "论点+数据" }
+  - { id: single_focus, cards: 1, description: "居中大卡", use: "核心结论" }
+  - { id: timeline, cards: "2-5", description: "水平步骤", use: "流程时间线" }
+  - { id: horizontal_split, cards: "3-4", description: "顶hero+底卡", use: "标题+指标" }
+
+card_roles:
+  - { role: hero, visual: "大卡，金色发光边框", required: [title, body], optional: [chart] }
+  - { role: metric, visual: "居中大数字，金色高光", required: [chart], optional: [] }
+  - { role: card_0, visual: "标准卡，圆角20px，金色色条", required: [title or body], optional: [chart] }
+  - { role: card_1, visual: "标准卡，圆角20px，紫色色条", required: [title or body], optional: [chart] }
+  - { role: card_2, visual: "标准卡，圆角20px，粉色色条", required: [title or body], optional: [chart] }
+  - { role: card_3, visual: "标准卡，圆角20px，蓝色色条", required: [title or body], optional: [chart] }
+  - { role: card_4, visual: "标准卡，圆角20px，绿色色条", required: [title or body], optional: [chart] }
+  - { role: left, visual: "绿色顶条+▲", required: [title,body], optional: [chart], use: "双栏左" }
+  - { role: right, visual: "红色顶条+▼", required: [title,body], optional: [chart], use: "双栏右" }
+  - { role: summary, visual: "全宽半透明卡", required: [title or body], optional: [chart], use: "总结" }
+  - { role: step_N, visual: "金色圆形编号", required: [title,body], optional: [], use: "步骤" }
+
+decoration:
+  accent_stripe: "4px solid {{accent}}"
+  title_underline: "40×2px {{accent}}"
+  page_dot: "6px {{accent}}"
+  layers: ["背景层", "星光纹理层", "结构层", "内容层", "发光层"]
+  types:
+    - { id: type_a, name: "星夜魔法", description: "金色发光边框+圆角20px+星光纹理+渐变光晕" }
+    - { id: type_b, name: "奇幻史诗", description: "半透明几何+金色光斑+弧形装饰线" }
+
+icons:
+  style: "outline"
+  stroke_width: "2px"
+  card_size: 20
+  hero_size: 36
+  metric_size: 16
+  color_rule: "跟随chart_color, opacity:0.9"
+
+illustrations:
+  label_align: "text-anchor=middle"
+  label_spacing: "≥22px"
+  guide_spacing: "≥20px"
+  min_stroke: "1px"
+  min_font: "14px"
+
+quality_checklist:
+  - "5层结构完整"
+  - "≥3个SVG元素"
+  - "≥4种chart_color"
+  - "≥1个半透明几何"
+  - "每卡:标题+正文"
+  - "数字→图表形态"
+  - "标题primary色"
+  - "正文text色"
+  - "卡片card_bg色"
+  - "背景background色"
+  - "字体typography token"
+  - "圆角20px"
+  - "金色发光阴影"
+  - "金色占比≤8%"
+  - "禁止锐角"
+  - "禁止灰色调"
+
+font_thresholds:
+  slide_title: { min: 28, max: 44 }
+  card_title: { min: 18, max: 32 }
+  body: { min: 14, max: 20 }
+  label: { min: 14, max: 14 }
+  absolute_min: 14
+
+safe_area: { x_min: 40, y_min: 28, y_max: 710 }
+
+visual_richness:
+  min_svg_elements: 3
+  min_colors: 4
+  min_cards: 3
+  min_decorations: 2
+  min_layers: 5
+
+block_types:
+  header:
+    description: "文档头部（LOGO/编号/日期），全宽合并，可选段落"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba({{text_rgb}}, 0.5)"
+    border_bottom: "1px solid rgba(255,215,0, 0.1)"
+    columns: "2-4"
+  title:
+    description: "文档主标题，hero 渐变背景 + accent 下划线，必有段落"
+    colspan: full
+    background: "linear-gradient(135deg, {{primary}} 0%, {{secondary}} 100%)"
+    color: "{{accent}}"
+    font_size: "20-24px"
+    font_weight: 700
+    letter_spacing: "2-3px"
+    border_bottom: "2px solid {{accent}}"
+  info_block:
+    description: "键值对信息表，标签列 + 值列，可选图片占位区"
+    colspan: auto
+    label_bg: "{{card_bg}}"
+    label_color: "{{accent}}"
+    label_weight: 600
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "1.5px dashed rgba(255,215,0, 0.25)"
+    image_placeholder_radius: 10
+  table_block:
+    description: "多列数据网格，含表头和交替行数据"
+    colspan: auto
+    header_bg_default: "{{primary}}"
+    header_bg_alt_0: "{{chart_0}}"
+    header_bg_alt_2: "{{chart_2}}"
+    header_color: "#ffffff"
+    header_weight: 600
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba(255,215,0, 0.04)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "1px solid rgba({{text_rgb}}, 0.06)"
+    header_border_top: "2px solid rgba(255,215,0, 0.2)"
+    header_rotation: "primary → chart_0 → chart_2"
+  text_block:
+    description: "自由段落文字，全宽合并"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba({{text_rgb}}, 0.06)"
+  list_block:
+    description: "编号或项目符号列表"
+    colspan: full
+    number_color: "{{accent}}"
+    number_weight: 600
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba({{text_rgb}}, 0.06)"
+  closing:
+    description: "文档收束区域（结论/签名/落款），可选段落"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "1.5px solid rgba(255,215,0, 0.15)"
+    layouts: ["center", "split"]
+  footer:
+    description: "文档底部声明区（版权/备注）"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba({{text_rgb}}, 0.45)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "1.5px solid rgba(255,215,0, 0.12)"
+    align: center

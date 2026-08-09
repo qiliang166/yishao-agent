@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{BOOK_TITLE}}</title>
+<style>
+/* ═══ 主题变量（全部经 THEME_CSS_VARS 注入，禁止写死实值） ═══ */
+:root { {{THEME_CSS_VARS}} }
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; background: var(--desk); }
+body {
+  font-family: var(--font);
+  color: var(--text);
+  overflow: hidden;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ═══ 翻页式：单页舞台居中，等比缩放（同 ppt 翻页交互） ═══ */
+.bk-stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+.bk-sheet {
+  width: 210mm;
+  height: 297mm;
+  background: var(--background);
+  position: absolute; display: none; overflow: hidden;
+  transform-origin: center center;
+}
+.bk-sheet.bk-active { display: flex; flex-direction: column; }
+.bk-sheet-inner { flex: 1; padding: 22mm 20mm 26mm; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ═══ 封面 ═══ */
+.bk-cover .bk-sheet-inner { align-items: center; text-align: center; padding-top: 44mm; }
+.bk-cover-band { width: 100%; height: 8px; background: var(--accent); flex-shrink: 0; }
+.bk-cover-logo { margin-top: 26mm; max-height: 30mm; max-width: 70mm; object-fit: contain; }
+.bk-cover-title { margin-top: 22mm; font-size: 34pt; font-weight: 700; color: var(--ink); line-height: 1.35; letter-spacing: 0.08em; }
+.bk-cover-subtitle { margin-top: 10mm; font-size: 15pt; color: var(--text); opacity: 0.75; letter-spacing: 0.2em; }
+.bk-cover-rule { width: 42mm; height: 2px; background: var(--accent); margin: 14mm auto 0; }
+.bk-cover-meta { margin-top: auto; padding-bottom: 8mm; font-size: 12pt; line-height: 2.1; color: var(--text); }
+.bk-cover-author { font-size: 14pt; font-weight: 600; color: var(--ink); }
+
+/* ═══ 扉页 ═══ */
+.bk-flyleaf .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
+.bk-flyleaf-title { font-size: 20pt; font-weight: 600; color: var(--ink); letter-spacing: 0.15em; }
+.bk-flyleaf-text { margin-top: 14mm; font-size: 12pt; line-height: 2.2; max-width: 130mm; white-space: pre-wrap; }
+.bk-flyleaf-info { margin-top: 20mm; font-size: 10.5pt; line-height: 2.2; color: var(--text); opacity: 0.8; }
+.bk-flyleaf-brand { margin-top: 12mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
+
+/* ═══ 目录 ═══ */
+.bk-toc-title { font-size: 22pt; font-weight: 700; color: var(--ink); text-align: center; letter-spacing: 0.3em; margin-bottom: 14mm; }
+.bk-toc-table { width: 100%; border-collapse: collapse; font-size: 12.5pt; }
+.bk-toc-table td { padding: 3mm 0; vertical-align: top; }
+.bk-toc-table a { color: inherit; text-decoration: none; }
+.bk-toc-num { width: 14mm; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.bk-toc-title-cell { color: var(--text); border-bottom: 1px dotted rgba(var(--text-rgb), 0.15); }
+.bk-toc-page { color: rgba(var(--text-rgb), 0.45); text-align: right; width: 12mm; font-size: 11pt; }
+
+/* ═══ 章节正文 ═══ */
+.bk-chapter { page-break-before: always; break-before: page; }
+.bk-chapter-head { border-left: 5px solid var(--accent); padding: 2mm 0 2mm 6mm; margin-bottom: 8mm; }
+.bk-chapter-no { font-size: 10.5pt; color: var(--accent); font-weight: 600; letter-spacing: 0.2em; }
+.bk-chapter-title { font-size: 19pt; font-weight: 700; color: var(--ink); margin-top: 1.5mm; line-height: 1.4; }
+.bk-chapter-src { font-size: 9pt; opacity: 0.55; margin-top: 1.5mm; }
+
+.bk-prose { font-size: 11.5pt; line-height: 1.95; }
+.bk-prose h1, .bk-prose h2, .bk-prose h3, .bk-prose h4 { color: var(--ink); margin: 7mm 0 3.5mm; line-height: 1.5; }
+.bk-prose h1 { font-size: 16pt; } .bk-prose h2 { font-size: 14.5pt; } .bk-prose h3 { font-size: 13pt; } .bk-prose h4 { font-size: 12pt; }
+.bk-prose p { margin: 3mm 0; }
+.bk-prose ul, .bk-prose ol { margin: 3mm 0 3mm 7mm; }
+.bk-prose li { margin: 1.5mm 0; }
+.bk-prose table { border-collapse: collapse; width: 100%; margin: 4mm 0; font-size: 10.5pt; }
+.bk-prose th, .bk-prose td { border: 1px solid var(--text); padding: 2mm 3mm; }
+.bk-prose th { background: var(--card-bg); color: var(--ink); }
+.bk-prose blockquote { border-left: 3px solid var(--accent); background: var(--card-bg); padding: 3mm 5mm; margin: 4mm 0; }
+.bk-prose code { background: var(--card-bg); padding: 0.5mm 1.5mm; border-radius: 2px; font-size: 10pt; }
+.bk-prose pre { background: var(--card-bg); padding: 4mm; overflow-x: auto; margin: 4mm 0; }
+.bk-prose img { max-width: 100%; }
+.bk-prose hr { border: none; border-top: 1px solid var(--text); opacity: 0.25; margin: 6mm 0; }
+
+/* ═══ 课件嵌入页（iframe 隔离，避免样式互染） ═══ */
+.bk-embed-sheet { padding: 0; align-items: center; justify-content: center; }
+.bk-embed-frame { border: none; width: 794px; height: 1123px; display: block; margin: 0 auto; }
+
+/* ═══ 封底 ═══ */
+.bk-back .bk-sheet-inner { justify-content: center; align-items: center; text-align: center; }
+.bk-back-band { width: 100%; height: 8px; background: var(--primary); flex-shrink: 0; margin-top: auto; }
+.bk-back-text { font-size: 12pt; line-height: 2.4; max-width: 125mm; white-space: pre-wrap; }
+.bk-back-brand { margin-top: 22mm; font-size: 9.5pt; opacity: 0.6; line-height: 1.9; }
+
+/* ═══ VI A4 版式（第一章为 HTML 课件时 body 注入 bk-vi；规则源自 VI 手册 A4：封面/封底 var(--primary) 纯色禁渐变，深底白字 #ffffff 为唯一硬编码例外） ═══ */
+.bk-vi-pagehead, .bk-vi-tocline, .bk-vi-rule, .bk-vi-decor { display: none; }
+.bk-vi .bk-cover { background: var(--primary); }
+.bk-vi .bk-cover-band { height: 10px; }
+.bk-vi .bk-cover-title { color: #ffffff; }
+.bk-vi .bk-cover-subtitle { color: #ffffff; order: 2; }
+.bk-vi .bk-cover-rule { width: 48px; height: 4px; order: 1; margin: 10mm auto 0; }
+.bk-vi .bk-cover-meta { color: rgba(255, 255, 255, 0.6); order: 3; }
+.bk-vi .bk-cover-author { color: #ffffff; }
+.bk-vi .bk-cover .bk-vi-decor { display: block; position: absolute; left: -30mm; bottom: -30mm; width: 90mm; height: 90mm; }
+.bk-vi .bk-vi-pagehead {
+  display: flex; position: absolute; top: 0; left: 20mm; right: 20mm; height: 45px;
+  align-items: center; justify-content: space-between;
+  font-size: 12px; color: rgba(var(--text-rgb), 0.45);
+  border-bottom: 1px solid rgba(var(--text-rgb), 0.08);
+}
+.bk-vi .bk-toc .bk-vi-tocline { display: block; width: 100%; height: 4px; background: var(--accent); margin-bottom: 8mm; flex-shrink: 0; }
+.bk-vi .bk-toc-title { text-align: left; font-size: 21pt; color: var(--primary); letter-spacing: 0.08em; }
+.bk-vi .bk-back { background: var(--primary); }
+.bk-vi .bk-back-band { order: -1; margin-top: 0; height: 10px; background: var(--accent); }
+.bk-vi .bk-back-text { color: #ffffff; font-size: 16pt; font-weight: 600; line-height: 2; }
+.bk-vi .bk-back .bk-vi-rule { display: block; width: 48px; height: 4px; background: var(--accent); margin: 10mm auto 0; }
+.bk-vi .bk-back-brand { color: #ffffff; }
+.bk-vi .bk-back .bk-vi-decor { display: block; position: absolute; right: -30mm; top: -30mm; width: 90mm; height: 90mm; }
+
+/* ═══ 控制条 ═══ */
+.bk-nav {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; align-items: center; z-index: 10;
+  background: rgba(0,0,0,0.55); color: #fff; padding: 8px 18px; border-radius: 20px;
+  font-size: 14px; font-family: sans-serif; user-select: none;
+}
+.bk-nav button {
+  background: none; border: 1px solid rgba(255,255,255,0.5); color: #fff;
+  border-radius: 14px; padding: 3px 14px; cursor: pointer; font-size: 14px;
+}
+.bk-nav button:hover { background: rgba(255,255,255,0.2); }
+
+	/* === 页眉页脚（绝对定位在页边距区内，不占内容流，不影响拆页检测） === */
+	.bk-page-header {
+	  position: absolute; top: 0; left: 20mm; right: 20mm; height: 16mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 10pt; color: rgba(var(--text-rgb), 0.5);
+	  border-bottom: 1px solid rgba(var(--text-rgb), 0.1);
+	  z-index: 1; pointer-events: none;
+	}
+	.bk-page-header.no-divider { border-bottom: none; }
+	.bk-page-header-logo { height: 11mm; width: auto; vertical-align: middle; margin-right: 3mm; }
+	.bk-page-footer {
+	  position: absolute; bottom: 0; left: 20mm; right: 20mm; height: 14mm;
+	  display: flex; align-items: center; justify-content: space-between;
+	  font-size: 9pt; color: rgba(var(--text-rgb), 0.4);
+	  z-index: 1; pointer-events: none;
+	}
+
+/* ═══ 打印：A4 分页（全页输出，不受翻页状态影响） ═══ */
+@page {
+  size: A4;
+  margin: 0;
+  @bottom-center { content: counter(page) " / " counter(pages); font-size: 8.5pt; color: #888; }
+}
+@media print {
+  html, body { background: none; overflow: visible; height: auto; }
+  .bk-stage { position: static; display: block; }
+  .bk-sheet {
+    display: flex !important; flex-direction: column; position: relative;
+    transform: none !important; width: 100%; height: auto; max-height: 297mm;
+    margin: 0; page-break-after: always; break-after: page;
+  }
+  .bk-sheet:last-of-type { page-break-after: auto; break-after: auto; }
+  .bk-embed-frame { width: 794px; height: 1123px; }
+  .bk-nav { display: none; }
+}
+</style>
+</head>
+<body class="{{BOOK_BODY_CLASS}}">
+
+<div class="bk-stage" id="bkStage">
+
+  <!-- ═══ 封面 ═══ -->
+  <section class="bk-sheet bk-cover bk-active">
+    <div class="bk-cover-band"></div>
+    <svg class="bk-vi-decor" viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="78" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+      <circle cx="100" cy="100" r="52" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.18"/>
+    </svg>
+    <div class="bk-sheet-inner">
+      {{BOOK_LOGO}}
+      <h1 class="bk-cover-title">{{BOOK_TITLE}}</h1>
+      <div class="bk-cover-subtitle">{{BOOK_SUBTITLE}}</div>
+      <div class="bk-cover-rule"></div>
+      <div class="bk-cover-meta">
+        <div class="bk-cover-author">{{BOOK_AUTHOR}}</div>
+        <div>{{BOOK_ORG}}</div>
+        <div>{{BOOK_DATE}}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ 扉页（封面背面/版权编制说明） ═══ -->
+  <!--BK:FLYLEAF-->
+  <section class="bk-sheet bk-flyleaf">
+    <div class="bk-vi-pagehead"><span>{{BOOK_TITLE}}</span><span>{{BOOK_DATE}}</span></div>
+    <div class="bk-sheet-inner">
+      <div class="bk-flyleaf-title">{{BOOK_TITLE}}</div>
+      <div class="bk-flyleaf-text">{{FLYLEAF_TEXT}}</div>
+      <div class="bk-flyleaf-info">
+        编著：{{BOOK_AUTHOR}}<br>
+        单位：{{BOOK_ORG}}<br>
+        日期：{{BOOK_DATE}}<br>
+        全书共 {{PAGE_TOTAL}} 章
+      </div>
+      <div class="bk-flyleaf-brand">{{BRAND_COPYRIGHT}}<br>{{BRAND_SIGNATURE}}</div>
+    </div>
+  </section>
+  <!--/BK:FLYLEAF-->
+
+  <!-- ═══ 目录 ═══ -->
+      <!-- ═══ 目录 ═══ -->
+    <!--BK:TOC-->
+    <section class="bk-sheet bk-toc">
+      <div class="bk-vi-pagehead"><span>{{BOOK_TITLE}}</span><span>{{BOOK_DATE}}</span></div>
+      <div class="bk-sheet-inner">
+        <div class="bk-vi-tocline"></div>
+        <div class="bk-toc-title">目 录</div>
+        <table class="bk-toc-table">
+          {{TOC_ENTRIES}}
+        </table>
+      </div>
+    </section>
+    <!--/BK:TOC-->
+
+  <!-- ═══ 章节正文 ═══ -->
+  {{CHAPTERS}}
+
+  <!-- ═══ 封底 ═══ -->
+  <!--BK:BACK-->
+  <section class="bk-sheet bk-back">
+    <svg class="bk-vi-decor" viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="78" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.3"/>
+      <circle cx="100" cy="100" r="52" fill="none" stroke="#ffffff" stroke-width="1.5" opacity="0.18"/>
+    </svg>
+    <div class="bk-sheet-inner">
+      <div class="bk-back-text">{{BACK_COVER_TEXT}}</div>
+      <div class="bk-vi-rule"></div>
+      <div class="bk-back-brand">{{BOOK_AUTHOR}} · {{BOOK_ORG}}<br>{{BRAND_COPYRIGHT}} {{BRAND_SIGNATURE}}</div>
+    </div>
+    <div class="bk-back-band"></div>
+  </section>
+  <!--/BK:BACK-->
+
+</div>
+
+<div class="bk-nav">
+  <button id="bkPrev" type="button">← 上一页</button>
+  <span id="bkCounter">1 / 1</span>
+  <button id="bkNext" type="button">下一页 →</button>
+</div>
+
+<script>
+/* ═══ 长正文自动拆页（模板内置资产）：超出固定页高的 .bk-prose 按块级子元素填充分页，表格按行拆，续页不带章头 ═══ */
+window.__BK_RDY = 0;
+(function () {
+  function contentBottom(box) {
+    var r = box.getBoundingClientRect();
+    var pb = parseFloat(getComputedStyle(box).paddingBottom) || 0;
+    return r.bottom - pb;
+  }
+  function overflowIndex(prose, limit) {
+    var kids = prose.children;
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].getBoundingClientRect().bottom > limit + 1) return i;
+    }
+    return -1;
+  }
+  function splitTable(table, limit) {
+    var rows = [];
+    for (var b = 0; b < table.tBodies.length; b++) {
+      rows = rows.concat(Array.prototype.slice.call(table.tBodies[b].rows));
+    }
+    var cut = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getBoundingClientRect().bottom > limit + 1) { cut = i; break; }
+    }
+    if (cut <= 0) return null; /* 首行就超 → 整表移到下一页 */
+    var clone = table.cloneNode(false);
+    if (table.tHead) clone.appendChild(table.tHead.cloneNode(true));
+    var tb = document.createElement('tbody');
+    for (var j = cut; j < rows.length; j++) tb.appendChild(rows[j]);
+    clone.appendChild(tb);
+    return clone;
+  }
+  window.bkSplitProse = function (opts) {
+    Array.prototype.slice.call(opts.sections).forEach(function (section) {
+      var cur = section, guard = 0;
+      while (cur && guard++ < 200) {
+        if (opts.prepare) opts.prepare(cur);
+        var prose = cur.querySelector('.bk-prose');
+        if (!prose) { if (opts.restore) opts.restore(cur); break; }
+        var limit = contentBottom(opts.box ? opts.box(cur) : cur);
+        var idx = overflowIndex(prose, limit);
+        if (idx < 0) { if (opts.restore) opts.restore(cur); break; }
+        var carry = [];
+        var breaker = prose.children[idx];
+        if (breaker && breaker.tagName === 'TABLE') {
+          var rest = splitTable(breaker, limit);
+          if (rest) { carry.push(rest); idx += 1; }
+        }
+        if (idx === 0 && carry.length === 0 && !cur.querySelector('.bk-chapter-head')) {
+          if (prose.children.length <= 1) { if (opts.restore) opts.restore(cur); break; }
+          idx = 1; /* 单个超高不可拆块留本页，其余移下页 */
+        }
+        var moved = [];
+        while (prose.children.length > idx) moved.push(prose.removeChild(prose.children[idx]));
+        var next = opts.makeCont(cur);
+        carry.forEach(function (n) { next.prose.appendChild(n); });
+        moved.forEach(function (n) { next.prose.appendChild(n); });
+        if (opts.restore) opts.restore(cur);
+        cur = next.section;
+      }
+    });
+  };
+})();
+
+(function defer() {
+  if (window.__BK_RDY !== 0) return;
+  if (!document.documentElement.clientHeight || !document.documentElement.clientWidth)
+    return requestAnimationFrame(defer);
+  /* 翻页式下非激活页 display:none 无法测量 → 拆页时临时显隐（visibility:hidden 不闪屏） */
+  var proseSheets = [];
+  Array.prototype.slice.call(document.querySelectorAll('.bk-sheet.bk-chapter')).forEach(function (s) {
+    if (s.querySelector(':scope > .bk-sheet-inner > .bk-prose')) proseSheets.push(s);
+  });
+  window.bkSplitProse({
+    sections: proseSheets,
+    box: function (s) { return s.querySelector('.bk-sheet-inner'); },
+    prepare: function (s) { s.style.display = 'flex'; s.style.visibility = 'hidden'; },
+    restore: function (s) { s.style.display = ''; s.style.visibility = ''; },
+    makeCont: function (s) {
+      var cont = s.cloneNode(false);
+      cont.removeAttribute('id');
+      cont.classList.remove('bk-chapter');
+      cont.style.display = 'flex'; cont.style.visibility = 'hidden'; /* 供本轮继续测量，restore 时清除 */
+      // 复制页眉页脚到续页
+      var hdr = s.querySelector(':scope > .bk-page-header');
+      var ftr = s.querySelector(':scope > .bk-page-footer');
+      if (hdr) cont.appendChild(hdr.cloneNode(true));
+      var inner = document.createElement('div'); inner.className = 'bk-sheet-inner';
+      var prose = document.createElement('div'); prose.className = 'bk-prose';
+      inner.appendChild(prose); cont.appendChild(inner);
+      if (ftr) cont.appendChild(ftr.cloneNode(true));
+      s.parentNode.insertBefore(cont, s.nextSibling);
+      return { section: cont, prose: prose };
+    },
+  });
+  window.__BK_RDY = 1;
+})();
+</script>
+
+<script>
+/* ═══ R6 页面编排：拆页后应用正文逐页隐藏/排序（配置由装配引擎注入，仅锚点键与 int 列表） ═══ */
+window.__BK_PROSE_ARRANGE = {{PROSE_ARRANGE}};
+(function defer() {
+  if (window.__BK_RDY > 1) return;
+  if (window.__BK_RDY < 1) return requestAnimationFrame(defer);
+  var cfg = window.__BK_PROSE_ARRANGE || {};
+  Object.keys(cfg).forEach(function (anchor) {
+    /* 本章拆页序列 = 原始正文页 + 续页（makeCont cloneNode 复制 data-bk-prose，DOM 序即页序） */
+    var pages = Array.prototype.slice.call(document.querySelectorAll('[data-bk-prose="' + anchor + '"]'));
+    if (!pages.length) return;
+    var c = cfg[anchor] || {};
+    var idxs = [], i;
+    for (i = 0; i < pages.length; i++) idxs.push(i);
+    var order = c.order;
+    if (Object.prototype.toString.call(order) === '[object Array]' && order.length === pages.length) {
+      var seen = {}, ok = true;
+      for (i = 0; i < order.length; i++) {
+        var v = order[i];
+        if (typeof v !== 'number' || v < 0 || v >= pages.length || seen[v]) { ok = false; break; }
+        seen[v] = 1;
+      }
+      if (ok) idxs = order; /* 非 0..n-1 完整排列 → 回退自然序（与后端 _visible_page_indices 同规则） */
+    }
+    var hidden = {};
+    (c.hidden || []).forEach(function (v) { hidden[v] = 1; });
+    var keep = [];
+    for (i = 0; i < idxs.length; i++) { if (!hidden[idxs[i]]) keep.push(pages[idxs[i]]); }
+    var parent = pages[0].parentNode;
+    var tail = pages[pages.length - 1].nextSibling;
+    pages.forEach(function (p) { parent.removeChild(p); });
+    keep.forEach(function (p) { parent.insertBefore(p, tail); });
+    /* 锚点跟随第一张保留页，目录跳转不失效 */
+    if (keep.length && keep[0].id !== anchor) {
+      pages.forEach(function (p) { if (p.id === anchor) p.removeAttribute('id'); });
+      keep[0].id = anchor;
+    }
+  });
+  window.__BK_RDY = 2;
+})();
+</script>
+
+<script>
+(function defer() {
+  if (window.__BK_RDY > 2) return;
+  if (window.__BK_RDY < 2) return requestAnimationFrame(defer);
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.bk-sheet'));
+  var idx = 0;
+  var counter = document.getElementById('bkCounter');
+  var PAGE_W = 794, PAGE_H = 1123; /* A4 @96dpi 固定几何（210mm×297mm），非主题值 */
+
+  function fit() {
+    var scale = Math.min(window.innerWidth / PAGE_W, (window.innerHeight - 70) / PAGE_H);
+    slides.forEach(function (s) { s.style.transform = 'scale(' + scale + ')'; });
+  }
+
+  function show(i) {
+    if (i < 0) i = 0;
+    if (i > slides.length - 1) i = slides.length - 1;
+    idx = i;
+    slides.forEach(function (s, k) { s.classList.toggle('bk-active', k === idx); });
+    counter.textContent = (idx + 1) + ' / ' + slides.length;
+  }
+
+  document.getElementById('bkPrev').addEventListener('click', function () { show(idx - 1); });
+  document.getElementById('bkNext').addEventListener('click', function () { show(idx + 1); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { show(idx + 1); e.preventDefault(); }
+    if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(idx - 1); e.preventDefault(); }
+    if (e.key === 'Home') { show(0); }
+    if (e.key === 'End') { show(slides.length - 1); }
+  });
+
+  // 目录点击跳转：a4 目录用 href="#bk-ch-N" 锚点 → 定位所在纸页
+  document.querySelectorAll('.bk-toc-table a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      var target = document.getElementById(a.getAttribute('href').slice(1));
+      if (!target) return;
+      var sheet = target.closest ? target.closest('.bk-sheet') : null;
+      if (sheet) show(slides.indexOf(sheet));
+    });
+  });
+
+  window.addEventListener('resize', fit);
+  fit();
+  show(0);
+})();
+</script>
+
+<script>
+/* ═══ 页脚页码填充（拆页/编排完成后注入当前页与总页数） ═══ */
+(function defer() {
+  if (window.__BK_RDY < 2) return requestAnimationFrame(defer);
+  var sheets = document.querySelectorAll('.bk-sheet');
+  var total = sheets.length;
+  sheets.forEach(function(s, i) {
+    var cur = s.querySelector('.bk-page-cur');
+    var tot = s.querySelector('.bk-page-total');
+    if (cur) cur.textContent = i + 1;
+    if (tot) tot.textContent = total;
+  });
+})();
+</script>
+
+</body>
+</html>

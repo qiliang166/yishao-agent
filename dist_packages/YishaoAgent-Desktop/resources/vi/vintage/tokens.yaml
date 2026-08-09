@@ -1,0 +1,449 @@
+# Vintage — Aged, Warm, Timeless Design Tokens
+# 程序解析用，所有色值/字号/间距的精确数值
+# 颜色变量: {{primary}}, {{primary_rgb}}, {{accent}}, {{chart_0}}, 等
+
+# 当前激活的色系（兼容字段）
+color_scheme: vintage-sepia
+
+# 文档模板映射 — 从 chart_colors 引用，避免破坏13色码结构
+document_colors:
+  header_blue: "{{chart_0}}"
+  header_bronze: "{{chart_1}}"
+  text_rgb: "44,36,22"
+  white: "#faf5ee"
+
+color_schemes:
+  vintage-sepia:
+    label: "经典棕褐"
+    primary: "#3d2b1f"
+    secondary: "#6b5a4e"
+    accent: "#8b6914"
+    background: "#faf5ee"
+    text: "#2c2416"
+    card_bg: "#f0e8d8"
+    chart_colors:
+      - "#8b6914"
+      - "#5c3a1e"
+      - "#6b3a2a"
+      - "#2f4f2f"
+      - "#654321"
+    semantic:
+      positive: "#2f4f2f"
+      negative: "#6b3a2a"
+    persona_hint: "Aged, warm, timeless. Deep sepia browns (#3d2b1f) on aged paper cream (#faf5ee). Classic serif typography, subtle warm shadows, ornamental details. Cards use 1px solid sepia-toned borders. Like a well-preserved antique book — warm, textured, enduring. No gradients, no cold colors — all warmth and patina."
+
+  vintage-burgundy:
+    label: "古典酒红"
+    primary: "#4a1824"
+    secondary: "#7a4a4a"
+    accent: "#9b7b3a"
+    background: "#fdf8f5"
+    text: "#2c1810"
+    card_bg: "#f5ece4"
+    chart_colors:
+      - "#9b7b3a"
+      - "#4a1824"
+      - "#6b3030"
+      - "#3d4a1f"
+      - "#7a4a4a"
+    semantic:
+      positive: "#3d4a1f"
+      negative: "#6b3030"
+    persona_hint: "Rich burgundy (#4a1824) with antique gold (#9b7b3a). Warm cream backgrounds, ivory cards. Classic serif typography. Like a vintage wine label — refined, luxurious, deeply traditional. Warm shadows, subtle borders."
+
+  vintage-olive:
+    label: "档案军绿"
+    primary: "#2d3a1f"
+    secondary: "#5a6b4a"
+    accent: "#9b7b3a"
+    background: "#f8f6f0"
+    text: "#1e2414"
+    card_bg: "#eef0e6"
+    chart_colors:
+      - "#9b7b3a"
+      - "#2d3a1f"
+      - "#5a6b4a"
+      - "#6b4a2a"
+      - "#3d4a2a"
+    semantic:
+      positive: "#2d4a1f"
+      negative: "#6b2a2a"
+    persona_hint: "Archival olive green (#2d3a1f) with brass accents (#9b7b3a). Warm parchment backgrounds, pale sage cards. Like a military archive document — authoritative, historical, understated. Serif typography throughout."
+
+  vintage-navy:
+    label: "海军深蓝"
+    primary: "#1c2833"
+    secondary: "#3e5c6b"
+    accent: "#9b8b3a"
+    background: "#f8f7f4"
+    text: "#1a1e24"
+    card_bg: "#eef0f2"
+    chart_colors:
+      - "#9b8b3a"
+      - "#1c2833"
+      - "#3e5c6b"
+      - "#5a3a2a"
+      - "#2a4a3a"
+    semantic:
+      positive: "#2a4a3a"
+      negative: "#5a2a2a"
+    persona_hint: "Deep navy (#1c2833) with aged brass (#9b8b3a). Warm off-white backgrounds, pale blue-gray cards. Like a naval captain's log — dignified, precise, timeless. Classic serif typography."
+
+  vintage-charcoal:
+    label: "炭灰银"
+    primary: "#2d2d2d"
+    secondary: "#5a5a5a"
+    accent: "#8b793a"
+    background: "#faf9f7"
+    text: "#1a1a1a"
+    card_bg: "#f0efed"
+    chart_colors:
+      - "#8b793a"
+      - "#2d2d2d"
+      - "#5a3a3a"
+      - "#3a4a3a"
+      - "#5a5a5a"
+    semantic:
+      positive: "#3a4a3a"
+      negative: "#5a2a2a"
+    persona_hint: "Charcoal (#2d2d2d) with tarnished silver-gold (#8b793a). Warm white backgrounds, light gray cards. Like a vintage photography studio — monochromatic elegance with sepia warmth. Serif typography."
+
+typography:
+  heading_font: "'Playfair Display', Georgia, 'Times New Roman', 'Noto Serif SC', 'STSong', serif"
+  body_font: "Lora, Georgia, 'Times New Roman', 'Noto Serif SC', 'STSong', serif"
+  cjk_font: "'Noto Serif SC', 'STSong', 'SimSun', 'PingFang SC', serif"
+  cover_title:
+    size: "48-56px"
+    weight: 700
+  page_title:
+    size: "32-40px"
+    weight: 600
+  card_title:
+    size: "18-22px"
+    weight: 600
+  body:
+    size: "15-17px"
+    weight: 400
+  caption:
+    size: "12-13px"
+    weight: 400
+  line_height:
+    heading: 1.25-1.35
+    body: 1.7-1.85
+  letter_spacing:
+    heading: "0~0.5px"
+
+card_style:
+  border_radius: 3
+  shadow: "0 1px 3px rgba(44,36,22, 0.08)"
+  border: "1px solid rgba(44,36,22, 0.12)"
+  gap: 28
+  left_stripe_width: 3
+
+gradients:
+  hero_bg: "none"
+  card_highlight: "none"
+
+elevation:
+  shadow_sm: "0 1px 2px rgba(44,36,22, 0.05)"
+  shadow_md: "0 2px 6px rgba(44,36,22, 0.08)"
+  shadow_lg: "0 4px 16px rgba(44,36,22, 0.12)"
+
+decoration:
+  accent_stripe: "4px solid {{accent}}"
+  title_underline: "40×3px {{accent}}"
+  page_dot: "4px {{primary}}"
+  layers: ["背景层", "装饰层", "结构层", "内容层"]
+  types:
+    - id: type_a
+      name: "古典饰线"
+      description: "顶部 accent 色条 + 标题下划线 + 底部细线 + 页码 —— 经典稳重"
+    - id: type_b
+      name: "档案边框"
+      description: "双线边框 + 角落 accent 方块 —— 正式文献风格"
+    - id: type_c
+      name: "极简古籍"
+      description: "仅标题 accent 下划线 + 页码 —— 靠 typography 建立层次"
+
+icons:
+  style: "outline"
+  stroke_width: "1.5px"
+  card_size: 18
+  hero_size: 32
+  metric_size: 14
+  color_rule: "跟随所在卡片的 chart_color, opacity: 0.65"
+
+illustrations:
+  label_align: "text-anchor=middle, label_x=graphic_cx"
+  label_spacing: ">=22px from graphic bottom to label baseline"
+  guide_spacing: ">=20px"
+  min_stroke: "1px"
+  min_font: "13px"
+
+slide_type_overrides:
+  cover:
+    card_bg: "{{background}}"
+    text: "{{primary}}"
+    heading_scale: 1.2
+    layout: full_bleed
+    no_card_container: true
+  quote:
+    card_bg: "{{card_bg}}"
+    text: "{{primary}}"
+    body_font_style: "italic"
+    layout: single_focus
+  data:
+    heading_scale: 0.9
+    layout: dashboard
+  section:
+    background: "{{primary}}"
+    text: "{{background}}"
+    layout: full_bleed
+  summary:
+    background: "{{primary}}"
+    text: "{{background}}"
+    heading_scale: 1.1
+    layout: full_bleed
+    copyright: "YYYY Company Name. All rights reserved."
+    copyright_size: "11-12px"
+    copyright_opacity: 0.45-0.55
+  content:
+    background: "{{background}}"
+    layout: mixed_grid
+  document:
+    page_width: 794
+    page_height: 1123
+    page_unit: "px"
+    print_width: 210
+    print_height: 297
+    print_unit: "mm"
+    background: "{{background}}"
+    layout: single_focus
+    no_card_container: true
+    table_border: "1px solid rgba(44,36,22, 0.15)"
+    cell_border: "1px solid rgba(44,36,22, 0.08)"
+    header_font_size: "12-13px"
+    data_font_size: "12px"
+    label_font_size: "13px"
+    footer_font_size: "11-12px"
+    min_row_height: 26
+    print_margin: "12mm 14mm"
+    decoration_circle_opacity: "0.03-0.05"
+    accent_stripe_height: 4
+
+layout_types:
+  - id: full_bleed
+    cards: "1-3"
+    description: "垂直居中，全屏"
+    use: "封面、章节分隔、总结"
+  - id: three_column
+    cards: 3
+    description: "水平等分，每栏 ~373px"
+    use: "并列要点、三大优势"
+  - id: two_column
+    cards: 2
+    description: "水平等分，每栏 ~550px"
+    use: "对比分析、优劣对比"
+  - id: two_column_asymmetric
+    cards: 2
+    description: "左宽 62% + 右窄 38%"
+    use: "主次内容、问题+方案"
+  - id: dashboard
+    cards: "3-5"
+    description: "顶行 metric 卡 + 底行 summary"
+    use: "数据总览、KPI 展示"
+  - id: mixed_grid
+    cards: "3-4"
+    description: "顶行 hero(全宽) + 底行 2-3 小卡"
+    use: "核心观点+支撑论据"
+  - id: hero_grid
+    cards: "2-4"
+    description: "左 hero 大卡 + 右 1-2 小卡堆叠"
+    use: "论点+数据佐证"
+  - id: single_focus
+    cards: 1
+    description: "居中大卡 ~900px"
+    use: "核心结论、金句"
+  - id: timeline
+    cards: "2-5"
+    description: "水平排列，步骤节点+连接线"
+    use: "流程步骤、时间线"
+  - id: horizontal_split
+    cards: "3-4"
+    description: "顶全宽 hero + 底行 2-3 小卡"
+    use: "标题+支撑指标"
+
+card_roles:
+  - role: hero
+    visual: "大卡，大面积，核心信息，暖色细边框"
+    required: [title, body]
+    optional: [chart]
+  - role: metric
+    visual: "居中大数字/进度条，暖色细边框（1px solid chart_color）"
+    required: [chart]
+    optional: []
+  - role: card_0
+    visual: "标准卡，暖色细边框(chart_colors[0], 1px solid)"
+    required: [title or body]
+    optional: [chart]
+  - role: card_1
+    visual: "标准卡，暖色细边框(chart_colors[1], 1px solid)"
+    required: [title or body]
+    optional: [chart]
+  - role: card_2
+    visual: "标准卡，暖色细边框(chart_colors[2], 1px solid)"
+    required: [title or body]
+    optional: [chart]
+  - role: card_3
+    visual: "标准卡，暖色细边框(chart_colors[3], 1px solid)"
+    required: [title or body]
+    optional: [chart]
+  - role: card_4
+    visual: "标准卡，暖色细边框(chart_colors[4], 1px solid)"
+    required: [title or body]
+    optional: [chart]
+  - role: left
+    visual: "暖色细边框(chart_0, 1px solid) + ▲ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比左/正面/优势"
+  - role: right
+    visual: "暖色细边框(chart_3, 1px solid) + ▼ 前缀"
+    required: [title, body]
+    optional: [chart]
+    use: "双栏对比右/反面/劣势"
+  - role: summary
+    visual: "全宽暖色卡，细边框（1px solid accent）"
+    required: [title or body]
+    optional: [chart]
+    use: "数据总结、页面收尾"
+  - role: step_N
+    visual: "圆形编号 + 标题 + 描述，暖色细边框"
+    required: [title, body]
+    optional: []
+    use: "时间线步骤 1~5"
+
+quality_checklist:
+  - "3 层结构完整（背景->结构->内容）"
+  - ">=2 个 SVG 元素"
+  - ">=3 种不同 chart_color"
+  - "每卡: 标题 + 正文（图标可选）"
+  - "数字->图表形态"
+  - "标题下划线(40x3px)"
+  - "标题 primary 色"
+  - "正文 text 色"
+  - "卡片 card_bg 色"
+  - "背景 background 色"
+  - "衬线字体 typography token"
+  - "圆角 3px（古典直角感）"
+  - "暖色微阴影（aged paper）"
+  - "插图标签居中"
+  - "插图间距 >=22px"
+  - "插图字号 >=13px"
+  - "SVG描边 >=1px"
+  - "封面/总结无卡片容器且无顶部色条"
+  - "卡片暖色细边框轮换（每卡不同 chart_color，边框即装饰）"
+  - "禁止任何渐变"
+  - "禁止全宽顶部 accent 色条（封面除外）"
+  - "禁止冷色调（蓝、青、紫）"
+  - "禁止无衬线字体（必须使用 serif）"
+
+font_thresholds:
+  slide_title: { min: 28, max: 40 }
+  card_title: { min: 18, max: 28 }
+  body: { min: 14, max: 18 }
+  label: { min: 13, max: 13 }
+  absolute_min: 13
+
+safe_area:
+  x_min: 48
+  y_min: 32
+  y_max: 706
+
+visual_richness:
+  min_svg_elements: 2
+  min_colors: 3
+  min_cards: 3
+  min_decorations: 1
+  min_layers: 4
+
+block_types:
+  header:
+    description: "文档头部（LOGO/编号/日期），全宽合并，可选段落"
+    colspan: full
+    font_size: "12-14px"
+    color: "rgba(44,36,22, 0.5)"
+    border_bottom: "1px solid rgba(44,36,22, 0.1)"
+    columns: "2-4"
+  title:
+    description: "文档主标题，card_bg 背景 + accent 下划线，必有段落"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{primary}}"
+    font_size: "20-24px"
+    font_weight: 700
+    letter_spacing: "1-2px"
+    border_bottom: "2px solid {{accent}}"
+  info_block:
+    description: "键值对信息表，标签列 + 值列，可选图片占位区"
+    colspan: auto
+    label_bg: "rgba(44,36,22, 0.04)"
+    label_color: "{{primary}}"
+    label_weight: 600
+    value_bg: "{{background}}"
+    value_color: "{{text}}"
+    font_size: "13-14px"
+    image_placeholder_bg: "{{card_bg}}"
+    image_placeholder_border: "1.5px dashed rgba(139,105,20, 0.3)"
+    image_placeholder_radius: 3
+  table_block:
+    description: "多列数据网格，含表头和交替行数据"
+    colspan: auto
+    header_bg_default: "{{primary}}"
+    header_bg_alt_0: "{{chart_0}}"
+    header_bg_alt_2: "{{chart_2}}"
+    header_color: "{{background}}"
+    header_weight: 600
+    header_font_size: "12-13px"
+    data_bg: "{{background}}"
+    data_bg_alt: "rgba(44,36,22, 0.02)"
+    data_font_size: "12px"
+    row_height: 26
+    border: "1px solid rgba(44,36,22, 0.1)"
+    header_border_top: "2px solid rgba(44,36,22, 0.12)"
+    header_rotation: "primary -> chart_0 -> chart_2"
+  text_block:
+    description: "自由段落文字，全宽合并"
+    colspan: full
+    background: "{{background}}"
+    color: "{{text}}"
+    font_size: "14-16px"
+    line_height: 1.8
+    border_top: "1px solid rgba(44,36,22, 0.08)"
+  list_block:
+    description: "编号或项目符号列表"
+    colspan: full
+    number_color: "{{primary}}"
+    number_weight: 600
+    number_size: "14px"
+    item_color: "{{text}}"
+    item_size: "14px"
+    styles: ["ordered", "bullet", "checkbox"]
+    border_top: "1px solid rgba(44,36,22, 0.08)"
+  closing:
+    description: "文档收束区域（结论/签名/落款），可选段落"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "{{text}}"
+    font_size: "13-14px"
+    border_top: "2px solid rgba(139,105,20, 0.15)"
+    layouts: ["center", "split"]
+  footer:
+    description: "文档底部声明区（版权/备注）"
+    colspan: full
+    background: "{{card_bg}}"
+    color: "rgba(44,36,22, 0.5)"
+    font_size: "11-12px"
+    line_height: 1.7
+    border_top: "2px solid rgba(139,105,20, 0.12)"
+    align: center

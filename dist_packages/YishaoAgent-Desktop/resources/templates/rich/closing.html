@@ -1,0 +1,45 @@
+<div style="width:1280px;height:720px;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--primary) 0%,var(--secondary) 100%);font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;">
+
+  <!-- 第1层：背景层 -->
+  <div style="position:absolute;inset:0;background:linear-gradient(to bottom right,rgba(0,0,0,0.2),rgba(0,0,0,0.5));"></div>
+
+  <!-- 第2层：装饰层（光晕与几何图形 — 与封面呼应） -->
+  <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+      </pattern>
+      <radialGradient id="glow1" cx="50%" cy="35%" r="50%">
+        <stop offset="0%" stop-color="rgba(255,255,255,0.07)"/>
+        <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+      </radialGradient>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#grid)"/>
+    <circle cx="640" cy="260" r="300" fill="url(#glow1)"/>
+    <circle cx="200" cy="500" r="120" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1.5"/>
+    <circle cx="1100" cy="200" r="90" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+  </svg>
+
+  <!-- 第3层：顶部 accent 色条 -->
+  <div style="position:absolute;top:0;left:0;width:100%;height:4px;background:var(--accent);z-index:5;"></div>
+
+  <!-- 第4层：结构层 + 内容层（居中） -->
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);text-align:center;z-index:2;">
+
+    <!-- 感谢语 -->
+    <h2 style="font-family:'DM Sans',Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:52px;font-weight:700;letter-spacing:-1px;line-height:1.2;color:#ffffff;margin:0 0 20px 0;">{{THANKS}}</h2>
+
+    <!-- 装饰性短线 -->
+    <div style="width:48px;height:3px;background:var(--accent);margin:0 auto 32px auto;border-radius:2px;"></div>
+
+    <!-- 行动号召 -->
+    {{#CTA}}<p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:17px;font-weight:600;color:var(--accent);margin:0 0 24px 0;">{{CTA}}</p>{{/CTA}}
+
+    <!-- 联系方式 -->
+    {{#CONTACT_INFO}}<p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:14px;color:rgba(255,255,255,0.55);margin:0 0 8px 0;">{{CONTACT_INFO}}</p>{{/CONTACT_INFO}}
+
+    <!-- 版权声明 -->
+    {{#COPYRIGHT}}<p style="font-family:Inter,'PingFang SC','Microsoft YaHei',sans-serif;font-size:12px;color:rgba(255,255,255,0.35);margin:0;">{{COPYRIGHT}}</p>{{/COPYRIGHT}}
+  </div>
+
+</div>
