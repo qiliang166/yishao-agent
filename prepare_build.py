@@ -158,6 +158,9 @@ def main():
     print(f"[prepare] Discovered {len(discovered)} backend modules")
     content = _inject_missing_hiddenimports(content, discovered)
 
+    # Apply brand name to the EXE
+    content = content.replace("name='YishaoAgent'", f"name='{app_name}'")
+
     if icon_path:
         icon_path_fwd = icon_path.replace("\\", "/")
         content = content.replace("icon=None", f"icon='{icon_path_fwd}'")

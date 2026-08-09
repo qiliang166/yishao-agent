@@ -151,23 +151,29 @@ Write-Host "  [OK] Factory resources staged"
 # Clean up temp spec
 Remove-Item "$root\build_temp.spec" -Force -ErrorAction SilentlyContinue
 
-# Step 4: Copy portable exe to downloads (NOT called "Setup")
-Write-Host "[4/5] Copying portable exe to downloads..."
+# Step 4: Create desktop distribution ZIP (entire dist folder)
+Write-Host "[4/5] Creating desktop ZIP..."
 $downloadsDir = "$root\backend\data\downloads"
 if (-not (Test-Path $downloadsDir)) { New-Item -ItemType Directory -Path $downloadsDir -Force | Out-Null }
 
-$builtExe = Get-ChildItem "$root\dist\*.exe" | Where-Object { $_.Name -ne 'YishaoAgent-KeyGen.exe' } | Sort-Object LastWriteTime -Desc | Select-Object -First 1
-if ($builtExe) {
-    $portableName = "YishaoAgent-Portable.exe"
-    Copy-Item $builtExe.FullName "$downloadsDir\$portableName" -Force -ErrorAction SilentlyContinue
-    Write-Host "  Copied portable exe to downloads as $portableName"
-}
-
-# Also copy CHANGELOG alongside the build artifacts
+# Copy CHANGELOG into dist
 if (Test-Path "$root\CHANGELOG.md") {
     Copy-Item "$root\CHANGELOG.md" "$root\dist\CHANGELOG.md" -Force
     Write-Host "  CHANGELOG.md copied to dist"
 }
+
+# Remove any runtime artifacts (DB, logs, password file) that should NOT ship to users
+@("$root\dist\data\yishao.db", "$root\dist\data\yishao.db-journal",
+  "$root\dist\data\yishao.db-wal", "$root\dist\data\yishao.db-shm",
+  "$root\dist\initial_admin_password.txt", "$root\dist\startup_errors.log") | ForEach-Object {
+    if (Test-Path $_) { Remove-Item $_ -Force -ErrorAction SilentlyContinue }
+}
+
+$desktopZip = "$downloadsDir\YishaoAgent-Desktop.zip"
+if (Test-Path $desktopZip) { Remove-Item $desktopZip -Force }
+Compress-Archive -Path "$root\dist\*" -DestinationPath $desktopZip -Force
+$zipSize = [math]::Round((Get-Item $desktopZip).Length / 1MB, 1)
+Write-Host "  Desktop ZIP: $desktopZip ($zipSize MB)"
 
 # Step 5: Build NSIS installer (real "Setup") — shell out to installer/build.ps1
 Write-Host "[5/5] Building NSIS installer..."
@@ -177,7 +183,6 @@ if (Test-Path $installerBuildScript) {
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  [WARNING] NSIS installer build had errors (exit code: $LASTEXITCODE)"
     } else {
-        # Copy NSIS output to downloads
         $nsisExe = Get-ChildItem "$root\dist\*Setup*.exe" | Sort-Object LastWriteTime -Desc | Select-Object -First 1
         if ($nsisExe) {
             Copy-Item $nsisExe.FullName "$downloadsDir\$($nsisExe.Name)" -Force -ErrorAction SilentlyContinue
@@ -191,6 +196,7 @@ if (Test-Path $installerBuildScript) {
 Write-Host ""
 Write-Host "========================================"
 Write-Host "  Build complete!"
-Write-Host "  Output: $root\dist\"
+Write-Host "  Desktop ZIP: $desktopZip"
+Write-Host "  EXE: $root\dist\"
 Write-Host "========================================"
 pause
