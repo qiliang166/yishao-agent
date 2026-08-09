@@ -21,8 +21,8 @@ _TABLES_WITH_WS_ID = {"project_categories", "projects", "batch_jobs"}
 _COL_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 _SQLITE_MAX_VARS = 500  # batch size for IN (...) queries, well under SQLite's 999 limit
 
-# Video files — skip from export, re-download from source URL after import
-_VIDEO_EXTS = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv'}
+# Media files — skip from export, can be regenerated or re-downloaded
+_SKIP_EXTS = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv', '.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma'}
 
 
 def _batch_in_select(db, table: str, id_column: str, ids: list[str], exclude_cols=None) -> list[dict]:
@@ -88,8 +88,8 @@ def _get_export_dir() -> str:
 
 
 def _skip_file(filename: str) -> bool:
-    """Return True if file should be skipped from export (e.g. large video files)."""
-    return os.path.splitext(filename)[1].lower() in _VIDEO_EXTS
+    """Return True if file should be skipped from export (video/audio — regeneratable)."""
+    return os.path.splitext(filename)[1].lower() in _SKIP_EXTS
 
 
 def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_root: str) -> dict:
