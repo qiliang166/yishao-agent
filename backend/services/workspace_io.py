@@ -267,14 +267,10 @@ def import_workspace_zip(db, zip_bytes: bytes, user_sub: str) -> dict:
          user_sub),
     )
 
-    # Auto-assign the importer's own roles to the new workspace
-    _importer_roles = db.execute(
-        "SELECT role_id FROM user_roles WHERE user_id = ?", (user_sub,)
-    ).fetchall()
-    for _r in _importer_roles:
-        db.execute(
-            "INSERT OR IGNORE INTO workspace_roles (workspace_id, role_id) VALUES (?, ?)",
-            (new_ws_id, _r[0]))
+    # Assign imported workspace to importer personally
+    db.execute(
+        "INSERT OR IGNORE INTO member_workspaces (workspace_id, user_id) VALUES (?, ?)",
+        (new_ws_id, user_sub))
 
     # Build ID mapping
     id_map = {manifest["source_workspace_id"]: new_ws_id}
