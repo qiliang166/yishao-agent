@@ -21,6 +21,9 @@ _TABLES_WITH_WS_ID = {"project_categories", "projects", "batch_jobs"}
 _COL_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
 _SQLITE_MAX_VARS = 500  # batch size for IN (...) queries, well under SQLite's 999 limit
 
+# Video files — skip from export, re-download from source URL after import
+_VIDEO_EXTS = {'.mp4', '.mkv', '.webm', '.avi', '.mov', '.flv'}
+
 
 def _batch_in_select(db, table: str, id_column: str, ids: list[str], exclude_cols=None) -> list[dict]:
     """SELECT * FROM table WHERE id_column IN (ids), batched to avoid SQLite 999-var limit."""
@@ -84,6 +87,11 @@ def _get_export_dir() -> str:
     return os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "exports")
 
 
+def _skip_file(filename: str) -> bool:
+    """Return True if file should be skipped from export (e.g. large video files)."""
+    return os.path.splitext(filename)[1].lower() in _VIDEO_EXTS
+
+
 def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_root: str) -> dict:
     """Collect all disk files: project dirs + result file_paths + step file_paths.
 
@@ -94,6 +102,8 @@ def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_r
 
     def _add_path(abs_path: str):
         if not abs_path:
+            return
+        if _skip_file(os.path.basename(abs_path)):
             return
         p = os.path.normcase(os.path.normpath(os.path.abspath(abs_path)))
         if not os.path.exists(p):
@@ -111,6 +121,8 @@ def _collect_all_files(projects_rows, pr_results_rows, step_results_rows, save_r
             return
         for root, _dirs, files in os.walk(p):
             for f in files:
+                if _skip_file(f):
+                    continue
                 fp = os.path.join(root, f)
                 _add_path(fp)
 
@@ -167,6 +179,8 @@ def _collect_export_files(step_results_rows) -> dict:
             continue
         for root, _dirs, files in os.walk(run_dir):
             for f in files:
+                if _skip_file(f):
+                    continue
                 fp = os.path.join(root, f)
                 rel = os.path.relpath(fp, export_dir_norm).replace("\\", "/")
                 file_map[fp] = f"exports/{rel}"
@@ -219,7 +233,7 @@ def export_workspace_zip(db, workspace_id: str) -> io.BytesIO:
     # 9. Batch job items (batched, exclude AUTOINCREMENT id)
     batch_items = _batch_in_select(db, "batch_job_items", "batch_id", batch_ids, {"id"}) if batch_ids else []
 
-    # 10. File map — all project dirs + result files + step files
+    # 10. File map — all project dirs + result files + step files (skip video files)
     save_root = _get_save_root(db)
     file_map = _collect_all_files(projects, pr_results, step_results, save_root)
 
