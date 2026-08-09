@@ -837,9 +837,17 @@ def list_workspaces(page: int = 1, page_size: int = 20, mine: int = 0, request: 
             """, (uid, uid, page_size, offset)).fetchall()
         else:
             # mine=1：普通管理员只看自己创建的工作区；超管（admin）不受限
-            where, params = "", ()
+            where_parts = []
+            params_list = []
             if mine and user and user.get("username") != "admin":
-                where, params = " WHERE created_by = ?", (user.get("sub", ""),)
+                where_parts.append("created_by = ?")
+                params_list.append(user.get("sub", ""))
+            elif user and user.get("username") != "admin":
+                # 内容管理员 (mine=0): 排除 member 类型用户创建的工作区
+                where_parts.append(
+                    "created_by IN (SELECT id FROM users WHERE user_type = 'admin')")
+            where = f" WHERE {' AND '.join(where_parts)}" if where_parts else ""
+            params = tuple(params_list)
             total = db.execute(f"SELECT COUNT(*) FROM workspaces{where}", params).fetchone()[0]
             offset = (page - 1) * page_size
             rows = db.execute(
@@ -1451,6 +1459,19 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         ws = db.execute("SELECT id FROM workspaces WHERE id = ?", (req.workspace_id,)).fetchone()
         if not ws:
             raise HTTPException(404, "workspace not found")
+
+        # Verify user has access to this workspace (member-type users must be assigned)
+        if user.get("user_type") != "admin":
+            uid = user.get("user_id", user.get("sub", ""))
+            access = db.execute("""
+                SELECT 1 FROM member_workspaces WHERE user_id=? AND workspace_id=?
+                UNION
+                SELECT 1 FROM workspace_roles wr
+                JOIN user_roles ur ON ur.role_id = wr.role_id
+                WHERE ur.user_id = ? AND wr.workspace_id = ?
+            """, (uid, req.workspace_id, uid, req.workspace_id)).fetchone()
+            if not access:
+                raise HTTPException(403, "无权在此工作区创建项目")
 
         # Compute default storage path
         base = _get_global_save_path()
