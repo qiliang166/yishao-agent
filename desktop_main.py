@@ -50,7 +50,6 @@ def _is_self_already_running(port: int) -> bool:
     if not _port_in_use(port):
         return False
     try:
-        import urllib.request
         req = urllib.request.Request(
             f'http://localhost:{port}/api/health',
             headers={'User-Agent': 'YishaoAgent-Desktop/1.0'}
