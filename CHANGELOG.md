@@ -2,6 +2,11 @@
 
 ## 2026-08-09
 
+- fix: persist purchase order_no + license_key to localStorage across refresh
+- chore: rebuild both packages with KeyGen brand info + logo upload (e0bacd5)
+
+## 2026-08-09
+
 - feat: KeyGen brand info tab + logo upload with preview + PUT endpoint fix
 - chore: rebuild desktop package with import fix (940a1cf)
 
