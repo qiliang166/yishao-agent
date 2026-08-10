@@ -279,6 +279,12 @@ def create_user(req: dict, user=require_perm("member.manage")):
                {expires_val}, datetime('now'), datetime('now'))""",
             (user_id, username, password_hash, display_name, email, user_type,
              user["sub"]))
+        # Auto-assign default role based on user_type
+        default_role = "内容管理员" if user_type == "admin" else "试用会员"
+        role = db.execute("SELECT id FROM roles WHERE name = ?", (default_role,)).fetchone()
+        if role:
+            db.execute("INSERT OR IGNORE INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                       (user_id, role["id"]))
         db.commit()
         row = db.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         result = dict(row)
