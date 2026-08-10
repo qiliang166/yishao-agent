@@ -2,6 +2,44 @@
 
 ## 2026-08-10
 
+- fix: replace window.confirm with UnlockConfirmDialog in ProjectPage download flow
+
+## 2026-08-10
+
+- fix: ProjectPage stage 5 individual download now checks unlock via canDownload before downloading
+
+## 2026-08-10
+
+- fix: api_can_download and api_unlock_projects now allow stage5.download non-owners to unlock is_downloadable=0 projects
+
+## 2026-08-10
+
+- fix: stage5.download only grants free download for own projects
+
+## 2026-08-10
+
+- fix: auto-assign default role on user creation
+- fix: create_project write access now uses member_workspaces + ownership only
+
+## 2026-08-10
+
+- revert: restore WorkspaceSettingsPage to pre-c5de9b8c state
+
+## 2026-08-10
+
+- fix: _collect_all_files fallback uses project name not ID, matching resolve_project_storage
+
+## 2026-08-10
+
+- fix: _collect_export_files use os.listdir instead of os.walk to match _list_project_files filtering
+
+## 2026-08-10
+
+- fix: import file paths broken — rename project dirs from old to new IDs after extraction
+- chore: rebuild packages with left-aligned settings page fix
+
+## 2026-08-10
+
 - fix: restore left-aligned layout on workspace settings page
 
 ## 2026-08-10
