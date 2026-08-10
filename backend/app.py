@@ -6972,9 +6972,10 @@ async def api_can_download(request: Request, user=Depends(get_current_user)):
 
         pts = _get_user_points(db, uid)
 
+        perms = set(user.get("permissions", []))
         for pid in project_ids:
             proj = db.execute(
-                "SELECT id, name, is_downloadable, point_cost_deci FROM projects WHERE id=?",
+                "SELECT id, name, is_downloadable, point_cost_deci, created_by FROM projects WHERE id=?",
                 (pid,),
             ).fetchone()
             if not proj:
@@ -6991,8 +6992,21 @@ async def api_can_download(request: Request, user=Depends(get_current_user)):
                 already_unlocked.append({"project_id": pid, "project_name": proj["name"]})
                 continue
 
-            # Check if downloadable
+            # Not downloadable: stage5.download users can still download — own=free, others=pay
             if not proj["is_downloadable"]:
+                if "stage5.download" in perms:
+                    is_owner = proj["created_by"] == uid if proj["created_by"] else False
+                    if is_owner:
+                        already_unlocked.append({"project_id": pid, "project_name": proj["name"]})
+                        continue
+                    cost = int(proj["point_cost_deci"])
+                    need_unlock.append({
+                        "project_id": pid,
+                        "project_name": proj["name"],
+                        "point_cost_deci": cost,
+                    })
+                    total_cost += cost
+                    continue
                 not_downloadable.append({"project_id": pid, "project_name": proj["name"]})
                 continue
 
@@ -7051,11 +7065,19 @@ async def api_unlock_projects(request: Request, user=Depends(get_current_user)):
                 continue
 
             proj = db.execute(
-                "SELECT id, name, is_downloadable, point_cost_deci FROM projects WHERE id=?",
+                "SELECT id, name, is_downloadable, point_cost_deci, created_by FROM projects WHERE id=?",
                 (pid,),
             ).fetchone()
-            if not proj or not proj["is_downloadable"]:
+            if not proj:
                 continue
+            # Allow is_downloadable=0 projects when user has stage5.download (non-owner unlock)
+            if not proj["is_downloadable"]:
+                perms = set(user.get("permissions", []))
+                if "stage5.download" not in perms:
+                    continue
+                is_owner = proj["created_by"] == uid if proj["created_by"] else False
+                if is_owner:
+                    continue  # owner downloads free, no unlock needed
 
             cost = int(proj["point_cost_deci"])
             total_cost += cost
