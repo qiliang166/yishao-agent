@@ -7326,8 +7326,9 @@ def api_download_server():
 def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
                            download_type: str = "file", ip: str = "") -> bool:
     """Check if user can download this project. Returns True if download allowed.
-    - Admins always allowed
-    - is_downloadable=0 projects: requires stage5.download permission (existing behavior)
+    - Admins always allowed (free)
+    - is_downloadable=0 + stage5.download + owner → free
+    - is_downloadable=0 + stage5.download + non-owner → auto-unlock with points
     - is_downloadable=1 projects: requires unlock OR admin
     On success, increments download_count and inserts download_logs.
     """
@@ -7335,11 +7336,12 @@ def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
     is_admin = user.get("user_type") == "admin"
 
     proj = db.execute(
-        "SELECT id, name, is_downloadable, point_cost_deci, download_count FROM projects WHERE id=?",
+        "SELECT id, name, is_downloadable, point_cost_deci, download_count, created_by FROM projects WHERE id=?",
         (project_id,),
     ).fetchone()
     if not proj:
         return False
+    is_owner = proj["created_by"] == uid if proj["created_by"] else False
 
     if is_admin:
         import uuid as _uuid
@@ -7351,10 +7353,36 @@ def _check_unlock_and_log(db, user: dict, project_id: str, filename: str = "",
         )
         return True
 
-    # Not downloadable: use existing stage5.download permission
+    # Not downloadable: stage5.download gives free access only to OWN projects
     if not proj["is_downloadable"]:
         perms = set(user.get("permissions", []))
-        if "stage5.download" in perms:
+        if "stage5.download" in perms and is_owner:
+            import uuid as _uuid
+            db.execute("UPDATE projects SET download_count = download_count + 1 WHERE id=?", (project_id,))
+            db.execute(
+                "INSERT INTO download_logs (id, user_id, project_id, filename, download_type, ip_address) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (str(_uuid.uuid4()), uid, project_id, filename, download_type, ip),
+            )
+            return True
+        if "stage5.download" in perms and not is_owner:
+            # Non-owner must pay points — auto-unlock on first download
+            existing = db.execute(
+                "SELECT 1 FROM project_unlocks WHERE user_id=? AND project_id=? "
+                "AND (expires_at IS NULL OR expires_at > datetime('now'))",
+                (uid, project_id),
+            ).fetchone()
+            if not existing:
+                cost = int(proj["point_cost_deci"])
+                _deduct_points(db, uid, cost, "unlock",
+                               ref_id=project_id, ref_type="project",
+                               note=f"下载解锁「{proj['name']}」")
+                db.execute(
+                    "INSERT INTO project_unlocks (user_id, project_id, points_spent_deci, unlocked_at) "
+                    "VALUES (?, ?, ?, datetime('now'))",
+                    (uid, project_id, cost),
+                )
+                _record_author_revenue(db, project_id, cost)
             import uuid as _uuid
             db.execute("UPDATE projects SET download_count = download_count + 1 WHERE id=?", (project_id,))
             db.execute(
