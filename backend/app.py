@@ -1466,16 +1466,15 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         if not ws:
             raise HTTPException(404, "workspace not found")
 
-        # Verify user has access to this workspace (member-type users must be assigned)
+        # Write-access check: member-type users need direct binding or ownership.
+        # workspace_roles grants visibility only, NOT write access.
         if user.get("user_type") != "admin":
             uid = user.get("user_id", user.get("sub", ""))
             access = db.execute("""
                 SELECT 1 FROM member_workspaces WHERE user_id=? AND workspace_id=?
-                UNION
-                SELECT 1 FROM workspace_roles wr
-                JOIN user_roles ur ON ur.role_id = wr.role_id
-                WHERE ur.user_id = ? AND wr.workspace_id = ?
-            """, (uid, req.workspace_id, uid, req.workspace_id)).fetchone()
+                UNION ALL
+                SELECT 1 FROM workspaces WHERE id=? AND created_by=?
+            """, (uid, req.workspace_id, req.workspace_id, uid)).fetchone()
             if not access:
                 raise HTTPException(403, "无权在此工作区创建项目")
 
