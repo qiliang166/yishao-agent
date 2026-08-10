@@ -5,6 +5,7 @@ import { usePermission } from '../hooks/usePermission'
 import { api, Voice, TTSProvider, LLMProvider, notifyNoProvider } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import TeachingDocPanel from '../components/TeachingDocPanel'
+import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import SlideEditModal from '../components/SlideEditModal'
@@ -316,6 +317,8 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [loaded, setLoaded] = useState(false)
   const [playingAudio, setPlayingAudio] = useState('')
+  const [unlockData, setUnlockData] = useState<any>(null)
+  const [pendingFile, setPendingFile] = useState<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   const playingUrlRef = useRef('')
@@ -496,13 +499,8 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
       if (check == null) { modal.toast('操作失败：服务器未确认', 'error'); return }
       if (check.is_admin) { await downloadSingleFile(f); return }
       if (check.need_unlock && check.need_unlock.length > 0) {
-        const item = check.need_unlock[0]
-        const cost = item.point_cost_deci != null ? (item.point_cost_deci / 10).toFixed(1) : '?'
-        const balance = check.balance_deci != null ? (check.balance_deci / 10).toFixed(1) : '?'
-        const ok = window.confirm(`下载「${f.display_name || f.filename}」需消耗 ${cost} 积分（余额 ${balance} 积分），确认下载？`)
-        if (!ok) return
-        await api.unlockProjects([projectId])
-        await downloadSingleFile(f)
+        setUnlockData(check)
+        setPendingFile(f)
         return
       }
       if (check.already_unlocked && check.already_unlocked.length > 0) { await downloadSingleFile(f); return }
@@ -512,6 +510,21 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
       }
       modal.toast('无法下载：请重试或联系管理员', 'error')
     } catch (e: any) { modal.toast(`下载失败: ${e?.message || e}`, 'error') }
+  }
+
+  const handleUnlockConfirm = async () => {
+    const check = unlockData
+    if (!check) return
+    try {
+      const projectIds = [...new Set(check.need_unlock.map((p: any) => p.project_id))] as string[]
+      await api.unlockProjects(projectIds)
+      setUnlockData(null)
+      modal.toast('解锁成功，开始下载', 'success')
+      if (pendingFile) {
+        await downloadSingleFile(pendingFile)
+        setPendingFile(null)
+      }
+    } catch (e: any) { modal.toast(`解锁失败: ${e?.message || e}`, 'error') }
   }
 
   return (
@@ -617,6 +630,18 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', fontSize: 14 }}>
           暂无产出物
         </div>
+      )}
+
+      {unlockData && (
+        <UnlockConfirmDialog
+          needUnlock={unlockData.need_unlock || []}
+          alreadyUnlocked={unlockData.already_unlocked || []}
+          notDownloadable={unlockData.not_downloadable || []}
+          totalCostDeci={unlockData.total_cost_deci || 0}
+          balanceDeci={unlockData.balance_deci || 0}
+          onConfirm={handleUnlockConfirm}
+          onCancel={() => { setUnlockData(null); setPendingFile(null) }}
+        />
       )}
     </div>
   )
