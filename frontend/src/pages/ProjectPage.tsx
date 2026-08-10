@@ -478,6 +478,42 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
     } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
   }
 
+  const downloadSingleFile = async (f: any) => {
+    const dlName = f.display_name || f.filename
+    if (f.download_url) {
+      await api.downloadWithName(f.download_url, dlName)
+    } else {
+      await api.downloadWithName(
+        `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(projectId)}`,
+        dlName
+      )
+    }
+  }
+
+  const downloadFileWithCheck = async (f: any) => {
+    try {
+      const check = await api.canDownload([{ project_id: projectId, filename: f.filename }])
+      if (check == null) { modal.toast('操作失败：服务器未确认', 'error'); return }
+      if (check.is_admin) { await downloadSingleFile(f); return }
+      if (check.need_unlock && check.need_unlock.length > 0) {
+        const item = check.need_unlock[0]
+        const cost = item.point_cost_deci != null ? (item.point_cost_deci / 10).toFixed(1) : '?'
+        const balance = check.balance_deci != null ? (check.balance_deci / 10).toFixed(1) : '?'
+        const ok = window.confirm(`下载「${f.display_name || f.filename}」需消耗 ${cost} 积分（余额 ${balance} 积分），确认下载？`)
+        if (!ok) return
+        await api.unlockProjects([projectId])
+        await downloadSingleFile(f)
+        return
+      }
+      if (check.already_unlocked && check.already_unlocked.length > 0) { await downloadSingleFile(f); return }
+      if (check.not_downloadable && check.not_downloadable.length > 0) {
+        modal.toast('该项目未开放积分解锁下载，请联系管理员', 'error')
+        return
+      }
+      modal.toast('无法下载：请重试或联系管理员', 'error')
+    } catch (e: any) { modal.toast(`下载失败: ${e?.message || e}`, 'error') }
+  }
+
   return (
     <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div className="card-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
@@ -564,19 +600,7 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
                           )
                         })()}
                         <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', flexShrink: 0 }}
-                          onClick={async () => {
-                            try {
-                              const dlName = f.display_name || f.filename
-                              if (f.download_url) {
-                                await api.downloadWithName(f.download_url, dlName)
-                              } else {
-                                await api.downloadWithName(
-                                  `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(projectId)}`,
-                                  dlName
-                                )
-                              }
-                            } catch (e) { modal.toast(`下载失败: ${e}`, 'error') }
-                          }}>下载</button>
+                          onClick={async () => { await downloadFileWithCheck(f) }}>下载</button>
                         {canEditOwn !== false && (
                         <button className="btn btn-ghost btn-sm" style={{ fontSize: 10, padding: '0 4px', color: 'var(--warning)', flexShrink: 0 }}
                           onClick={() => deleteFile(f)}><SvgIcon name="x-mark" size={11} /></button>
