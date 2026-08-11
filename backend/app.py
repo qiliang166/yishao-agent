@@ -8071,8 +8071,7 @@ def public_list_booklets(q: str = "", page: int = 1, page_size: int = 50, reques
         params = []
         wheres = []
         if user:
-            if user.get("user_type") == "member":
-                wheres.append("owner_role = 'admin'")
+            wheres.append("owner_role = 'admin'")
         else:
             # Anonymous: only recommended booklets
             wheres.append("is_recommended = 1")
