@@ -1,5 +1,10 @@
 ﻿# 更新日志
 
+## 2026-08-11
+
+- fix: logged-in members now see only admin-created booklets in browse square
+- chore: update build stamp after commit abc06d2
+
 ## 2026-08-10
 
 - fix: replace window.confirm with UnlockConfirmDialog in ProjectPage download flow
