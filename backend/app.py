@@ -8064,15 +8064,15 @@ def backup_full(user=require_perm("config.global")):
 
 @app.get("/api/public/booklets")
 def public_list_booklets(q: str = "", page: int = 1, page_size: int = 50, request: Request = None):
-    """Public listing of booklets — recommended-only for anonymous, all for authenticated users."""
+    """Public listing of booklets — recommended-only for anonymous, admin-only for members, all for admins."""
     db = get_db()
     try:
         user = request.state.user if request else None
         params = []
         wheres = []
         if user:
-            # Authenticated: all booklets
-            pass
+            if user.get("user_type") == "member":
+                wheres.append("owner_role = 'admin'")
         else:
             # Anonymous: only recommended booklets
             wheres.append("is_recommended = 1")
