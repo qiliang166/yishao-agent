@@ -2,6 +2,11 @@
 
 ## 2026-08-11
 
+- fix: all logged-in users now see only admin-created booklets in browse square
+- chore: update build stamp after booklet member filter (6919fc2)
+
+## 2026-08-11
+
 - fix: logged-in members now see only admin-created booklets in browse square
 - chore: update build stamp after commit abc06d2
 
