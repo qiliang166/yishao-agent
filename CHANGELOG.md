@@ -2,6 +2,11 @@
 
 ## 2026-08-13
 
+- fix: add gap between 批量新建 and 新建册子 buttons
+- chore: update build stamp after zip download (3ddd3c1)
+
+## 2026-08-13
+
 - feat: batch booklet downloads as a single zip
 - chore: update build stamp after batch booklet preview/download fix (2907b5f)
 
