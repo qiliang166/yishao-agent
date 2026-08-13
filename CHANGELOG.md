@@ -2,6 +2,11 @@
 
 ## 2026-08-13
 
+- feat: batch booklet downloads as a single zip
+- chore: update build stamp after batch booklet preview/download fix (2907b5f)
+
+## 2026-08-13
+
 - fix: batch booklet cover preview + multi-file download
 
 ## 2026-08-13
