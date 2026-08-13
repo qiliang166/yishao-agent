@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import JSZip from 'jszip'
 import SvgIcon from '../components/SvgIcon'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
@@ -45,8 +46,9 @@ interface BatchCover {
   page_hf: PageHeaderFooter
 }
 
-const triggerHtmlDownload = (html: string, filename: string) => {
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+const sanitizeFileName = (name: string) => name.replace(/[\\/:*?"<>|]/g, '_').trim() || '未命名'
+
+const triggerBlobDownload = (blob: Blob, filename: string) => {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -56,8 +58,6 @@ const triggerHtmlDownload = (html: string, filename: string) => {
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 5000)
 }
-
-const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
 
 function CoverThumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; pageH: number; thumbW: number }) {
   if (!doc || thumbW <= 0) return null
@@ -269,7 +269,7 @@ export default function BatchBookletPage() {
     page_hf: cover.page_hf,
   })
 
-  const generateOne = async (entry: SelEntry) => {
+  const generateOne = async (entry: SelEntry): Promise<{ title: string; html: string }> => {
     const title = (cover.titleTemplate.replace(/\{name\}/g, entry.project.name) || entry.project.name).trim()
     const b = await api.createBooklet(title, bookType)
     if (b == null || !b.id) throw new Error('创建草稿失败')
@@ -302,7 +302,7 @@ export default function BatchBookletPage() {
     })
     const html = await api.renderBooklet(b.id, cover.render_mode)
     if (html == null) throw new Error('合成返回空')
-    triggerHtmlDownload(html, `${title}.html`)
+    return { title, html }
   }
 
   const handleBatchGenerate = async () => {
@@ -318,29 +318,51 @@ export default function BatchBookletPage() {
       return
     }
     const ok = await confirm(
-      `将为 ${entries.length} 个项目各生成一本${BOOK_TYPE_LABEL[bookType]}，共 ${entries.length} 本。\n\n确定开始批量合成吗？`
+      `将为 ${entries.length} 个项目各生成一本${BOOK_TYPE_LABEL[bookType]}，共 ${entries.length} 本，并打包成一个压缩包下载。\n\n确定开始批量合成吗？`
     )
     if (!ok) return
 
     setGenerating(true)
     setProgress({ done: 0, total: entries.length, failed: [] })
+    const zip = new JSZip()
+    const usedNames = new Set<string>()
     let okCount = 0
     const failed: string[] = []
     for (const entry of entries) {
       try {
-        await generateOne(entry)
+        const { title, html } = await generateOne(entry)
+        let fileName = sanitizeFileName(title)
+        if (usedNames.has(fileName)) {
+          let i = 2
+          while (usedNames.has(`${fileName}-${i}`)) i++
+          fileName = `${fileName}-${i}`
+        }
+        usedNames.add(fileName)
+        zip.file(`${fileName}.html`, html)
         okCount++
       } catch (e: any) {
         failed.push(`${entry.project.name}: ${e?.message || e}`)
       }
       setProgress({ done: okCount + failed.length, total: entries.length, failed: [...failed] })
-      if (okCount + failed.length < entries.length) await sleep(800)
     }
-    setGenerating(false)
-    if (failed.length > 0) {
-      toast(`批量合成完成：成功 ${okCount} 本，失败 ${failed.length} 本（${failed[0]}）`, 'error')
-    } else {
-      toast(`批量合成完成，共 ${okCount} 本`, 'success')
+
+    if (okCount === 0) {
+      setGenerating(false)
+      toast(`批量合成失败：${failed[0] || '没有成功生成任何一本'}`, 'error')
+      return
+    }
+
+    try {
+      const blob = await zip.generateAsync({ type: 'blob' })
+      triggerBlobDownload(blob, `批量电子书-${okCount}本.zip`)
+      toast(
+        failed.length > 0 ? `已打包 ${okCount} 本，${failed.length} 本失败（${failed[0]}）` : `已打包 ${okCount} 本电子书`,
+        failed.length > 0 ? 'error' : 'success'
+      )
+    } catch (e: any) {
+      toast(`打包失败: ${e?.message || e}`, 'error')
+    } finally {
+      setGenerating(false)
     }
   }
 
@@ -680,7 +702,7 @@ export default function BatchBookletPage() {
               <div className="card" style={{ flexShrink: 0 }}>
                 <div className="card-title"><SvgIcon name="download" size={14} /> 批量合成</div>
                 <div className="card-hint">
-                  顺序为每个项目生成一本电子书并逐个下载。合成后草稿会保留在「我的画册」，可继续编辑。
+                  顺序为每个项目生成一本电子书，全部打包成一个压缩包一次下载。合成后草稿会保留在「我的画册」，可继续编辑。
                 </div>
                 <button className="btn btn-primary" style={{ width: '100%', padding: '10px 0', fontSize: 14 }}
                   disabled={generating} onClick={handleBatchGenerate}>
