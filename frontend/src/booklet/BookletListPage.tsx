@@ -34,6 +34,8 @@ export default function BookletListPage() {
   const [newTitle, setNewTitle] = useState('')
   const [newType, setNewType] = useState<BookType>('a4')
   const [creating, setCreating] = useState(false)
+  const [showBatch, setShowBatch] = useState(false)
+  const [batchType, setBatchType] = useState<BookType>('a4')
   const [cloning, setCloning] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
@@ -289,6 +291,7 @@ export default function BookletListPage() {
     <div style={{ padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, flex: 1 }}><SvgIcon name="book-open" size={14} /> 电子成册</h2>
+        <button type="button" className="btn btn-ghost" onClick={(e) => { e.preventDefault(); setShowBatch(true); }}><SvgIcon name="package" size={14} /> 批量新建</button>
         <button type="button" className="btn btn-primary" onClick={(e) => { e.preventDefault(); setShowNew(true); }}><SvgIcon name="plus" size={14} /> 新建册子</button>
       </div>
       <div className="card-hint" style={{ marginBottom: 14 }}>
@@ -365,6 +368,42 @@ export default function BookletListPage() {
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowNew(false)}>取消</button>
               <button type="button" className="btn btn-primary btn-sm" disabled={creating} onClick={handleCreate}>
                 {creating ? '创建中...' : '创建并编辑'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBatch && (
+        <div className="dialog-overlay" onClick={() => setShowBatch(false)}>
+          <div className="dialog-box" style={{ width: 400 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量新建</div>
+            <div className="card-hint" style={{ marginTop: 0 }}>
+              一次勾选多个项目，为每个项目各生成一本电子书，封面与署名批量设置。
+            </div>
+            <div className="form-group">
+              <label className="form-label">册子类型（决定页面尺寸）</label>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                {(['a4', 'ppt'] as BookType[]).map(t => (
+                  <div key={t} onClick={() => setBatchType(t)}
+                    style={{
+                      flex: 1, padding: '10px 12px', borderRadius: 6, cursor: 'pointer', fontSize: 12,
+                      border: `2px solid ${batchType === t ? 'var(--primary)' : 'var(--border)'}`,
+                      background: batchType === t ? 'var(--bg-hover)' : 'transparent',
+                    }}>
+                    <div style={{ fontWeight: 600 }}>{t === 'a4' ? <><SvgIcon name="book-open" size={14} /> A4 书册版</> : <><SvgIcon name="monitor" size={14} /> PPT 合辑版</>}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-secondary)', marginTop: 3 }}>
+                      {t === 'a4' ? '竖版 A4 — 文档、演讲稿，可打印装订' : '横版 16:9 — 分析PPT、综合PPT 合辑'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 14 }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShowBatch(false)}>取消</button>
+              <button type="button" className="btn btn-primary btn-sm"
+                onClick={() => { setShowBatch(false); navigate(`${base}/batch?book_type=${batchType}`) }}>
+                下一步
               </button>
             </div>
           </div>

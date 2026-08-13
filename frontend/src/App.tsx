@@ -29,6 +29,7 @@ import LandingPage from './pages/LandingPage'
 import FirstTimeSetupPage from './pages/FirstTimeSetupPage'
 import BookletListPage from './booklet/BookletListPage'
 import BookletEditorPage from './booklet/BookletEditorPage'
+import BatchBookletPage from './booklet/BatchBookletPage'
 import PurchasePage from './pages/PurchasePage'
 import { ModalProvider, useModal } from './components/ModalProvider'
 import AboutDialog from './components/AboutDialog'
@@ -663,6 +664,7 @@ function MemberAppShell() {
             <Route path="/author" element={<MemberAuthorPage />} />
             <Route path="/downloads" element={<MemberDownloadsPage />} />
             <Route path="/booklets" element={<BookletListPage />} />
+            <Route path="/booklets/batch" element={<BatchBookletPage />} />
             <Route path="/booklets/:id" element={<BookletEditorPage />} />
             <Route path="/purchase" element={<PurchasePage />} />
             <Route path="/home-legacy" element={<MemberHomePage />} />
@@ -757,6 +759,7 @@ function AppShell() {
             <Route path="/proj-settings" element={<SettingsLock><ProjSettingsPage /></SettingsLock>} />
             <Route path="/prompt-studio" element={<PromptStudioPage />} />
             <Route path="/booklets" element={<BookletListPage />} />
+            <Route path="/booklets/batch" element={<BatchBookletPage />} />
             <Route path="/booklets/:id" element={<BookletEditorPage />} />
             <Route path="/members" element={<UserManagePage />} />
             <Route path="/members/pending" element={<MemberApprovalPage />} />
