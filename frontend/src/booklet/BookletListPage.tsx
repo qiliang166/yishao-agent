@@ -289,7 +289,7 @@ export default function BookletListPage() {
 
   return (
     <div style={{ padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, flex: 1 }}><SvgIcon name="book-open" size={14} /> 电子成册</h2>
         <button type="button" className="btn btn-ghost" onClick={(e) => { e.preventDefault(); setShowBatch(true); }}><SvgIcon name="package" size={14} /> 批量新建</button>
         <button type="button" className="btn btn-primary" onClick={(e) => { e.preventDefault(); setShowNew(true); }}><SvgIcon name="plus" size={14} /> 新建册子</button>
