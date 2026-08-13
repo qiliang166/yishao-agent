@@ -1,5 +1,14 @@
 ﻿# 更新日志
 
+## 2026-08-13
+
+- fix: batch booklet cover preview + multi-file download
+
+## 2026-08-13
+
+- feat: batch booklet generation — one booklet per selected project
+- chore: update build stamp after booklet filter fix (3a797ad)
+
 ## 2026-08-11
 
 - fix: all logged-in users now see only admin-created booklets in browse square
