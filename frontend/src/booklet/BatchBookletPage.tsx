@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import SvgIcon from '../components/SvgIcon'
 import { api } from '../services/api'
@@ -51,9 +51,23 @@ const triggerHtmlDownload = (html: string, filename: string) => {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
   a.remove()
-  URL.revokeObjectURL(url)
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
+}
+
+const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms))
+
+function CoverThumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; pageH: number; thumbW: number }) {
+  if (!doc || thumbW <= 0) return null
+  const scale = thumbW / pageW
+  return (
+    <div style={{ width: thumbW, height: Math.round(pageH * scale), overflow: 'hidden', background: '#fff', flexShrink: 0 }}>
+      <iframe srcDoc={doc} sandbox="" scrolling="no" title="封面预览"
+        style={{ width: pageW, height: pageH, border: 'none', transform: `scale(${scale})`, transformOrigin: 'top left', pointerEvents: 'none' }} />
+    </div>
+  )
 }
 
 export default function BatchBookletPage() {
@@ -98,6 +112,14 @@ export default function BatchBookletPage() {
   const [themes, setThemes] = useState<Theme[]>([])
   const [uploading, setUploading] = useState(false)
   const logoRef = useRef<HTMLInputElement>(null)
+
+  // Step 2 封面预览状态
+  const [coverDoc, setCoverDoc] = useState('')
+  const [coverError, setCoverError] = useState('')
+  const previewRef = useRef<HTMLDivElement>(null)
+  const [previewW, setPreviewW] = useState(0)
+  const [previewH, setPreviewH] = useState(0)
+  const fetchTimer = useRef<ReturnType<typeof setTimeout>>()
 
   // Step 3 状态
   const [generating, setGenerating] = useState(false)
@@ -170,6 +192,53 @@ export default function BatchBookletPage() {
       return { ...prev, hidden_fixed: Array.from(hidden) }
     })
   }
+
+  useEffect(() => {
+    if (step !== 2) return
+    const el = previewRef.current
+    if (!el) return
+    const update = () => { setPreviewW(el.clientWidth); setPreviewH(el.clientHeight) }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [step])
+
+  const fetchCover = useCallback(() => {
+    const firstEntry = selectedEntries[0]
+    const previewTitle = cover.titleTemplate.replace(/\{name\}/g, firstEntry?.project.name || '{name}')
+    const firstItem = firstEntry?.checkedItems[0]
+    const viMode = bookType === 'a4' && !!firstItem && firstItem.source_type !== 'step_md'
+    const theme = themes.find(t => t.id === cover.theme_id) || themes[0]
+    setCoverError('')
+    api.bookletCoverPreview({
+      book_type: bookType,
+      title: previewTitle,
+      subtitle: cover.subtitle,
+      author: cover.author,
+      org: cover.org,
+      date_text: cover.date_text,
+      flyleaf_text: cover.flyleaf_text,
+      back_cover_text: cover.back_cover_text,
+      logo_url: cover.logo_url,
+      theme_id: cover.theme_id || '',
+      theme_colors: (theme?.colors || {}) as Record<string, string>,
+      desk_none: !!cover.desk_none,
+      vi_mode: viMode,
+      page_hf: cover.page_hf || {},
+    }).then(doc => { if (doc) { setCoverDoc(doc); setCoverError('') } })
+      .catch((e: any) => {
+        console.warn('封面预览加载失败:', e)
+        setCoverError('封面预览暂时不可用，请检查后端服务')
+      })
+  }, [selectedEntries, cover, themes, bookType])
+
+  useEffect(() => {
+    if (!themes.length) return
+    clearTimeout(fetchTimer.current)
+    fetchTimer.current = setTimeout(fetchCover, 250)
+    return () => clearTimeout(fetchTimer.current)
+  }, [fetchCover, themes])
 
   const handleUploadLogo = async (file: File) => {
     setUploading(true)
@@ -265,6 +334,7 @@ export default function BatchBookletPage() {
         failed.push(`${entry.project.name}: ${e?.message || e}`)
       }
       setProgress({ done: okCount + failed.length, total: entries.length, failed: [...failed] })
+      if (okCount + failed.length < entries.length) await sleep(800)
     }
     setGenerating(false)
     if (failed.length > 0) {
@@ -277,6 +347,16 @@ export default function BatchBookletPage() {
   const hf = cover.page_hf || {}
   const hfEnabled = !!hf.enabled
   const renderMode = cover.render_mode
+
+  const previewPageW = bookType === 'ppt' ? 1280 : 794
+  const previewPageH = bookType === 'ppt' ? 720 : 1123
+  const previewAspect = previewPageW / previewPageH
+  const maxPreviewW = Math.max(0, previewW - 32)
+  const maxPreviewH = Math.max(0, previewH - 32)
+  let thumbW = maxPreviewW || 480
+  if (maxPreviewW > 0 && maxPreviewH > 0 && maxPreviewW / previewAspect > maxPreviewH) {
+    thumbW = Math.round(maxPreviewH * previewAspect)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden' }}>
@@ -397,8 +477,8 @@ export default function BatchBookletPage() {
         )}
 
         {step === 2 && (
-          <div className="panel-grid" style={{ overflowY: 'auto' }}>
-            <div className="panel-left">
+          <div className="panel-grid">
+            <div className="panel-left" style={{ overflowY: 'auto' }}>
               <div className="card" style={{ flexShrink: 0 }}>
                 <div className="card-title"><SvgIcon name="file-text" size={14} /> 封面与署名（批量应用到所有册子）</div>
                 <div className="form-group">
@@ -547,6 +627,21 @@ export default function BatchBookletPage() {
                       onChange={e => setCoverPatch({ desk_none: e.target.checked })} />
                     不要页面外背景色（合成后页面四周用白色底）
                   </label>
+                </div>
+              </div>
+            </div>
+            <div className="panel-right" style={{ overflow: 'hidden' }}>
+              <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden' }}>
+                <div className="card-title"><SvgIcon name="eye" size={14} /> 封面实时预览</div>
+                <div ref={previewRef} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', background: 'var(--bg-secondary)', borderRadius: 6, padding: 16, minHeight: 0 }}>
+                  {coverError && !coverDoc ? (
+                    <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 20 }}>
+                      <div style={{ marginBottom: 8 }}><SvgIcon name="alert-triangle" size={14} /></div>
+                      <div>{coverError}</div>
+                    </div>
+                  ) : (
+                    <CoverThumb doc={coverDoc} pageW={previewPageW} pageH={previewPageH} thumbW={thumbW} />
+                  )}
                 </div>
               </div>
             </div>
