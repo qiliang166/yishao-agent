@@ -2,6 +2,11 @@
 
 ## 2026-08-14
 
+- feat: paginate booklet list sections (recommended/mine/users), 24 per page
+- chore: update build stamp after plaza card step-5 fix (5e9e9ab)
+
+## 2026-08-14
+
 - fix: plaza card click jumps straight to 预览合成 (step 5)
 
 ## 2026-08-14
