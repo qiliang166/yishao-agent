@@ -2,6 +2,11 @@
 
 ## 2026-08-14
 
+- fix: route plaza booklet click by admin shell for dev-experience-officer
+- chore: update build stamp after booklet list pagination (e1d425c)
+
+## 2026-08-14
+
 - feat: paginate booklet list sections (recommended/mine/users), 24 per page
 - chore: update build stamp after plaza card step-5 fix (5e9e9ab)
 
