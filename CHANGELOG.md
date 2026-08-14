@@ -2,6 +2,11 @@
 
 ## 2026-08-14
 
+- fix: allow cloning any read-only booklet, not just recommended ones
+- chore: update build stamp after dev-experience-officer routing fix (84aa7af)
+
+## 2026-08-14
+
 - fix: route plaza booklet click by admin shell for dev-experience-officer
 - chore: update build stamp after booklet list pagination (e1d425c)
 
