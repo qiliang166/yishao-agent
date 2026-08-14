@@ -145,7 +145,7 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
           </div>
           {readonly ? (
             <div className="card-hint" style={{ marginTop: 8, marginBottom: 0, color: 'var(--warning, #d97706)' }}>
-              推荐画册请先点击顶部「使用推荐」按钮引用为自己的副本，即可下载。
+              该画册由其他用户创建，请先点击顶部「引用为我的副本」按钮复制一份，即可下载。
             </div>
           ) : (
             <>

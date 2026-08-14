@@ -154,7 +154,7 @@ export default function BookletEditorPage() {
 
   const isOwnerView = !draft || draft.owner_id === userId || isAdmin
   const isReadonly = !isOwnerView
-  const showUseRecommend = isReadonly && draft.is_recommended
+  const showUseRecommend = isReadonly
 
   if (loadError) {
     return (
@@ -206,7 +206,7 @@ export default function BookletEditorPage() {
         {showUseRecommend && (
           <button type="button" className="btn btn-ghost btn-sm" disabled={cloning} onClick={handleClone}
             style={{ fontSize: 11 }}>
-            {cloning ? '引用中...' : '使用推荐'}
+            {cloning ? '引用中...' : '引用为我的副本'}
           </button>
         )}
         {isOwnerView && (
