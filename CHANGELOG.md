@@ -2,6 +2,15 @@
 
 ## 2026-08-14
 
+- feat: add back-to-top floating button on plaza page
+
+## 2026-08-14
+
+- fix: merge slogan and recipe count into one line on plaza hero
+- chore: update build stamp after readonly clone fix (f962ebb)
+
+## 2026-08-14
+
 - fix: allow cloning any read-only booklet, not just recommended ones
 - chore: update build stamp after dev-experience-officer routing fix (84aa7af)
 
