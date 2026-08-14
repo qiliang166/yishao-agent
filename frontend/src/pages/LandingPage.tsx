@@ -59,7 +59,8 @@ export default function LandingPage() {
       navigate('/member?redirect=' + encodeURIComponent(hp))
       return
     }
-    navigate('/app/booklets/' + id)
+    const base = user.user_type === 'admin' ? '/booklets' : '/app/booklets'
+    navigate(`${base}/${id}?step=5`)
   }
 
   const name = brandName || 'Yishao Agent'

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import SvgIcon from '../components/SvgIcon'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -30,7 +30,11 @@ export default function BookletEditorPage() {
   const base = location.pathname.startsWith('/app') ? '/app/booklets' : '/booklets'
 
   const [draft, setDraft] = useState<BookletDraft | null>(null)
-  const [step, setStep] = useState(1)
+  const [searchParams] = useSearchParams()
+  const [step, setStep] = useState(() => {
+    const s = parseInt(searchParams.get('step') || '1', 10)
+    return (s >= 1 && s <= 5) ? s : 1
+  })
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loadError, setLoadError] = useState('')
