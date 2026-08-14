@@ -131,17 +131,10 @@ export default function LandingPage() {
         }}>
           {name}
         </h1>
-        {brandSlogan && (
-          <p style={{
-            fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 8px 0',
-          }}>
-            {brandSlogan}
-          </p>
-        )}
         <div style={{
           fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 28px 0',
         }}>
-          当前收录：{totalCount}份菜谱
+          {brandSlogan ? `${brandSlogan} | ` : ''}当前收录：{totalCount}份菜谱
         </div>
 
         {/* Search Box */}
