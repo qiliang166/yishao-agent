@@ -26,6 +26,7 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(true)
   const [pageSize, setPageSize] = useState(50)
   const [totalCount, setTotalCount] = useState(0)
+  const [showBackTop, setShowBackTop] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -44,6 +45,13 @@ export default function LandingPage() {
     }).catch(() => {})
     .finally(() => setLoading(false))
   }, [pageSize])
+
+  useEffect(() => {
+    const onScroll = () => setShowBackTop(window.scrollY > 400)
+    window.addEventListener('scroll', onScroll)
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return booklets
@@ -303,6 +311,28 @@ export default function LandingPage() {
           </div>
         )}
       </section>
+
+      {/* Back to top */}
+      {showBackTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          title="返回顶部"
+          style={{
+            position: 'fixed', right: 24, bottom: 24, zIndex: 50,
+            width: 44, height: 44, borderRadius: '50%',
+            border: 'none', cursor: 'pointer',
+            background: 'var(--primary)', color: '#ffffff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 2px 12px rgba(0,0,0,0.18)',
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="19" x2="12" y2="5" />
+            <polyline points="5 12 12 5 19 12" />
+          </svg>
+        </button>
+      )}
     </div>
   )
 }
