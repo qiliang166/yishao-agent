@@ -6,6 +6,8 @@ import { useModal } from '../components/ModalProvider'
 import { useAuth } from '../contexts/AuthContext'
 import { BOOK_TYPE_LABEL, BookType, BookletSummary } from './types'
 
+const PAGE_SIZE = 24
+
 const triggerHtmlDownload = (html: string, filename: string) => {
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -38,6 +40,9 @@ export default function BookletListPage() {
   const [batchType, setBatchType] = useState<BookType>('a4')
   const [cloning, setCloning] = useState<string | null>(null)
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [recPage, setRecPage] = useState(1)
+  const [minePage, setMinePage] = useState(1)
+  const [userPage, setUserPage] = useState(1)
 
   const load = async () => {
     setLoading(true)
@@ -49,6 +54,9 @@ export default function BookletListPage() {
     } finally {
       setLoading(false)
     }
+    setRecPage(1)
+    setMinePage(1)
+    setUserPage(1)
   }
 
   useEffect(() => { load() }, [])
@@ -132,6 +140,28 @@ export default function BookletListPage() {
   const userBooklets = isAdmin
     ? booklets.filter(b => !b.is_recommended && b.owner_id !== userId)
     : []
+
+  const paginate = (arr: BookletSummary[], page: number) => {
+    const totalPages = Math.max(1, Math.ceil(arr.length / PAGE_SIZE))
+    const cur = Math.min(Math.max(1, page), totalPages)
+    const start = (cur - 1) * PAGE_SIZE
+    return { items: arr.slice(start, start + PAGE_SIZE), cur, totalPages }
+  }
+
+  const recPg = paginate(recommended, recPage)
+  const minePg = paginate(myBooklets, minePage)
+  const userPg = paginate(userBooklets, userPage)
+
+  const renderPager = (cur: number, totalPages: number, total: number, setPage: (p: number) => void) => {
+    if (totalPages <= 1) return null
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 14 }}>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={cur <= 1} onClick={() => setPage(cur - 1)}>« 上一页</button>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>第 {cur} / {totalPages} 页 · 共 {total} 本</span>
+        <button type="button" className="btn btn-ghost btn-sm" disabled={cur >= totalPages} onClick={() => setPage(cur + 1)}>下一页 »</button>
+      </div>
+    )
+  }
 
   const handleCardClick = (b: BookletSummary) => {
     if (actionLock.current) { actionLock.current = false; return }
@@ -310,8 +340,9 @@ export default function BookletListPage() {
             <div style={{ marginBottom: 24 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}><SvgIcon name="star" size={14} /> 推荐画册</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                {recommended.map(b => renderCard(b, true))}
+                {recPg.items.map(b => renderCard(b, true))}
               </div>
+              {renderPager(recPg.cur, recPg.totalPages, recommended.length, setRecPage)}
             </div>
           )}
           {myBooklets.length > 0 && (
@@ -320,16 +351,18 @@ export default function BookletListPage() {
                 <SvgIcon name="file-text" size={14} /> 我的画册
               </h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {myBooklets.map(b => renderCard(b, false))}
+                {minePg.items.map(b => renderCard(b, false))}
               </div>
+              {renderPager(minePg.cur, minePg.totalPages, myBooklets.length, setMinePage)}
             </div>
           )}
           {userBooklets.length > 0 && (
             <div>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}><SvgIcon name="users" size={14} /> 用户画册</h3>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {userBooklets.map(b => renderCard(b, false))}
+                {userPg.items.map(b => renderCard(b, false))}
               </div>
+              {renderPager(userPg.cur, userPg.totalPages, userBooklets.length, setUserPage)}
             </div>
           )}
         </>
