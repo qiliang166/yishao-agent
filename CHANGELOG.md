@@ -1,5 +1,18 @@
 ﻿# 更新日志
 
+## 2026-08-14
+
+- fix: plaza card click jumps straight to 预览合成 (step 5)
+
+## 2026-08-14
+
+- feat: plaza page-size selector (50/250/500/all) + total recipe count
+
+## 2026-08-14
+
+- fix: preserve line breaks in speech preview
+- chore: update build stamp after button gap fix (7ba223b)
+
 ## 2026-08-13
 
 - fix: add gap between 批量新建 and 新建册子 buttons
