@@ -7,6 +7,13 @@ import SvgIcon from '../components/SvgIcon'
 const isImagePath = (v: string) =>
   v.startsWith('/api/logos/') || v.match(/\.(png|jpg|jpeg|gif|svg|webp|ico)($|\?)/i)
 
+const PAGE_SIZE_OPTIONS = [
+  { label: '50张', value: 50 },
+  { label: '250张', value: 250 },
+  { label: '500张', value: 500 },
+  { label: '显示全部', value: 0 },
+]
+
 export default function LandingPage() {
   const { user, token } = useAuth()
   const navigate = useNavigate()
@@ -17,12 +24,14 @@ export default function LandingPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [booklets, setBooklets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [pageSize, setPageSize] = useState(50)
+  const [totalCount, setTotalCount] = useState(0)
 
   useEffect(() => {
     Promise.all([
       fetch('/api/settings').then(r => r.json()),
       fetch('/api/version').then(r => r.json()),
-      api.publicListBooklets(),
+      api.publicListBooklets('', 1, pageSize === 0 ? 100000 : pageSize),
     ]).then(([data, ver, bookletData]) => {
       const s = data.settings || {}
       const fallback = (ver as any).app || ''
@@ -31,9 +40,10 @@ export default function LandingPage() {
       if (s.brand_logo) setBrandLogo(s.brand_logo)
       if (s.branding_slogan) setBrandSlogan(s.branding_slogan)
       setBooklets(bookletData.booklets || [])
+      setTotalCount(bookletData.total_all ?? 0)
     }).catch(() => {})
     .finally(() => setLoading(false))
-  }, [])
+  }, [pageSize])
 
   const filtered = useMemo(() => {
     if (!searchQuery.trim()) return booklets
@@ -122,11 +132,16 @@ export default function LandingPage() {
         </h1>
         {brandSlogan && (
           <p style={{
-            fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 28px 0',
+            fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 8px 0',
           }}>
             {brandSlogan}
           </p>
         )}
+        <div style={{
+          fontSize: 13, color: 'var(--text-secondary)', margin: '0 0 28px 0',
+        }}>
+          当前收录：{totalCount}份菜谱
+        </div>
 
         {/* Search Box */}
         <div style={{
@@ -270,6 +285,27 @@ export default function LandingPage() {
                 </div>
               )
             })}
+          </div>
+        )}
+
+        {!loading && filtered.length > 0 && (
+          <div style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24,
+          }}>
+            {PAGE_SIZE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setPageSize(opt.value)}
+                style={{
+                  padding: '4px 16px', fontSize: 13, borderRadius: 4, cursor: 'pointer',
+                  border: pageSize === opt.value ? '1px solid var(--primary)' : '1px solid var(--border)',
+                  background: pageSize === opt.value ? 'var(--primary)' : 'var(--card-bg, #ffffff)',
+                  color: pageSize === opt.value ? '#ffffff' : 'var(--text-secondary)',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
         )}
       </section>

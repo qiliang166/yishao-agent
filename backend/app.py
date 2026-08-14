@@ -8082,6 +8082,7 @@ def public_list_booklets(q: str = "", page: int = 1, page_size: int = 50, reques
         where_clause = ("WHERE " + " AND ".join(wheres)) if wheres else ""
         count_sql = f"SELECT COUNT(*) FROM booklets {where_clause}"
         total = db.execute(count_sql, params).fetchone()[0]
+        total_all = db.execute("SELECT COUNT(*) FROM booklets").fetchone()[0]
         offset = (page - 1) * page_size
         sql = f"""SELECT id, title, author, book_type, cover_json,
                      json_array_length(chapters_json) as chapter_count,
@@ -8103,7 +8104,7 @@ def public_list_booklets(q: str = "", page: int = 1, page_size: int = 50, reques
                 "is_recommended": r["is_recommended"],
                 "updated_at": r["updated_at"],
             })
-        return {"booklets": items, "total": total, "page": page, "page_size": page_size}
+        return {"booklets": items, "total": total, "total_all": total_all, "page": page, "page_size": page_size}
     finally:
         db.close()
 

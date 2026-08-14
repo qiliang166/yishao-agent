@@ -1527,8 +1527,8 @@ export const api = {
     }[]),
   cloneBooklet: (id: string) =>
     request(`/api/booklets/${id}/clone`, { method: 'POST' }),
-  publicListBooklets: (q?: string, page?: number) =>
-    request(`/api/public/booklets?q=${encodeURIComponent(q || '')}&page=${page || 1}`),
+  publicListBooklets: (q?: string, page?: number, pageSize?: number) =>
+    request(`/api/public/booklets?q=${encodeURIComponent(q || '')}&page=${page || 1}&page_size=${pageSize || 50}`),
   createBooklet: (title: string, bookType: string) =>
     request('/api/booklets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, book_type: bookType }) }),
   getBooklet: (id: string) =>
