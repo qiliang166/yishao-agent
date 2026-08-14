@@ -1403,7 +1403,7 @@ export default function ProjectPage() {
   const s4Content = steps[s4ActiveStepKey] || ''
   const s4RenderedHtml = useMemo(() => {
     if (!s4Content) return ''
-    try { return DOMPurify.sanitize(marked.parse(s4Content) as string) } catch { return '' }
+    try { return DOMPurify.sanitize(marked.parse(s4Content, { breaks: true }) as string) } catch { return '' }
   }, [s4Content])
 
   const handleS4DownloadHtml = () => {
