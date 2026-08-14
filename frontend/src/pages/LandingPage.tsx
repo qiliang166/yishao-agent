@@ -59,7 +59,7 @@ export default function LandingPage() {
       navigate('/member?redirect=' + encodeURIComponent(hp))
       return
     }
-    const base = user.user_type === 'admin' ? '/booklets' : '/app/booklets'
+    const base = (user.user_type === 'admin' || user.roles?.includes('开发体验员')) ? '/booklets' : '/app/booklets'
     navigate(`${base}/${id}?step=5`)
   }
 
