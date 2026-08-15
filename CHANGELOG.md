@@ -1,5 +1,11 @@
 ﻿# 更新日志
 
+## 2026-08-16
+
+- feat: allow inserting local images into standard doc editor (base64)
+- docs: add backend feature voiceover scripts (14 episodes)
+- chore: update build stamp after plaza hero + back-to-top (d2ac4a4)
+
 ## 2026-08-14
 
 - feat: add back-to-top floating button on plaza page
