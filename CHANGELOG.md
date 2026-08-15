@@ -2,6 +2,11 @@
 
 ## 2026-08-16
 
+- fix: add reasoning_content fallback to streaming LLM generate
+- chore: update build stamp after renewal reject (3b3e4df)
+
+## 2026-08-16
+
 - fix: add reject button for pending renewal in member approval
 - chore: update build stamp after standard-doc image insert (cb0d9016)
 
