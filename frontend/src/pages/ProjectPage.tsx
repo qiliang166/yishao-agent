@@ -3090,7 +3090,7 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2a': g })); if (g) { setS2Logs(prev => ({ ...prev, '2a': [] })); setS2Progress(prev => ({ ...prev, '2a': '' })) } }}
                     onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2a': [...(prev['2a'] || []), entry] }))}
-                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2a': p })); setDocGenProgress({ phase_label: '正在生成 标准文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_sop' }) }}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2a': p })); setDocGenProgress(p === '' ? null : { phase_label: '正在生成 标准文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_sop' }) }}
                     hideControls dataSource={s2DataSources['sop'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -3110,7 +3110,7 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2b': g })); if (g) { setS2Logs(prev => ({ ...prev, '2b': [] })); setS2Progress(prev => ({ ...prev, '2b': '' })) } }}
                     onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2b': [...(prev['2b'] || []), entry] }))}
-                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2b': p })); setDocGenProgress({ phase_label: '正在生成 分析文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_daoshuyi' }) }}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2b': p })); setDocGenProgress(p === '' ? null : { phase_label: '正在生成 分析文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_daoshuyi' }) }}
                     hideControls dataSource={s2DataSources['dao'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {
@@ -3130,7 +3130,7 @@ export default function ProjectPage() {
                     llmProviders={llmProviders}
                     onGeneratingChange={(g) => { setStep2Generating(prev => ({ ...prev, '2c': g })); if (g) { setS2Logs(prev => ({ ...prev, '2c': [] })); setS2Progress(prev => ({ ...prev, '2c': '' })) } }}
                     onLogEntry={(entry) => setS2Logs(prev => ({ ...prev, '2c': [...(prev['2c'] || []), entry] }))}
-                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2c': p })); setDocGenProgress({ phase_label: '正在生成 综合文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_yanxi' }) }}
+                    onProgressChange={(p) => { setS2Progress(prev => ({ ...prev, '2c': p })); setDocGenProgress(p === '' ? null : { phase_label: '正在生成 综合文档', message: p.replace(/^[^-]+—\s*/, ''), stepKey: 'step2_yanxi' }) }}
                     hideControls dataSource={s2DataSources['yanxi'] || 'video'}
                     onRefresh={() => {
                       return api.getSteps(id!).then((s: any[]) => {

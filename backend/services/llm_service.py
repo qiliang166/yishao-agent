@@ -174,10 +174,20 @@ async def generate_stream(
         stream=True,
     )
 
+    content_seen = False
+    reasoning_parts = []
     async for chunk in stream:
         delta = chunk.choices[0].delta
         if delta.content:
+            content_seen = True
             yield delta.content
+        rc = getattr(delta, 'reasoning_content', None)
+        if rc:
+            reasoning_parts.append(rc)
+
+    if not content_seen and reasoning_parts:
+        for p in reasoning_parts:
+            yield p
 
 
 async def refine(

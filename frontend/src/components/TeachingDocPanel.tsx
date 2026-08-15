@@ -252,8 +252,10 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
       onProgressChange?.('')
       if (fullText) {
         await api.saveStep(projectId, stepKey, fullText)
+        onLogEntry?.({ time: now(), message: `已保存 ${stepKey} (${fullText.length} 字符)` })
         api.saveFileToProject(projectId, `${projectName}_${label}.txt`, fullText).catch(() => {})
         await onRefresh()
+        onLogEntry?.({ time: now(), message: '已刷新步骤数据' })
         setViewMode('preview')
       } else {
         modal.toast('生成失败: 模型未返回内容', 'error')

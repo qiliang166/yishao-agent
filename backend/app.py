@@ -2854,6 +2854,7 @@ def save_step(project_id: str, step_name: str, req: StepResultSave, user=require
             db.execute(
                 "INSERT INTO step_results (project_id, step_name, content, content_type) VALUES (?, ?, ?, ?)",
                 (project_id, step_name, req.content, req.content_type))
+        _log.info("save_step project=%s step=%s len=%d", project_id, step_name, len(req.content or ""))
         db.commit()
         return {"ok": True}
     finally:
@@ -3969,15 +3970,19 @@ async def llm_generate(req: LLMGenerateRequest, user=require_perm("stage2.genera
 async def llm_generate_stream(req: LLMGenerateRequest, user=require_perm("stage2.generate")):
     """Streaming LLM generate via SSE — provider-aware routing."""
     async def event_stream():
+        total_len = 0
         try:
             async for text in generate_stream(
                 req.provider_id, req.model,
                 req.system_prompt, req.user_message,
                 req.temperature,
             ):
+                total_len += len(text)
                 yield f"data: {json.dumps({'content': text}, ensure_ascii=False)}\n\n"
+            _log.info("llm_generate_stream done model=%s len=%d", req.model, total_len)
             yield "data: [DONE]\n\n"
         except Exception as e:
+            _log.info("llm_generate_stream error model=%s len=%d err=%s", req.model, total_len, e)
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
