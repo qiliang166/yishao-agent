@@ -44,6 +44,7 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   dao: '请分析以下内容的原理与方法。',
   yanxi: '请将以下内容整理为手册格式，包含背景知识和要点。',
 }
+const IMG_MAX_BYTES = 2 * 1024 * 1024
 
 // ── Preview tab CSS (scoped to .md-preview-container) ──
 const PREVIEW_CSS = `
@@ -73,6 +74,8 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   onGeneratingChange, onLogEntry, onProgressChange,
 }, ref) => {
   const modal = useModal()
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  const imgRef = useRef<HTMLInputElement>(null)
 
   // ── Internal state ──
   const modelKey = MODEL_KEYS[docType]
@@ -292,6 +295,38 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     await onRefresh()
   }, [projectId, stepKey, onRefresh])
 
+  // ── Insert local image as base64 at cursor ──
+  const handleInsertImage = (file: File) => {
+    if (file.size > IMG_MAX_BYTES) {
+      modal.toast('图片超过 2MB，请压缩后再插入', 'error')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = () => {
+      const uri = typeof reader.result === 'string' ? reader.result : ''
+      if (!uri.startsWith('data:image/')) {
+        modal.toast('不是有效的图片文件', 'error')
+        return
+      }
+      const ta = taRef.current
+      const start = ta ? ta.selectionStart : localContent.length
+      const end = ta ? ta.selectionEnd : localContent.length
+      const snippet = `![图片](${uri})`
+      const next = localContent.slice(0, start) + snippet + localContent.slice(end)
+      setLocalContent(next)
+      api.saveStep(projectId, stepKey, next)
+      modal.toast('图片已插入（自包含保存，下载 HTML 离线可见）', 'success')
+      requestAnimationFrame(() => {
+        if (!ta) return
+        ta.focus()
+        const pos = start + snippet.length
+        ta.setSelectionRange(pos, pos)
+      })
+    }
+    reader.onerror = () => modal.toast('读取图片失败', 'error')
+    reader.readAsDataURL(file)
+  }
+
   // ── Save to project file ──
   const handleSaveToProject = useCallback(async () => {
     if (!localContent) return
@@ -429,15 +464,28 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
       {tabBar}
 
       {viewMode === 'edit' ? (
-        <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-          value={localContent}
-          onChange={e => {
-            const newVal = e.target.value
-            setLocalContent(newVal)
-            api.saveStep(projectId, stepKey, newVal)
-          }}
-          placeholder="点击生成按钮，AI生成后在此编辑..."
-        />
+        <>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0 }}>
+            <button className="btn btn-ghost btn-sm" type="button"
+              title="插入本地图片（≤2MB，自动内嵌）"
+              style={{ fontSize: 11, padding: '2px 8px' }}
+              onClick={() => imgRef.current?.click()}>
+              <SvgIcon name="image" size={12} /> 插入图片
+            </button>
+            <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
+          </div>
+          <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+            ref={taRef}
+            value={localContent}
+            onChange={e => {
+              const newVal = e.target.value
+              setLocalContent(newVal)
+              api.saveStep(projectId, stepKey, newVal)
+            }}
+            placeholder="点击生成按钮，AI生成后在此编辑..."
+          />
+        </>
       ) : (
         <div style={{
           flex: 1, minHeight: 120, overflow: 'auto',
