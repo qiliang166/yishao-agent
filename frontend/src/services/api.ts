@@ -1315,6 +1315,13 @@ export const api = {
       body: JSON.stringify({ reason: reason || '' }),
     }).then(d => d as { ok: boolean; message: string }),
 
+  rejectRenewal: (userId: string, reason?: string) =>
+    request('/api/members/' + userId + '/reject-renewal', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || '' }),
+    }).then(d => d as { ok: boolean; message: string }),
+
   listMyPayments: () =>
     request('/api/member/my-payments').then(d => d as { payments: any[] }),
 

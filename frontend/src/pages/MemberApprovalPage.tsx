@@ -101,6 +101,8 @@ export default function MemberApprovalPage() {
   const [renewalLoading, setRenewalLoading] = useState(true)
   const [approveRenewalTarget, setApproveRenewalTarget] = useState<any | null>(null)
   const [renewalPointsGranted, setRenewalPointsGranted] = useState<number>(0)
+  const [rejectRenewalId, setRejectRenewalId] = useState<string | null>(null)
+  const [rejectRenewalReason, setRejectRenewalReason] = useState('')
 
   const pageSize = 20
 
@@ -228,6 +230,24 @@ export default function MemberApprovalPage() {
       if (result == null) { setError('操作失败：服务器未确认'); return }
       showToast(`续费审批通过 — ${result.plan_name}，获 ${(result.points_granted_deci / 10).toFixed(1)} 积分`)
       setApproveRenewalTarget(null)
+      loadRenewals()
+    } catch (e: any) {
+      setError(e.message || '操作失败')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleRejectRenewal = async () => {
+    if (!rejectRenewalId) return
+    setActionLoading(true)
+    setError('')
+    try {
+      const result = await api.rejectRenewal(rejectRenewalId, rejectRenewalReason.trim())
+      if (result == null) { setError('操作失败：服务器未确认'); return }
+      showToast('已拒绝续费申请')
+      setRejectRenewalId(null)
+      setRejectRenewalReason('')
       loadRenewals()
     } catch (e: any) {
       setError(e.message || '操作失败')
@@ -443,6 +463,13 @@ export default function MemberApprovalPage() {
                     onClick={() => setPayHistUser({ id: r.user_id, username: r.username, display_name: r.display_name } as MemberRow)}
                   >
                     明细
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => { setRejectRenewalId(r.user_id); setRejectRenewalReason(''); setError('') }}
+                    style={{ color: 'var(--warning)' }}
+                  >
+                    拒绝
                   </button>
                 </div>
               </div>
@@ -897,6 +924,39 @@ export default function MemberApprovalPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setApproveRenewalTarget(null)}>取消</button>
               <button className="btn btn-primary btn-sm" onClick={handleApproveRenewal} disabled={actionLoading}>
                 {actionLoading ? '处理中...' : '确认收款'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Renewal Dialog */}
+      {rejectRenewalId && (
+        <div className="dialog-overlay" onClick={() => setRejectRenewalId(null)}>
+          <div className="dialog-box" style={{ width: 380 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">拒绝续费申请</div>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              驳回本次续费付款。会员资格保留，到期时间不变。
+            </p>
+            <label style={{ fontSize: 11, fontWeight: 600, display: 'block', marginBottom: 4 }}>
+              拒绝原因（可选）
+            </label>
+            <textarea
+              className="form-input"
+              rows={3}
+              value={rejectRenewalReason}
+              onChange={e => setRejectRenewalReason(e.target.value)}
+              placeholder="如：查不到付款单号"
+              style={{ width: '100%', boxSizing: 'border-box', fontSize: 11, resize: 'vertical' }}
+            />
+            {error && (
+              <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 10, textAlign: 'center' }}>{error}</div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setRejectRenewalId(null)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={handleRejectRenewal} disabled={actionLoading}
+                style={{ background: 'var(--warning)', borderColor: 'var(--warning)' }}>
+                {actionLoading ? '处理中...' : '确认拒绝'}
               </button>
             </div>
           </div>

@@ -9460,6 +9460,54 @@ def reject_upgrade(user_id: str, body: RejectUpgradeReq, request: Request,
         db.close()
 
 
+@app.put("/api/members/{user_id}/reject-renewal")
+def reject_renewal(user_id: str, body: RejectUpgradeReq, request: Request,
+                   user=require_perm("member.manage")):
+    """Reject a member's pending renewal payment. Membership is preserved."""
+    reason = body.reason
+    ip = _get_client_ip(request)
+    db = get_db()
+    try:
+        m = db.execute(
+            "SELECT id, user_type, is_approved FROM users WHERE id=?", (user_id,)
+        ).fetchone()
+        if not m:
+            raise HTTPException(404, "用户不存在")
+        if m["user_type"] != "member":
+            raise HTTPException(400, "只能为会员操作")
+        if not m["is_approved"]:
+            raise HTTPException(400, "该会员尚未通过基础审批")
+
+        plans = _load_plans()
+        upgrade_plan_name = plans.get("upgrade", {}).get("name", "体验管理员升级")
+        payment = db.execute(
+            "SELECT id FROM payment_records "
+            "WHERE user_id=? AND recorded_by IS NULL AND plan_name != ? "
+            "ORDER BY paid_at DESC LIMIT 1",
+            (user_id, upgrade_plan_name),
+        ).fetchone()
+        if not payment:
+            raise HTTPException(404, "没有待审批的续费付款")
+
+        if (reason or "").strip():
+            db.execute(
+                "UPDATE payment_records SET note=?, recorded_by=? WHERE id=?",
+                ("[已拒绝] " + (reason or "").strip(), user["sub"], payment["id"]),
+            )
+        else:
+            db.execute(
+                "UPDATE payment_records SET recorded_by=? WHERE id=?",
+                (user["sub"], payment["id"]),
+            )
+
+        _write_audit(db, user["sub"], "member.reject_renewal", "user", user_id,
+                      json.dumps({"reason": reason, "payment_id": payment["id"]}), ip_address=ip)
+        db.commit()
+        return {"ok": True, "message": "已拒绝续费申请，会员资格保留"}
+    finally:
+        db.close()
+
+
 @app.get("/api/member/my-payments")
 def my_payments(current_user=Depends(get_current_user)):
     """Return the current member's own payment records with status."""
