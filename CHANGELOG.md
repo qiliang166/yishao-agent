@@ -2,6 +2,11 @@
 
 ## 2026-08-16
 
+- fix: add reject button for pending renewal in member approval
+- chore: update build stamp after standard-doc image insert (cb0d9016)
+
+## 2026-08-16
+
 - feat: allow inserting local images into standard doc editor (base64)
 - docs: add backend feature voiceover scripts (14 episodes)
 - chore: update build stamp after plaza hero + back-to-top (d2ac4a4)
