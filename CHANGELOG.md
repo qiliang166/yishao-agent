@@ -2,6 +2,11 @@
 
 ## 2026-08-16
 
+- fix: block cloning booklets with paid-download chapters
+- chore: update build stamp after clone leak fix (5ca4043)
+
+## 2026-08-16
+
 - fix: block cloning booklets with locked paid chapters
 - chore: update build stamp after paid-preview leak fix (4bef3eb)
 
