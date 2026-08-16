@@ -2,6 +2,11 @@
 
 ## 2026-08-16
 
+- fix: close two remaining paid-preview leak paths
+- chore: update build stamp after paid-preview flag (885afffa)
+
+## 2026-08-16
+
 - feat: add paid-preview flag with batch edit for projects
 - chore: update build stamp after reasoning_content fallback (7569a19)
 
