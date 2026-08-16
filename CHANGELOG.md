@@ -2,6 +2,11 @@
 
 ## 2026-08-16
 
+- fix: block cloning booklets with locked paid chapters
+- chore: update build stamp after paid-preview leak fix (4bef3eb)
+
+## 2026-08-16
+
 - fix: close two remaining paid-preview leak paths
 - chore: update build stamp after paid-preview flag (885afffa)
 
