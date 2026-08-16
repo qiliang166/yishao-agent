@@ -2,6 +2,11 @@
 
 ## 2026-08-16
 
+- feat: add paid-preview flag with batch edit for projects
+- chore: update build stamp after reasoning_content fallback (7569a19)
+
+## 2026-08-16
+
 - fix: add reasoning_content fallback to streaming LLM generate
 - chore: update build stamp after renewal reject (3b3e4df)
 
