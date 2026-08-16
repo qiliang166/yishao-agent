@@ -1646,6 +1646,9 @@ def clone_booklet(booklet_id: str, request: Request):
     db = get_db()
     try:
         row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
+        hidden = _lock_hidden_project_ids(db, user, _row_to_full(row))
+        if hidden:
+            raise HTTPException(403, "该画册包含未解锁的付费章节，请先解锁后再复制")
         new_id = f"bk-{uuid.uuid4().hex[:12]}"
         db.execute(
             "INSERT INTO booklets (id, owner_id, owner_role, book_type, title, subtitle, "
