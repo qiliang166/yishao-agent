@@ -216,6 +216,27 @@ def _lock_hidden_project_ids(db, user: dict, booklet: dict) -> dict:
     return {r["id"]: (r["point_cost_deci"] or 0) for r in rows if r["id"] not in unlocked}
 
 
+def _locked_clone_project_ids(db, user: dict, booklet: dict) -> dict:
+    """clone 拦截：返回 {project_id: point_cost_deci}，付费明细且当前查看者未解锁。
+
+    与 _lock_hidden_project_ids 的区别：clone 会复制章节内联正文，且副本 owner 下载免扣积分，
+    故付费下载(is_downloadable=1)明细也必须拦截，否则「复制→下载自己副本」绕过下载积分。
+    """
+    if _is_admin(user) or booklet.get("owner_id") == user.get("sub"):
+        return {}
+    pids = {ch.get("project_id") for ch in booklet.get("chapters") or [] if ch.get("project_id")}
+    if not pids:
+        return {}
+    marks = ",".join("?" * len(pids))
+    rows = db.execute(
+        f"SELECT id, point_cost_deci FROM projects WHERE id IN ({marks}) "
+        "AND (is_downloadable=1 OR preview_requires_unlock=1)",
+        tuple(pids),
+    ).fetchall()
+    unlocked = _member_unlocked_project_ids(db, user)
+    return {r["id"]: (r["point_cost_deci"] or 0) for r in rows if r["id"] not in unlocked}
+
+
 def _deduct_booklet_points(db, user: dict, booklet: dict):
     """下载电子书时扣积分：遍历章节引用的项目，对未解锁项目依次扣积分。"""
     import uuid as _uuid
@@ -1646,7 +1667,7 @@ def clone_booklet(booklet_id: str, request: Request):
     db = get_db()
     try:
         row = _get_booklet_or_403(db, booklet_id, user, readonly_ok=True)
-        hidden = _lock_hidden_project_ids(db, user, _row_to_full(row))
+        hidden = _locked_clone_project_ids(db, user, _row_to_full(row))
         if hidden:
             raise HTTPException(403, "该画册包含未解锁的付费章节，请先解锁后再复制")
         new_id = f"bk-{uuid.uuid4().hex[:12]}"
