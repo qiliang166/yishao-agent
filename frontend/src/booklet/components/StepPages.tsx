@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, type ReactNode } from 'react'
 import SvgIcon from '../../components/SvgIcon'
 import { api } from '../../services/api'
+import { useModal } from '../../components/ModalProvider'
 import { BookletDraft, Chapter, PageMapChapter, Theme, mdToHtml, resolveDraftTheme } from '../types'
 import ProsePreview from './ProsePreview'
 import { splitProsePages, proseSplitCss, themeVars } from '../proseSplit'
@@ -77,6 +78,7 @@ function Thumb({ doc, pageW, pageH, thumbW }: { doc: string; pageW: number; page
 }
 
 export default function StepPages({ draft, dirty, onSave, onChange, readonly }: Props) {
+  const { toast } = useModal()
   const [pageMap, setPageMap] = useState<PageMapChapter[] | null>(null)
   const [fixedKeys, setFixedKeys] = useState<string[]>([])
   const [fixedDocs, setFixedDocs] = useState<Record<string, string>>({})
@@ -299,6 +301,41 @@ export default function StepPages({ draft, dirty, onSave, onChange, readonly }: 
 
         {/* 章节页 */}
         {(pageMap || []).map((pm, chIdx) => {
+          if (pm.kind === 'locked') {
+            return (
+              <div key={pm.chapter_id} style={{ marginTop: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{String(chIdx + 1).padStart(2, '0')} · {pm.title}</span>
+                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--warning, #d97706)' }}>付费章节</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={cardStyle(false)}>
+                    <div style={{
+                      width: thumbW, height: thumbH, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexDirection: 'column', gap: 8, fontSize: 11, background: 'var(--bg-secondary, #f4f4f5)', color: 'var(--text-secondary)',
+                    }}>
+                      <span style={{ fontSize: 20 }}>🔒</span>
+                      <span>付费章节，解锁后预览</span>
+                      {!readonly && (
+                        <button className="btn btn-primary btn-sm" onClick={async () => {
+                          try {
+                            await api.unlockProjects([pm.project_id as string])
+                            toast('解锁成功', 'success')
+                            setReloadKey(k => k + 1)
+                          } catch (e: any) {
+                            toast(`解锁失败: ${e?.message || e}`, 'error')
+                          }
+                        }}>
+                          解锁（{(pm.point_cost_deci ?? 0) / 10} 积分）
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ padding: '3px 6px', fontSize: 10, color: 'var(--text-secondary)', textAlign: 'center' }}>付费章节 · 解锁后可预览正文</div>
+                  </div>
+                </div>
+              </div>
+            )
+          }
           const ch = draftChapterById(pm.chapter_id)
           const isProse = pm.kind === 'prose'
           const splitDocs = isProse ? proseDocs[pm.chapter_id] : undefined

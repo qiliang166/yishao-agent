@@ -1273,6 +1273,8 @@ def init_db():
                 conn.execute("ALTER TABLE projects ADD COLUMN point_cost_deci INTEGER NOT NULL DEFAULT 5")
             if "is_downloadable" not in proj_cols:
                 conn.execute("ALTER TABLE projects ADD COLUMN is_downloadable INTEGER NOT NULL DEFAULT 0")
+            if "preview_requires_unlock" not in proj_cols:
+                conn.execute("ALTER TABLE projects ADD COLUMN preview_requires_unlock INTEGER NOT NULL DEFAULT 0")
             if "download_count" not in proj_cols:
                 conn.execute("ALTER TABLE projects ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0")
             if "view_count" not in proj_cols:
@@ -1766,6 +1768,8 @@ def _migrate_v1_create_tables(conn):
             conn.execute("ALTER TABLE projects ADD COLUMN point_cost_deci INTEGER NOT NULL DEFAULT 5")
         if "is_downloadable" not in proj_cols:
             conn.execute("ALTER TABLE projects ADD COLUMN is_downloadable INTEGER NOT NULL DEFAULT 0")
+        if "preview_requires_unlock" not in proj_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN preview_requires_unlock INTEGER NOT NULL DEFAULT 0")
         if "download_count" not in proj_cols:
             conn.execute("ALTER TABLE projects ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0")
         if "view_count" not in proj_cols:

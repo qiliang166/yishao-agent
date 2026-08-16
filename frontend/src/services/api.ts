@@ -168,6 +168,7 @@ export interface Project {
   is_locked?: number
   point_cost_deci?: number
   is_downloadable?: number
+  preview_requires_unlock?: number
   copied_from_project_id?: string
   workspace_id?: string
   category_id?: string
@@ -294,13 +295,13 @@ export const api = {
   },
   getProject: (id: string) => request(`/api/projects/${id}`),
   listProjectVideos: (id: string) => request(`/api/projects/${id}/videos`),
-  createProject: (name: string, workspaceId: string, opts?: { point_cost_deci?: number; is_downloadable?: number; category_id?: string; author_id?: string }) =>
+  createProject: (name: string, workspaceId: string, opts?: { point_cost_deci?: number; is_downloadable?: number; preview_requires_unlock?: number; category_id?: string; author_id?: string }) =>
     request('/api/projects', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, workspace_id: workspaceId, source_type: 'text', ...opts }),
     }),
-  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number; point_cost_deci?: number; is_downloadable?: number; category_id?: string; author_id?: string}) =>
+  updateProject: (id: string, data: {name?: string; status?: string; storage_path?: string; is_locked?: number; point_cost_deci?: number; is_downloadable?: number; preview_requires_unlock?: number; category_id?: string; author_id?: string}) =>
     request(`/api/projects/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }),
   deleteProject: (id: string) => request(`/api/projects/${id}`, { method: 'DELETE' }),
 
@@ -1609,7 +1610,7 @@ export const api = {
     request(`/api/booklets/${id}/page-map`).then(d => d as {
       book_type: string; fixed: string[]
       fixed_docs?: Record<string, string>
-      chapters: { chapter_id: string; title: string; kind: 'prose' | 'fulldoc' | 'embed'; page_count: number; docs?: string[] }[]
+      chapters: { chapter_id: string; title: string; kind: 'prose' | 'fulldoc' | 'embed' | 'locked'; page_count: number; docs?: string[]; project_id?: string; point_cost_deci?: number }[]
     }),
   bookletImportFile: async (file: File) => {
     const formData = new FormData()

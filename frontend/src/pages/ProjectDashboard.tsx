@@ -48,6 +48,8 @@ export default function ProjectDashboard() {
   const [batchPoints, setBatchPoints] = useState('0')
   const [showAuthorDialog, setShowAuthorDialog] = useState(false)
   const [batchAuthorId, setBatchAuthorId] = useState('')
+  const [showPreviewLockDialog, setShowPreviewLockDialog] = useState(false)
+  const [batchPreviewLock, setBatchPreviewLock] = useState('0')
   // Expand project row to show output files
   const [editPointProject, setEditPointProject] = useState('')
   const [editPointValue, setEditPointValue] = useState('')
@@ -568,6 +570,9 @@ export default function ProjectDashboard() {
                       <button className="btn btn-outline btn-sm" onClick={() => { setShowAuthorDialog(true); setBatchAuthorId('') }}>
                         批量修改作者
                       </button>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setShowPreviewLockDialog(true); setBatchPreviewLock('0') }}>
+                        批量设置预览
+                      </button>
                       <button className="btn btn-outline btn-sm" onClick={async () => {
                         const ids = [...selected]
                         await Promise.all(ids.map(id => api.updateProject(id, { status: 'completed' })))
@@ -700,6 +705,25 @@ export default function ProjectDashboard() {
                   ) : (
                     <span style={{ fontSize: 11, marginLeft: 4, color: p.is_downloadable ? 'var(--success)' : 'var(--text-secondary)' }}>
                       {p.is_downloadable ? '可下载' : '—'}
+                    </span>
+                  )}
+                  {/* Preview unlock toggle */}
+                  {canEditOwn && isOwner(p.created_by) ? (
+                    <span style={{
+                      cursor: 'pointer', fontSize: 11, marginLeft: 4,
+                      color: p.preview_requires_unlock ? 'var(--warning)' : 'var(--text-secondary)',
+                    }}
+                      onClick={async e => {
+                        e.stopPropagation()
+                        await api.updateProject(p.id, { preview_requires_unlock: p.preview_requires_unlock ? 0 : 1 })
+                        loadProjects(page)
+                      }}
+                      title={p.preview_requires_unlock ? '点击改为免费预览正文' : '点击改为付费预览正文'}>
+                      {p.preview_requires_unlock ? '付费预览' : '免费预览'}
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: 11, marginLeft: 4, color: p.preview_requires_unlock ? 'var(--warning)' : 'var(--text-secondary)' }}>
+                      {p.preview_requires_unlock ? '付费预览' : '—'}
                     </span>
                   )}
                   {/* Point cost inline edit */}
@@ -1160,6 +1184,39 @@ export default function ProjectDashboard() {
                 const name = authorOptions.find(a => a.id === batchAuthorId)?.name || '无署名'
                 modal.toast(`已批量修改 ${ids.length} 个项目的作者为 ${name}`, 'success')
                 setShowAuthorDialog(false)
+              }}>确认</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Set Preview Lock Dialog */}
+      {showPreviewLockDialog && (
+        <div className="dialog-overlay"
+          onMouseDown={(e: any) => { overlayMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={() => { if (overlayMouseDownRef.current) setShowPreviewLockDialog(false) }}>
+          <div className="dialog-box" style={{ width: 360 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量设置预览</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              将 {selected.size} 个项目的正文预览设置为：
+            </div>
+            <div className="form-group">
+              <select className="form-input" value={batchPreviewLock}
+                onChange={e => setBatchPreviewLock(e.target.value)} style={{ fontSize: 13 }}>
+                <option value="0">免费预览（会员可直接预览正文）</option>
+                <option value="1">付费预览（会员需解锁后预览正文）</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowPreviewLockDialog(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={async () => {
+                const ids = [...selected]
+                const val = batchPreviewLock === '1' ? 1 : 0
+                await Promise.all(ids.map((id: string) => api.updateProject(id, { preview_requires_unlock: val })))
+                loadProjects(page)
+                setSelected(new Set())
+                modal.toast(`已批量设置 ${ids.length} 个项目为${val === 1 ? '付费预览' : '免费预览'}`, 'success')
+                setShowPreviewLockDialog(false)
               }}>确认</button>
             </div>
           </div>

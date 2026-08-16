@@ -1489,10 +1489,11 @@ def create_project(req: ProjectCreate, user=require_perm("project.create")):
         project_code = _generate_project_code(db)
 
         db.execute(
-            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable, category_id, author_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO projects (id, name, source_type, storage_path, project_code, workspace_id, created_by, point_cost_deci, is_downloadable, preview_requires_unlock, category_id, author_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (pid, req.name, req.source_type, storage_path, project_code, req.workspace_id, user["sub"],
              req.point_cost_deci if req.point_cost_deci is not None else 5,
              req.is_downloadable if req.is_downloadable is not None else 0,
+             req.preview_requires_unlock if req.preview_requires_unlock is not None else 0,
              req.category_id or "", req.author_id or ""))
         db.commit()
         # Initialize project_items from workspace configs
@@ -1900,6 +1901,8 @@ def update_project(project_id: str, req: ProjectUpdate, user=require_perm("proje
             db.execute("UPDATE projects SET point_cost_deci = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.point_cost_deci, project_id))
         if req.is_downloadable is not None:
             db.execute("UPDATE projects SET is_downloadable = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.is_downloadable, project_id))
+        if req.preview_requires_unlock is not None:
+            db.execute("UPDATE projects SET preview_requires_unlock = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.preview_requires_unlock, project_id))
         if req.category_id is not None:
             db.execute("UPDATE projects SET category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (req.category_id, project_id))
         if req.author_id is not None:
@@ -6773,6 +6776,7 @@ def api_downloadable_projects(user=Depends(get_current_user)):
                 "point_cost_deci": row["point_cost_deci"] or 5,
                 "download_count": row["download_count"] or 0,
                 "is_downloadable": row["is_downloadable"],
+                "preview_requires_unlock": row["preview_requires_unlock"],
                 "workspace_id": row["workspace_id"],
                 "workspace_name": ws_map.get(row["workspace_id"] or "", ""),
                 "category_name": cat_map.get(row["category_id"] or "", ""),
@@ -10301,10 +10305,11 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
 
                 db.execute(
                     "INSERT INTO projects (id, workspace_id, name, source_type, status, project_code, "
-                    "category_id, author_id, point_cost_deci, is_downloadable, created_by) "
-                    "VALUES (?, ?, ?, 'text', 'draft', ?, ?, ?, ?, ?, ?)",
+                    "category_id, author_id, point_cost_deci, is_downloadable, preview_requires_unlock, created_by) "
+                    "VALUES (?, ?, ?, 'text', 'draft', ?, ?, ?, ?, ?, ?, ?)",
                     (proj_id, workspace_id, name, project_code, cat_id, author_id,
-                     r.get("point_cost_deci", 0), r.get("is_downloadable", 0), user_id))
+                     r.get("point_cost_deci", 0), r.get("is_downloadable", 0),
+                     r.get("preview_requires_unlock", 0), user_id))
 
                 # Init project items from factory (pass db to avoid lock)
                 _init_project_items_from_factory(proj_id, workspace_id, db=db)

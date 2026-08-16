@@ -272,6 +272,9 @@ export default function StepContent({ draft, onChange, readonly }: Props) {
                 }}>
                   <span style={{ color: 'var(--text-secondary)', width: 24 }}>{String(i + 1).padStart(2, '0')}</span>
                   <span style={{ flex: 1 }}>{c.title}</span>
+                  {c.locked && (
+                    <span style={{ fontSize: 10, color: 'var(--warning, #d97706)', flexShrink: 0 }}>🔒 付费预览</span>
+                  )}
                   <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
                     {c.source_type === 'custom' ? (c.content_format === 'html' ? '自建·页面' : '自建') : c.source_type === 'step_md' ? '文档' : '课件'}
                     {' · '}{(c.content || '').length} 字符

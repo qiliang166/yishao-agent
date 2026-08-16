@@ -15,6 +15,7 @@ export interface Chapter {
   content_html: string
   enabled: boolean
   content_format?: 'md' | 'html'
+  locked?: boolean
   bg_color?: string
   hidden_pages?: number[]
   page_order?: number[]
@@ -95,9 +96,11 @@ export interface ContentProject {
 export interface PageMapChapter {
   chapter_id: string
   title: string
-  kind: 'prose' | 'fulldoc' | 'embed'
+  kind: 'prose' | 'fulldoc' | 'embed' | 'locked'
   page_count: number
   docs?: string[]
+  project_id?: string
+  point_cost_deci?: number
 }
 
 export interface Theme {
