@@ -26,6 +26,7 @@ export default function BookletListPage() {
   const { user, token } = useAuth()
   const base = location.pathname.startsWith('/app') ? '/app/booklets' : '/booklets'
   const isAdmin = user?.user_type === 'admin'
+  const canEditAll = user?.permissions?.includes('project.edit_all') ?? false
   const userId = user?.user_id || ''
 
   const actionLock = useRef(false)
@@ -239,6 +240,7 @@ export default function BookletListPage() {
 
   const renderCard = (b: BookletSummary, isRec: boolean) => {
     const isDownloading = downloadingId === b.id
+    const canModify = canEditAll || b.owner_id === userId
     return (
     <div key={b.id} className="card" style={{ display: 'flex', flexDirection: 'row', padding: 0, overflow: 'hidden', gap: 0 }}>
       {renderThumb(b)}
@@ -262,7 +264,7 @@ export default function BookletListPage() {
         </div>
         <div style={{ fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 6 }}>
           {isRec ? (
-            isAdmin ? (
+            isAdmin && canModify ? (
               <>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                   onClick={(e) => handleToggleRecommend(b, e)}>取消推荐</button>
@@ -296,7 +298,7 @@ export default function BookletListPage() {
           ) : (
             <>
               <span>
-                {isAdmin && (
+                {isAdmin && canModify && (
                   <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
                     onClick={(e) => handleToggleRecommend(b, e)}><SvgIcon name="star" size={14} /> 推荐</button>
                 )}
@@ -307,8 +309,10 @@ export default function BookletListPage() {
                   onClick={(e) => { e.preventDefault(); handleCardDownload(b, e) }}>
                   {isDownloading ? '下载中...' : '下载'}
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
-                  onClick={(e) => handleDelete(b, e)}><SvgIcon name="trash" size={14} /> 删除</button>
+                {canModify && (
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 10 }}
+                    onClick={(e) => handleDelete(b, e)}><SvgIcon name="trash" size={14} /> 删除</button>
+                )}
               </span>
             </>
           )}

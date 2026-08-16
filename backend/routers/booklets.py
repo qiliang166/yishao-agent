@@ -134,6 +134,11 @@ def _is_admin(user: dict) -> bool:
     return user.get("user_type") == "admin"
 
 
+def _can_edit_all(user: dict) -> bool:
+    """超级管理员（含 project.edit_all）可编辑任意册子；内容管理员仅能编辑自己的。"""
+    return "project.edit_all" in user.get("permissions", [])
+
+
 def _user_id(user: dict) -> str:
     return user.get("user_id", user.get("sub", ""))
 
@@ -164,7 +169,7 @@ def _get_booklet_or_403(db, booklet_id: str, user: dict, readonly_ok: bool = Fal
     if not row:
         raise HTTPException(404, "册子不存在")
     is_owner = row["owner_id"] == user["sub"]
-    if _is_admin(user) or is_owner:
+    if is_owner or _can_edit_all(user):
         return row
     if readonly_ok:
         if not skip_project_check:

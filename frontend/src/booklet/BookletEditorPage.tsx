@@ -26,6 +26,7 @@ export default function BookletEditorPage() {
   const { toast } = useModal()
   const { user } = useAuth()
   const isAdmin = user?.user_type === 'admin'
+  const canEditAll = user?.permissions?.includes('project.edit_all') ?? false
   const userId = user?.user_id || ''
   const base = location.pathname.startsWith('/app') ? '/app/booklets' : '/booklets'
 
@@ -152,7 +153,7 @@ export default function BookletEditorPage() {
     setEditingTitle(false)
   }
 
-  const isOwnerView = !draft || draft.owner_id === userId || isAdmin
+  const isOwnerView = !draft || draft.owner_id === userId || canEditAll
   const isReadonly = !isOwnerView
   const showUseRecommend = isReadonly
 
@@ -196,7 +197,7 @@ export default function BookletEditorPage() {
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>{BOOK_TYPE_LABEL[draft.book_type]}</span>
         <span style={{ flex: 1 }} />
         {!isReadonly && dirty && <span style={{ fontSize: 10, color: 'var(--warning, #d97706)' }}>● 未保存</span>}
-        {isAdmin && (
+        {isAdmin && isOwnerView && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer', marginRight: 8 }}>
             <input type="checkbox" checked={!!draft.is_recommended}
               onChange={e => onChange(d => ({ ...d, is_recommended: e.target.checked }))} />
