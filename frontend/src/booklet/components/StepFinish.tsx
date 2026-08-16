@@ -38,10 +38,10 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
     { mode: 'standard', label: '标准页（PDF 型）', descA4: 'A4 纸页一页接一页瀑布式排布，像 PDF 阅读器；打印即得一页一张 A4', descPpt: '16:9 标准页瀑布式排布，像 PDF 阅读器；打印每页一屏' },
   ]
 
-  const ensureSavedAndRender = async (): Promise<string | null> => {
+  const ensureSavedAndRender = async (download = true): Promise<string | null> => {
     const ok = await onSave()
     if (!ok) return null
-    return api.renderBooklet(draft.id, renderModeRef.current)
+    return api.renderBooklet(draft.id, renderModeRef.current, download)
   }
 
   const doPreview = async () => {
@@ -49,9 +49,9 @@ export default function StepFinish({ draft, dirty, onSave, onChange, readonly }:
     try {
       let html: string | null = null
       if (readonly) {
-        html = await api.renderBooklet(draft.id, renderModeRef.current)
+        html = await api.renderBooklet(draft.id, renderModeRef.current, false)
       } else {
-        html = await ensureSavedAndRender()
+        html = await ensureSavedAndRender(false)
       }
       if (html != null) {
         setPreviewHtml(html)

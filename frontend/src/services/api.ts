@@ -1570,10 +1570,9 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(d => (d as { doc: string }).doc),
-  renderBooklet: async (id: string, renderMode?: string) => {
-    const body = renderMode ? JSON.stringify({ render_mode: renderMode }) : undefined
-    const headers = { ...getAuthHeaders() }
-    if (body) headers['Content-Type'] = 'application/json'
+  renderBooklet: async (id: string, renderMode?: string, download = true) => {
+    const body = JSON.stringify({ render_mode: renderMode || undefined, download })
+    const headers = { ...getAuthHeaders(), 'Content-Type': 'application/json' }
     const res = await fetch(`/api/booklets/${id}/render`, {
       method: 'POST',
       headers,

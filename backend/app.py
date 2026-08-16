@@ -54,7 +54,7 @@ from routers.users import router as users_router
 from routers.prompt_studio import router as prompt_studio_router
 from routers.scenarios import router as scenarios_router
 from routers.booklets import router as booklets_router
-from permissions import require_perm, check_ownership, verify_project_access
+from permissions import require_perm, check_ownership, verify_project_access, verify_preview_access
 from services.license_service import (
     validate_license_key, activate as license_activate,
     check_activation, deactivate as license_deactivate, get_license_status,
@@ -391,8 +391,10 @@ def api_serve_export_file(run_id: str, filename: str, request: Request, project_
                             db.close()
                 except JWTError:
                     pass
-        if user is not None:
-            _incr_view_count(project_id, user["sub"], filename, request)
+        if user is None:
+            raise HTTPException(status_code=401, detail="请先登录")
+        verify_preview_access(project_id, user)
+        _incr_view_count(project_id, user["sub"], filename, request)
     run_dir = _run_dirs.get(run_id)
     if not run_dir:
         # Fallback: look in EXPORT_DIR and scan subdirs
@@ -6897,6 +6899,7 @@ def api_member_preview_file(project_id: str, filename: str, request: Request):
     if user is None:
         raise HTTPException(status_code=401, detail="请先登录")
     verify_project_access(project_id, user)
+    verify_preview_access(project_id, user)
 
     proj_dir = resolve_project_storage(project_id, auto_create=False)
     filepath = os.path.realpath(os.path.join(proj_dir, filename))

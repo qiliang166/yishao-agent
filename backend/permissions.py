@@ -122,3 +122,32 @@ def verify_project_unlock(project_id: str, user: dict) -> None:
             )
     finally:
         db.close()
+
+
+def verify_preview_access(project_id: str, user: dict) -> None:
+    """preview_requires_unlock=1 且会员未解锁时 403；管理员豁免。"""
+    if user.get("user_type") == "admin":
+        return
+    if "user_type" not in user and user.get("sub") == "admin":
+        return
+    db = get_db()
+    try:
+        proj = db.execute(
+            "SELECT preview_requires_unlock FROM projects WHERE id=?", (project_id,)
+        ).fetchone()
+        if not proj or not proj["preview_requires_unlock"]:
+            return
+        uid = user.get("user_id", user.get("sub", ""))
+        unlock = db.execute(
+            """SELECT 1 FROM project_unlocks
+               WHERE user_id=? AND project_id=?
+               AND (expires_at IS NULL OR expires_at > datetime('now'))""",
+            (uid, project_id),
+        ).fetchone()
+        if not unlock:
+            raise HTTPException(
+                status_code=403,
+                detail="该明细已设为付费预览，请先解锁后再预览",
+            )
+    finally:
+        db.close()

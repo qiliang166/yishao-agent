@@ -25,6 +25,7 @@ interface DlProject {
   category_name: string
   author_id: string
   author_name: string
+  preview_requires_unlock: boolean
   unlocked: {
     is_unlocked: boolean
     unlocked_at: string | null
@@ -65,6 +66,7 @@ export default function MemberDownloadsPage() {
   const [preview, setPreview] = useState<{ project: DlProject; file: DlFile } | null>(null)
   const [previewText, setPreviewText] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewUnlocking, setPreviewUnlocking] = useState(false)
   const navigate = useNavigate()
 
   const showToast = useCallback((msg: string) => {
@@ -96,6 +98,7 @@ export default function MemberDownloadsPage() {
   useEffect(() => {
     setPreviewText(null)
     if (!preview) return
+    if (preview.project.preview_requires_unlock && !preview.project.unlocked.is_unlocked) return
     const ext = (preview.file.ext || '').toLowerCase()
     if (!TEXT_MD_EXTS.includes(ext) && !TEXT_RAW_EXTS.includes(ext)) return
     let cancelled = false
@@ -256,6 +259,26 @@ export default function MemberDownloadsPage() {
     }
   }
 
+  const unlockPreview = async () => {
+    if (!preview) return
+    setPreviewUnlocking(true)
+    try {
+      await api.unlockProjects([preview.project.id])
+      const d = await api.getDownloadableProjects()
+      if (d != null) {
+        const list: DlProject[] = (d as any)?.projects || []
+        setProjects(list)
+        const updated = list.find(p => p.id === preview.project.id)
+        if (updated) setPreview({ project: updated, file: preview.file })
+      }
+      showToast('解锁成功')
+    } catch (e: any) {
+      showToast(`解锁失败: ${e?.message || e}`)
+    } finally {
+      setPreviewUnlocking(false)
+    }
+  }
+
   const downloadSingle = (project: DlProject, f: DlFile) => {
     doDownload([{ project, files: [f] }])
   }
@@ -314,6 +337,7 @@ export default function MemberDownloadsPage() {
   const previewExt = preview ? (preview.file.ext || '').toLowerCase() : ''
   const previewUrl = preview ? api.previewFileUrl(preview.project.id, preview.file) : ''
   const previewIsText = TEXT_MD_EXTS.includes(previewExt) || TEXT_RAW_EXTS.includes(previewExt)
+  const isPreviewLocked = preview ? (preview.project.preview_requires_unlock && !preview.project.unlocked.is_unlocked) : false
 
   return (
     <div style={{ padding: '24px 32px', maxWidth: 1440, margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 0px)', boxSizing: 'border-box' }}>
@@ -564,7 +588,18 @@ export default function MemberDownloadsPage() {
               </div>
             </div>
             <div style={{ flex: 1, minHeight: 0, background: 'var(--bg-secondary, #f5f5f5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {previewIsText ? (
+              {isPreviewLocked ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: 24 }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🔒</div>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary, #111)', margin: '0 0 4px' }}>付费预览</p>
+                  <p style={{ fontSize: 12, margin: '0 0 16px' }}>该明细已设为付费预览，解锁后可在线预览正文</p>
+                  <button className="btn btn-primary btn-sm" style={{ fontSize: 12 }}
+                    disabled={previewUnlocking}
+                    onClick={unlockPreview}>
+                    {previewUnlocking ? '解锁中...' : `解锁（${pts(preview.project.point_cost_deci)} 积分）`}
+                  </button>
+                </div>
+              ) : previewIsText ? (
                 <div
                   onCopy={blockEvent} onCut={blockEvent} onContextMenu={blockEvent} onDragStart={blockEvent}
                   style={{
