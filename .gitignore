@@ -42,3 +42,14 @@ Thumbs.db
 
 # 本地测试令牌，禁止入库
 dev-log/*token*
+
+# Build artifacts & backups (never commit these)
+*.zip
+*.tar.gz
+*.exe
+*.mp4
+backups/
+beifen/
+dist_packages/
+test-package/
+dist_server_tmp/
