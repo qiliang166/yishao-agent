@@ -1211,7 +1211,7 @@ img { max-width:100%; height:auto; }
     const blob = await res.blob()
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = 'yishao-backup.db'
+    a.download = 'yishao-data.zip'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -1229,6 +1229,18 @@ img { max-width:100%; height:auto; }
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(a.href)
+  },
+  importData: async (file: File) => {
+    const headers = getAuthHeaders()
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/import-data', { method: 'POST', headers, body: fd })
+    if (!res.ok) {
+      let detail = '导入失败'
+      try { const e = await res.json(); if (e.detail) detail = e.detail } catch {}
+      throw new Error(detail)
+    }
+    return res.json()
   },
 
   // Prompt Studio

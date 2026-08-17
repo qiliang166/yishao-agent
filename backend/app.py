@@ -8130,21 +8130,46 @@ def update_settings(req: dict, user=require_perm("config.global")):
 
 @app.get("/api/backup-database")
 def backup_database(user=require_perm("config.global")):
-    """Download a snapshot of the database."""
-    import shutil
+    """Download a complete data package: DB snapshot (minus machine-bound license) + exports + downloads."""
+    import sqlite3 as _sq
     ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    tmp = os.path.join(BASE_DIR, "data", f"yishao-snapshot-{ts}.db")
+    tmp_db = os.path.join(BASE_DIR, "data", f"_snapshot-{ts}.db")
+    tmp_zip = os.path.join(BASE_DIR, "data", f"yishao-data-{ts}.zip")
     try:
-        shutil.copy2(os.path.join(BASE_DIR, "data", "yishao.db"), tmp)
+        # Consistent snapshot via SQLite backup API (avoids WAL data loss)
+        src = _sq.connect(os.path.join(BASE_DIR, "data", "yishao.db"))
+        dst = _sq.connect(tmp_db)
+        with dst:
+            src.backup(dst)
+        src.close()
+        # Exclude machine-bound license from the data package
+        _c = _sq.connect(tmp_db)
+        _c.execute("DELETE FROM license")
+        _c.commit()
+        _c.close()
+
+        with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as zf:
+            zf.write(tmp_db, "yishao.db")
+            for sub in ("exports", "downloads"):
+                sd = os.path.join(BASE_DIR, "data", sub)
+                if os.path.isdir(sd):
+                    for root, _, files in os.walk(sd):
+                        for f in files:
+                            fp = os.path.join(root, f)
+                            arc = os.path.join("data", sub, os.path.relpath(fp, sd))
+                            zf.write(fp, arc)
         return FileResponse(
-            tmp,
-            media_type="application/octet-stream",
-            filename=f"yishao-snapshot-{ts}.db",
+            tmp_zip,
+            media_type="application/zip",
+            filename=f"yishao-data-{ts}.zip",
         )
     except Exception:
-        if os.path.exists(tmp):
-            os.remove(tmp)
+        if os.path.exists(tmp_zip):
+            os.remove(tmp_zip)
         raise HTTPException(status_code=500, detail="备份失败")
+    finally:
+        if os.path.exists(tmp_db):
+            os.remove(tmp_db)
 
 
 @app.get("/api/backup-full")
@@ -8225,6 +8250,104 @@ def backup_full(user=require_perm("config.global")):
         if os.path.exists(tmp):
             os.remove(tmp)
         raise HTTPException(status_code=500, detail="备份失败")
+
+
+@app.post("/api/import-data")
+async def import_data(file: UploadFile = File(...), user=require_perm("config.global")):
+    """Import a data package (zip) exported by /api/backup-database.
+
+    Replaces business data + exports/downloads, but keeps the local machine's
+    license row so importing does not break activation.
+    """
+    import tempfile
+    import sqlite3 as _sq
+    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    db_path = os.path.join(BASE_DIR, "data", "yishao.db")
+    tmp_dir = tempfile.mkdtemp(prefix="yishao-import-")
+    zip_path = os.path.join(tmp_dir, "upload.zip")
+    try:
+        content = await file.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="空文件")
+        with open(zip_path, "wb") as f:
+            f.write(content)
+
+        extract_dir = os.path.join(tmp_dir, "extracted")
+        os.makedirs(extract_dir, exist_ok=True)
+        try:
+            with zipfile.ZipFile(zip_path, "r") as zf:
+                zf.extractall(extract_dir)
+        except Exception:
+            raise HTTPException(status_code=400, detail="不是有效的 zip 数据包")
+
+        new_db = os.path.join(extract_dir, "yishao.db")
+        if not os.path.isfile(new_db):
+            raise HTTPException(status_code=400, detail="数据包缺少 yishao.db")
+
+        # Validate the uploaded DB is a real SQLite database
+        try:
+            _v = _sq.connect(new_db)
+            _v.execute("SELECT 1 FROM sqlite_master LIMIT 1").fetchone()
+            _v.close()
+        except Exception:
+            raise HTTPException(status_code=400, detail="yishao.db 不是有效的数据库")
+
+        # Backup current DB before overwriting
+        backup_dir = os.path.join(BASE_DIR, "data", "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        shutil.copy2(db_path, os.path.join(backup_dir, f"yishao-pre-import-{ts}.db"))
+
+        # Preserve local license row so activation survives the swap
+        old_license = None
+        conn = get_db()
+        try:
+            row = conn.execute("SELECT * FROM license WHERE id = 1").fetchone()
+            if row:
+                old_license = dict(row)
+        finally:
+            conn.close()
+
+        # Checkpoint WAL into the main file, then swap the DB file
+        chk = _sq.connect(db_path)
+        chk.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchall()
+        chk.close()
+
+        shutil.copy2(new_db, db_path)
+        for suffix in ("-wal", "-shm"):
+            sp = db_path + suffix
+            if os.path.exists(sp):
+                try:
+                    os.remove(sp)
+                except Exception:
+                    pass
+
+        # Restore the local license row into the new DB
+        if old_license:
+            cols = list(old_license.keys())
+            colnames = ",".join(cols)
+            placeholders = ",".join(["?"] * len(cols))
+            conn = get_db()
+            try:
+                conn.execute(
+                    f"INSERT OR REPLACE INTO license ({colnames}) VALUES ({placeholders})",
+                    [old_license[c] for c in cols],
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+        # Restore exports / downloads (full replace when present in the package)
+        for sub in ("exports", "downloads"):
+            src_dir = os.path.join(extract_dir, "data", sub)
+            dst_dir = os.path.join(BASE_DIR, "data", sub)
+            if os.path.isdir(src_dir):
+                if os.path.isdir(dst_dir):
+                    shutil.rmtree(dst_dir)
+                shutil.copytree(src_dir, dst_dir)
+
+        return {"ok": True, "message": "数据已导入，请重启应用/服务生效"}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @app.get("/api/public/booklets")

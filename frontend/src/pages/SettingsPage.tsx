@@ -696,7 +696,7 @@ function SettingsPage() {
                     alert('下载失败: ' + e.message)
                   }
                 }}
-              >下载数据库</button>}
+              >下载数据</button>}
               {canSaveGlobal && <button className="btn btn-primary btn-sm"
                 onClick={async () => {
                   try {
@@ -706,6 +706,27 @@ function SettingsPage() {
                   }
                 }}
               >下载整站备份</button>}
+              {canSaveGlobal && <label className="btn btn-primary btn-sm" style={{ cursor: 'pointer', marginBottom: 0 }}>
+                导入数据
+                <input type="file" accept=".zip" style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const input = e.target
+                    const file = input.files?.[0]
+                    if (!file) return
+                    if (!confirm('导入将覆盖当前全部数据，且需重启生效。继续？')) { input.value = ''; return }
+                    ;(async () => {
+                      try {
+                        await api.importData(file)
+                        alert('数据已导入，请重启应用/服务生效')
+                      } catch (err: any) {
+                        alert('导入失败: ' + (err?.message || err))
+                      } finally {
+                        input.value = ''
+                      }
+                    })()
+                  }}
+                />
+              </label>}
             </div>
           </div>
 
