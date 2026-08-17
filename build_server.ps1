@@ -43,9 +43,15 @@ if (Test-Path $lastBuildFile) {
     $lastCommit = (Get-Content $lastBuildFile -Raw).Trim()
 }
 if ($lastCommit -and $commit) {
-    # Only diff when the previous commit still exists (history may have been rewritten by filter-repo)
+    # Only diff when the previous commit still exists (history may have been rewritten by filter-repo).
+    # git cat-file exits non-zero + writes stderr when the object is missing; under
+    # $ErrorActionPreference="Stop" that aborts the build, so run it relaxed and check $LASTEXITCODE.
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     git cat-file -e "${lastCommit}^{commit}" 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    $lastCommitExists = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $prevEAP
+    if (-not $lastCommitExists) {
         Write-Host "  CHANGELOG: previous commit $($lastCommit.Substring(0,7)) no longer in history (rewritten), skipping"
     } else {
         # git emits UTF-8; default console codepage (GBK) would mangle Chinese commit subjects
