@@ -1,5 +1,9 @@
 ﻿# 更新日志
 
+## 2026-08-17
+
+- fix: seed column_configs via BASE_DIR in frozen EXE + self-heal missing column items
+
 ## 2026-08-16
 
 - fix: block cloning booklets with paid-download chapters
