@@ -1,7 +1,11 @@
 """Multi-provider LLM service using OpenAI-compatible SDK + Anthropic native API."""
+import logging
+
 import anthropic
 from openai import OpenAI, AsyncOpenAI
 from database import get_db
+
+logger = logging.getLogger(__name__)
 
 
 def _is_anthropic(provider: dict) -> bool:
@@ -63,7 +67,7 @@ async def generate(
     user_message: str,
     temperature: float = 0.7,
     json_mode: bool = False,
-    max_tokens: int = 16384,
+    max_tokens: int = 49152,
 ) -> str:
     provider = await get_provider(provider_id)
     if not provider:
