@@ -6547,6 +6547,26 @@ def api_export_svg_zip(run_id: str):
     )
 
 
+@app.post("/api/ppt/{run_id}/upload-image")
+async def api_ppt_upload_image(run_id: str, file: UploadFile = File(...), user=require_perm("stage3.generate")):
+    """Upload an image into the slide run directory for insertion via the HTML editor."""
+    run_dir = _find_run_dir(run_id)
+    if not run_dir:
+        raise HTTPException(status_code=404, detail="Export not found")
+    ext = os.path.splitext(file.filename or "img.png")[1].lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"):
+        raise HTTPException(status_code=400, detail="不支持的图片格式")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件大小不能超过 5MB")
+    images_dir = os.path.join(run_dir, "images")
+    os.makedirs(images_dir, exist_ok=True)
+    filename = f"{uuid.uuid4().hex[:8]}{ext}"
+    with open(os.path.join(images_dir, filename), "wb") as f:
+        f.write(content)
+    return {"path": f"images/{filename}"}
+
+
 @app.post("/api/ppt/save-images/{run_id}")
 async def api_save_slide_images(run_id: str, user=require_perm("stage3.generate"), download: bool = False):
     """Render each slide as a 3840x2160 (4K) PNG and save to the export directory.

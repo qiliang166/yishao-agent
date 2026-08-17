@@ -985,6 +985,16 @@ export const api = {
     return data as { filename: string; url: string }
   },
 
+  // Slide image upload (into the run dir's images/ folder, for HTML editor insertion)
+  uploadSlideImage: async (runId: string, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch(`/api/ppt/${encodeURIComponent(runId)}/upload-image`, { method: 'POST', body: formData, headers: getAuthHeaders() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.detail || 'Upload failed')
+    return data as { path: string }
+  },
+
   // File system
   openFolder: (path: string) =>
     request('/api/open-folder', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) }),

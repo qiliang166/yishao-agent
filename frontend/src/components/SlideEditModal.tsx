@@ -27,6 +27,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
   const [contentEditable, setContentEditable] = useState(false)
   const [textColor, setTextColor] = useState('#ffffff')
   const [savingImages, setSavingImages] = useState(false)
+  const [slideImageSize, setSlideImageSize] = useState('400')
   const [colorScheme, setColorScheme] = useState('deep-blue')
   const [colorSchemes, setColorSchemes] = useState<{id:string;label:string;primary:string;accent:string;background:string;text:string;card_bg:string}[]>([])
   const [recoloring, setRecoloring] = useState(false)
@@ -50,6 +51,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const newpageIframeRef = useRef<HTMLIFrameElement>(null)
   const savedRangeRef = useRef<Range | null>(null)
+  const slideImgRef = useRef<HTMLInputElement>(null)
 
   const modal = useModal()
   // 与后端 PUT /api/ppt/slide-source 的 require_perm 同码：无权限则不显示编辑入口，
@@ -146,6 +148,43 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       iframe.contentDocument.execCommand(command, false, value)
     } catch {
       // silently ignore
+    }
+  }
+
+  const handleInsertImage = async (file: File) => {
+    try {
+      const res = await api.uploadSlideImage(runId, file)
+      if (res == null || !res.path) {
+        modal.toast('上传失败：未返回图片地址', 'error')
+        return
+      }
+      const iframe = iframeRef.current
+      const doc = iframe?.contentDocument
+      const win = iframe?.contentWindow
+      if (!doc || !win) return
+      win.focus()
+      // Insert at current cursor (works inside <td> too)
+      const ok = doc.execCommand('insertImage', false, res.path)
+      if (!ok) {
+        modal.toast('插入失败，请把光标放到要插入的位置后重试', 'error')
+        return
+      }
+      // Set width on the just-inserted <img> (matched by src suffix)
+      const width = parseInt(slideImageSize, 10)
+      if (width > 0) {
+        const imgs = doc.querySelectorAll('img')
+        for (const img of Array.from(imgs).reverse()) {
+          const src = img.getAttribute('src') || ''
+          if (src === res.path || src.endsWith(res.path)) {
+            img.style.width = width + 'px'
+            img.style.maxWidth = '100%'
+            break
+          }
+        }
+      }
+      modal.toast('图片已插入', 'success')
+    } catch (e: any) {
+      modal.toast('图片上传失败: ' + (e?.message || e), 'error')
     }
   }
 
@@ -638,6 +677,24 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
                       background: '#ffff00', border: '1px solid rgba(0,0,0,0.15)',
                     }} />A</span>
                 </div>
+                <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
+                {/* Insert image */}
+                <button onClick={() => slideImgRef.current?.click()}
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                  title="插入图片">
+                  <SvgIcon name="image" size={13} /> 图片
+                </button>
+                <input
+                  type="number" min={0} step={10} value={slideImageSize}
+                  onChange={e => setSlideImageSize(e.target.value)}
+                  placeholder="原图"
+                  title="图片宽度（px，留空=原图）"
+                  style={{ width: 56, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+                />
+                <span style={{ fontSize: 10, color: 'var(--text-muted, #94a3b8)' }}>px</span>
+                <input ref={slideImgRef} type="file" accept="image/*" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
               </div>
             )}
             <button

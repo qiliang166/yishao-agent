@@ -104,6 +104,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
   // ── Preview tab state ──
   const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit')
+  const [imageSize, setImageSize] = useState('400')
 
   const stepKey = STEP_KEYS[docType]
   const propContent = steps[stepKey] || ''
@@ -157,9 +158,44 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     }
   }, [localContent])
 
+  // ── Inline /api/logos/* references as data URIs for offline HTML ──
+  const inlineLogos = useCallback(async (html: string): Promise<string> => {
+    const regex = /src="(\/api\/logos\/[^"]+)"/g
+    const matches = [...html.matchAll(regex)]
+    if (matches.length === 0) return html
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+    let out = html
+    for (const m of matches) {
+      const url = m[1]
+      try {
+        const resp = await fetch(url, { headers })
+        if (!resp.ok) continue
+        const blob = await resp.blob()
+        const dataUri = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = () => reject(reader.error)
+          reader.readAsDataURL(blob)
+        })
+        out = out.split(`src="${url}"`).join(`src="${dataUri}"`)
+      } catch {
+        // keep original URL if fetch fails
+      }
+    }
+    return out
+  }, [])
+
   // ── Print ──
-  const handlePrint = useCallback(() => {
+  const handlePrint = useCallback(async () => {
     if (!renderedHtml) return
+    // Open synchronously within the click gesture to avoid popup blocking
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (!w) return
+    let html = renderedHtml
+    try {
+      html = await inlineLogos(renderedHtml)
+    } catch { /* keep original */ }
     const doc = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -170,20 +206,21 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
 @media print { body { max-width:none; padding:0; } }
 </style>
 </head>
-<body><div class="md-preview">${renderedHtml}</div></body>
+<body><div class="md-preview">${html}</div></body>
 </html>`
-    const w = window.open('', '_blank', 'width=900,height=700')
-    if (w) {
-      w.document.write(doc)
-      w.document.close()
-      w.focus()
-      w.print()
-    }
-  }, [renderedHtml, docType])
+    w.document.write(doc)
+    w.document.close()
+    w.focus()
+    w.print()
+  }, [renderedHtml, docType, inlineLogos])
 
   // ── Download as self-contained HTML ──
-  const handleDownloadHtml = useCallback(() => {
+  const handleDownloadHtml = useCallback(async () => {
     if (!renderedHtml) return
+    let html = renderedHtml
+    try {
+      html = await inlineLogos(renderedHtml)
+    } catch { /* keep original */ }
     const doc = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -193,7 +230,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
 <style>${PREVIEW_CSS}</style>
 </head>
 <body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-<div class="md-preview">${renderedHtml}</div>
+<div class="md-preview">${html}</div>
 </body>
 </html>`
     const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
@@ -203,7 +240,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     a.download = `${DOC_LABELS[docType]}.html`
     a.click()
     URL.revokeObjectURL(url)
-  }, [renderedHtml, docType])
+  }, [renderedHtml, docType, inlineLogos])
 
   // ── Generate (streaming with progress) ──
   const handleGenerate = useCallback(async () => {
@@ -297,36 +334,37 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     await onRefresh()
   }, [projectId, stepKey, onRefresh])
 
-  // ── Insert local image as base64 at cursor ──
-  const handleInsertImage = (file: File) => {
+  // ── Insert image via backend upload (URL reference, no base64 in textarea) ──
+  const handleInsertImage = async (file: File) => {
     if (file.size > IMG_MAX_BYTES) {
       modal.toast('图片超过 2MB，请压缩后再插入', 'error')
       return
     }
-    const reader = new FileReader()
-    reader.onload = () => {
-      const uri = typeof reader.result === 'string' ? reader.result : ''
-      if (!uri.startsWith('data:image/')) {
-        modal.toast('不是有效的图片文件', 'error')
+    try {
+      const res = await api.uploadLogo(file)
+      if (res == null || !res.url) {
+        modal.toast('上传失败：未返回图片地址', 'error')
         return
       }
+      const width = parseInt(imageSize, 10)
+      const widthAttr = width > 0 ? ` width="${width}"` : ''
+      const snippet = `<img src="${res.url}"${widthAttr} alt="图片">`
       const ta = taRef.current
       const start = ta ? ta.selectionStart : localContent.length
       const end = ta ? ta.selectionEnd : localContent.length
-      const snippet = `![图片](${uri})`
       const next = localContent.slice(0, start) + snippet + localContent.slice(end)
       setLocalContent(next)
       api.saveStep(projectId, stepKey, next)
-      modal.toast('图片已插入（自包含保存，下载 HTML 离线可见）', 'success')
+      modal.toast('图片已插入', 'success')
       requestAnimationFrame(() => {
         if (!ta) return
         ta.focus()
         const pos = start + snippet.length
         ta.setSelectionRange(pos, pos)
       })
+    } catch (e: any) {
+      modal.toast('图片上传失败: ' + (e?.message || e), 'error')
     }
-    reader.onerror = () => modal.toast('读取图片失败', 'error')
-    reader.readAsDataURL(file)
   }
 
   // ── Save to project file ──
@@ -467,13 +505,21 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
 
       {viewMode === 'edit' ? (
         <>
-          <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
             <button className="btn btn-ghost btn-sm" type="button"
-              title="插入本地图片（≤2MB，自动内嵌）"
+              title="插入图片（上传后以链接引用，可设宽度）"
               style={{ fontSize: 11, padding: '2px 8px' }}
               onClick={() => imgRef.current?.click()}>
               <SvgIcon name="image" size={12} /> 插入图片
             </button>
+            <input
+              type="number" min={0} step={10} value={imageSize}
+              onChange={e => setImageSize(e.target.value)}
+              placeholder="原图"
+              title="图片宽度（px，留空=原图）"
+              style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+            />
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
             <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
           </div>
