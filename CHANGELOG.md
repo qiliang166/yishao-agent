@@ -1,5 +1,10 @@
 ﻿# 更新日志
 
+## 2026-08-18
+
+- feat: export/import full data package (db + exports + downloads) for one-click deployment
+- chore: update build stamp after booklet batch ops (4b02e25)
+
 ## 2026-08-17
 
 - feat: batch recommend/delete/download for booklet sections
