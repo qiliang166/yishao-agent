@@ -304,6 +304,30 @@ async def startup_batch_scheduler():
         pass
     print(f"[batch-scheduler] Initialized on port {port}", flush=True)
 
+
+@app.on_event("startup")
+async def startup_backfill_project_items():
+    """Ensure every existing project owns its full set of project_items.
+
+    Self-heals projects created before column_configs finished seeding (a
+    frozen-mode startup path bug could leave column/speech/tts items uncreated,
+    which downstream outline/structure stages read as an empty skill template).
+    Idempotent — _init_project_items_from_factory skips items that already exist.
+    """
+    try:
+        from database import get_db
+        db = get_db()
+        try:
+            rows = db.execute("SELECT id, workspace_id FROM projects").fetchall()
+            projs = [(r["id"], r["workspace_id"]) for r in rows]
+        finally:
+            db.close()
+        for pid, wid in projs:
+            _init_project_items_from_factory(pid, wid)
+    except Exception:
+        pass
+
+
 app.include_router(prompts_router)
 app.include_router(users_router)
 app.include_router(prompt_studio_router)
@@ -5108,6 +5132,26 @@ def api_ppt_outline(req: PPTPlanRequest, user=require_perm("stage3.generate")):
             cfg = db.execute(
                 "SELECT prompt, skill, config_json FROM project_items WHERE id = ?",
                 (f"pi-{project_id}-{column_id}",)).fetchone()
+            if cfg is None:
+                # Self-heal: the per-project column item was never created (e.g. the
+                # project was created before column_configs finished seeding at startup).
+                # Fall back to the workspace/global column_configs row so the skill
+                # template is never silently empty.
+                ws_row = db.execute(
+                    "SELECT workspace_id FROM projects WHERE id = ?", (project_id,)).fetchone()
+                ws_id = ws_row["workspace_id"] if ws_row else None
+                cc = None
+                if ws_id:
+                    cc = db.execute(
+                        "SELECT prompt, skill, rules AS config_json FROM column_configs "
+                        "WHERE workspace_id = ? AND column_id = ? ORDER BY sort_order LIMIT 1",
+                        (ws_id, column_id)).fetchone()
+                if cc is None:
+                    cc = db.execute(
+                        "SELECT prompt, skill, rules AS config_json FROM column_configs "
+                        "WHERE workspace_id IS NULL AND column_id = ? ORDER BY sort_order LIMIT 1",
+                        (column_id,)).fetchone()
+                cfg = cc
 
         column_prompt = cfg["prompt"] or "" if cfg else ""
         column_skill = cfg["skill"] or "" if cfg else ""

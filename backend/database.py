@@ -791,7 +791,7 @@ def init_db():
         # Seed column configs if empty (loaded from JSON — single source of truth)
         existing = conn.execute("SELECT COUNT(*) FROM column_configs WHERE workspace_id IS NULL").fetchone()[0]
         if existing == 0:
-            _seed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "default_workspace_configs.json")
+            _seed_path = os.path.join(BASE_DIR, "resources", "default_workspace_configs.json")
             if os.path.exists(_seed_path):
                 import json as _json_seed
                 import uuid as _uuid_seed
@@ -925,7 +925,7 @@ def init_db():
         try:
             sc_count = conn.execute("SELECT COUNT(*) FROM speech_configs WHERE workspace_id IS NULL").fetchone()[0]
             if sc_count == 0:
-                _seed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "default_workspace_configs.json")
+                _seed_path = os.path.join(BASE_DIR, "resources", "default_workspace_configs.json")
                 if os.path.exists(_seed_path):
                     import json as _json_seed2
                     import uuid as _uuid_seed2
@@ -956,7 +956,7 @@ def init_db():
         try:
             tc_count = conn.execute("SELECT COUNT(*) FROM tts_configs WHERE workspace_id IS NULL").fetchone()[0]
             if tc_count == 0:
-                _seed_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "default_workspace_configs.json")
+                _seed_path = os.path.join(BASE_DIR, "resources", "default_workspace_configs.json")
                 if os.path.exists(_seed_path):
                     import json as _json_seed3
                     import uuid as _uuid_seed3
@@ -974,7 +974,7 @@ def init_db():
         try:
             import json as _json
             import uuid as _uuid
-            _config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "resources", "default_workspace_configs.json")
+            _config_path = os.path.join(BASE_DIR, "resources", "default_workspace_configs.json")
             if os.path.exists(_config_path):
                 _ws_row = conn.execute("SELECT id FROM workspaces WHERE name LIKE '%食谱%' LIMIT 1").fetchone()
                 if _ws_row:
