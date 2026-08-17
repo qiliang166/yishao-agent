@@ -194,7 +194,13 @@ export default function MemberDownloadsPage() {
     if (nonEmpty.length === 1) {
       const { project, files } = nonEmpty[0]
       if (files.length === 1) {
-        await api.downloadWithName(files[0].download_url, files[0].display_name || files[0].filename)
+        const f = files[0]
+        const dlName = f.display_name || f.filename
+        if (/\.(txt|md)$/i.test(f.filename || '')) {
+          await api.downloadDocAsHtml(f.download_url, dlName)
+        } else {
+          await api.downloadWithName(f.download_url, dlName)
+        }
       } else {
         await api.downloadSelectedFiles(project.id, files.map(f => ({
           filename: f.filename,

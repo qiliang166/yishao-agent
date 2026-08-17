@@ -398,31 +398,25 @@ export default function ProjectDashboard() {
     try {
       const check = await api.canDownload([{ project_id: expandedProject, filename: f.filename }])
       if (check == null) { modal.toast('操作失败：服务器未确认', 'error'); return }
-      if (check.is_admin) {
+      const doDownload = async () => {
         const dlName = f.display_name || f.filename
-        if (f.download_url) {
+        if (/\.(txt|md)$/i.test(f.filename || '')) {
+          const url = f.download_url || `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`
+          await api.downloadDocAsHtml(url, dlName)
+        } else if (f.download_url) {
           await api.downloadWithName(f.download_url, dlName)
         } else {
           await api.downloadWithName(
             `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`, dlName)
         }
-        return
       }
+      if (check.is_admin) { await doDownload(); return }
       if (check.need_unlock && check.need_unlock.length > 0) {
         setUnlockData(check)
         setUnlockPendingFiles([f])
         return
       }
-      if (check.already_unlocked && check.already_unlocked.length > 0) {
-        const dlName = f.display_name || f.filename
-        if (f.download_url) {
-          await api.downloadWithName(f.download_url, dlName)
-        } else {
-          await api.downloadWithName(
-            `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(expandedProject)}`, dlName)
-        }
-        return
-      }
+      if (check.already_unlocked && check.already_unlocked.length > 0) { await doDownload(); return }
       modal.toast('无法下载：请联系管理员', 'error')
     } catch (e: any) { modal.toast(`下载失败: ${e?.message || e}`, 'error') }
   }

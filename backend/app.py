@@ -450,6 +450,21 @@ def api_serve_export_file(run_id: str, filename: str, request: Request, project_
             from urllib.parse import quote
             encoded = quote(dl_name, safe='')
             headers['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded}"
+    # 下载内嵌：课件 HTML 带 ?inline=1 时，把本地图片引用转 base64，离线打开图片可见
+    if request.query_params.get("inline") == "1" and filepath.endswith('.html'):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception:
+            content = None
+        if content is not None:
+            from urllib.parse import quote
+            content = _inline_images_in_html(content, os.path.dirname(filepath))
+            dl_name = _ppt_display_name(os.path.basename(filepath))
+            cd = f"attachment; filename*=UTF-8''{quote(dl_name, safe='')}"
+            return Response(content, media_type="text/html; charset=utf-8",
+                            headers={"Content-Disposition": cd,
+                                     "Cache-Control": "no-cache, no-store, must-revalidate"})
     return _file_response(filepath, headers=headers)
 
 import re
@@ -472,6 +487,62 @@ def _file_response(filepath: str, **kwargs) -> FileResponse:
         if ext in _text_charset_exts and "charset" not in media_type:
             media_type = f"{media_type}; charset=utf-8"
     return FileResponse(filepath, media_type=media_type, **kwargs)
+
+
+_IMAGE_MEDIA = {
+    ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".gif": "image/gif", ".svg": "image/svg+xml", ".webp": "image/webp",
+    ".ico": "image/x-icon",
+}
+
+
+def _image_data_uri(path: str) -> str:
+    """读本地图片文件 → base64 data URI；扩展名不支持或文件不存在返回空串。"""
+    ext = os.path.splitext(path)[1].lower()
+    if ext not in _IMAGE_MEDIA:
+        return ""
+    if not os.path.isfile(path):
+        return ""
+    try:
+        import base64
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("ascii")
+        return f"data:{_IMAGE_MEDIA[ext]};base64,{b64}"
+    except Exception:
+        return ""
+
+
+_IMG_SRC_RE = re.compile(r'(<img\b[^>]*?\bsrc\s*=\s*)("([^"]*)"|\'([^\']*)\')', re.I | re.S)
+
+
+def _inline_images_in_html(html: str, run_dir: str | None = None) -> str:
+    """把 HTML 里的本地图片引用内联为 base64（下载产物自包含）。
+
+    处理两类：/api/logos/{fn}（读 LOGO_DIR）与 images/{fn} 相对路径（读 run_dir）。
+    http(s)/data:/#/绝对路径跳过；文件不存在保留原引用，不静默丢图。
+    """
+    if not html:
+        return html
+
+    def _resolve(src: str) -> str:
+        if src.startswith("/api/logos/"):
+            return _image_data_uri(os.path.join(LOGO_DIR, os.path.basename(src)))
+        if src.startswith(("http://", "https://", "data:", "#", "/")):
+            return ""
+        if run_dir:
+            norm = os.path.normpath(src)
+            if norm.startswith("..") or os.path.isabs(norm):
+                return ""
+            return _image_data_uri(os.path.join(run_dir, norm))
+        return ""
+
+    def _sub(m):
+        quote = m.group(2)[0]
+        src = m.group(2)[1:-1]
+        uri = _resolve(src)
+        return f'{m.group(1)}{quote}{uri}{quote}' if uri else m.group(0)
+
+    return _IMG_SRC_RE.sub(_sub, html)
 
 
 def _get_global_save_path() -> str:
@@ -7536,6 +7607,24 @@ def _incr_view_count(project_id: str, user_id: str, filename: str, request: Requ
         traceback.print_exc()
 
 
+def _serve_doc_with_inline(filepath: str, download_name: str):
+    """标准文档（.txt/.md）下载：把 /api/logos/ 引用内联 base64，前端 marked 渲染后图片可见。"""
+    ext = os.path.splitext(filepath)[1].lower()
+    if ext in (".txt", ".md"):
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+        except Exception:
+            content = None
+        if content is not None and "/api/logos/" in content:
+            from urllib.parse import quote
+            content = _inline_images_in_html(content, None)
+            cd = f"attachment; filename*=UTF-8''{quote(download_name, safe='')}"
+            return Response(content, media_type="text/plain; charset=utf-8",
+                            headers={"Content-Disposition": cd})
+    return _file_response(filepath, filename=download_name)
+
+
 @app.get("/api/download/{filename}")
 def download_file(filename: str, request: Request, project_id: str = None, name: str = None):
     download_name = name or filename
@@ -7586,14 +7675,14 @@ def download_file(filename: str, request: Request, project_id: str = None, name:
             proj_dir = resolve_project_storage(project_id, auto_create=False)
             filepath = os.path.join(proj_dir, filename)
             if os.path.exists(filepath):
-                return _file_response(filepath, filename=download_name)
+                return _serve_doc_with_inline(filepath, download_name)
         except Exception:
             pass
 
     filepath = os.path.join(EXPORT_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="File not found")
-    return _file_response(filepath, filename=download_name)
+    return _serve_doc_with_inline(filepath, download_name)
 
 
 # ── TTS ──

@@ -320,7 +320,8 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
     try {
       const token = localStorage.getItem('auth_token')
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-      const resp = await fetch(previewUrl + '?_t=' + Date.now(), { headers })
+      const sep = previewUrl.includes('?') ? '&' : '?'
+      const resp = await fetch(`${previewUrl}${sep}inline=1&_t=${Date.now()}`, { headers })
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
       let html = await resp.text()
       html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')

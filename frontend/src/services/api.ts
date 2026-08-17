@@ -1,3 +1,5 @@
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { emitAuthEvent } from '../contexts/AuthContext'
 
 const BASE = ''
@@ -683,13 +685,49 @@ export const api = {
     const token = localStorage.getItem('auth_token')
     const fullUrl = url.startsWith('http') ? url : `${BASE}${url}`
     const separator = fullUrl.includes('?') ? '&' : '?'
-    const finalUrl = token ? `${fullUrl}${separator}token=${encodeURIComponent(token)}` : fullUrl
+    let finalUrl = token ? `${fullUrl}${separator}token=${encodeURIComponent(token)}` : fullUrl
+    // 课件 HTML 下载：追加 inline=1 让后端内嵌图片，离线打开图片可见
+    if (/\.html$/i.test(finalUrl.split('?')[0].split('#')[0])) {
+      finalUrl += (finalUrl.includes('?') ? '&' : '?') + 'inline=1'
+    }
     const a = document.createElement('a')
     a.href = finalUrl
     a.download = filename
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
+  },
+  /** 标准文档（.txt/.md）下载：fetch 后端已内嵌图片的 markdown → marked 渲染 → 自包含 .html */
+  downloadDocAsHtml: async (url: string, filename: string) => {
+    const token = localStorage.getItem('auth_token')
+    const fullUrl = url.startsWith('http') ? url : `${BASE}${url}`
+    const separator = fullUrl.includes('?') ? '&' : '?'
+    const finalUrl = token ? `${fullUrl}${separator}token=${encodeURIComponent(token)}` : fullUrl
+    const resp = await fetch(finalUrl)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const md = await resp.text()
+    const html = DOMPurify.sanitize(marked.parse(md) as string)
+    const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    const doc = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(filename)}</title>
+<style>
+body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+img { max-width:100%; height:auto; }
+</style>
+</head>
+<body><div class="md-preview">${html}</div></body>
+</html>`
+    const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
+    const objUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objUrl
+    a.download = filename.replace(/\.(txt|md)$/i, '') + '.html'
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(objUrl)
   },
   downloadAllFiles: (projectId: string) => {
     window.open(`${BASE}/api/projects/${projectId}/download-all`, '_blank')

@@ -483,7 +483,10 @@ function ProjectOutputList({ projectId, projectName, readOnly, canEditOwn }: { p
 
   const downloadSingleFile = async (f: any) => {
     const dlName = f.display_name || f.filename
-    if (f.download_url) {
+    if (/\.(txt|md)$/i.test(f.filename || '')) {
+      const url = f.download_url || `/api/download/${encodeURIComponent(f.filename)}?project_id=${encodeURIComponent(projectId)}`
+      await api.downloadDocAsHtml(url, dlName)
+    } else if (f.download_url) {
       await api.downloadWithName(f.download_url, dlName)
     } else {
       await api.downloadWithName(
@@ -1985,7 +1988,8 @@ export default function ProjectPage() {
     try {
       const token = localStorage.getItem('auth_token')
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
-      const resp = await fetch(plan.previewUrl, { headers })
+      const sep = plan.previewUrl.includes('?') ? '&' : '?'
+      const resp = await fetch(`${plan.previewUrl}${sep}inline=1`, { headers })
       if (!resp.ok) {
         modal.toast(`HTML导出失败: 服务器返回 ${resp.status}`, 'error')
         return

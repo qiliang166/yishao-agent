@@ -535,7 +535,7 @@ def _srcdoc_escape(doc: str) -> str:
     return doc.replace("&", "&amp;").replace('"', "&quot;")
 
 
-def _build_embed_docs(source_html: str, page_size: tuple) -> list:
+def _build_embed_docs(source_html: str, page_size: tuple, run_dir: str | None = None) -> list:
     """把课件 HTML 拆成每页一个自包含 HTML 文档（原样式 + 单页节点，iframe 隔离防互染）。
 
     分页唯一事实源：page-map 缩略图与 render 装配都从这里取页，保证页数一致。
@@ -546,6 +546,9 @@ def _build_embed_docs(source_html: str, page_size: tuple) -> list:
     docs = []
     for wrapper in wrappers:
         page = _sanitize_fragment(wrapper)
+        if run_dir:
+            from app import _inline_images_in_html
+            page = _inline_images_in_html(page, run_dir)
         doc = (
             "<!DOCTYPE html><html><head><meta charset=\"UTF-8\">"
             f"{styles}"
@@ -557,15 +560,18 @@ def _build_embed_docs(source_html: str, page_size: tuple) -> list:
     return docs
 
 
-def _build_embed_srcdocs(source_html: str, page_size: tuple) -> list:
-    return [_srcdoc_escape(d) for d in _build_embed_docs(source_html, page_size)]
+def _build_embed_srcdocs(source_html: str, page_size: tuple, run_dir: str | None = None) -> list:
+    return [_srcdoc_escape(d) for d in _build_embed_docs(source_html, page_size, run_dir)]
 
 
-def _build_fulldoc_doc(source_html: str, page_size: tuple) -> str:
+def _build_fulldoc_doc(source_html: str, page_size: tuple, run_dir: str | None = None) -> str:
     """导入的整页 HTML（无 slide-wrapper 结构）→ 单页自包含 HTML 文档。"""
     styles = _sanitize_fragment(_extract_head_styles(source_html))
     body_match = re.search(r"<body\b[^>]*>(.*?)</body>", source_html, flags=re.S | re.I)
     body = _sanitize_fragment(body_match.group(1) if body_match else source_html)
+    if run_dir:
+        from app import _inline_images_in_html
+        body = _inline_images_in_html(body, run_dir)
     if not body.strip():
         return ""
     w, h = page_size
@@ -577,8 +583,8 @@ def _build_fulldoc_doc(source_html: str, page_size: tuple) -> str:
     )
 
 
-def _build_fulldoc_srcdoc(source_html: str, page_size: tuple) -> str:
-    doc = _build_fulldoc_doc(source_html, page_size)
+def _build_fulldoc_srcdoc(source_html: str, page_size: tuple, run_dir: str | None = None) -> str:
+    doc = _build_fulldoc_doc(source_html, page_size, run_dir)
     return _srcdoc_escape(doc) if doc else ""
 
 
@@ -715,7 +721,12 @@ def render_booklet(booklet: dict, theme: dict) -> str:
                 raise HTTPException(400, f"章节「{ch.get('title', '')}」HTML 内容为空或格式不支持")
             docs = [sd]
         else:
-            docs = _build_embed_srcdocs(ch.get("content") or "", page_size)
+            run_dir = ""
+            if ch.get("source_key"):
+                _idx = _resolve_run_index_html(ch["source_key"])
+                if _idx:
+                    run_dir = os.path.dirname(_idx)
+            docs = _build_embed_srcdocs(ch.get("content") or "", page_size, run_dir or None)
             if not docs:
                 kind = "课件" if book_type == "a4" else "PPT"
                 raise HTTPException(400, f"章节「{ch.get('title', '')}」{kind}内容为空或格式不支持")
@@ -756,7 +767,8 @@ def render_booklet(booklet: dict, theme: dict) -> str:
                     fr = _resolve_footer_right(page_hf.get("footer_right", ""), booklet, title)
                     hf_logo_html = ""
                     if page_hf.get("header_logo_url"):
-                        hf_logo_html = f'<img class="bk-page-header-logo" src="{_esc(page_hf["header_logo_url"])}" alt="">'
+                        _uri = _logo_data_uri(page_hf["header_logo_url"])
+                        hf_logo_html = f'<img class="bk-page-header-logo" src="{_esc(_uri)}" alt="">' if _uri else ""
                     div_cls = "bk-page-header" if page_hf.get("show_divider", True) else "bk-page-header no-divider"
                     hf_html = f'<div class="{div_cls}"><span>{hf_logo_html}{hl}</span><span>{hc}</span><span>{hr}</span></div>'
                     hf_html += f'<div class="bk-page-footer"><span>{fl}</span><span>{fc}</span><span>{fr}</span></div>'
