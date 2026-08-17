@@ -2,6 +2,15 @@
 
 ## 2026-08-17
 
+- feat: batch recommend/delete/download for booklet sections
+
+## 2026-08-17
+
+- fix: define missing logger in llm_service + raise max_tokens to 49152
+- chore: update build stamp after image-inline fix (c4cd50c)
+
+## 2026-08-17
+
 - fix: inline local images as base64 for offline downloads
 - chore: update build stamp after frozen-mode column seeding fix (95b8530)
 
