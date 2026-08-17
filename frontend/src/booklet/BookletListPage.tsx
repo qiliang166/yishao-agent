@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
+import JSZip from 'jszip'
 import SvgIcon from '../components/SvgIcon'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
@@ -18,6 +19,21 @@ const triggerHtmlDownload = (html: string, filename: string) => {
   a.remove()
   URL.revokeObjectURL(url)
 }
+
+const sanitizeFileName = (name: string) => name.replace(/[\\/:*?"<>|]/g, '_').trim() || '未命名'
+
+const triggerBlobDownload = (blob: Blob, filename: string) => {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
+}
+
+type Section = 'rec' | 'mine' | 'user'
 
 export default function BookletListPage() {
   const navigate = useNavigate()
@@ -44,6 +60,11 @@ export default function BookletListPage() {
   const [recPage, setRecPage] = useState(1)
   const [minePage, setMinePage] = useState(1)
   const [userPage, setUserPage] = useState(1)
+  const [selRec, setSelRec] = useState<Set<string>>(new Set())
+  const [selMine, setSelMine] = useState<Set<string>>(new Set())
+  const [selUser, setSelUser] = useState<Set<string>>(new Set())
+  const [batchBusy, setBatchBusy] = useState(false)
+  const [batchDownloading, setBatchDownloading] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -196,6 +217,137 @@ export default function BookletListPage() {
     } finally { actionLock.current = false }
   }
 
+  const toggleSelect = (sel: Set<string>, setSel: (s: Set<string>) => void, id: string) => {
+    const next = new Set(sel)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSel(next)
+  }
+
+  const toggleAll = (ids: string[], sel: Set<string>, setSel: (s: Set<string>) => void) => {
+    if (ids.length > 0 && ids.every(id => sel.has(id))) setSel(new Set())
+    else setSel(new Set(ids))
+  }
+
+  const selOf = (section: Section): { sel: Set<string>; setSel: (s: Set<string>) => void } => {
+    if (section === 'rec') return { sel: selRec, setSel: setSelRec }
+    if (section === 'mine') return { sel: selMine, setSel: setSelMine }
+    return { sel: selUser, setSel: setSelUser }
+  }
+
+  const sectionItems = (section: Section): BookletSummary[] =>
+    section === 'rec' ? recommended : section === 'mine' ? myBooklets : userBooklets
+
+  const handleBatchRecommend = async (section: Section) => {
+    const { sel, setSel } = selOf(section)
+    const flag = section !== 'rec'
+    const ids = sectionItems(section).filter(b => sel.has(b.id)).map(b => b.id)
+    if (ids.length === 0) { toast('请先勾选册子', 'error'); return }
+    setBatchBusy(true)
+    try {
+      const r = await api.batchRecommendBooklets(ids, flag)
+      if (r != null) {
+        const skipped = r.skipped || 0
+        toast(`已${flag ? '推荐' : '取消推荐'} ${r.updated || 0} 本${skipped > 0 ? `，${skipped} 本无权限跳过` : ''}`, 'success')
+        setSel(new Set())
+        load()
+      }
+    } catch (e: any) {
+      toast(`批量${flag ? '推荐' : '取消推荐'}失败: ${e?.message || e}`, 'error')
+    } finally {
+      setBatchBusy(false)
+    }
+  }
+
+  const handleBatchDelete = async (section: Section) => {
+    const { sel, setSel } = selOf(section)
+    const ids = sectionItems(section).filter(b => sel.has(b.id)).map(b => b.id)
+    if (ids.length === 0) { toast('请先勾选册子', 'error'); return }
+    const ok = await confirm(`确定删除选中的 ${ids.length} 本册子？删除后无法恢复。`)
+    if (!ok) return
+    setBatchBusy(true)
+    try {
+      const r = await api.batchDeleteBooklets(ids)
+      if (r != null) {
+        const skipped = r.skipped || 0
+        toast(`已删除 ${r.deleted || 0} 本${skipped > 0 ? `，${skipped} 本无权限跳过` : ''}`, 'success')
+        setSel(new Set())
+        load()
+      }
+    } catch (e: any) {
+      toast(`批量删除失败: ${e?.message || e}`, 'error')
+    } finally {
+      setBatchBusy(false)
+    }
+  }
+
+  const handleBatchDownload = async (items: BookletSummary[]) => {
+    if (items.length === 0) { toast('请先勾选册子', 'error'); return }
+    setBatchDownloading(true)
+    try {
+      const zip = new JSZip()
+      const usedNames = new Set<string>()
+      let okCount = 0
+      const failed: string[] = []
+      for (const b of items) {
+        try {
+          const html = await api.downloadBooklet(b.id)
+          let fileName = sanitizeFileName(b.title)
+          if (usedNames.has(fileName)) {
+            let i = 2
+            while (usedNames.has(`${fileName}-${i}`)) i++
+            fileName = `${fileName}-${i}`
+          }
+          usedNames.add(fileName)
+          zip.file(`${fileName}.html`, html)
+          okCount++
+        } catch (e: any) {
+          failed.push(`${b.title}: ${e?.message || e}`)
+        }
+      }
+      if (okCount === 0) {
+        toast(`批量下载失败：${failed[0] || '没有成功下载任何一本'}`, 'error')
+        return
+      }
+      const blob = await zip.generateAsync({ type: 'blob' })
+      triggerBlobDownload(blob, `电子成册批量下载-${okCount}本.zip`)
+      toast(failed.length > 0 ? `已打包 ${okCount} 本，${failed.length} 本失败（${failed[0]}）` : `已打包 ${okCount} 本`, 'success')
+    } catch (e: any) {
+      toast(`批量下载失败: ${e?.message || e}`, 'error')
+    } finally {
+      setBatchDownloading(false)
+    }
+  }
+
+  const renderBatchToolbar = (section: Section, items: BookletSummary[], sel: Set<string>, setSel: (s: Set<string>) => void) => {
+    const allIds = items.map(b => b.id)
+    const allSelected = allIds.length > 0 && allIds.every(id => sel.has(id))
+    const count = items.filter(b => sel.has(b.id)).length
+    const recLabel = section === 'rec' ? '批量取消推荐' : '批量推荐'
+    const showDelete = section === 'mine' ? true : canEditAll
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12 }}>
+          <input type="checkbox" checked={allSelected} onChange={() => toggleAll(allIds, sel, setSel)} />
+          全选
+        </label>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>已选 {count} 本</span>
+        {isAdmin && (
+          <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={batchBusy || count === 0}
+            onClick={() => handleBatchRecommend(section)}>{recLabel}</button>
+        )}
+        {showDelete && (
+          <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={batchBusy || count === 0}
+            onClick={() => handleBatchDelete(section)}><SvgIcon name="trash" size={14} /> 批量删除</button>
+        )}
+        <button type="button" className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} disabled={batchDownloading || count === 0}
+          onClick={() => handleBatchDownload(items.filter(b => sel.has(b.id)))}>
+          {batchDownloading ? '打包中...' : '批量下载'}
+        </button>
+      </div>
+    )
+  }
+
   const renderThumb = (b: BookletSummary) => {
     const isPpt = b.book_type === 'ppt'
     const pageW = isPpt ? 1280 : 794
@@ -238,11 +390,14 @@ export default function BookletListPage() {
     )
   }
 
-  const renderCard = (b: BookletSummary, isRec: boolean) => {
+  const renderCard = (b: BookletSummary, isRec: boolean, sel: Set<string>, setSel: (s: Set<string>) => void) => {
     const isDownloading = downloadingId === b.id
     const canModify = canEditAll || b.owner_id === userId
     return (
-    <div key={b.id} className="card" style={{ display: 'flex', flexDirection: 'row', padding: 0, overflow: 'hidden', gap: 0 }}>
+    <div key={b.id} className="card" style={{ display: 'flex', flexDirection: 'row', padding: 0, overflow: 'hidden', gap: 0, position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 6, left: 6, zIndex: 3 }} onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" checked={sel.has(b.id)} onChange={() => toggleSelect(sel, setSel, b.id)} style={{ width: 15, height: 15, cursor: 'pointer' }} />
+      </div>
       {renderThumb(b)}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '10px 12px', minWidth: 0 }}>
         <div style={{ cursor: 'pointer', flex: 1 }} onClick={() => handleCardClick(b)}>
@@ -343,8 +498,9 @@ export default function BookletListPage() {
           {recommended.length > 0 && (
             <div style={{ marginBottom: 24 }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}><SvgIcon name="star" size={14} /> 推荐画册</h3>
+              {renderBatchToolbar('rec', recommended, selRec, setSelRec)}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                {recPg.items.map(b => renderCard(b, true))}
+                {recPg.items.map(b => renderCard(b, true, selRec, setSelRec))}
               </div>
               {renderPager(recPg.cur, recPg.totalPages, recommended.length, setRecPage)}
             </div>
@@ -354,8 +510,9 @@ export default function BookletListPage() {
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}>
                 <SvgIcon name="file-text" size={14} /> 我的画册
               </h3>
+              {renderBatchToolbar('mine', myBooklets, selMine, setSelMine)}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {minePg.items.map(b => renderCard(b, false))}
+                {minePg.items.map(b => renderCard(b, false, selMine, setSelMine))}
               </div>
               {renderPager(minePg.cur, minePg.totalPages, myBooklets.length, setMinePage)}
             </div>
@@ -363,8 +520,9 @@ export default function BookletListPage() {
           {userBooklets.length > 0 && (
             <div>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 10 }}><SvgIcon name="users" size={14} /> 用户画册</h3>
+              {renderBatchToolbar('user', userBooklets, selUser, setSelUser)}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-                {userPg.items.map(b => renderCard(b, false))}
+                {userPg.items.map(b => renderCard(b, false, selUser, setSelUser))}
               </div>
               {renderPager(userPg.cur, userPg.totalPages, userBooklets.length, setUserPage)}
             </div>

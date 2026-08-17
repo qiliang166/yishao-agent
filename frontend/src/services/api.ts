@@ -1593,6 +1593,10 @@ img { max-width:100%; height:auto; }
     request(`/api/booklets/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }),
   deleteBooklet: (id: string) =>
     request(`/api/booklets/${id}`, { method: 'DELETE' }),
+  batchRecommendBooklets: (ids: string[], isRecommended: boolean) =>
+    request('/api/booklets/batch-recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booklet_ids: ids, is_recommended: isRecommended }) }),
+  batchDeleteBooklets: (ids: string[]) =>
+    request('/api/booklets/batch-delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booklet_ids: ids }) }),
   bookletAvailableContent: (bookType: string, workspaceId?: string, categoryId?: string) => {
     const params = [`book_type=${encodeURIComponent(bookType)}`]
     if (workspaceId) params.push(`workspace_id=${encodeURIComponent(workspaceId)}`)

@@ -1764,3 +1764,67 @@ def delete_booklet(booklet_id: str, request: Request):
         return {"ok": True}
     finally:
         db.close()
+
+
+# ── API #6 批量推荐 / 批量取消推荐 ──
+
+
+@router.post("/batch-recommend")
+def batch_recommend_booklets(req: dict, request: Request):
+    user = _require_user(request)
+    if not _is_admin(user):
+        raise HTTPException(403, "仅管理员可设置推荐状态")
+    ids = req.get("booklet_ids") or []
+    if not ids:
+        raise HTTPException(400, "booklet_ids required")
+    is_recommended = 1 if req.get("is_recommended") else 0
+    db = get_db()
+    try:
+        ok_ids = []
+        skipped = 0
+        for bid in ids:
+            try:
+                _get_booklet_or_403(db, bid, user)
+                ok_ids.append(bid)
+            except HTTPException:
+                skipped += 1
+        if not ok_ids:
+            raise HTTPException(403, "所选册子均无权操作")
+        placeholders = ",".join(["?"] * len(ok_ids))
+        db.execute(
+            f"UPDATE booklets SET is_recommended=?, updated_at=CURRENT_TIMESTAMP WHERE id IN ({placeholders})",
+            [is_recommended] + ok_ids,
+        )
+        db.commit()
+        return {"ok": True, "updated": len(ok_ids), "skipped": skipped}
+    finally:
+        db.close()
+
+
+# ── API #7 批量删除 ──
+
+
+@router.post("/batch-delete")
+def batch_delete_booklets(req: dict, request: Request):
+    user = _require_user(request)
+    ids = req.get("booklet_ids") or []
+    if not ids:
+        raise HTTPException(400, "booklet_ids required")
+    db = get_db()
+    try:
+        ok_ids = []
+        skipped = 0
+        for bid in ids:
+            try:
+                _get_booklet_or_403(db, bid, user)
+                ok_ids.append(bid)
+            except HTTPException:
+                skipped += 1
+        if not ok_ids:
+            raise HTTPException(403, "所选册子均无权操作")
+        placeholders = ",".join(["?"] * len(ok_ids))
+        db.execute(f"DELETE FROM booklets WHERE id IN ({placeholders})", ok_ids)
+        db.commit()
+        return {"ok": True, "deleted": len(ok_ids), "skipped": skipped}
+    finally:
+        db.close()
