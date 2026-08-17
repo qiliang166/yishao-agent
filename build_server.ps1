@@ -43,22 +43,28 @@ if (Test-Path $lastBuildFile) {
     $lastCommit = (Get-Content $lastBuildFile -Raw).Trim()
 }
 if ($lastCommit -and $commit) {
-    # git emits UTF-8; default console codepage (GBK) would mangle Chinese commit subjects
-    $prevEnc = [Console]::OutputEncoding
-    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-    $newLog = git log "${lastCommit}..${commit}" --format="- %s" 2>$null
-    [Console]::OutputEncoding = $prevEnc
-    if ($newLog) {
-        $dateHeader = (Get-Date).ToString("yyyy-MM-dd")
-        $entry = "`n## $dateHeader`n`n" + ($newLog -join "`n") + "`n"
-        $existing = if (Test-Path "$root\CHANGELOG.md") { [System.IO.File]::ReadAllText("$root\CHANGELOG.md", [System.Text.Encoding]::UTF8) } else { "# Changelog`n" }
-        # Insert after the title line
-        $lines = $existing -split "`n"
-        $newContent = $lines[0] + "`n" + $entry + ($lines[1..$lines.Length] -join "`n")
-        [System.IO.File]::WriteAllText("$root\CHANGELOG.md", $newContent.TrimEnd() + "`n", [System.Text.Encoding]::UTF8)
-        Write-Host "  CHANGELOG: appended commits since $($lastCommit.Substring(0,7))"
+    # Only diff when the previous commit still exists (history may have been rewritten by filter-repo)
+    git cat-file -e "${lastCommit}^{commit}" 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "  CHANGELOG: previous commit $($lastCommit.Substring(0,7)) no longer in history (rewritten), skipping"
     } else {
-        Write-Host "  CHANGELOG: no new commits since last build"
+        # git emits UTF-8; default console codepage (GBK) would mangle Chinese commit subjects
+        $prevEnc = [Console]::OutputEncoding
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $newLog = git log "${lastCommit}..${commit}" --format="- %s" 2>$null
+        [Console]::OutputEncoding = $prevEnc
+        if ($newLog) {
+            $dateHeader = (Get-Date).ToString("yyyy-MM-dd")
+            $entry = "`n## $dateHeader`n`n" + ($newLog -join "`n") + "`n"
+            $existing = if (Test-Path "$root\CHANGELOG.md") { [System.IO.File]::ReadAllText("$root\CHANGELOG.md", [System.Text.Encoding]::UTF8) } else { "# Changelog`n" }
+            # Insert after the title line
+            $lines = $existing -split "`n"
+            $newContent = $lines[0] + "`n" + $entry + ($lines[1..$lines.Length] -join "`n")
+            [System.IO.File]::WriteAllText("$root\CHANGELOG.md", $newContent.TrimEnd() + "`n", [System.Text.Encoding]::UTF8)
+            Write-Host "  CHANGELOG: appended commits since $($lastCommit.Substring(0,7))"
+        } else {
+            Write-Host "  CHANGELOG: no new commits since last build"
+        }
     }
 } elseif (-not $lastCommit) {
     Write-Host "  CHANGELOG: first build for this repo, no previous stamp"
