@@ -2,6 +2,11 @@
 
 ## 2026-08-17
 
+- fix: inline local images as base64 for offline downloads
+- chore: update build stamp after frozen-mode column seeding fix (95b8530)
+
+## 2026-08-17
+
 - fix: seed column_configs via BASE_DIR in frozen EXE + self-heal missing column items
 
 ## 2026-08-16
