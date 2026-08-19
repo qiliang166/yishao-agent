@@ -2,6 +2,11 @@
 
 ## 2026-08-20
 
+- fix: slide regenerate honors selected model instead of defaulting to first provider model
+- chore: update build stamp after white-bg fix (60df5d9)
+
+## 2026-08-20
+
 - fix: stop full-deck hex enforcement from corrupting :root CSS vars
 - chore: update build stamp after splice partial-deck fix (00a08d6)
 
