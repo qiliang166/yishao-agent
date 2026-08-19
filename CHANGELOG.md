@@ -2,6 +2,11 @@
 
 ## 2026-08-20
 
+- fix: stop full-deck hex enforcement from corrupting :root CSS vars
+- chore: update build stamp after splice partial-deck fix (00a08d6)
+
+## 2026-08-20
+
 - fix: splice applies fragment-only deck, not full regenerated deck
 - chore: update build stamp after apply split-page splice fix (12f2260)
 
