@@ -6357,7 +6357,8 @@ def _estimate_block_height(block_html: str) -> int:
     for hm in _re.findall(r'height:\s*(\d+)px', block_html):
         h += int(hm)
 
-    # Table rows
+    # Table rows — the row-based estimate already accounts for per-cell padding;
+    # return here so the padding loop below doesn't double-count each cell.
     rows = len(_re.findall(r'<tr\b', block_html))
     if rows > 0:
         pad = 14
@@ -6365,6 +6366,7 @@ def _estimate_block_height(block_html: str) -> int:
         if pm:
             pad = int(pm.group(1))
         h = max(h, rows * (pad * 2 + 16))
+        return max(h, 40)
 
     # Text content (rough)
     text = _re.sub(r'<[^>]+>', '', block_html).strip()
@@ -6467,50 +6469,11 @@ def _extract_content_blocks(inner_html: str) -> list[str]:
     return blocks
 
 
-def _outer_container_inner_span(html: str):
-    """Return (inner_start, inner_end) of the outermost div/section, or None.
-
-    Used for document-flow A4 pages (col3) that carry no position:absolute
-    content container — the whole page div is the split region.
-    """
-    first_div = html.find('<div')
-    first_sec = html.find('<section')
-    candidates = [p for p in (first_div, first_sec) if p >= 0]
-    if not candidates:
-        return None
-    start = min(candidates)
-    if first_div >= 0 and (first_sec < 0 or first_div <= first_sec):
-        tag = 'div'
-    else:
-        tag = 'section'
-    gt = html.find('>', start)
-    if gt < 0:
-        return None
-    inner_start = gt + 1
-    open_pat = f'<{tag}'
-    close_pat = f'</{tag}>'
-    depth = 0
-    pos = start
-    while pos < len(html):
-        no = html.find(open_pat, pos)
-        nc = html.find(close_pat, pos)
-        if nc == -1:
-            return None
-        if no != -1 and no < nc:
-            depth += 1
-            pos = no + len(open_pat)
-        else:
-            depth -= 1
-            if depth == 0:
-                return (inner_start, nc)
-            pos = nc + len(close_pat)
-    return None
-
-
 def _split_table_rows(table_html: str, content_max_h: int) -> list[str]:
     """Split an oversized table into complete <table> fragments that each fit a page.
 
-    The header row (contains <th>) is repeated on every fragment.
+    The header row (contains <th>) is repeated on every fragment, and the
+    <colgroup> (column widths) is preserved on every fragment.
     """
     import re as _re
     rows = _re.findall(r'<tr[^>]*>.*?</tr>', table_html, _re.DOTALL)
@@ -6518,6 +6481,10 @@ def _split_table_rows(table_html: str, content_max_h: int) -> list[str]:
         return [table_html]
     table_open_m = _re.match(r'<table[^>]*>', table_html)
     table_open = table_open_m.group(0) if table_open_m else '<table>'
+    colgroup = ''
+    cgm = _re.search(r'<colgroup>.*?</colgroup>', table_html, _re.DOTALL)
+    if cgm:
+        colgroup = cgm.group(0)
     header = ''
     body_rows = rows
     if rows and '<th' in rows[0].lower():
@@ -6540,7 +6507,7 @@ def _split_table_rows(table_html: str, content_max_h: int) -> list[str]:
         fragments.append(header + '\n' + '\n'.join(cur))
     if not fragments:
         return [table_html]
-    return [table_open + '\n' + p + '\n</table>' for p in fragments]
+    return [table_open + '\n' + colgroup + '\n' + p + '\n</table>' for p in fragments]
 
 
 def _has_oversized_table(html: str, content_max_h: int) -> bool:
@@ -6631,11 +6598,19 @@ def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
                     pos = nc + 6
     else:
         # Document-flow layout (col3 A4): no position:absolute content container.
-        # Treat the outermost div/section's inner content as the split region.
-        span = _outer_container_inner_span(html)
-        if span is None:
+        # The page carries a fixed header (top) + flex content + fixed footer (bottom).
+        # Split any oversized <table> in place, preserving the header/footer chrome
+        # around every continuation page (never fragment header/content/footer apart).
+        table_matches = list(_re.finditer(r'<table\b[^>]*>.*?</table>', html, _re.DOTALL))
+        if not table_matches:
             return [html]
-        content_inner_start, content_end = span
+        big = max(table_matches, key=lambda m: _estimate_block_height(m.group(0)))
+        if _estimate_block_height(big.group(0)) <= content_max_h:
+            return [html]
+        frags = _split_table_rows(big.group(0), content_max_h)
+        if len(frags) <= 1:
+            return [html]
+        return [html[:big.start()] + f + html[big.end():] for f in frags]
 
     if content_end < 0:
         return [html]
