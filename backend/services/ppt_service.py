@@ -6469,13 +6469,17 @@ def _extract_content_blocks(inner_html: str) -> list[str]:
     return blocks
 
 
-def _measure_table_rows_real(table_html: str) -> tuple[float, list[float]]:
-    """Measure a table's real rendered row heights in headless Chromium.
+def _measure_table_rows_real(table_html: str) -> dict:
+    """Measure a table's real rendered rows in headless Chromium.
 
     Row-count estimates are wrong for A4 tables: cell text wraps and changes
     row height, so a 21-row table can fit while a 10-row table overflows. This
-    renders the table with the deck's fonts and column widths and returns
-    (header_height, [body_row_heights]) from actual layout.
+    renders the table with the deck's fonts and column widths and returns the
+    BROWSER-NORMALIZED DOM — which tolerates LLM markup errors that regex
+    cannot (e.g. a missing </tr>; regex silently drops those rows, the browser
+    closes them). Returns:
+        {"header_html": str, "header_h": float,
+         "rows": [{"html": str, "h": float}, ...]}
     """
     from playwright.sync_api import sync_playwright
 
@@ -6506,15 +6510,17 @@ def _measure_table_rows_real(table_html: str) -> tuple[float, list[float]]:
             page.set_content(doc, wait_until="load")
             m = page.evaluate(
                 "() => {"
-                "  const th = document.querySelector('thead');"
+                "  const theadTr = document.querySelector('thead tr');"
                 "  const tb = document.querySelector('tbody');"
+                "  const rows = tb ? Array.from(tb.querySelectorAll('tr')) : [];"
                 "  return {"
-                "    thead: th ? th.getBoundingClientRect().height : 0,"
-                "    rows: tb ? Array.from(tb.querySelectorAll('tr')).map(tr => tr.getBoundingClientRect().height) : []"
+                "    header_html: theadTr ? theadTr.outerHTML : '',"
+                "    header_h: theadTr ? theadTr.getBoundingClientRect().height : 0,"
+                "    rows: rows.map(tr => ({ html: tr.outerHTML, h: tr.getBoundingClientRect().height }))"
                 "  };"
                 "}"
             )
-            return float(m["thead"] or 0), [float(x) for x in (m["rows"] or [])]
+            return m
         finally:
             browser.close()
 
@@ -6527,32 +6533,46 @@ def _split_table_rows(table_html: str, table_max_h: int) -> list[str]:
     the <colgroup> (column widths) is preserved on every fragment.
     """
     import re as _re
-    rows = _re.findall(r'<tr[^>]*>.*?</tr>', table_html, _re.DOTALL)
-    if len(rows) <= 1:
-        return [table_html]
     table_open_m = _re.match(r'<table[^>]*>', table_html)
     table_open = table_open_m.group(0) if table_open_m else '<table>'
     colgroup = ''
     cgm = _re.search(r'<colgroup>.*?</colgroup>', table_html, _re.DOTALL)
     if cgm:
         colgroup = cgm.group(0)
-    header = ''
-    body_rows = rows
-    if rows and '<th' in rows[0].lower():
-        header = rows[0]
-        body_rows = rows[1:]
 
-    # Real rendered heights (cell wrapping makes row-count estimates unreliable).
+    header = ''
+    body_rows: list[str] = []
     header_h = 0.0
     row_heights: list[float] = []
+
+    # Rows come from the BROWSER-NORMALIZED DOM, not a regex: the LLM sometimes
+    # omits a `</tr>`, which a regex silently drops (losing rows), while the
+    # browser tolerantly closes the row. The browser is the source of truth.
     try:
-        header_h, row_heights = _measure_table_rows_real(table_html)
+        m = _measure_table_rows_real(table_html)
+        header = m.get("header_html", '')
+        header_h = float(m.get("header_h", 0.0) or 0.0)
+        body_rows = [r["html"] for r in m.get("rows", [])]
+        row_heights = [float(r["h"]) for r in m.get("rows", [])]
     except Exception:
-        header_h = 0.0
-        row_heights = []
+        m = None
+
+    if not body_rows:
+        # Browser unavailable — fall back to regex (may drop unclosed rows, but
+        # there is no better source without a browser).
+        rows = _re.findall(r'<tr[^>]*>.*?</tr>', table_html, _re.DOTALL)
+        if len(rows) <= 1:
+            return [table_html]
+        if rows and '<th' in rows[0].lower():
+            header = rows[0]
+            body_rows = rows[1:]
+        else:
+            body_rows = rows
+        header_h = _estimate_block_height(header) if header else 0.0
+        row_heights = [_estimate_block_height(r) for r in body_rows]
+
     if not row_heights or len(row_heights) != len(body_rows):
-        # Browser unavailable or measurement mismatch — fall back to estimate.
-        header_h = _estimate_block_height(header) if header else 0
+        header_h = _estimate_block_height(header) if header else 0.0
         row_heights = [_estimate_block_height(r) for r in body_rows]
 
     fragments = []
