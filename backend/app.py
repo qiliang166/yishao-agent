@@ -6039,10 +6039,11 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest, user=require_perm("
 def api_ppt_splice_slides(run_id: str, req: dict, user=require_perm("stage3.generate")):
     """Apply regenerated slides by rebuilding index.html positionally.
 
-    Extracts the regenerated slide wrappers from index_regenerated.html and
-    splices them into index.html at the matching positions. A regenerated slide
-    that split into multiple A4 pages is inserted as multiple wrappers, and all
-    later slides are renumbered (data-seq + page numbers) accordingly.
+    Extracts the regenerated slide wrappers from index_regenerated_partial.html
+    (the fragment-only deck, NOT the full regenerated deck) and splices them into
+    index.html at the matching positions. A regenerated slide that split into
+    multiple A4 pages is inserted as multiple wrappers, and all later slides are
+    renumbered (data-seq + page numbers) accordingly.
     """
     import re as _re
 
@@ -6063,9 +6064,9 @@ def api_ppt_splice_slides(run_id: str, req: dict, user=require_perm("stage3.gene
             _lf.write(line)
             _lf.flush()
 
-    regen_path = os.path.join(run_dir, "index_regenerated.html")
+    regen_path = os.path.join(run_dir, "index_regenerated_partial.html")
     if not os.path.exists(regen_path):
-        raise HTTPException(status_code=400, detail="index_regenerated.html not found — regenerate first")
+        raise HTTPException(status_code=400, detail="index_regenerated_partial.html not found — regenerate first")
 
     index_path = os.path.join(run_dir, "index.html")
     if not os.path.exists(index_path):
