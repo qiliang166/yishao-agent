@@ -6007,6 +6007,17 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest, user=require_perm("
     # renumbers slides in-place, corrupting seq values.
     regen_slides = [{"seq": s["seq"], "html": s["html"]} for s in regen_resolved]
 
+    # Record how many A4 pages each regenerated slide split into. A regenerated
+    # slide can split (e.g. an oversized table), producing continuation pages the
+    # splice endpoint must insert — this count lets it renumber later slides.
+    from services.ppt_service import _preprocess_a4_slides
+    _regen_groups = []
+    for _rs in regen_resolved:
+        _probe = _preprocess_a4_slides([dict(_rs)], regen_cw, regen_ch)
+        _regen_groups.append({"seq": _rs.get("seq", 0), "count": len(_probe)})
+    with open(os.path.join(run_dir, "_regen_groups.json"), "w", encoding="utf-8") as _gf:
+        json.dump(_regen_groups, _gf)
+
     partial_html = _assemble_html_deck(regen_resolved, title, style_id, scheme_data, total_slides=len(slide_plan), canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
     if scheme_data:
         partial_html = _resolve_color_vars(partial_html, scheme_data, css_vars=True)
@@ -6026,11 +6037,12 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest, user=require_perm("
 
 @app.put("/api/ppt/splice-slides/{run_id}")
 def api_ppt_splice_slides(run_id: str, req: dict, user=require_perm("stage3.generate")):
-    """Apply regenerated slides by directly replacing slide wrappers in index.html.
+    """Apply regenerated slides by rebuilding index.html positionally.
 
-    Extracts the regenerated slide wrappers from index_regenerated.html
-    and splices them into index.html at the matching positions.
-    Only regenerated slides change — all other slides stay byte-identical.
+    Extracts the regenerated slide wrappers from index_regenerated.html and
+    splices them into index.html at the matching positions. A regenerated slide
+    that split into multiple A4 pages is inserted as multiple wrappers, and all
+    later slides are renumbered (data-seq + page numbers) accordingly.
     """
     import re as _re
 
@@ -6067,60 +6079,77 @@ def api_ppt_splice_slides(run_id: str, req: dict, user=require_perm("stage3.gene
     _ensure_backup(run_dir)
 
     regen_seqs = {s["seq"] for s in slides_data}
-    replaced = 0
 
-    for seq in sorted(regen_seqs):
-        # Extract slide wrapper from index_regenerated.html
-        wrapper = _extract_slide_wrapper(regen_html, seq)
-        if wrapper is None:
-            _log_splice(f"Warning: slide {seq} not found in index_regenerated.html")
-            continue
+    # A regenerated slide may have split into multiple A4 pages. The regenerate
+    # endpoint records the fragment count per slide in _regen_groups.json so the
+    # splice can insert continuation pages and renumber later slides.
+    groups = {}
+    groups_path = os.path.join(run_dir, "_regen_groups.json")
+    if os.path.exists(groups_path):
+        try:
+            with open(groups_path, "r", encoding="utf-8") as _gf:
+                for _g in json.loads(_gf.read()):
+                    groups[int(_g["seq"])] = int(_g.get("count", 1))
+        except Exception:
+            groups = {}
+    for seq in regen_seqs:
+        groups.setdefault(seq, 1)
 
-        # Replace matching wrapper in index.html
-        old_wrapper = _extract_slide_wrapper(index_html, seq)
-        if old_wrapper is None:
-            _log_splice(f"Warning: slide {seq} not found in index.html")
-            continue
+    regen_wrappers = _extract_all_wrappers(regen_html)
+    orig_wrappers = _extract_all_wrappers(index_html)
+    if not orig_wrappers:
+        raise HTTPException(status_code=400, detail="index.html has no slide wrappers")
 
-        index_html = index_html.replace(old_wrapper, wrapper, 1)
-        replaced += 1
-        _log_splice(f"Replaced slide {seq} ({len(old_wrapper)} → {len(wrapper)} bytes)")
+    # Rebuild positionally: replace each requested slide with its fragment(s).
+    final_wrappers = []
+    ri = 0
+    for (seq, wrapper, _start, _end) in orig_wrappers:
+        if seq in groups:
+            k = groups[seq]
+            for _ in range(k):
+                if ri < len(regen_wrappers):
+                    final_wrappers.append(regen_wrappers[ri][1])
+                    ri += 1
+                else:
+                    _log_splice(f"Warning: missing regenerated fragment for slide {seq}")
+        else:
+            final_wrappers.append(wrapper)
+    # Append any leftover fragments (defensive — should not happen).
+    while ri < len(regen_wrappers):
+        final_wrappers.append(regen_wrappers[ri][1])
+        ri += 1
+
+    # Renumber data-seq and A4 page numbers across the whole deck (a split shifts
+    # every later slide's seq and total).
+    total = len(final_wrappers)
+    new_wrappers = []
+    for i, w in enumerate(final_wrappers):
+        seq = i + 1
+        w = _re.sub(r'data-seq="\d+"', f'data-seq="{seq}"', w, count=1)
+        w = _re.sub(r'第\s*\d+\s*页\s*/\s*共\s*\d+\s*页', f'第{seq}页/共{total}页', w)
+        new_wrappers.append(w)
+
+    region_start = orig_wrappers[0][2]
+    region_end = orig_wrappers[-1][3]
+    index_html = index_html[:region_start] + "\n".join(new_wrappers) + index_html[region_end:]
 
     # Write updated index.html
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(index_html)
 
-    # Save individual slide files for regenerated slides
+    # Save individual slide files for regenerated fragments.
     from services.ppt_service import _save_slide_files
     regen_slides = []
-    for seq in sorted(regen_seqs):
-        inner = _extract_slide_inner(regen_html, seq)
+    for (frag_seq, _wrapper, _s, _e) in regen_wrappers:
+        inner = _extract_slide_inner(regen_html, frag_seq)
         if inner is not None:
-            regen_slides.append({"seq": seq, "html": inner})
+            regen_slides.append({"seq": frag_seq, "html": inner})
     if regen_slides:
         _save_slide_files(run_dir, regen_slides)
         _log_splice(f"Saved {len(regen_slides)} individual slide files")
 
-    _log_splice(f"Spliced {replaced}/{len(regen_seqs)} slides into index.html")
-    return {"ok": True, "replaced": replaced, "total": len(slides_data)}
-
-
-def _extract_slide_wrapper(html: str, seq: int) -> str | None:
-    """Extract the full slide-wrapper div (including outer div) for a given seq."""
-    import re
-    prefix = f'<div class="slide-wrapper" data-seq="{seq}">'
-    start = html.find(prefix)
-    if start < 0:
-        return None
-    # Find the end: next slide-wrapper or </body>
-    next_wrapper = html.find('<div class="slide-wrapper"', start + len(prefix))
-    if next_wrapper > 0:
-        return html[start:next_wrapper]
-    # Last slide — ends before </body>
-    body_end = html.find('</body>', start)
-    if body_end > 0:
-        return html[start:body_end]
-    return None
+    _log_splice(f"Spliced {len(regen_seqs)} slides into {len(final_wrappers)} pages")
+    return {"ok": True, "replaced": len(regen_seqs), "total": len(slides_data)}
 
 
 def _extract_slide_inner(html: str, seq: int) -> str | None:
@@ -6146,6 +6175,30 @@ def _extract_slide_inner(html: str, seq: int) -> str | None:
     if inner.endswith('</div>'):
         inner = inner[:-len('</div>')].rstrip()
     return inner
+
+
+def _extract_all_wrappers(html: str):
+    """Extract every slide-wrapper div in document order.
+
+    Returns a list of (seq, wrapper_html, start, end). start/end are byte
+    offsets; end points just past the wrapper (next wrapper's start, or the
+    trailing <script> for the last wrapper so scripts are never swallowed).
+    """
+    import re as _re
+    pattern = _re.compile(r'<div class="slide-wrapper" data-seq="(\d+)">')
+    starts = [(m.start(), int(m.group(1))) for m in pattern.finditer(html)]
+    out = []
+    for i, (start, seq) in enumerate(starts):
+        if i + 1 < len(starts):
+            end = starts[i + 1][0]
+        else:
+            end = html.find('<script', start)
+            if end < 0:
+                end = html.find('</body>', start)
+            if end < 0:
+                end = len(html)
+        out.append((seq, html[start:end], start, end))
+    return out
 
 
 def _splice_slides_legacy(run_dir, slides_data, scheme_data, style_id,
