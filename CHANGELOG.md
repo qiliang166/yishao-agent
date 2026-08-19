@@ -1,5 +1,13 @@
 ﻿# 更新日志
 
+## 2026-08-19
+
+- feat: batch import account display + batch category edit + local brand settings + A4 table pagination + HTML font editor
+
+## 2026-08-18
+
+- chore: update build stamp after data import/export (9044d28)
+
 ## 2026-08-18
 
 - feat: export/import full data package (db + exports + downloads) for one-click deployment
