@@ -1,5 +1,10 @@
 ﻿# 更新日志
 
+## 2026-08-20
+
+- fix: preserve all rows on A4 table split (use browser DOM, not regex)
+- chore: update build stamp after A4 real-height pagination fix (4c328e8)
+
 ## 2026-08-19
 
 - fix: A4表格分页改用真实渲染高度(Playwright测量)替代行数估算
