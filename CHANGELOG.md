@@ -2,6 +2,11 @@
 
 ## 2026-08-20
 
+- fix: A4 table pages drop rows — rebuild tbody from body + raise body_limit
+- chore: update build stamp after A4 table row-loss fix (ba27953)
+
+## 2026-08-20
+
 - fix: preserve all rows on A4 table split (use browser DOM, not regex)
 - chore: update build stamp after A4 real-height pagination fix (4c328e8)
 
