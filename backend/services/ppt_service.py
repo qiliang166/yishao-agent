@@ -6469,11 +6469,62 @@ def _extract_content_blocks(inner_html: str) -> list[str]:
     return blocks
 
 
-def _split_table_rows(table_html: str, content_max_h: int) -> list[str]:
+def _measure_table_rows_real(table_html: str) -> tuple[float, list[float]]:
+    """Measure a table's real rendered row heights in headless Chromium.
+
+    Row-count estimates are wrong for A4 tables: cell text wraps and changes
+    row height, so a 21-row table can fit while a 10-row table overflows. This
+    renders the table with the deck's fonts and column widths and returns
+    (header_height, [body_row_heights]) from actual layout.
+    """
+    from playwright.sync_api import sync_playwright
+
+    doc = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+        '*{margin:0;padding:0;box-sizing:border-box;}'
+        "body{font-family:'JetBrains Mono','Courier New','PingFang SC','Microsoft YaHei',monospace;}"
+        '</style></head><body>'
+        f'<div style="width:674px;">{table_html}</div>'
+        '</body></html>'
+    )
+
+    with sync_playwright() as pw:
+        browser = None
+        for channel in ("chrome", "msedge", None):
+            try:
+                kwargs = {"headless": True}
+                if channel:
+                    kwargs["channel"] = channel
+                browser = pw.chromium.launch(**kwargs)
+                break
+            except Exception:
+                continue
+        if browser is None:
+            raise RuntimeError("no browser available (install Chrome or Edge)")
+        try:
+            page = browser.new_page(viewport={"width": 720, "height": 900})
+            page.set_content(doc, wait_until="load")
+            m = page.evaluate(
+                "() => {"
+                "  const th = document.querySelector('thead');"
+                "  const tb = document.querySelector('tbody');"
+                "  return {"
+                "    thead: th ? th.getBoundingClientRect().height : 0,"
+                "    rows: tb ? Array.from(tb.querySelectorAll('tr')).map(tr => tr.getBoundingClientRect().height) : []"
+                "  };"
+                "}"
+            )
+            return float(m["thead"] or 0), [float(x) for x in (m["rows"] or [])]
+        finally:
+            browser.close()
+
+
+def _split_table_rows(table_html: str, table_max_h: int) -> list[str]:
     """Split an oversized table into complete <table> fragments that each fit a page.
 
-    The header row (contains <th>) is repeated on every fragment, and the
-    <colgroup> (column widths) is preserved on every fragment.
+    Uses REAL rendered row heights (cell wrapping included) instead of row-count
+    estimates. The header row (contains <th>) is repeated on every fragment, and
+    the <colgroup> (column widths) is preserved on every fragment.
     """
     import re as _re
     rows = _re.findall(r'<tr[^>]*>.*?</tr>', table_html, _re.DOTALL)
@@ -6490,13 +6541,25 @@ def _split_table_rows(table_html: str, content_max_h: int) -> list[str]:
     if rows and '<th' in rows[0].lower():
         header = rows[0]
         body_rows = rows[1:]
-    header_h = _estimate_block_height(header) if header else 0
+
+    # Real rendered heights (cell wrapping makes row-count estimates unreliable).
+    header_h = 0.0
+    row_heights: list[float] = []
+    try:
+        header_h, row_heights = _measure_table_rows_real(table_html)
+    except Exception:
+        header_h = 0.0
+        row_heights = []
+    if not row_heights or len(row_heights) != len(body_rows):
+        # Browser unavailable or measurement mismatch — fall back to estimate.
+        header_h = _estimate_block_height(header) if header else 0
+        row_heights = [_estimate_block_height(r) for r in body_rows]
+
     fragments = []
     cur = []
     cur_h = header_h
-    for r in body_rows:
-        h = _estimate_block_height(r)
-        if cur and cur_h + h > content_max_h:
+    for r, h in zip(body_rows, row_heights):
+        if cur and cur_h + h > table_max_h:
             fragments.append(header + '\n' + '\n'.join(cur))
             cur = [r]
             cur_h = header_h + h
@@ -6505,24 +6568,28 @@ def _split_table_rows(table_html: str, content_max_h: int) -> list[str]:
             cur_h += h
     if cur:
         fragments.append(header + '\n' + '\n'.join(cur))
-    if not fragments:
+    if len(fragments) <= 1:
         return [table_html]
     return [table_open + '\n' + colgroup + '\n' + p + '\n</table>' for p in fragments]
 
 
-def _has_oversized_table(html: str, content_max_h: int) -> bool:
-    """True if any <table> has an estimated height exceeding one page.
+def _has_oversized_table(html: str, table_max_h: int) -> bool:
+    """True if any <table> could overflow one page.
 
     col3 document-flow tables carry no overflow:auto/scroll signal, so the
-    split trigger must detect them directly by height estimate.
+    split trigger must detect them directly. This is a CHEAP conservative
+    pre-filter (~100px/row upper bound ≈ 5 wrapped lines) — it only decides
+    whether real measurement in _split_a4_html_content is worth a browser
+    launch, never the final split decision.
     """
     for m in re.finditer(r'<table\b[^>]*>.*?</table>', html, re.DOTALL):
-        if _estimate_block_height(m.group(0)) > content_max_h:
+        rows = len(re.findall(r'<tr\b', m.group(0)))
+        if rows * 100 > table_max_h:
             return True
     return False
 
 
-def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
+def _split_a4_html_content(html: str, content_max_h: int, table_max_h: int) -> list[str]:
     """Split an A4 page that overflows its content area into multiple pages.
 
     Locates the content container — a position:absolute div (legacy) or the
@@ -6604,10 +6671,8 @@ def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
         table_matches = list(_re.finditer(r'<table\b[^>]*>.*?</table>', html, _re.DOTALL))
         if not table_matches:
             return [html]
-        big = max(table_matches, key=lambda m: _estimate_block_height(m.group(0)))
-        if _estimate_block_height(big.group(0)) <= content_max_h:
-            return [html]
-        frags = _split_table_rows(big.group(0), content_max_h)
+        big = max(table_matches, key=lambda m: len(_re.findall(r'<tr\b', m.group(0))))
+        frags = _split_table_rows(big.group(0), table_max_h)
         if len(frags) <= 1:
             return [html]
         return [html[:big.start()] + f + html[big.end():] for f in frags]
@@ -6622,7 +6687,7 @@ def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
     expanded = []
     for b in blocks:
         if b.strip().startswith('<table') and _estimate_block_height(b) > content_max_h:
-            expanded.extend(_split_table_rows(b, content_max_h))
+            expanded.extend(_split_table_rows(b, table_max_h))
         else:
             expanded.append(b)
     blocks = expanded
@@ -6674,7 +6739,8 @@ def _preprocess_a4_slides(slides: list, canvas_w: int, canvas_h: int) -> list:
     if canvas_h <= canvas_w:
         return slides
 
-    content_max_h = canvas_h - 80  # header + footer
+    content_max_h = canvas_h - 80   # legacy block-group budget (header + footer, approx)
+    table_max_h = canvas_h - 112    # col3 table fragment budget (45 header + 45 footer + 4 accent + 16 margin + 2 border)
 
     result = []
     for s in slides:
@@ -6692,18 +6758,32 @@ def _preprocess_a4_slides(slides: list, canvas_w: int, canvas_h: int) -> list:
         if not has_overflow:
             # col3 document-flow tables carry no overflow signal; detect an
             # oversized table directly so its rows are split instead of clipped.
-            has_overflow = _has_oversized_table(html, content_max_h)
+            has_overflow = _has_oversized_table(html, table_max_h)
         if not has_overflow:
             result.append(s)
             continue
 
-        pages = _split_a4_html_content(html, content_max_h)
+        pages = _split_a4_html_content(html, content_max_h, table_max_h)
         for j, page_html in enumerate(pages):
             result.append({**s, "html": page_html, "_overflow_split": j > 0})
 
-    # Re-number sequentially
+    # Re-number sequentially (a split shifts every later page's seq)
     for i, s in enumerate(result):
         s["seq"] = i + 1
+
+    # Recompute A4 header/footer page numbers (第N页/共M页) after any split —
+    # the split shifts seq and total, so pre-baked numbers would be stale on
+    # every page from the split point onward.
+    final_total = len(result)
+    for s in result:
+        h = s.get("html", "")
+        if not h:
+            continue
+        s["html"] = re.sub(
+            r'第\s*\d+\s*页\s*/\s*共\s*\d+\s*页',
+            f'第{s.get("seq", 1)}页/共{final_total}页',
+            h,
+        )
 
     return result
 
