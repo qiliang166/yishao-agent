@@ -2,6 +2,19 @@
 
 ## 2026-08-19
 
+- fix: A4表格分页改用真实渲染高度(Playwright测量)替代行数估算
+
+## 2026-08-19
+
+- fix: A4表格分页误拆分(col3表格padding重复计数+页头页尾被拆散)
+
+## 2026-08-19
+
+- fix: 问题4品牌信息仅本地化3项(LOGO/应用名称/口号)，版本号/版权/签名/软件介绍仍由机器码管理器控制
+- chore: update build stamp after batch import/brand/font/A4 fixes (80b27cc)
+
+## 2026-08-19
+
 - feat: batch import account display + batch category edit + local brand settings + A4 table pagination + HTML font editor
 
 ## 2026-08-18
