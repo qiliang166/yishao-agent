@@ -23,7 +23,7 @@ interface Props {
   onDownloadHtml?: () => void
 }
 
-export default function SlideEditModal({ open, runId, previewUrl, slideCount, providerId: _pid, model: _model, projectId, projectName, columnId, styleId, onClose, pptxDownloadUrl, pptxFilename, downloadFormat, onDownloadHtml: _onDownloadHtml }: Props) {
+export default function SlideEditModal({ open, runId, previewUrl, slideCount, providerId, model, projectId, projectName, columnId, styleId, onClose, pptxDownloadUrl, pptxFilename, downloadFormat, onDownloadHtml: _onDownloadHtml }: Props) {
   const [contentEditable, setContentEditable] = useState(false)
   const [textColor, setTextColor] = useState('#ffffff')
   const [fontSize, setFontSize] = useState('')
@@ -436,6 +436,8 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
       const result = await api.regenerateSlide({
         run_id: runId,
         slide_seqs: seqs,
+        provider_id: providerId,
+        model,
         column_id: columnId,
       })
       clearInterval(pollTimer)
