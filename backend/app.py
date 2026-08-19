@@ -5978,7 +5978,6 @@ def api_ppt_regenerate_slide(req: PPTRegenerateSlideRequest, user=require_perm("
     deck_html = _assemble_html_deck(resolved_slides, title, style_id, scheme_data, canvas_w=regen_canvas_w, canvas_h=regen_canvas_h)
     if scheme_data:
         deck_html = _resolve_color_vars(deck_html, scheme_data, css_vars=True)
-        deck_html, _deck_enf = _enforce_no_hardcoded_hex(deck_html, scheme_data, 0)
     deck_vars = _assemble_html_deck(
         [{**s, "html": s.get("html_vars", s.get("html", ""))} for s in slide_plan],
         title, style_id, scheme_data, canvas_w=regen_canvas_w, canvas_h=regen_canvas_h
