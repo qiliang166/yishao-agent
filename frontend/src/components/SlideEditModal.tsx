@@ -26,6 +26,8 @@ interface Props {
 export default function SlideEditModal({ open, runId, previewUrl, slideCount, providerId: _pid, model: _model, projectId, projectName, columnId, styleId, onClose, pptxDownloadUrl, pptxFilename, downloadFormat, onDownloadHtml: _onDownloadHtml }: Props) {
   const [contentEditable, setContentEditable] = useState(false)
   const [textColor, setTextColor] = useState('#ffffff')
+  const [fontSize, setFontSize] = useState('')
+  const [fontFamily, setFontFamily] = useState('')
   const [savingImages, setSavingImages] = useState(false)
   const [slideImageSize, setSlideImageSize] = useState('400')
   const [colorScheme, setColorScheme] = useState('deep-blue')
@@ -89,6 +91,16 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
     if (!iframe?.contentDocument) return
     applyEditableDoc(iframe.contentDocument)
   }, [iframeKey, contentEditable])
+
+  // Track the current selection's font size / family while editing
+  useEffect(() => {
+    if (!contentEditable) return
+    const doc = iframeRef.current?.contentDocument
+    if (!doc) return
+    const handler = () => readCurrentFont()
+    doc.addEventListener('selectionchange', handler)
+    return () => doc.removeEventListener('selectionchange', handler)
+  }, [contentEditable, iframeKey])
 
   const refreshPreview = () => setIframeKey(k => k + 1)
 
@@ -247,6 +259,61 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
   const handleColorChange = (color: string) => {
     setTextColor(color)
     applyColorToSelection('foreground', color)
+  }
+
+  const getCurrentRange = (): Range | null => {
+    const saved = savedRangeRef.current
+    if (saved) return saved
+    const iframe = iframeRef.current
+    const win = iframe?.contentWindow
+    if (!win) return null
+    const sel = win.getSelection()
+    if (sel && sel.rangeCount > 0) return sel.getRangeAt(0)
+    return null
+  }
+
+  const wrapSelectionWithStyle = (styles: Record<string, string>): boolean => {
+    const range = getCurrentRange()
+    const doc = iframeRef.current?.contentDocument
+    if (!doc || !range || range.collapsed) return false
+    const span = doc.createElement('span')
+    Object.keys(styles).forEach(k => span.style.setProperty(k, styles[k]))
+    try {
+      range.surroundContents(span)
+    } catch {
+      const fragment = range.extractContents()
+      span.appendChild(fragment)
+      range.insertNode(span)
+    }
+    savedRangeRef.current = null
+    return true
+  }
+
+  const applyFontSize = (sizePx: number) => {
+    if (!(sizePx > 0)) return
+    wrapSelectionWithStyle({ 'font-size': sizePx + 'px' })
+  }
+
+  const applyFontFamily = (family: string) => {
+    if (!family) return
+    wrapSelectionWithStyle({ 'font-family': family })
+  }
+
+  const readCurrentFont = () => {
+    const iframe = iframeRef.current
+    const doc = iframe?.contentDocument
+    const win = iframe?.contentWindow
+    if (!doc || !win) return
+    const sel = win.getSelection()
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+    const range = sel.getRangeAt(0)
+    const container = range.commonAncestorContainer
+    const el = container.nodeType === 1 ? (container as Element) : (container.parentElement as Element | null)
+    if (!el) return
+    const cs = win.getComputedStyle(el)
+    const size = parseFloat(cs.fontSize)
+    if (!isNaN(size)) setFontSize(String(Math.round(size)))
+    setFontFamily((cs.fontFamily || '').split(',')[0].replace(/["']/g, '').trim())
   }
 
   const handleRestore = async () => {
@@ -641,16 +708,41 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
                   style={{ fontSize: 13, minWidth: 28 }}
                   title="重做">↷</button>
                 <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
-                {/* Font size - */}
-                <button onClick={() => execCmd('decreaseFontSize')}
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: 12, minWidth: 22 }}
-                  title="缩小字号">A-</button>
-                {/* Font size + */}
-                <button onClick={() => execCmd('increaseFontSize')}
-                  className="btn btn-ghost btn-sm"
-                  style={{ fontSize: 12, minWidth: 22 }}
-                  title="增大字号">A+</button>
+                {/* Font family */}
+                <select
+                  value={fontFamily}
+                  onMouseDown={() => saveIframeSelection()}
+                  onChange={e => { setFontFamily(e.target.value); applyFontFamily(e.target.value) }}
+                  style={{
+                    fontSize: 11, padding: '2px 4px', maxWidth: 96,
+                    border: '1px solid var(--border, #e2e8f0)', borderRadius: 4,
+                    background: 'var(--bg, #fff)', color: 'var(--text)',
+                  }}
+                  title="字体">
+                  <option value="">字体</option>
+                  <option value="SimSun">宋体</option>
+                  <option value="SimHei">黑体</option>
+                  <option value="Microsoft YaHei">微软雅黑</option>
+                  <option value="KaiTi">楷体</option>
+                  <option value="FangSong">仿宋</option>
+                  <option value="Arial">Arial</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="monospace">等宽</option>
+                </select>
+                {/* Font size */}
+                <input
+                  type="number" min={6} max={400}
+                  value={fontSize}
+                  onMouseDown={() => saveIframeSelection()}
+                  onChange={e => setFontSize(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { applyFontSize(parseInt(fontSize, 10)) } }}
+                  onBlur={() => applyFontSize(parseInt(fontSize, 10))}
+                  placeholder="字号"
+                  title="字号（px，回车生效）"
+                  style={{ width: 48, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border, #e2e8f0)', borderRadius: 4 }}
+                />
+                <span style={{ fontSize: 10, color: 'var(--text-muted, #94a3b8)' }}>px</span>
                 <span style={{ width: 1, height: 16, background: 'var(--border, #e2e8f0)', margin: '0 2px' }} />
                 {/* Text color */}
                 <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>

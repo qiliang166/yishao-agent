@@ -352,6 +352,9 @@ AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 
+# Business-data subdirectories bundled in the full data package (export/import)
+DATA_PACKAGE_SUBDIRS = ("exports", "downloads", "logos", "output", "videos", "audio")
+
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
 os.makedirs(LOGO_DIR, exist_ok=True)
@@ -8059,9 +8062,7 @@ def get_settings(request: Request):
                     try:
                         _arows = _aconn.execute(
                         "SELECT key, value FROM site_config WHERE key IN "
-                        "('download_desktop_url','download_server_url',"
-                        "'brand_name','brand_logo','branding_slogan','app_version',"
-                        "'branding_copyright','branding_signature','about_content')"
+                        "('download_desktop_url','download_server_url','app_version')"
                     ).fetchall()
                         for _r in _arows:
                             if _r[1] and not settings.get(_r[0]):
@@ -8093,9 +8094,7 @@ def get_settings(request: Request):
             _req = _ur.Request(f"{_act_srv}/api/site-config")
             with _ur.urlopen(_req, timeout=5) as _resp:
                 _config = json.loads(_resp.read().decode())
-            for _k in ("download_desktop_url", "download_server_url",
-                         "brand_name", "brand_logo", "branding_slogan", "app_version",
-                         "branding_copyright", "branding_signature", "about_content"):
+            for _k in ("download_desktop_url", "download_server_url", "app_version"):
                 if _config.get(_k):
                     settings[_k] = _config[_k]
         except Exception:
@@ -8150,7 +8149,7 @@ def backup_database(user=require_perm("config.global")):
 
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED, strict_timestamps=False) as zf:
             zf.write(tmp_db, "yishao.db")
-            for sub in ("exports", "downloads"):
+            for sub in DATA_PACKAGE_SUBDIRS:
                 sd = os.path.join(BASE_DIR, "data", sub)
                 if os.path.isdir(sd):
                     for root, _, files in os.walk(sd):
@@ -8336,8 +8335,8 @@ async def import_data(file: UploadFile = File(...), user=require_perm("config.gl
             finally:
                 conn.close()
 
-        # Restore exports / downloads (full replace when present in the package)
-        for sub in ("exports", "downloads"):
+        # Restore business-data subdirs (full replace when present in the package)
+        for sub in DATA_PACKAGE_SUBDIRS:
             src_dir = os.path.join(extract_dir, "data", sub)
             dst_dir = os.path.join(BASE_DIR, "data", sub)
             if os.path.isdir(src_dir):
@@ -10521,7 +10520,12 @@ async def api_batch_preview_import(file: UploadFile = File(...), user=require_pe
             "raw_text": vals[5],
         })
 
-    return {"rows": rows, "errors": errors, "total": len(rows)}
+    return {
+        "rows": rows,
+        "errors": errors,
+        "total": len(rows),
+        "account": user.get("username", "") or user.get("sub", ""),
+    }
 
 
 @app.post("/api/batch/import")
@@ -10535,7 +10539,7 @@ def api_batch_import(req: dict, user=require_perm("project.create")):
     created = []
     failed = []
     try:
-        user_id = user.get("id", "")
+        user_id = user.get("sub", "") or user.get("user_id", "")
         for r in rows:
             try:
                 name = r.get("name", "").strip()

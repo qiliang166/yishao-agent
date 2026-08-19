@@ -48,6 +48,8 @@ export default function ProjectDashboard() {
   const [batchPoints, setBatchPoints] = useState('0')
   const [showAuthorDialog, setShowAuthorDialog] = useState(false)
   const [batchAuthorId, setBatchAuthorId] = useState('')
+  const [showCategoryDialog, setShowCategoryDialog] = useState(false)
+  const [batchCategoryId, setBatchCategoryId] = useState('')
   const [showPreviewLockDialog, setShowPreviewLockDialog] = useState(false)
   const [batchPreviewLock, setBatchPreviewLock] = useState('0')
   // Expand project row to show output files
@@ -563,6 +565,9 @@ export default function ProjectDashboard() {
                       </button>
                       <button className="btn btn-outline btn-sm" onClick={() => { setShowAuthorDialog(true); setBatchAuthorId('') }}>
                         批量修改作者
+                      </button>
+                      <button className="btn btn-outline btn-sm" onClick={() => { setShowCategoryDialog(true); setBatchCategoryId('') }}>
+                        批量修改分类
                       </button>
                       <button className="btn btn-outline btn-sm" onClick={() => { setShowPreviewLockDialog(true); setBatchPreviewLock('0') }}>
                         批量设置预览
@@ -1178,6 +1183,48 @@ export default function ProjectDashboard() {
                 const name = authorOptions.find(a => a.id === batchAuthorId)?.name || '无署名'
                 modal.toast(`已批量修改 ${ids.length} 个项目的作者为 ${name}`, 'success')
                 setShowAuthorDialog(false)
+              }}>确认</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Batch Edit Category Dialog */}
+      {showCategoryDialog && (
+        <div className="dialog-overlay"
+          onMouseDown={(e: any) => { overlayMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={() => { if (overlayMouseDownRef.current) setShowCategoryDialog(false) }}>
+          <div className="dialog-box" style={{ width: 360 }} onClick={e => e.stopPropagation()}>
+            <div className="dialog-title">批量修改分类</div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
+              将 {selected.size} 个项目的分类修改为：
+            </div>
+            <div className="form-group">
+              <select className="form-input" value={batchCategoryId} autoFocus
+                onChange={e => setBatchCategoryId(e.target.value)} style={{ fontSize: 13 }}
+                onKeyDown={e => { if (e.key === 'Enter') {
+                  const ids = [...selected]
+                  Promise.all(ids.map((id: string) => api.updateProject(id, { category_id: batchCategoryId }))).then(() => {
+                    loadProjects(page); setSelected(new Set())
+                    const name = categories.find(c => c.id === batchCategoryId)?.name || '无分类'
+                    modal.toast(`已批量修改 ${ids.length} 个项目的分类为 ${name}`, 'success')
+                    setShowCategoryDialog(false)
+                  })
+                }}}>
+                <option value="">无分类</option>
+                {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowCategoryDialog(false)}>取消</button>
+              <button className="btn btn-primary btn-sm" onClick={async () => {
+                const ids = [...selected]
+                await Promise.all(ids.map((id: string) => api.updateProject(id, { category_id: batchCategoryId })))
+                loadProjects(page)
+                setSelected(new Set())
+                const name = categories.find(c => c.id === batchCategoryId)?.name || '无分类'
+                modal.toast(`已批量修改 ${ids.length} 个项目的分类为 ${name}`, 'success')
+                setShowCategoryDialog(false)
               }}>确认</button>
             </div>
           </div>

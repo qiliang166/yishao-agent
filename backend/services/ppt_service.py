@@ -6467,20 +6467,110 @@ def _extract_content_blocks(inner_html: str) -> list[str]:
     return blocks
 
 
+def _outer_container_inner_span(html: str):
+    """Return (inner_start, inner_end) of the outermost div/section, or None.
+
+    Used for document-flow A4 pages (col3) that carry no position:absolute
+    content container — the whole page div is the split region.
+    """
+    first_div = html.find('<div')
+    first_sec = html.find('<section')
+    candidates = [p for p in (first_div, first_sec) if p >= 0]
+    if not candidates:
+        return None
+    start = min(candidates)
+    if first_div >= 0 and (first_sec < 0 or first_div <= first_sec):
+        tag = 'div'
+    else:
+        tag = 'section'
+    gt = html.find('>', start)
+    if gt < 0:
+        return None
+    inner_start = gt + 1
+    open_pat = f'<{tag}'
+    close_pat = f'</{tag}>'
+    depth = 0
+    pos = start
+    while pos < len(html):
+        no = html.find(open_pat, pos)
+        nc = html.find(close_pat, pos)
+        if nc == -1:
+            return None
+        if no != -1 and no < nc:
+            depth += 1
+            pos = no + len(open_pat)
+        else:
+            depth -= 1
+            if depth == 0:
+                return (inner_start, nc)
+            pos = nc + len(close_pat)
+    return None
+
+
+def _split_table_rows(table_html: str, content_max_h: int) -> list[str]:
+    """Split an oversized table into complete <table> fragments that each fit a page.
+
+    The header row (contains <th>) is repeated on every fragment.
+    """
+    import re as _re
+    rows = _re.findall(r'<tr[^>]*>.*?</tr>', table_html, _re.DOTALL)
+    if len(rows) <= 1:
+        return [table_html]
+    table_open_m = _re.match(r'<table[^>]*>', table_html)
+    table_open = table_open_m.group(0) if table_open_m else '<table>'
+    header = ''
+    body_rows = rows
+    if rows and '<th' in rows[0].lower():
+        header = rows[0]
+        body_rows = rows[1:]
+    header_h = _estimate_block_height(header) if header else 0
+    fragments = []
+    cur = []
+    cur_h = header_h
+    for r in body_rows:
+        h = _estimate_block_height(r)
+        if cur and cur_h + h > content_max_h:
+            fragments.append(header + '\n' + '\n'.join(cur))
+            cur = [r]
+            cur_h = header_h + h
+        else:
+            cur.append(r)
+            cur_h += h
+    if cur:
+        fragments.append(header + '\n' + '\n'.join(cur))
+    if not fragments:
+        return [table_html]
+    return [table_open + '\n' + p + '\n</table>' for p in fragments]
+
+
+def _has_oversized_table(html: str, content_max_h: int) -> bool:
+    """True if any <table> has an estimated height exceeding one page.
+
+    col3 document-flow tables carry no overflow:auto/scroll signal, so the
+    split trigger must detect them directly by height estimate.
+    """
+    for m in re.finditer(r'<table\b[^>]*>.*?</table>', html, re.DOTALL):
+        if _estimate_block_height(m.group(0)) > content_max_h:
+            return True
+    return False
+
+
 def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
     """Split an A4 page that overflows its content area into multiple pages.
 
-    Finds the main content container (position:absolute div with overflow-y),
-    splits its child blocks across pages, and rebuilds the HTML structure
-    for each page. Returns list of complete page HTML strings.
+    Locates the content container — a position:absolute div (legacy) or the
+    outermost document-flow div/section (col3) — splits its child blocks across
+    pages, splitting oversized tables by row so no data rows are lost.
+    Returns list of complete page HTML strings.
     """
     import re as _re
 
-    # Remove overflow scrolling
+    # Remove overflow scrolling (only auto/scroll; overflow:hidden stays as page clip)
     html = _re.sub(r'overflow(?:-y)?:\s*(?:auto|scroll)\s*;?', '', html)
 
-    # Find the content container — a positioned div that holds the bulk of content
-    # Pattern: position:absolute with top: + bottom: or overflow-y that we just removed
+    content_inner_start = None
+    content_end = -1
+
     content_re = _re.compile(
         r'(<div[^>]*position:\s*absolute[^>]*'
         r'(?:top:\s*\d+px[^>]*(?:bottom|right)[^>]*|'
@@ -6489,64 +6579,63 @@ def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
     )
     matches = list(content_re.finditer(html))
 
-    if not matches:
-        return [html]
-
-    # Pick the content container with the most inner content, not the
-    # last regex match (which might be a decorative accent bar).
-    content_match = matches[0]
-    content_match_end = -1
-    best_size = -1
-    for m in matches:
-        m_inner_start = m.end()
-        m_depth = 0
-        m_pos = m.start()
-        m_end = -1
-        while m_pos < len(html):
-            no = html.find('<div', m_pos)
-            nc = html.find('</div>', m_pos)
-            if nc == -1:
-                break
-            if no != -1 and no < nc:
-                m_depth += 1
-                m_pos = no + 4
-            else:
-                m_depth -= 1
-                if m_depth == 0:
-                    m_end = nc
+    if matches:
+        # Pick the content container with the most inner content, not the
+        # last regex match (which might be a decorative accent bar).
+        content_match = matches[0]
+        content_match_end = -1
+        best_size = -1
+        for m in matches:
+            m_depth = 0
+            m_pos = m.start()
+            m_end = -1
+            while m_pos < len(html):
+                no = html.find('<div', m_pos)
+                nc = html.find('</div>', m_pos)
+                if nc == -1:
                     break
-                m_pos = nc + 6
-        if m_end > 0:
-            inner_size = m_end - m_inner_start
-            if inner_size > best_size:
-                best_size = inner_size
-                content_match = m
-                content_match_end = m_end
+                if no != -1 and no < nc:
+                    m_depth += 1
+                    m_pos = no + 4
+                else:
+                    m_depth -= 1
+                    if m_depth == 0:
+                        m_end = nc
+                        break
+                    m_pos = nc + 6
+            if m_end > 0:
+                inner_size = m_end - m.end()
+                if inner_size > best_size:
+                    best_size = inner_size
+                    content_match = m
+                    content_match_end = m_end
 
-    content_tag_start = content_match.start()
-    content_inner_start = content_match.end()
-
-    # Use the pre-computed end from the best-match scan above, or find it now
-    if content_match_end > 0:
+        content_inner_start = content_match.end()
         content_end = content_match_end
-    else:
-        depth = 0
-        pos = content_match.start()
-        content_end = -1
-        while pos < len(html):
-            no = html.find('<div', pos)
-            nc = html.find('</div>', pos)
-            if nc == -1:
-                break
-            if no != -1 and no < nc:
-                depth += 1
-                pos = no + 4
-            else:
-                depth -= 1
-                if depth == 0:
-                    content_end = nc
+        if content_end < 0:
+            depth = 0
+            pos = content_match.start()
+            while pos < len(html):
+                no = html.find('<div', pos)
+                nc = html.find('</div>', pos)
+                if nc == -1:
                     break
-                pos = nc + 6
+                if no != -1 and no < nc:
+                    depth += 1
+                    pos = no + 4
+                else:
+                    depth -= 1
+                    if depth == 0:
+                        content_end = nc
+                        break
+                    pos = nc + 6
+    else:
+        # Document-flow layout (col3 A4): no position:absolute content container.
+        # Treat the outermost div/section's inner content as the split region.
+        span = _outer_container_inner_span(html)
+        if span is None:
+            return [html]
+        content_inner_start, content_end = span
 
     if content_end < 0:
         return [html]
@@ -6554,20 +6643,14 @@ def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
     inner = html[content_inner_start:content_end]
     blocks = _extract_content_blocks(inner)
 
-    # Detect single oversized block (common: large <table> with many rows)
-    _table_open = ""
-    if len(blocks) <= 1:
-        if blocks and blocks[0].strip().startswith('<table'):
-            solo = blocks[0]
-            rows = _re.findall(r'<tr[^>]*>.*?</tr>', solo, _re.DOTALL)
-            if len(rows) > 1:
-                table_open_m = _re.match(r'<table[^>]*>', solo)
-                _table_open = table_open_m.group(0) if table_open_m else '<table>'
-                blocks = rows  # Split into row-level blocks
-            else:
-                return [html]
+    # Split any oversized table block into row-level complete <table> fragments
+    expanded = []
+    for b in blocks:
+        if b.strip().startswith('<table') and _estimate_block_height(b) > content_max_h:
+            expanded.extend(_split_table_rows(b, content_max_h))
         else:
-            return [html]
+            expanded.append(b)
+    blocks = expanded
 
     # Estimate heights and group into pages
     heights = [_estimate_block_height(b) for b in blocks]
@@ -6599,10 +6682,7 @@ def _split_a4_html_content(html: str, content_max_h: int) -> list[str]:
 
     result = []
     for page_blocks in pages:
-        page_inner = '\n'.join(page_blocks)
-        if _table_open:
-            page_inner = _table_open + '\n' + page_inner + '\n</table>'
-        result.append(before + page_inner + after)
+        result.append(before + '\n'.join(page_blocks) + after)
 
     return result
 
@@ -6634,6 +6714,10 @@ def _preprocess_a4_slides(slides: list, canvas_w: int, canvas_h: int) -> list:
             continue
 
         has_overflow = bool(re.search(r'overflow(?:-y)?:\s*(?:auto|scroll)', html, re.IGNORECASE))
+        if not has_overflow:
+            # col3 document-flow tables carry no overflow signal; detect an
+            # oversized table directly so its rows are split instead of clipped.
+            has_overflow = _has_oversized_table(html, content_max_h)
         if not has_overflow:
             result.append(s)
             continue

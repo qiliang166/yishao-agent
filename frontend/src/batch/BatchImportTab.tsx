@@ -18,6 +18,7 @@ interface PreviewRow {
 export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => {
   const [previewRows, setPreviewRows] = useState<PreviewRow[]>([])
   const [errors, setErrors] = useState<{ row: number; error: string }[]>([])
+  const [account, setAccount] = useState('')
   const [importing, setImporting] = useState(false)
   const [result, setResult] = useState<{ success: number; failed: number } | null>(null)
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set())
@@ -39,6 +40,7 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
       const rows = data.rows || []
       setPreviewRows(rows)
       setErrors(data.errors || [])
+      setAccount(data.account || '')
       setSelectedRows(new Set(rows.map((_: any, i: number) => i)))
       setResult(null)
     } catch (err: any) {
@@ -184,6 +186,12 @@ export const BatchImportTab: React.FC<Props> = ({ workspaceId, onImported }) => 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
               数据预览 (共 {previewRows.length + errors.length} 条，已选 {selectedRows.size} 条)
+              {account && (
+                <span style={{
+                  fontSize: 10, color: 'var(--primary)', background: 'var(--primary-light, rgba(59,130,246,0.12))',
+                  padding: '1px 6px', borderRadius: 3, marginLeft: 8, whiteSpace: 'nowrap',
+                }}>导入账号：{account}</span>
+              )}
             </span>
           </div>
           <div style={{ overflow: 'auto', maxHeight: 300 }}>
