@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id
+from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_rows
 
 
 class TestCleanJsonResponse:
@@ -74,3 +74,56 @@ class TestValidateColumnId:
     def test_rejects_special_chars(self):
         assert _validate_column_id("col;drop") == ""
         assert _validate_column_id("col 4") == ""
+
+
+class TestBuildTableRows:
+    def test_materials_table_8_cells_per_row(self):
+        body = (
+            "1 | 干货 | 银鳕鱼 | 冰岛 | 干蒸后50℃浸泡8h | 胶质不流失 | 100 | 克\n"
+            "2 | 海鲜 | 鲍鱼 | 大连 | 涨发 | 保持弹性 | 50 | 克"
+        )
+        out = _build_table_rows({"body": body}, "materials_table")
+        assert out.count("<tr") == 2
+        assert out.split("</tr>")[0].count("<td") == 8
+
+    def test_materials_table_odd_even_background(self):
+        body = (
+            "1 | 干货 | 银鳕鱼 | — | — | — | 100 | 克\n"
+            "2 | 海鲜 | 鲍鱼 | — | — | — | 50 | 克"
+        )
+        out = _build_table_rows({"body": body}, "materials_table")
+        assert "background:rgba(var(--text-rgb),0.02)" in out
+        assert "background:transparent" in out
+
+    def test_steps_table_colspans(self):
+        body = "1 | 涨发 | 蒸笼 | 干蒸后浸泡 | 胶质不流失"
+        out = _build_table_rows({"body": body}, "steps_table")
+        assert out.count("<tr") == 1
+        assert 'colspan="3"' in out
+        assert 'colspan="2"' in out
+
+    def test_structured_rows_path(self):
+        slide = {
+            "rows": [
+                ["1", "干货", "银鳕鱼", "—", "—", "—", "100", "克"],
+                ["2", "海鲜", "鲍鱼", "—", "—", "—", "50", "克"],
+            ]
+        }
+        out = _build_table_rows(slide, "materials_table")
+        assert out.count("<tr") == 2
+
+    def test_skips_header_line(self):
+        body = (
+            "序号 | 分类 | 名称 | 品牌 | 加工说明 | 加工要求 | 重量 | 单位\n"
+            "1 | 干货 | 银鳕鱼 | — | — | — | 100 | 克"
+        )
+        out = _build_table_rows({"body": body}, "materials_table")
+        assert out.count("<tr") == 1
+
+    def test_unparseable_body_returns_empty(self):
+        assert _build_table_rows({"body": "free prose with no pipes"}, "materials_table") == ""
+        assert _build_table_rows({"body": ""}, "materials_table") == ""
+
+    def test_wrong_type_returns_empty(self):
+        assert _build_table_rows({"body": "1 | a | b | c"}, "cover") == ""
+        assert _build_table_rows({"body": "1 | a | b | c"}, "content") == ""
