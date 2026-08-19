@@ -2,6 +2,11 @@
 
 ## 2026-08-20
 
+- fix: apply regenerated split A4 pages — splice inserts continuation pages and renumbers
+- chore: update build stamp after A4 table row fix (f65e363)
+
+## 2026-08-20
+
 - fix: A4 table pages drop rows — rebuild tbody from body + raise body_limit
 - chore: update build stamp after A4 table row-loss fix (ba27953)
 
