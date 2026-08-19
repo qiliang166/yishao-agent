@@ -2,6 +2,11 @@
 
 ## 2026-08-20
 
+- fix: splice applies fragment-only deck, not full regenerated deck
+- chore: update build stamp after apply split-page splice fix (12f2260)
+
+## 2026-08-20
+
 - fix: apply regenerated split A4 pages — splice inserts continuation pages and renumbers
 - chore: update build stamp after A4 table row fix (f65e363)
 
