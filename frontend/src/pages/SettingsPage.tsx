@@ -290,11 +290,9 @@ function SettingsPage() {
       await api.updateSettings({
         brand_logo: brandLogo, brand_name: brandName, save_path: savePath,
         branding_slogan: brandSlogan,
-        branding_copyright: brandingCopyright, branding_signature: brandingSignature,
-        admin_phone: adminPhone, app_version: appVersion,
+        admin_phone: adminPhone,
         payment_qr_wechat: qrWechat, payment_qr_alipay: qrAlipay,
         contact_info: contactInfo,
-        about_content: aboutContent,
         admin_password_enabled: adminPasswordEnabled ? '1' : '0',
         member_plan: JSON.stringify({
           quarterly: {
@@ -455,7 +453,7 @@ function SettingsPage() {
           <div className="settings-section">
             <h3>品牌信息</h3>
             <p style={{fontSize:11,color:'var(--text-secondary)',margin:'2px 0 12px'}}>
-              LOGO、应用名称、口号等品牌信息可在本地设置，保存后立即生效，不再由注册码管理器统一控制。
+              LOGO、应用名称、口号三项可在本地设置，保存后立即生效；版本号、版权信息、签名/作者、软件介绍仍由机器码管理器统一控制。
             </p>
             <div className="settings-row">
               <label>LOGO 图标</label>
@@ -500,26 +498,22 @@ function SettingsPage() {
                 style={{ maxWidth: 120, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 8px' }}>
-              以下信息将作为页脚嵌入导出的文档 / PPT 中。
+              以下信息由机器码管理器统一设置，仅作展示，将作为页脚嵌入导出的文档 / PPT 中。
             </p>
             <div className="settings-row">
               <label>版权信息</label>
-              <input className="form-input" type="text" value={brandingCopyright}
-                onChange={e => setBrandingCopyright(e.target.value)}
-                placeholder="例如：© 2026 你的站点名称" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input className="form-input" type="text" value={brandingCopyright} readOnly
+                style={{ maxWidth: 300, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <div className="settings-row">
               <label>签名/作者</label>
-              <input className="form-input" type="text" value={brandingSignature}
-                onChange={e => setBrandingSignature(e.target.value)}
-                placeholder="例如：作者名称" style={{ maxWidth: 300 }} disabled={!canSaveGlobal} />
+              <input className="form-input" type="text" value={brandingSignature} readOnly
+                style={{ maxWidth: 300, background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
             <div className="settings-row" style={{ alignItems: 'flex-start' }}>
               <label>软件介绍</label>
-              <textarea className="form-textarea" rows={6} value={aboutContent}
-                onChange={e => setAboutContent(e.target.value)}
-                placeholder="展示在「关于软件」弹窗中，登录页和侧边栏均可查看..."
-                style={{ maxWidth: 480, width: '100%', resize: 'vertical' }} disabled={!canSaveGlobal} />
+              <textarea className="form-textarea" rows={6} value={aboutContent} readOnly
+                style={{ maxWidth: 480, width: '100%', resize: 'vertical', background: 'var(--bg-secondary)', cursor: 'not-allowed' }} />
             </div>
           </div>
 
