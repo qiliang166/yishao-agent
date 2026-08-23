@@ -66,6 +66,7 @@ const PREVIEW_CSS = `
 .md-preview hr { border:none; border-top:1px solid #e0e0e0; margin:1em 0; }
 .md-preview img { max-width:100%; }
 .md-preview a { color:var(--primary,#4a6cf7); }
+.md-preview[contenteditable]:empty:before { content:attr(data-placeholder); color:#999; }
 `
 
 const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
@@ -74,8 +75,9 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   onGeneratingChange, onLogEntry, onProgressChange,
 }, ref) => {
   const modal = useModal()
-  const taRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLInputElement>(null)
+  const lastPushedRef = useRef<string | null>(null)
 
   // ── Internal state ──
   const modelKey = MODEL_KEYS[docType]
@@ -102,8 +104,7 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
   const generatingRef = useRef(false)
   const [savedFlash, setSavedFlash] = useState(0)
 
-  // ── Preview tab state ──
-  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit')
+  // ── Editor state ──
   const [imageSize, setImageSize] = useState('400')
 
   const stepKey = STEP_KEYS[docType]
@@ -157,6 +158,21 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
       return ''
     }
   }, [localContent])
+
+  // ── WYSIWYG editor: uncontrolled div, push HTML only on external content change ──
+  useEffect(() => {
+    if (!editorRef.current) return
+    if (lastPushedRef.current === localContent) return
+    lastPushedRef.current = localContent
+    editorRef.current.innerHTML = renderedHtml
+  }, [localContent, renderedHtml])
+
+  const handleEditorInput = () => {
+    const html = editorRef.current?.innerHTML ?? ''
+    lastPushedRef.current = html
+    setLocalContent(html)
+    api.saveStep(projectId, stepKey, html)
+  }
 
   // ── Inline /api/logos/* references as data URIs for offline HTML ──
   const inlineLogos = useCallback(async (html: string): Promise<string> => {
@@ -293,7 +309,6 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
         api.saveFileToProject(projectId, `${projectName}_${label}.txt`, fullText).catch(() => {})
         await onRefresh()
         onLogEntry?.({ time: now(), message: '已刷新步骤数据' })
-        setViewMode('preview')
       } else {
         modal.toast('生成失败: 模型未返回内容', 'error')
       }
@@ -334,7 +349,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     await onRefresh()
   }, [projectId, stepKey, onRefresh])
 
-  // ── Insert image via backend upload (URL reference, no base64 in textarea) ──
+  // ── Insert image via backend upload (URL reference, inserted at cursor in WYSIWYG) ──
   const handleInsertImage = async (file: File) => {
     if (file.size > IMG_MAX_BYTES) {
       modal.toast('图片超过 2MB，请压缩后再插入', 'error')
@@ -349,19 +364,17 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
       const width = parseInt(imageSize, 10)
       const widthAttr = width > 0 ? ` width="${width}"` : ''
       const snippet = `<img src="${res.url}"${widthAttr} alt="图片">`
-      const ta = taRef.current
-      const start = ta ? ta.selectionStart : localContent.length
-      const end = ta ? ta.selectionEnd : localContent.length
-      const next = localContent.slice(0, start) + snippet + localContent.slice(end)
-      setLocalContent(next)
-      api.saveStep(projectId, stepKey, next)
+      const div = editorRef.current
+      if (!div) return
+      div.focus()
+      let ok = false
+      try { ok = document.execCommand('insertHTML', false, snippet) } catch { ok = false }
+      if (!ok) div.innerHTML += snippet
+      const html = div.innerHTML
+      lastPushedRef.current = html
+      setLocalContent(html)
+      api.saveStep(projectId, stepKey, html)
       modal.toast('图片已插入', 'success')
-      requestAnimationFrame(() => {
-        if (!ta) return
-        ta.focus()
-        const pos = start + snippet.length
-        ta.setSelectionRange(pos, pos)
-      })
     } catch (e: any) {
       modal.toast('图片上传失败: ' + (e?.message || e), 'error')
     }
@@ -451,120 +464,62 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     </>
   )
 
-  // ── Tab switcher (shared between editor & preview) ──
-  const tabBar = (
-    <div style={{ display: 'flex', gap: 0, marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
-      <button
-        onClick={() => setViewMode('edit')}
-        style={{
-          padding: '5px 14px', fontSize: 12, cursor: 'pointer',
-          background: 'none', border: 'none', borderRadius: 0,
-          color: viewMode === 'edit' ? 'var(--primary)' : 'var(--text-secondary)',
-          borderBottom: viewMode === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
-          fontWeight: viewMode === 'edit' ? 600 : 400,
-        }}>
-        <SvgIcon name="pencil" size={12} /> 编辑
-      </button>
-      <button
-        onClick={() => setViewMode('preview')}
-        style={{
-          padding: '5px 14px', fontSize: 12, cursor: 'pointer',
-          background: 'none', border: 'none', borderRadius: 0,
-          color: viewMode === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
-          borderBottom: viewMode === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
-          fontWeight: viewMode === 'preview' ? 600 : 400,
-        }}>
-        <SvgIcon name="eye" size={12} /> 预览
-      </button>
-      {viewMode === 'preview' && localContent && (
-        <>
-          <button
-            onClick={handleDownloadHtml}
-            style={{
-              marginLeft: 'auto', padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-              background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-            }}>
-            <SvgIcon name="download" size={12} /> 下载 HTML
-          </button>
-          <button
-            onClick={handlePrint}
-            style={{
-              marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-              background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-            }}>
-            <SvgIcon name="printer" size={12} /> 打印
-          </button>
-        </>
-      )}
-    </div>
-  )
-
-  const imageToolbar = (
-    <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
-      <button className="btn btn-ghost btn-sm" type="button"
-        title="插入图片（上传后以链接引用，可设宽度）"
-        style={{ fontSize: 11, padding: '2px 8px' }}
-        onClick={() => imgRef.current?.click()}>
-        <SvgIcon name="image" size={12} /> 插入图片
-      </button>
-      <input
-        type="number" min={0} step={10} value={imageSize}
-        onChange={e => setImageSize(e.target.value)}
-        placeholder="原图"
-        title="图片宽度（px，留空=原图）"
-        style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
-      />
-      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
-      <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
-    </div>
-  )
-
-  const editTextarea = (
-    <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-      ref={taRef}
-      value={localContent}
-      onChange={e => {
-        const newVal = e.target.value
-        setLocalContent(newVal)
-        api.saveStep(projectId, stepKey, newVal)
-      }}
-      placeholder="点击生成按钮，AI生成后在此编辑..."
-    />
-  )
-
+  // ── Editor: single WYSIWYG contentEditable area (edit + image insertion inline) ──
   const editor = (
     <>
-      {tabBar}
-
-      {viewMode === 'edit' ? (
-        <>
-          {imageToolbar}
-          {editTextarea}
-        </>
-      ) : (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{
-            flex: '1 1 50%', minHeight: 120, overflow: 'auto',
-            background: '#fff', borderRadius: 6, padding: '16px 20px',
-            border: '1px solid var(--border)',
-          }}>
-            <style>{PREVIEW_CSS}</style>
-            {localContent ? (
-              <div className="md-preview" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
-            ) : (
-              <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>
-                暂无内容，请先生成文档
-              </div>
-            )}
-          </div>
-          <div style={{ flex: '1 1 50%', minHeight: 120, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {imageToolbar}
-            {editTextarea}
-          </div>
-        </div>
-      )}
-
+      <style>{PREVIEW_CSS}</style>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
+        <button className="btn btn-ghost btn-sm" type="button"
+          title="插入图片（上传后以链接引用，可设宽度）"
+          style={{ fontSize: 11, padding: '2px 8px' }}
+          onClick={() => imgRef.current?.click()}>
+          <SvgIcon name="image" size={12} /> 插入图片
+        </button>
+        <input
+          type="number" min={0} step={10} value={imageSize}
+          onChange={e => setImageSize(e.target.value)}
+          placeholder="原图"
+          title="图片宽度（px，留空=原图）"
+          style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+        />
+        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
+        <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
+        <span style={{ flex: 1 }} />
+        {localContent && (
+          <>
+            <button
+              onClick={handleDownloadHtml}
+              style={{
+                padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+              }}>
+              <SvgIcon name="download" size={12} /> 下载 HTML
+            </button>
+            <button
+              onClick={handlePrint}
+              style={{
+                marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+              }}>
+              <SvgIcon name="printer" size={12} /> 打印
+            </button>
+          </>
+        )}
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={handleEditorInput}
+        data-placeholder="点击生成按钮，AI生成后在此直接编辑，可输入文字或插入图片"
+        className="md-preview"
+        style={{
+          flex: 1, minHeight: 280, overflow: 'auto',
+          background: '#fff', borderRadius: 6, padding: '16px 20px',
+          border: '1px solid var(--border)', outline: 'none',
+        }}
+      />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
           {docType === 'sop' ? '编辑完成后可供文档课件使用'

@@ -754,7 +754,6 @@ export default function ProjectPage() {
   const step1Model = step1Models[mode1Key] || ''
   const s1Temperature = s1Temperatures[mode1Key] || 0.3
   const [step1Generating, setStep1Generating] = useState<Record<string, boolean>>({})
-  const [s1ViewMode, setS1ViewMode] = useState<Record<string, 'edit' | 'preview'>>({})
 
   // Stage 2 state
   const [step2Generating, setStep2Generating] = useState<Record<string, boolean>>({})
@@ -1322,8 +1321,58 @@ export default function ProjectPage() {
     try { return DOMPurify.sanitize(marked.parse(s1Content) as string) } catch { return '' }
   }, [s1Content])
 
-  const s1View = s1ViewMode[sub] || 'edit'
-  const setS1View = (v: 'edit' | 'preview') => setS1ViewMode(prev => ({ ...prev, [sub]: v }))
+  // ── Stage 1 WYSIWYG editor (uncontrolled div, push HTML only on external change) ──
+  const s1EditorRef = useRef<HTMLDivElement>(null)
+  const s1ImgRef = useRef<HTMLInputElement>(null)
+  const s1LastPushedRef = useRef<string | null>(null)
+  const [s1ImageSize, setS1ImageSize] = useState('400')
+
+  useEffect(() => {
+    if (stage !== 1) {
+      // Editor unmounted: reset guard so a later remount re-initializes the DOM.
+      s1LastPushedRef.current = null
+      return
+    }
+    if (!s1EditorRef.current) return
+    if (s1LastPushedRef.current === s1Content) return
+    s1LastPushedRef.current = s1Content
+    s1EditorRef.current.innerHTML = s1RenderedHtml
+  }, [stage, s1Content, s1RenderedHtml])
+
+  const handleS1EditorInput = () => {
+    const html = s1EditorRef.current?.innerHTML ?? ''
+    s1LastPushedRef.current = html
+    setSteps(prev => ({ ...prev, [step1Key()]: html }))
+  }
+
+  const handleS1InsertImage = async (file: File) => {
+    if (file.size > 2 * 1024 * 1024) {
+      modal.toast('图片超过 2MB，请压缩后再插入', 'error')
+      return
+    }
+    try {
+      const res = await api.uploadLogo(file)
+      if (res == null || !res.url) {
+        modal.toast('上传失败：未返回图片地址', 'error')
+        return
+      }
+      const width = parseInt(s1ImageSize, 10)
+      const widthAttr = width > 0 ? ` width="${width}"` : ''
+      const snippet = `<img src="${res.url}"${widthAttr} alt="图片">`
+      const div = s1EditorRef.current
+      if (!div) return
+      div.focus()
+      let ok = false
+      try { ok = document.execCommand('insertHTML', false, snippet) } catch { ok = false }
+      if (!ok) div.innerHTML += snippet
+      const html = div.innerHTML
+      s1LastPushedRef.current = html
+      setSteps(prev => ({ ...prev, [step1Key()]: html }))
+      modal.toast('图片已插入', 'success')
+    } catch (e: any) {
+      modal.toast('图片上传失败: ' + (e?.message || e), 'error')
+    }
+  }
 
   const PREVIEW_CSS = `
 .md-preview{font-size:14px;line-height:1.8;color:#1a1a2e}
@@ -1344,6 +1393,7 @@ export default function ProjectPage() {
 .md-preview hr{border:none;border-top:1px solid #e0e0e0;margin:1em 0}
 .md-preview img{max-width:100%}
 .md-preview a{color:var(--primary,#4a6cf7)}
+.md-preview[contenteditable]:empty:before{content:attr(data-placeholder);color:#999}
 `
 
   const handleS1DownloadHtml = () => {
@@ -2922,24 +2972,34 @@ export default function ProjectPage() {
 
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                {/* Tab switcher */}
-                <div style={{ display: 'flex', gap: 0, marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
-                  <button onClick={() => setS1View('edit')} style={{
-                    padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
-                    color: s1View === 'edit' ? 'var(--primary)' : 'var(--text-secondary)',
-                    borderBottom: s1View === 'edit' ? '2px solid var(--primary)' : '2px solid transparent',
-                    fontWeight: s1View === 'edit' ? 600 : 400,
-                  }}><SvgIcon name="edit" size={11} /> 编辑</button>
-                  <button onClick={() => setS1View('preview')} style={{
-                    padding: '5px 14px', fontSize: 12, cursor: 'pointer', background: 'none', border: 'none', borderRadius: 0,
-                    color: s1View === 'preview' ? 'var(--primary)' : 'var(--text-secondary)',
-                    borderBottom: s1View === 'preview' ? '2px solid var(--primary)' : '2px solid transparent',
-                    fontWeight: s1View === 'preview' ? 600 : 400,
-                  }}><SvgIcon name="eye" size={11} /> 预览</button>
-                  {s1View === 'preview' && s1Content && (
+                <style>{PREVIEW_CSS}</style>
+                {/* Toolbar */}
+                <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
+                  {!readOnly && (
+                    <>
+                      <button className="btn btn-ghost btn-sm" type="button"
+                        title="插入图片（上传后以链接引用，可设宽度）"
+                        style={{ fontSize: 11, padding: '2px 8px' }}
+                        onClick={() => s1ImgRef.current?.click()}>
+                        <SvgIcon name="image" size={12} /> 插入图片
+                      </button>
+                      <input
+                        type="number" min={0} step={10} value={s1ImageSize}
+                        onChange={e => setS1ImageSize(e.target.value)}
+                        placeholder="原图"
+                        title="图片宽度（px，留空=原图）"
+                        style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+                      />
+                      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
+                      <input ref={s1ImgRef} type="file" accept="image/*" style={{ display: 'none' }}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) handleS1InsertImage(f); e.target.value = '' }} />
+                    </>
+                  )}
+                  <span style={{ flex: 1 }} />
+                  {s1Content && (
                     <>
                       <button onClick={handleS1DownloadHtml} style={{
-                        marginLeft: 'auto', padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                        padding: '5px 12px', fontSize: 11, cursor: 'pointer',
                         background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
                       }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
                       <button onClick={handleS1Print} style={{
@@ -2949,27 +3009,19 @@ export default function ProjectPage() {
                     </>
                   )}
                 </div>
-                {s1View === 'edit' ? (
-                  <textarea className="form-textarea" style={{ flex: 1, minHeight: 280 }}
-                    value={s1Content} readOnly={readOnly}
-                    onChange={e => { setSteps(prev => ({ ...prev, [step1Key()]: e.target.value })) }}
-                    placeholder="点击左侧「生成」按钮，AI 整理后的标准文档将显示在此..." />
-                ) : (
-                  <div style={{
+                <div
+                  ref={s1EditorRef}
+                  contentEditable={!readOnly}
+                  suppressContentEditableWarning
+                  onInput={handleS1EditorInput}
+                  data-placeholder="点击左侧「生成」按钮，AI 整理后的文档将显示在此，可直接编辑或插入图片"
+                  className="md-preview"
+                  style={{
                     flex: 1, minHeight: 280, overflow: 'auto',
                     background: '#fff', borderRadius: 6, padding: '16px 20px',
-                    border: '1px solid var(--border)',
-                  }}>
-                    <style>{PREVIEW_CSS}</style>
-                    {s1Content ? (
-                      <div className="md-preview" dangerouslySetInnerHTML={{ __html: s1RenderedHtml }} />
-                    ) : (
-                      <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>
-                        暂无内容，请先生成文档
-                      </div>
-                    )}
-                  </div>
-                )}
+                    border: '1px solid var(--border)', outline: 'none',
+                  }}
+                />
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     {mode1 === 'link' ? '来源：视频提取' : mode1 === 'text' ? '来源：文字输入' : '来源：文件提取'}
