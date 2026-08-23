@@ -1,8 +1,7 @@
 import os
 import sys
 import sqlite3
-import shutil
-from datetime import datetime, timedelta
+from datetime import datetime
 
 # When running as PyInstaller bundle, data goes next to the exe
 if getattr(sys, 'frozen', False):
@@ -24,23 +23,6 @@ def get_db() -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
-
-
-def backup_database():
-    if not os.path.exists(DB_PATH):
-        return
-    today = datetime.now().strftime("%Y-%m-%d")
-    backup_path = os.path.join(BACKUP_DIR, f"yishao-{today}.db")
-    if not os.path.exists(backup_path):
-        shutil.copy2(DB_PATH, backup_path)
-    # Cleanup old backups (keep 7 days)
-    cutoff = datetime.now() - timedelta(days=7)
-    for f in os.listdir(BACKUP_DIR):
-        fpath = os.path.join(BACKUP_DIR, f)
-        if os.path.isfile(fpath):
-            mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
-            if mtime < cutoff:
-                os.remove(fpath)
 
 
 def _migrate_legacy_data(conn):
@@ -150,7 +132,6 @@ def _migrate_legacy_data(conn):
 
 
 def init_db():
-    backup_database()
     conn = get_db()
     try:
         # Migration tracking table
