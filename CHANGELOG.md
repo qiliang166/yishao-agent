@@ -2,6 +2,11 @@
 
 ## 2026-08-23
 
+- fix: remove redundant in-app daily backup overlapping cron job
+- chore: update build stamp after XSS fix (5f7c340)
+
+## 2026-08-23
+
 - fix: use DOM-safe image insertion to prevent XSS in WYSIWYG editors
 - chore: update build stamp after WYSIWYG preview editing (9ad0a75)
 
