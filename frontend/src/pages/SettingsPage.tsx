@@ -414,6 +414,14 @@ function SettingsPage() {
     saveThemeChoice(preset.id)
   }
 
+  const restoreThemeDefault = (id: string) => {
+    const def = DEFAULT_THEMES.find(t => t.id === id)
+    const preset = themePresets.find(p => p.id === id)
+    if (!def || !preset) return
+    saveThemePreset(id, preset.name, def.colors)
+    setEditThemeId(null)
+  }
+
   return (
     <div>
       {/* Tab Bar */}
@@ -944,6 +952,10 @@ function SettingsPage() {
                         {isEditing && (
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => setEditThemeId(null)}>取消</button>
+                        )}
+                        {isEditing && (
+                          <button className="btn btn-ghost btn-sm"
+                            onClick={() => restoreThemeDefault(preset.id)}>恢复默认</button>
                         )}
                       </div>
 
