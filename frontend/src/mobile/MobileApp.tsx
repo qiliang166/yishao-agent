@@ -127,14 +127,15 @@ function ThemeSync() {
         localStorage.removeItem('theme_presets')
       }
 
-      if (themeId === 'classic') {
-        resetThemeToDefault()
-      } else if (presetsJson) {
+      if (presetsJson) {
         try {
           const presets = JSON.parse(presetsJson)
           const preset = Array.isArray(presets) ? presets.find((p: any) => p != null && p.id === themeId) : null
           if (preset != null && preset.colors != null) applyThemeToDOM(preset.colors, themeId)
-        } catch {}
+          else resetThemeToDefault()
+        } catch { resetThemeToDefault() }
+      } else {
+        resetThemeToDefault()
       }
     }).catch(() => {})
   }, [user])

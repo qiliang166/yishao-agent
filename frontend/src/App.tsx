@@ -821,14 +821,15 @@ function App() {
         localStorage.removeItem('theme_presets')
       }
 
-      if (themeId === 'classic') {
-        resetThemeToDefault()
-      } else if (presetsJson) {
+      if (presetsJson) {
         try {
           const presets = JSON.parse(presetsJson)
-          const preset = presets.find((p: any) => p.id === themeId)
-          if (preset) applyThemeToDOM(preset.colors, themeId)
-        } catch {}
+          const preset = presets.find((p: any) => p != null && p.id === themeId)
+          if (preset && preset.colors) applyThemeToDOM(preset.colors, themeId)
+          else resetThemeToDefault()
+        } catch { resetThemeToDefault() }
+      } else {
+        resetThemeToDefault()
       }
     }).catch(() => {})
   }, [])

@@ -5,7 +5,7 @@ import DOMPurify from 'dompurify'
 import { api } from '../services/api'
 import { useModal } from '../components/ModalProvider'
 import { usePermission } from '../hooks/usePermission'
-import { DEFAULT_THEMES, applyThemeToDOM, resetThemeToDefault } from '../services/theme'
+import { DEFAULT_THEMES, applyThemeToDOM } from '../services/theme'
 import type { ThemePreset } from '../services/theme'
 
 type SettingsTab = 'general' | 'appearance' | 'manual' | 'plan'
@@ -82,6 +82,14 @@ const COLOR_LABELS = [
   { key: 'primaryHover', label: '悬停色' },
   { key: 'btnDirtyBg', label: '保存按钮' },
 ]
+
+function colorsEqualBuiltin(id: string, colors: Record<string, string>): boolean {
+  const def = DEFAULT_THEMES.find(t => t.id === id)
+  if (!def) return true
+  const keys = new Set([...Object.keys(def.colors), ...Object.keys(colors)])
+  for (const k of keys) if ((def.colors[k] || '') !== (colors[k] || '')) return false
+  return true
+}
 
 function SettingsPage() {
   const modal = useModal()
@@ -194,7 +202,6 @@ function SettingsPage() {
         try {
           const custom = JSON.parse(s.theme_presets)
           setThemePresets(DEFAULT_THEMES.map(p => {
-            if (p.isDefault) return p
             const override = custom.find((c: any) => c.id === p.id)
             return override ? { ...p, name: override.name, colors: { ...p.colors, ...override.colors } } : p
           }))
@@ -375,31 +382,23 @@ function SettingsPage() {
     applyThemeToDOM(preset.colors, preset.id)
   }
 
-  const applyClassicTheme = () => {
-    resetThemeToDefault()
-  }
-
   const saveThemeChoice = (id: string) => {
     localStorage.setItem('theme', id)
-    if (id !== 'classic') {
-      const preset = themePresets.find(p => p.id === id)
-      if (preset) {
-        localStorage.setItem('theme_presets', JSON.stringify(
-          themePresets.filter(p => !p.isDefault).map(p => ({ id: p.id, name: p.name, colors: p.colors }))
-        ))
-      }
-    }
+    const custom = themePresets
+      .filter(p => !p.isDefault || !colorsEqualBuiltin(p.id, p.colors))
+      .map(p => ({ id: p.id, name: p.name, colors: p.colors }))
+    if (custom.length) localStorage.setItem('theme_presets', JSON.stringify(custom))
     api.updateSettings({ theme: id }).catch(() => {})
   }
 
   const saveThemePreset = (id: string, name: string, colors: Record<string, string>) => {
-    const updated = themePresets.map(p => {
-      if (p.id === id) return { ...p, name, colors: { ...p.colors, ...colors } }
-      return p
-    })
+    const updated = themePresets.map(p =>
+      p.id === id ? { ...p, name, colors: { ...p.colors, ...colors } } : p)
     setThemePresets(updated)
 
-    const custom = updated.filter(p => !p.isDefault).map(p => ({ id: p.id, name: p.name, colors: p.colors }))
+    const custom = updated
+      .filter(p => !p.isDefault || !colorsEqualBuiltin(p.id, p.colors))
+      .map(p => ({ id: p.id, name: p.name, colors: p.colors }))
     localStorage.setItem('theme_presets', JSON.stringify(custom))
     api.updateSettings({ theme_presets: JSON.stringify(custom) }).catch(() => {})
 
@@ -411,11 +410,7 @@ function SettingsPage() {
 
   const handleThemeSelect = (preset: ThemePreset) => {
     setCurrentThemeId(preset.id)
-    if (preset.isDefault) {
-      applyClassicTheme()
-    } else {
-      applyTheme(preset)
-    }
+    applyTheme(preset)
     saveThemeChoice(preset.id)
   }
 
@@ -896,7 +891,7 @@ function SettingsPage() {
             <div className="settings-section">
               <h3>主题配色</h3>
               <p style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 12 }}>
-                选择预设主题或自定义配色，一键改变网站整体风格。经典酒红为默认主题，不可修改。
+                选择预设主题或自定义配色，一键改变网站整体风格。经典酒红为默认主题，也可点击「✏ 编辑」微调颜色。
               </p>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 {themePresets.map(preset => {
@@ -931,7 +926,7 @@ function SettingsPage() {
                           disabled={!canSaveGlobal}>
                           {isActive ? '✓ 使用中' : '启用'}
                         </button>
-                        {canSaveGlobal && !preset.isDefault && (
+                        {canSaveGlobal && (
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => {
                               if (isEditing) {
@@ -946,7 +941,7 @@ function SettingsPage() {
                             {isEditing ? '💾 保存修改' : '✏ 编辑'}
                           </button>
                         )}
-                        {!preset.isDefault && isEditing && (
+                        {isEditing && (
                           <button className="btn btn-ghost btn-sm"
                             onClick={() => setEditThemeId(null)}>取消</button>
                         )}
