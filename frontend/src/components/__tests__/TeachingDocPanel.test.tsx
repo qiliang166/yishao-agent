@@ -7,6 +7,7 @@ import TeachingDocPanel from '../TeachingDocPanel'
 vi.mock('../../services/api', () => ({
   api: {
     llmGenerate: vi.fn(),
+    llmGenerateStream: vi.fn(async function* () {}),
     saveStep: vi.fn(),
     saveFileToProject: vi.fn(),
   },

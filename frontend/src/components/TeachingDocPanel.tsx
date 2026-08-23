@@ -4,6 +4,8 @@ import { api } from '../services/api'
 import { useModal } from './ModalProvider'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import TurndownService from 'turndown'
+import { gfm } from 'turndown-plugin-gfm'
 
 export interface TeachingDocPanelProps {
   docType: 'sop' | 'dao' | 'yanxi'
@@ -45,6 +47,10 @@ const DEFAULT_PROMPTS: Record<string, string> = {
   yanxi: '请将以下内容整理为手册格式，包含背景知识和要点。',
 }
 const IMG_MAX_BYTES = 2 * 1024 * 1024
+
+// ── HTML → Markdown converter (shared across all doc panels) ──
+const turndownService = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-', codeBlockStyle: 'fenced' })
+turndownService.use(gfm)
 
 // ── Preview tab CSS (scoped to .md-preview-container) ──
 const PREVIEW_CSS = `
@@ -106,12 +112,13 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
 
   // ── Editor state ──
   const [imageSize, setImageSize] = useState('400')
+  const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview')
 
   const stepKey = STEP_KEYS[docType]
   const propContent = steps[stepKey] || ''
   const savedContent = savedSteps[stepKey] || ''
 
-  // ── Local content state (decoupled from props for dirty-state tracking) ──
+  // ── Local content state (markdown is the source of truth) ──
   const [localContent, setLocalContent] = useState(propContent)
 
   // Re-sync localContent when prop content changes externally (AI gen, onRefresh)
@@ -159,19 +166,31 @@ const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, Te
     }
   }, [localContent])
 
-  // ── WYSIWYG editor: uncontrolled div, push HTML only on external content change ──
+  // ── Push markdown render into the WYSIWYG editor on external content change / mode switch ──
   useEffect(() => {
+    if (viewMode !== 'preview') return
     if (!editorRef.current) return
     if (lastPushedRef.current === localContent) return
     lastPushedRef.current = localContent
     editorRef.current.innerHTML = renderedHtml
-  }, [localContent, renderedHtml])
+  }, [localContent, renderedHtml, viewMode])
+
+  // ── Commit current WYSIWYG HTML back to markdown (source of truth) ──
+  const commitPreviewHtml = () => {
+    const html = editorRef.current?.innerHTML ?? ''
+    const md = turndownService.turndown(html)
+    lastPushedRef.current = md
+    setLocalContent(md)
+    api.saveStep(projectId, stepKey, md)
+  }
 
   const handleEditorInput = () => {
-    const html = editorRef.current?.innerHTML ?? ''
-    lastPushedRef.current = html
-    setLocalContent(html)
-    api.saveStep(projectId, stepKey, html)
+    commitPreviewHtml()
+  }
+
+  const handleSourceChange = (text: string) => {
+    setLocalContent(text)
+    api.saveStep(projectId, stepKey, text)
   }
 
   // ── Inline /api/logos/* references as data URIs for offline HTML ──
@@ -384,14 +403,71 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
           }
         }
       }
-      const html = div.innerHTML
-      lastPushedRef.current = html
-      setLocalContent(html)
-      api.saveStep(projectId, stepKey, html)
+      commitPreviewHtml()
       modal.toast('图片已插入', 'success')
     } catch (e: any) {
       modal.toast('图片上传失败: ' + (e?.message || e), 'error')
     }
+  }
+
+  // ── Insert a 3x3 table at cursor in the WYSIWYG editor ──
+  const handleInsertTable = () => {
+    const div = editorRef.current
+    if (!div) return
+    div.focus()
+    const cols = 3
+    let html = '<table><thead><tr>' + '<th>表头</th>'.repeat(cols) + '</tr></thead><tbody>'
+    for (let i = 0; i < 2; i++) {
+      html += '<tr>' + '<td></td>'.repeat(cols) + '</tr>'
+    }
+    html += '</tbody></table><p><br></p>'
+    let ok = false
+    try { ok = document.execCommand('insertHTML', false, html) } catch { ok = false }
+    if (!ok) {
+      const table = document.createElement('table')
+      const thead = document.createElement('thead')
+      const headRow = document.createElement('tr')
+      for (let i = 0; i < cols; i++) {
+        const th = document.createElement('th')
+        th.textContent = '表头'
+        headRow.appendChild(th)
+      }
+      thead.appendChild(headRow)
+      table.appendChild(thead)
+      const tbody = document.createElement('tbody')
+      for (let r = 0; r < 2; r++) {
+        const row = document.createElement('tr')
+        for (let c = 0; c < cols; c++) row.appendChild(document.createElement('td'))
+        tbody.appendChild(row)
+      }
+      table.appendChild(tbody)
+      div.appendChild(table)
+      div.appendChild(document.createElement('p'))
+    }
+    commitPreviewHtml()
+    modal.toast('已插入表格，点击单元格可编辑', 'success')
+  }
+
+  // ── Insert a blank row below the row the cursor is in ──
+  const handleInsertRow = () => {
+    const div = editorRef.current
+    if (!div) return
+    const sel = window.getSelection()
+    let tr: HTMLTableRowElement | null = null
+    if (sel && sel.rangeCount > 0) {
+      const anchor = sel.anchorNode as Element | null
+      const el = anchor && anchor.nodeType === 1 ? anchor : (anchor?.parentElement ?? null)
+      tr = el ? (el.closest('tr') as HTMLTableRowElement | null) : null
+    }
+    if (!tr) {
+      modal.toast('请先把光标放到表格的某一行内', 'error')
+      return
+    }
+    const newTr = tr.cloneNode(true) as HTMLTableRowElement
+    newTr.querySelectorAll('td,th').forEach(c => { c.textContent = '' })
+    tr.after(newTr)
+    commitPreviewHtml()
+    modal.toast('已在当前行下方插入一行', 'success')
   }
 
   // ── Save to project file ──
@@ -478,62 +554,111 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     </>
   )
 
-  // ── Editor: single WYSIWYG contentEditable area (edit + image insertion inline) ──
+  // ── Switch editor mode (reset the push guard so a freshly-mounted WYSIWYG re-renders) ──
+  const switchMode = (mode: 'preview' | 'source') => {
+    if (mode === 'preview') lastPushedRef.current = null
+    setViewMode(mode)
+  }
+
+  // ── Editor: dual-mode (preview WYSIWYG + source markdown textarea) ──
+  const tabBar = (
+    <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
+      <button className="btn btn-ghost btn-sm" type="button"
+        style={{ fontSize: 11, padding: '2px 10px', background: viewMode === 'preview' ? 'var(--primary)' : undefined, color: viewMode === 'preview' ? '#fff' : undefined }}
+        onClick={() => switchMode('preview')}>
+        预览
+      </button>
+      <button className="btn btn-ghost btn-sm" type="button"
+        style={{ fontSize: 11, padding: '2px 10px', background: viewMode === 'source' ? 'var(--primary)' : undefined, color: viewMode === 'source' ? '#fff' : undefined }}
+        onClick={() => switchMode('source')}>
+        源码
+      </button>
+      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+        {viewMode === 'preview' ? '所见即所得，可插图、编辑文字、回车换行、插入表格' : 'Markdown 源码，可自由换行、新增行、写表格'}
+      </span>
+    </div>
+  )
+
   const editor = (
     <>
       <style>{PREVIEW_CSS}</style>
-      <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
-        <button className="btn btn-ghost btn-sm" type="button"
-          title="插入图片（上传后以链接引用，可设宽度）"
-          style={{ fontSize: 11, padding: '2px 8px' }}
-          onClick={() => imgRef.current?.click()}>
-          <SvgIcon name="image" size={12} /> 插入图片
-        </button>
-        <input
-          type="number" min={0} step={10} value={imageSize}
-          onChange={e => setImageSize(e.target.value)}
-          placeholder="原图"
-          title="图片宽度（px，留空=原图）"
-          style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+      {tabBar}
+      {viewMode === 'source' ? (
+        <textarea
+          className="form-input"
+          value={localContent}
+          onChange={e => handleSourceChange(e.target.value)}
+          placeholder="在此编辑 Markdown 源码，可直接换行、新增行，或写表格"
+          style={{ flex: 1, minHeight: 280, resize: 'none', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7, width: '100%' }}
         />
-        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
-        <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
-        <span style={{ flex: 1 }} />
-        {localContent && (
-          <>
-            <button
-              onClick={handleDownloadHtml}
-              style={{
-                padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-                background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-              }}>
-              <SvgIcon name="download" size={12} /> 下载 HTML
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-ghost btn-sm" type="button"
+              title="插入图片（上传后以链接引用，可设宽度）"
+              style={{ fontSize: 11, padding: '2px 8px' }}
+              onClick={() => imgRef.current?.click()}>
+              <SvgIcon name="image" size={12} /> 插入图片
             </button>
-            <button
-              onClick={handlePrint}
-              style={{
-                marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-                background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-              }}>
-              <SvgIcon name="printer" size={12} /> 打印
+            <input
+              type="number" min={0} step={10} value={imageSize}
+              onChange={e => setImageSize(e.target.value)}
+              placeholder="原图"
+              title="图片宽度（px，留空=原图）"
+              style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+            />
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
+            <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
+              onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
+            <button className="btn btn-ghost btn-sm" type="button"
+              title="在光标处插入一个 3x3 表格"
+              style={{ fontSize: 11, padding: '2px 8px' }}
+              onClick={handleInsertTable}>
+              <SvgIcon name="table" size={12} /> 插入表格
             </button>
-          </>
-        )}
-      </div>
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleEditorInput}
-        data-placeholder="点击生成按钮，AI生成后在此直接编辑，可输入文字或插入图片"
-        className="md-preview"
-        style={{
-          flex: 1, minHeight: 280, overflow: 'auto',
-          background: '#fff', borderRadius: 6, padding: '16px 20px',
-          border: '1px solid var(--border)', outline: 'none',
-        }}
-      />
+            <button className="btn btn-ghost btn-sm" type="button"
+              title="在光标所在行下方插入一行（需先把光标放进表格内）"
+              style={{ fontSize: 11, padding: '2px 8px' }}
+              onClick={handleInsertRow}>
+              <SvgIcon name="plus" size={12} /> 插入行
+            </button>
+            <span style={{ flex: 1 }} />
+            {localContent && (
+              <>
+                <button
+                  onClick={handleDownloadHtml}
+                  style={{
+                    padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                    background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                  }}>
+                  <SvgIcon name="download" size={12} /> 下载 HTML
+                </button>
+                <button
+                  onClick={handlePrint}
+                  style={{
+                    marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                    background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                  }}>
+                  <SvgIcon name="printer" size={12} /> 打印
+                </button>
+              </>
+            )}
+          </div>
+          <div
+            ref={editorRef}
+            contentEditable
+            suppressContentEditableWarning
+            onInput={handleEditorInput}
+            data-placeholder="点击生成按钮，AI生成后在此直接编辑，可输入文字、回车换行或插入图片/表格"
+            className="md-preview"
+            style={{
+              flex: 1, minHeight: 280, overflow: 'auto',
+              background: '#fff', borderRadius: 6, padding: '16px 20px',
+              border: '1px solid var(--border)', outline: 'none',
+            }}
+          />
+        </>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
         <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
           {docType === 'sop' ? '编辑完成后可供文档课件使用'
