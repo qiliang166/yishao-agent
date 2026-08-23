@@ -2,6 +2,11 @@
 
 ## 2026-08-23
 
+- fix: shrink data backup scope and clean temp zips to prevent disk-full outage
+- chore: update build stamp after preview split-view editing (31e313a)
+
+## 2026-08-23
+
 - feat: preview tab supports editing and image insertion via split view
 - chore: update build stamp after slide-regenerate model fix (0b04234)
 
