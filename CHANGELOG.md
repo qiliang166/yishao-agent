@@ -2,6 +2,11 @@
 
 ## 2026-08-23
 
+- feat: restore dual-tab Markdown/Preview editing with table & row insertion
+- chore: update build stamp after backup-redundancy fix (f41ad3d)
+
+## 2026-08-23
+
 - fix: remove redundant in-app daily backup overlapping cron job
 - chore: update build stamp after XSS fix (5f7c340)
 
