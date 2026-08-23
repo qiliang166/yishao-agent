@@ -7,6 +7,7 @@ import uuid
 from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Body, Request, Depends
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Response, HTMLResponse
+from starlette.background import BackgroundTask
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -353,7 +354,7 @@ EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 
 # Business-data subdirectories bundled in the full data package (export/import)
-DATA_PACKAGE_SUBDIRS = ("exports", "downloads", "logos", "output", "videos", "audio")
+DATA_PACKAGE_SUBDIRS = ("exports", "logos", "output", "audio")
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -8216,6 +8217,7 @@ def backup_database(user=require_perm("config.global")):
             tmp_zip,
             media_type="application/zip",
             filename=f"yishao-data-{ts}.zip",
+            background=BackgroundTask(os.remove, tmp_zip),
         )
     except Exception:
         if os.path.exists(tmp_zip):
@@ -8299,6 +8301,7 @@ def backup_full(user=require_perm("config.global")):
             tmp,
             media_type="application/zip",
             filename=f"yishao-full-{ts}.zip",
+            background=BackgroundTask(os.remove, tmp),
         )
     except Exception:
         if os.path.exists(tmp):
