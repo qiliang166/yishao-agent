@@ -1441,10 +1441,40 @@ export default function ProjectPage() {
 .md-preview[contenteditable]:empty:before{content:attr(data-placeholder);color:#999}
 `
 
-  const handleS1DownloadHtml = () => {
+  // ── Inline /api/logos/* references as data URIs so downloaded/printed HTML is self-contained ──
+  const inlineLogos = useCallback(async (html: string): Promise<string> => {
+    const regex = /src="(\/api\/logos\/[^"]+)"/g
+    const matches = [...html.matchAll(regex)]
+    if (matches.length === 0) return html
+    const token = localStorage.getItem('auth_token')
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {}
+    let out = html
+    for (const m of matches) {
+      const url = m[1]
+      try {
+        const resp = await fetch(url, { headers })
+        if (!resp.ok) continue
+        const blob = await resp.blob()
+        const dataUri = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = () => reject(reader.error)
+          reader.readAsDataURL(blob)
+        })
+        out = out.split(`src="${url}"`).join(`src="${dataUri}"`)
+      } catch {
+        // keep original URL if fetch fails
+      }
+    }
+    return out
+  }, [])
+
+  const handleS1DownloadHtml = async () => {
     if (!s1RenderedHtml) return
+    let html = s1RenderedHtml
+    try { html = await inlineLogos(s1RenderedHtml) } catch { /* keep original */ }
     const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件提取'
-    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>AI生成结果 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + s1RenderedHtml + '</div>\n</body>\n</html>'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>AI生成结果 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + html + '</div>\n</body>\n</html>'
     const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1454,12 +1484,15 @@ export default function ProjectPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleS1Print = () => {
+  const handleS1Print = async () => {
     if (!s1RenderedHtml) return
-    const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件提取'
-    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>AI生成结果 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + s1RenderedHtml + '</div></body>\n</html>'
     const w = window.open('', '_blank', 'width=900,height=700')
-    if (w) { w.document.write(doc); w.document.close(); w.focus(); w.print() }
+    if (!w) return
+    let html = s1RenderedHtml
+    try { html = await inlineLogos(s1RenderedHtml) } catch { /* keep original */ }
+    const label = sub === '1a' ? '视频提取' : sub === '1b' ? '文字输入' : '文件提取'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>AI生成结果 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + html + '</div></body>\n</html>'
+    w.document.write(doc); w.document.close(); w.focus(); w.print()
   }
   const step3Key = () => sub === '3a' ? 'step3_sop_doc' : sub === '3b' ? 'step3_dao_ppt' : 'step3_yan_ppt'
 
@@ -1472,11 +1505,13 @@ export default function ProjectPage() {
     try { return DOMPurify.sanitize(marked.parse(s3OutlineText) as string) } catch { return '' }
   }, [s3OutlineText])
 
-  const handleS3DownloadHtml = () => {
+  const handleS3DownloadHtml = async () => {
     if (!s3RenderedHtml) return
+    let html = s3RenderedHtml
+    try { html = await inlineLogos(s3RenderedHtml) } catch { /* keep original */ }
     const key = step3Key()
     const label = key === 'step3_dao_ppt' ? '分析PPT' : key === 'step3_yan_ppt' ? '综合PPT' : '文档课件'
-    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>PPT大纲 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + s3RenderedHtml + '</div>\n</body>\n</html>'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>PPT大纲 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + html + '</div>\n</body>\n</html>'
     const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1484,13 +1519,16 @@ export default function ProjectPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleS3Print = () => {
+  const handleS3Print = async () => {
     if (!s3RenderedHtml) return
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (!w) return
+    let html = s3RenderedHtml
+    try { html = await inlineLogos(s3RenderedHtml) } catch { /* keep original */ }
     const key = step3Key()
     const label = key === 'step3_dao_ppt' ? '分析PPT' : key === 'step3_yan_ppt' ? '综合PPT' : '文档课件'
-    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>PPT大纲 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + s3RenderedHtml + '</div></body>\n</html>'
-    const w = window.open('', '_blank', 'width=900,height=700')
-    if (w) { w.document.write(doc); w.document.close(); w.focus(); w.print() }
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>PPT大纲 - ' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + html + '</div></body>\n</html>'
+    w.document.write(doc); w.document.close(); w.focus(); w.print()
   }
 
   // ── Stage 4 preview helpers ──
@@ -1504,11 +1542,13 @@ export default function ProjectPage() {
     try { return DOMPurify.sanitize(marked.parse(s4Content, { breaks: true }) as string) } catch { return '' }
   }, [s4Content])
 
-  const handleS4DownloadHtml = () => {
+  const handleS4DownloadHtml = async () => {
     if (!s4RenderedHtml) return
+    let html = s4RenderedHtml
+    try { html = await inlineLogos(s4RenderedHtml) } catch { /* keep original */ }
     const tab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
     const label = tab?.label || '演讲稿'
-    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + s4RenderedHtml + '</div>\n</body>\n</html>'
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>' + label + '</title>\n<style>' + PREVIEW_CSS + '</style>\n</head>\n<body style="max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif">\n<div class="md-preview">' + html + '</div>\n</body>\n</html>'
     const blob = new Blob([doc], { type: 'text/html;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1516,13 +1556,16 @@ export default function ProjectPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleS4Print = () => {
+  const handleS4Print = async () => {
     if (!s4RenderedHtml) return
+    const w = window.open('', '_blank', 'width=900,height=700')
+    if (!w) return
+    let html = s4RenderedHtml
+    try { html = await inlineLogos(s4RenderedHtml) } catch { /* keep original */ }
     const tab = S4_SPEECH_TABS.find(t => t.key === s4ActiveSpeechTab)
     const label = tab?.label || '演讲稿'
-    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + s4RenderedHtml + '</div></body>\n</html>'
-    const w = window.open('', '_blank', 'width=900,height=700')
-    if (w) { w.document.write(doc); w.document.close(); w.focus(); w.print() }
+    const doc = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="UTF-8">\n<title>' + label + '</title>\n<style>' + PREVIEW_CSS + '\nbody{max-width:800px;margin:0 auto;padding:24px;font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif}@media print{body{max-width:none;padding:0}}\n</style>\n</head>\n<body><div class="md-preview">' + html + '</div></body>\n</html>'
+    w.document.write(doc); w.document.close(); w.focus(); w.print()
   }
 
   // Extract run_id, provider, model for the edit panel
