@@ -362,14 +362,28 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
         return
       }
       const width = parseInt(imageSize, 10)
-      const widthAttr = width > 0 ? ` width="${width}"` : ''
-      const snippet = `<img src="${res.url}"${widthAttr} alt="图片">`
       const div = editorRef.current
       if (!div) return
       div.focus()
       let ok = false
-      try { ok = document.execCommand('insertHTML', false, snippet) } catch { ok = false }
-      if (!ok) div.innerHTML += snippet
+      try { ok = document.execCommand('insertImage', false, res.url) } catch { ok = false }
+      if (!ok) {
+        const img = document.createElement('img')
+        img.src = res.url
+        img.alt = '图片'
+        if (width > 0) img.width = width
+        div.appendChild(img)
+      } else if (width > 0) {
+        const imgs = div.querySelectorAll('img')
+        for (const img of Array.from(imgs).reverse()) {
+          const src = img.getAttribute('src') || ''
+          if (src === res.url || src.endsWith(res.url)) {
+            img.style.width = width + 'px'
+            img.style.maxWidth = '100%'
+            break
+          }
+        }
+      }
       const html = div.innerHTML
       lastPushedRef.current = html
       setLocalContent(html)
