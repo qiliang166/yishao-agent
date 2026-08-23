@@ -2,6 +2,11 @@
 
 ## 2026-08-23
 
+- fix: exclude output dir from data backup (1.7G generated artifacts on server)
+- chore: update build stamp after data-backup fix (ba61e4a)
+
+## 2026-08-23
+
 - fix: shrink data backup scope and clean temp zips to prevent disk-full outage
 - chore: update build stamp after preview split-view editing (31e313a)
 
