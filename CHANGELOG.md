@@ -2,6 +2,30 @@
 
 ## 2026-08-23
 
+- feat: add restore-default button to theme editor
+
+## 2026-08-23
+
+- feat: allow customizing classic wine-red theme colors
+- chore: update build stamp after image-inlining fix (782518e)
+
+## 2026-08-23
+
+- fix: inline logos as data URIs in Stage 1/3/4 download & print HTML
+- chore: update build stamp after Stage 1 dual-tab editor (e938cc2)
+
+## 2026-08-23
+
+- feat: add source/preview dual tabs to Stage 1 material editor
+- chore: update build stamp after image-width fix (35a0931)
+
+## 2026-08-23
+
+- fix: preserve image width when inserting in preview tab
+- chore: update build stamp after dual-tab Markdown/Preview editing (8a9af49)
+
+## 2026-08-23
+
 - feat: restore dual-tab Markdown/Preview editing with table & row insertion
 - chore: update build stamp after backup-redundancy fix (f41ad3d)
 
