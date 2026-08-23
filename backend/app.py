@@ -353,8 +353,10 @@ AUDIO_DIR = os.path.join(BASE_DIR, "data", "audio")
 EXPORT_DIR = os.path.join(BASE_DIR, "data", "exports")
 LOGO_DIR = os.path.join(BASE_DIR, "data", "logos")
 
-# Business-data subdirectories bundled in the full data package (export/import)
-DATA_PACKAGE_SUBDIRS = ("exports", "logos", "output", "audio")
+# Business-data subdirectories bundled in the full data package (export/import).
+# downloads/output/videos are large regenerable artifacts, excluded so the
+# synchronous backup stays small instead of zipping ~3.7GB and filling the disk.
+DATA_PACKAGE_SUBDIRS = ("exports", "logos", "audio")
 
 os.makedirs(AUDIO_DIR, exist_ok=True)
 os.makedirs(EXPORT_DIR, exist_ok=True)
