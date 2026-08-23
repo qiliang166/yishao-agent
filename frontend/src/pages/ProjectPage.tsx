@@ -8,10 +8,29 @@ import TeachingDocPanel from '../components/TeachingDocPanel'
 import UnlockConfirmDialog from '../components/UnlockConfirmDialog'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import TurndownService from 'turndown'
+import { gfm } from 'turndown-plugin-gfm'
 import SlideEditModal from '../components/SlideEditModal'
 import SvgIcon from '../components/SvgIcon'
 import Stage3TempSettings, { StageTemps, DEFAULT_STAGE_TEMPS } from '../components/Stage3TempSettings'
 import HelpButton from '../components/HelpButton'
+
+// ── HTML → Markdown converter (mirrors TeachingDocPanel, keeps image width) ──
+const turndownService = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-', codeBlockStyle: 'fenced' })
+turndownService.use(gfm)
+turndownService.addRule('image', {
+  filter: 'img',
+  replacement: (_content, node) => {
+    const el = node as HTMLElement
+    const src = el.getAttribute('src') || ''
+    const alt = el.getAttribute('alt') || ''
+    const widthAttr = el.getAttribute('width')
+    const styleWidth = el.style && el.style.width ? parseInt(el.style.width, 10) : 0
+    const width = widthAttr || styleWidth || 0
+    if (width) return `<img src="${src}" alt="${alt}" width="${width}">`
+    return `![${alt}](${src})`
+  },
+})
 
 // ── Types ──
 interface Project {
@@ -1326,6 +1345,7 @@ export default function ProjectPage() {
   const s1ImgRef = useRef<HTMLInputElement>(null)
   const s1LastPushedRef = useRef<string | null>(null)
   const [s1ImageSize, setS1ImageSize] = useState('400')
+  const [s1ViewMode, setS1ViewMode] = useState<'preview' | 'source'>('preview')
 
   useEffect(() => {
     if (stage !== 1) {
@@ -1333,16 +1353,27 @@ export default function ProjectPage() {
       s1LastPushedRef.current = null
       return
     }
+    if (s1ViewMode !== 'preview') return
     if (!s1EditorRef.current) return
     if (s1LastPushedRef.current === s1Content) return
     s1LastPushedRef.current = s1Content
     s1EditorRef.current.innerHTML = s1RenderedHtml
-  }, [stage, s1Content, s1RenderedHtml])
+  }, [stage, s1Content, s1RenderedHtml, s1ViewMode])
+
+  const s1SwitchMode = (mode: 'preview' | 'source') => {
+    if (mode === 'preview') s1LastPushedRef.current = null
+    setS1ViewMode(mode)
+  }
+
+  const handleS1SourceChange = (text: string) => {
+    setSteps(prev => ({ ...prev, [step1Key()]: text }))
+  }
 
   const handleS1EditorInput = () => {
     const html = s1EditorRef.current?.innerHTML ?? ''
-    s1LastPushedRef.current = html
-    setSteps(prev => ({ ...prev, [step1Key()]: html }))
+    const md = turndownService.turndown(html)
+    s1LastPushedRef.current = md
+    setSteps(prev => ({ ...prev, [step1Key()]: md }))
   }
 
   const handleS1InsertImage = async (file: File) => {
@@ -1379,9 +1410,9 @@ export default function ProjectPage() {
           }
         }
       }
-      const html = div.innerHTML
-      s1LastPushedRef.current = html
-      setSteps(prev => ({ ...prev, [step1Key()]: html }))
+      const md = turndownService.turndown(div.innerHTML)
+      s1LastPushedRef.current = md
+      setSteps(prev => ({ ...prev, [step1Key()]: md }))
       modal.toast('图片已插入', 'success')
     } catch (e: any) {
       modal.toast('图片上传失败: ' + (e?.message || e), 'error')
@@ -2987,55 +3018,84 @@ export default function ProjectPage() {
             <div className="panel-right">
               <div className="card" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <style>{PREVIEW_CSS}</style>
-                {/* Toolbar */}
+                {/* tabBar: 预览 / 源码 */}
                 <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
-                  {!readOnly && (
-                    <>
-                      <button className="btn btn-ghost btn-sm" type="button"
-                        title="插入图片（上传后以链接引用，可设宽度）"
-                        style={{ fontSize: 11, padding: '2px 8px' }}
-                        onClick={() => s1ImgRef.current?.click()}>
-                        <SvgIcon name="image" size={12} /> 插入图片
-                      </button>
-                      <input
-                        type="number" min={0} step={10} value={s1ImageSize}
-                        onChange={e => setS1ImageSize(e.target.value)}
-                        placeholder="原图"
-                        title="图片宽度（px，留空=原图）"
-                        style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
-                      />
-                      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
-                      <input ref={s1ImgRef} type="file" accept="image/*" style={{ display: 'none' }}
-                        onChange={e => { const f = e.target.files?.[0]; if (f) handleS1InsertImage(f); e.target.value = '' }} />
-                    </>
-                  )}
-                  <span style={{ flex: 1 }} />
-                  {s1Content && (
-                    <>
-                      <button onClick={handleS1DownloadHtml} style={{
-                        padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
-                      <button onClick={handleS1Print} style={{
-                        marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
-                        background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
-                      }}><SvgIcon name="printer" size={11} /> 打印</button>
-                    </>
-                  )}
+                  <button className="btn btn-ghost btn-sm" type="button"
+                    style={{ fontSize: 11, padding: '2px 10px', background: s1ViewMode === 'preview' ? 'var(--primary)' : undefined, color: s1ViewMode === 'preview' ? '#fff' : undefined }}
+                    onClick={() => s1SwitchMode('preview')}>
+                    预览
+                  </button>
+                  <button className="btn btn-ghost btn-sm" type="button"
+                    style={{ fontSize: 11, padding: '2px 10px', background: s1ViewMode === 'source' ? 'var(--primary)' : undefined, color: s1ViewMode === 'source' ? '#fff' : undefined }}
+                    onClick={() => s1SwitchMode('source')}>
+                    源码
+                  </button>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                    {s1ViewMode === 'preview' ? '所见即所得，可插图、编辑文字、回车换行' : 'Markdown 源码，可自由换行、新增行'}
+                  </span>
                 </div>
-                <div
-                  ref={s1EditorRef}
-                  contentEditable={!readOnly}
-                  suppressContentEditableWarning
-                  onInput={handleS1EditorInput}
-                  data-placeholder="点击左侧「生成」按钮，AI 整理后的文档将显示在此，可直接编辑或插入图片"
-                  className="md-preview"
-                  style={{
-                    flex: 1, minHeight: 280, overflow: 'auto',
-                    background: '#fff', borderRadius: 6, padding: '16px 20px',
-                    border: '1px solid var(--border)', outline: 'none',
-                  }}
-                />
+                {s1ViewMode === 'source' ? (
+                  <textarea
+                    className="form-input"
+                    value={s1Content}
+                    readOnly={readOnly}
+                    onChange={e => handleS1SourceChange(e.target.value)}
+                    placeholder="在此编辑 Markdown 源码，可直接换行、新增行"
+                    style={{ flex: 1, minHeight: 280, resize: 'none', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.7, width: '100%' }}
+                  />
+                ) : (
+                  <>
+                    {/* Toolbar */}
+                    <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
+                      {!readOnly && (
+                        <>
+                          <button className="btn btn-ghost btn-sm" type="button"
+                            title="插入图片（上传后以链接引用，可设宽度）"
+                            style={{ fontSize: 11, padding: '2px 8px' }}
+                            onClick={() => s1ImgRef.current?.click()}>
+                            <SvgIcon name="image" size={12} /> 插入图片
+                          </button>
+                          <input
+                            type="number" min={0} step={10} value={s1ImageSize}
+                            onChange={e => setS1ImageSize(e.target.value)}
+                            placeholder="原图"
+                            title="图片宽度（px，留空=原图）"
+                            style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+                          />
+                          <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
+                          <input ref={s1ImgRef} type="file" accept="image/*" style={{ display: 'none' }}
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleS1InsertImage(f); e.target.value = '' }} />
+                        </>
+                      )}
+                      <span style={{ flex: 1 }} />
+                      {s1Content && (
+                        <>
+                          <button onClick={handleS1DownloadHtml} style={{
+                            padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                            background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                          }}><SvgIcon name="download" size={11} /> 下载 HTML</button>
+                          <button onClick={handleS1Print} style={{
+                            marginLeft: 6, padding: '5px 12px', fontSize: 11, cursor: 'pointer',
+                            background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 4,
+                          }}><SvgIcon name="printer" size={11} /> 打印</button>
+                        </>
+                      )}
+                    </div>
+                    <div
+                      ref={s1EditorRef}
+                      contentEditable={!readOnly}
+                      suppressContentEditableWarning
+                      onInput={handleS1EditorInput}
+                      data-placeholder="点击左侧「生成」按钮，AI 整理后的文档将显示在此，可直接编辑或插入图片"
+                      className="md-preview"
+                      style={{
+                        flex: 1, minHeight: 280, overflow: 'auto',
+                        background: '#fff', borderRadius: 6, padding: '16px 20px',
+                        border: '1px solid var(--border)', outline: 'none',
+                      }}
+                    />
+                  </>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
                     {mode1 === 'link' ? '来源：视频提取' : mode1 === 'text' ? '来源：文字输入' : '来源：文件提取'}
