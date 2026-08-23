@@ -1,5 +1,10 @@
 ﻿# 更新日志
 
+## 2026-08-23
+
+- feat: preview tab supports editing and image insertion via split view
+- chore: update build stamp after slide-regenerate model fix (0b04234)
+
 ## 2026-08-20
 
 - fix: slide regenerate honors selected model instead of defaulting to first provider model
