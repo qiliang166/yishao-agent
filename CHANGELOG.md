@@ -2,6 +2,11 @@
 
 ## 2026-08-23
 
+- feat: WYSIWYG preview editing + inline image insertion for Stage 1 & 2
+- chore: update build stamp after output-dir exclusion (e244559)
+
+## 2026-08-23
+
 - fix: exclude output dir from data backup (1.7G generated artifacts on server)
 - chore: update build stamp after data-backup fix (ba61e4a)
 
