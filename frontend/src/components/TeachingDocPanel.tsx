@@ -499,55 +499,69 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     </div>
   )
 
+  const imageToolbar = (
+    <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
+      <button className="btn btn-ghost btn-sm" type="button"
+        title="插入图片（上传后以链接引用，可设宽度）"
+        style={{ fontSize: 11, padding: '2px 8px' }}
+        onClick={() => imgRef.current?.click()}>
+        <SvgIcon name="image" size={12} /> 插入图片
+      </button>
+      <input
+        type="number" min={0} step={10} value={imageSize}
+        onChange={e => setImageSize(e.target.value)}
+        placeholder="原图"
+        title="图片宽度（px，留空=原图）"
+        style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
+      />
+      <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
+      <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
+    </div>
+  )
+
+  const editTextarea = (
+    <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
+      ref={taRef}
+      value={localContent}
+      onChange={e => {
+        const newVal = e.target.value
+        setLocalContent(newVal)
+        api.saveStep(projectId, stepKey, newVal)
+      }}
+      placeholder="点击生成按钮，AI生成后在此编辑..."
+    />
+  )
+
   const editor = (
     <>
       {tabBar}
 
       {viewMode === 'edit' ? (
         <>
-          <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexShrink: 0, alignItems: 'center' }}>
-            <button className="btn btn-ghost btn-sm" type="button"
-              title="插入图片（上传后以链接引用，可设宽度）"
-              style={{ fontSize: 11, padding: '2px 8px' }}
-              onClick={() => imgRef.current?.click()}>
-              <SvgIcon name="image" size={12} /> 插入图片
-            </button>
-            <input
-              type="number" min={0} step={10} value={imageSize}
-              onChange={e => setImageSize(e.target.value)}
-              placeholder="原图"
-              title="图片宽度（px，留空=原图）"
-              style={{ width: 64, padding: '2px 6px', fontSize: 11, border: '1px solid var(--border)', borderRadius: 4 }}
-            />
-            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>px 宽</span>
-            <input ref={imgRef} type="file" accept="image/*" style={{ display: 'none' }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleInsertImage(f); e.target.value = '' }} />
-          </div>
-          <textarea className="form-textarea" style={{ flex: 1, minHeight: 120 }}
-            ref={taRef}
-            value={localContent}
-            onChange={e => {
-              const newVal = e.target.value
-              setLocalContent(newVal)
-              api.saveStep(projectId, stepKey, newVal)
-            }}
-            placeholder="点击生成按钮，AI生成后在此编辑..."
-          />
+          {imageToolbar}
+          {editTextarea}
         </>
       ) : (
-        <div style={{
-          flex: 1, minHeight: 120, overflow: 'auto',
-          background: '#fff', borderRadius: 6, padding: '16px 20px',
-          border: '1px solid var(--border)',
-        }}>
-          <style>{PREVIEW_CSS}</style>
-          {localContent ? (
-            <div className="md-preview" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
-          ) : (
-            <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>
-              暂无内容，请先生成文档
-            </div>
-          )}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{
+            flex: '1 1 50%', minHeight: 120, overflow: 'auto',
+            background: '#fff', borderRadius: 6, padding: '16px 20px',
+            border: '1px solid var(--border)',
+          }}>
+            <style>{PREVIEW_CSS}</style>
+            {localContent ? (
+              <div className="md-preview" dangerouslySetInnerHTML={{ __html: renderedHtml }} />
+            ) : (
+              <div style={{ color: 'var(--text-secondary)', fontSize: 13, textAlign: 'center', padding: 40 }}>
+                暂无内容，请先生成文档
+              </div>
+            )}
+          </div>
+          <div style={{ flex: '1 1 50%', minHeight: 120, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {imageToolbar}
+            {editTextarea}
+          </div>
         </div>
       )}
 
