@@ -51,6 +51,22 @@ const IMG_MAX_BYTES = 2 * 1024 * 1024
 // ── HTML → Markdown converter (shared across all doc panels) ──
 const turndownService = new TurndownService({ headingStyle: 'atx', bulletListMarker: '-', codeBlockStyle: 'fenced' })
 turndownService.use(gfm)
+// Markdown `![](url)` can't carry a width, so keep sized images as inline HTML
+turndownService.addRule('image', {
+  filter: 'img',
+  replacement: (_content, node) => {
+    const el = node as HTMLElement
+    const src = el.getAttribute('src') || ''
+    const alt = el.getAttribute('alt') || ''
+    const widthAttr = el.getAttribute('width')
+    const styleWidth = el.style && el.style.width ? parseInt(el.style.width, 10) : 0
+    const width = widthAttr || styleWidth || 0
+    if (width) {
+      return `<img src="${src}" alt="${alt}" width="${width}">`
+    }
+    return `![${alt}](${src})`
+  },
+})
 
 // ── Preview tab CSS (scoped to .md-preview-container) ──
 const PREVIEW_CSS = `
