@@ -2,6 +2,11 @@
 
 ## 2026-08-23
 
+- fix: use DOM-safe image insertion to prevent XSS in WYSIWYG editors
+- chore: update build stamp after WYSIWYG preview editing (9ad0a75)
+
+## 2026-08-23
+
 - feat: WYSIWYG preview editing + inline image insertion for Stage 1 & 2
 - chore: update build stamp after output-dir exclusion (e244559)
 
