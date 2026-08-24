@@ -187,13 +187,19 @@ async def generate_stream(
     content_seen = False
     reasoning_parts = []
     async for chunk in stream:
-        delta = chunk.choices[0].delta
+        choice = chunk.choices[0]
+        delta = choice.delta
         if delta.content:
             content_seen = True
             yield delta.content
         rc = getattr(delta, 'reasoning_content', None)
         if rc:
             reasoning_parts.append(rc)
+        # Some OpenAI-compatible endpoints (e.g. Baidu Qianfan Token Plan) never send
+        # the terminal `data: [DONE]` SSE event, so the SDK stream iterator hangs after
+        # the final chunk. Break on finish_reason (the true final chunk) to avoid the hang.
+        if getattr(choice, 'finish_reason', None):
+            break
 
     if not content_seen and reasoning_parts:
         for p in reasoning_parts:
