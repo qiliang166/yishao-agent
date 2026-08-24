@@ -6946,7 +6946,65 @@ def _find_matching_div_close(html: str, open_pos: int) -> int:
     return -1
 
 
-def _paginate_saved_deck(html: str) -> str:
+def _inject_image_heights(html: str, run_dir: str | None = None) -> str:
+    """Inject explicit `height` into inserted <img> tags from the real files.
+
+    Editor-inserted images may carry only `width` (no height). The A4 pagination
+    engine cannot see an image's rendered height without an explicit height: real
+    Chromium measurement collapses a broken relative src to ~18px, and the regex
+    fallback estimates 44px/row. The image files live on disk in run_dir/images/,
+    so read their natural dimensions and set height = width * natural_h / natural_w.
+    Old images then paginate without being re-inserted.
+    """
+    if not html or not run_dir:
+        return html
+    from PIL import Image as _PILImage
+
+    def _sub(m):
+        tag = m.group(0)
+        if re.search(r'height\s*:\s*\d+px', tag, re.I):
+            return tag
+        sm = re.search(r'src\s*=\s*["\']([^"\']+)["\']', tag, re.I)
+        if not sm:
+            return tag
+        src = sm.group(1)
+        if src.startswith(("http://", "https://", "data:", "#", "/")):
+            return tag
+        norm = os.path.normpath(src)
+        if norm.startswith("..") or os.path.isabs(norm):
+            return tag
+        path = os.path.join(run_dir, norm)
+        if not os.path.isfile(path):
+            return tag
+        wm = (re.search(r'width\s*:\s*(\d+)px', tag, re.I)
+              or re.search(r'\bwidth\s*=\s*["\']?(\d+)', tag, re.I))
+        if not wm:
+            return tag
+        width = int(wm.group(1))
+        if width <= 0:
+            return tag
+        try:
+            with _PILImage.open(path) as im:
+                w, h = im.size
+        except Exception:
+            return tag
+        if not w or not h:
+            return tag
+        height = max(1, round(width * h / w))
+        style_m = re.search(r'style\s*=\s*["\']', tag, re.I)
+        if style_m:
+            return tag[:style_m.end()] + f'height: {height}px; ' + tag[style_m.end():]
+        body = tag.rstrip()
+        if body.endswith('/>'):
+            return body[:-2].rstrip() + f' style="height: {height}px;" />'
+        if body.endswith('>'):
+            return body[:-1].rstrip() + f' style="height: {height}px;">'
+        return tag
+
+    return re.sub(r'<img\b[^>]*>', _sub, html)
+
+
+def _paginate_saved_deck(html: str, run_dir: str | None = None) -> str:
     """Re-run A4 overflow pagination on an edited deck (index.html).
 
     The generation pipeline splits oversized tables via _preprocess_a4_slides,
@@ -6957,6 +7015,10 @@ def _paginate_saved_deck(html: str) -> str:
     generated ones.
     """
     import re as _re
+
+    # 0. Normalize inserted images: give them an explicit height (from the files
+    #    on disk) so the split engine can actually measure their rows.
+    html = _inject_image_heights(html, run_dir)
 
     # 1. Recover canvas dims from the .slide-wrapper rule (always present in
     #    decks produced by _assemble_html_deck).

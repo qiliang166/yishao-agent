@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html, _paginate_saved_deck, _has_oversized_table
+from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html, _paginate_saved_deck, _has_oversized_table, _inject_image_heights
 
 
 class TestCleanJsonResponse:
@@ -226,3 +226,53 @@ class TestHasOversizedTable:
         rows = ''.join(f'<tr><td>{i}</td><td>x</td></tr>' for i in range(1, 20))
         html = '<table><thead><tr><th>序号</th><th>名称</th></tr></thead><tbody>' + rows + '</tbody></table>'
         assert _has_oversized_table(html, 1011) is True
+
+
+class TestInjectImageHeights:
+    def _make_png(self, tmp_path, name="t.png", w=100, h=50):
+        from PIL import Image
+        img_dir = tmp_path / "images"
+        img_dir.mkdir(exist_ok=True)
+        p = img_dir / name
+        Image.new("RGB", (w, h), (255, 0, 0)).save(p)
+        return p
+
+    def test_injects_height_from_real_file(self, tmp_path):
+        self._make_png(tmp_path)
+        out = _inject_image_heights(
+            '<img src="images/t.png" style="width: 200px; max-width: none;">',
+            str(tmp_path),
+        )
+        assert 'height: 100px' in out
+
+    def test_existing_height_not_overwritten(self, tmp_path):
+        self._make_png(tmp_path)
+        tag = '<img src="images/t.png" style="width: 200px; height: 99px;">'
+        assert _inject_image_heights(tag, str(tmp_path)) == tag
+
+    def test_data_src_untouched(self, tmp_path):
+        tag = '<img src="data:image/png;base64,AAAA" style="width: 200px;">'
+        assert _inject_image_heights(tag, str(tmp_path)) == tag
+
+    def test_http_src_untouched(self, tmp_path):
+        tag = '<img src="https://x.com/a.png" style="width: 200px;">'
+        assert _inject_image_heights(tag, str(tmp_path)) == tag
+
+    def test_missing_file_untouched(self, tmp_path):
+        tag = '<img src="images/nope.png" style="width: 200px;">'
+        assert _inject_image_heights(tag, str(tmp_path)) == tag
+
+    def test_no_run_dir_untouched(self, tmp_path):
+        self._make_png(tmp_path)
+        tag = '<img src="images/t.png" style="width: 200px;">'
+        assert _inject_image_heights(tag) == tag
+
+    def test_no_width_untouched(self, tmp_path):
+        self._make_png(tmp_path)
+        tag = '<img src="images/t.png">'
+        assert _inject_image_heights(tag, str(tmp_path)) == tag
+
+    def test_path_traversal_untouched(self, tmp_path):
+        self._make_png(tmp_path)
+        tag = '<img src="../etc/passwd" style="width: 200px;">'
+        assert _inject_image_heights(tag, str(tmp_path)) == tag
