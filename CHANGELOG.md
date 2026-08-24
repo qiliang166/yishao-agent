@@ -2,6 +2,11 @@
 
 ## 2026-08-24
 
+- fix: ship backend/build_version.txt in server package
+- chore: update build stamp after A4 image/pagination fix (f4faa42)
+
+## 2026-08-24
+
 - fix: honor image width in A4 tables and paginate edited decks on save
 
 ## 2026-08-24
