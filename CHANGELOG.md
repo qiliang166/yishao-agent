@@ -2,6 +2,11 @@
 
 ## 2026-08-24
 
+- fix: repeat table header on A4 continuation pages and re-merge fragments before re-pagination
+- chore: update build stamp after image-height symlink hardening (a7a4035)
+
+## 2026-08-24
+
 - fix: resolve real paths in image-height injection to block symlink traversal
 - chore: update build stamp after server-side image-height injection (ce80552)
 
