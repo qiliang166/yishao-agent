@@ -2,6 +2,10 @@
 
 ## 2026-08-24
 
+- fix: inject image heights server-side so edited A4 tables re-paginate
+
+## 2026-08-24
+
 - fix: give inserted images explicit height so A4 pagination sees them
 - chore: update build stamp after build_version.txt packaging fix (fb8a6ad)
 
