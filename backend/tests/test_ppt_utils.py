@@ -385,3 +385,28 @@ class TestMergeContinuationTables:
         s2 = self._slide(f'<table>{self.CG}<tr><td>2</td><td>b</td></tr></table>')
         merged = _merge_continuation_tables([s1, s2])
         assert len(merged) == 2
+
+    def test_merge_keeps_rows_inside_tbody(self):
+        # Real fragments emitted by _split_table_rows wrap the header in <thead>
+        # and data rows in <tbody>. Merging must fold continuation rows INTO that
+        # <tbody>, never after </tbody> — a bare <tr> after </tbody> makes the
+        # browser open a second <tbody>, which _measure_table_rows_real
+        # (querySelector('tbody')) skips, silently dropping the merged rows.
+        s1 = self._slide(
+            f'<table>{self.CG}<thead>{self.HDR}</thead>'
+            '<tbody><tr><td>1</td><td>a</td></tr></tbody></table>'
+        )
+        s2 = self._slide(
+            f'<table>{self.CG}<thead>{self.HDR}</thead>'
+            '<tbody><tr><td>2</td><td>b</td></tr></tbody></table>'
+        )
+        merged = _merge_continuation_tables([s1, s2])
+        assert len(merged) == 1
+        html = merged[0]["html"]
+        # exactly one tbody, and no bare <tr> trailing after its close
+        assert html.count("<tbody>") == 1
+        assert html.count("</tbody>") == 1
+        assert "</tbody><tr" not in html
+        # both data rows survive
+        assert "1</td><td>a</td>" in html
+        assert "2</td><td>b</td>" in html

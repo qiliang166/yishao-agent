@@ -6618,8 +6618,7 @@ def _measure_table_rows_real(table_html: str) -> dict:
             m = page.evaluate(
                 "() => {"
                 "  const theadTr = document.querySelector('thead tr');"
-                "  const tb = document.querySelector('tbody');"
-                "  const rows = tb ? Array.from(tb.querySelectorAll('tr')) : [];"
+                "  const rows = Array.from(document.querySelectorAll('tbody tr'));"
                 "  return {"
                 "    header_html: theadTr ? theadTr.outerHTML : '',"
                 "    header_h: theadTr ? theadTr.getBoundingClientRect().height : 0,"
@@ -7098,7 +7097,15 @@ def _merge_continuation_tables(slides: list) -> list:
             out.append(s)
             continue
 
-        merged_table = pt.group(0)[:-len('</table>')] + ''.join(data_rows) + '</table>'
+        body_close = pt.group(0).rfind('</tbody>')
+        if body_close != -1:
+            # Fold continuation rows INTO the parent's <tbody>. Appending a bare
+            # <tr> after </tbody> makes the browser open a second <tbody>, which
+            # _measure_table_rows_real (querySelector('tbody')) skips — silently
+            # dropping the merged rows on re-split.
+            merged_table = pt.group(0)[:body_close] + ''.join(data_rows) + pt.group(0)[body_close:]
+        else:
+            merged_table = pt.group(0)[:-len('</table>')] + ''.join(data_rows) + '</table>'
         new_prev_html = prev.get("html", "").replace(pt.group(0), merged_table, 1)
         out[-1] = {**prev, "html": new_prev_html}
         # current slide folded into the previous — drop it.
