@@ -6973,8 +6973,9 @@ def _inject_image_heights(html: str, run_dir: str | None = None) -> str:
         norm = os.path.normpath(src)
         if norm.startswith("..") or os.path.isabs(norm):
             return tag
-        path = os.path.join(run_dir, norm)
-        if not os.path.isfile(path):
+        real_base = os.path.realpath(run_dir)
+        path = os.path.realpath(os.path.join(run_dir, norm))
+        if not path.startswith(real_base + os.sep) or not os.path.isfile(path):
             return tag
         wm = (re.search(r'width\s*:\s*(\d+)px', tag, re.I)
               or re.search(r'\bwidth\s*=\s*["\']?(\d+)', tag, re.I))
