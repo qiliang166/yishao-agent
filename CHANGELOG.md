@@ -2,6 +2,11 @@
 
 ## 2026-08-25
 
+- feat: batch execute supports unified model override across all steps
+- chore: update build stamp after qianfan stream hang fix (ee52e19)
+
+## 2026-08-25
+
 - fix: break stream on finish_reason to avoid hang on Qianfan Token Plan
 - chore: update build stamp after stage2 model + anthropic test fix (7427ca7)
 
