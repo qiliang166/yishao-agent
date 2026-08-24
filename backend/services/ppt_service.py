@@ -6678,23 +6678,46 @@ def _split_table_rows(table_html: str, table_max_h: int) -> list[str]:
         header_h = _estimate_block_height(header) if header else 0.0
         row_heights = [_estimate_block_height(r) for r in body_rows]
 
+    # The browser-normalized DOM reports an empty header when the header row is a
+    # bare <tr><th> not wrapped in <thead> — which is exactly what a prior split
+    # emits (and what contentEditable serialization produces). The browser
+    # auto-wraps those bare rows in <tbody>, so the header row lands in
+    # body_rows[0]. Promote it so continuation pages repeat the header instead of
+    # silently dropping it (and so its height is budgeted on every page).
+    if not header and body_rows and '<th' in body_rows[0].lower():
+        header = body_rows[0]
+        header_h = row_heights[0] if row_heights else 0.0
+        body_rows = body_rows[1:]
+        row_heights = row_heights[1:] if row_heights else []
+
     if not row_heights or len(row_heights) != len(body_rows):
         header_h = _estimate_block_height(header) if header else 0.0
         row_heights = [_estimate_block_height(r) for r in body_rows]
+
+    # Wrap the repeated header in <thead> and body rows in <tbody> so the emitted
+    # fragments are well-formed. A bare <tr><th> header (no <thead>) is invisible
+    # to _measure_table_rows_real on the next save, which then drops the header on
+    # continuation pages — wrapping here makes re-pagination idempotent.
+    def _wrap(header, cur):
+        parts = []
+        if header:
+            parts.append(f'<thead>{header}</thead>')
+        parts.append('<tbody>' + '\n'.join(cur) + '</tbody>')
+        return '\n'.join(parts)
 
     fragments = []
     cur = []
     cur_h = header_h
     for r, h in zip(body_rows, row_heights):
         if cur and cur_h + h > table_max_h:
-            fragments.append(header + '\n' + '\n'.join(cur))
+            fragments.append(_wrap(header, cur))
             cur = [r]
             cur_h = header_h + h
         else:
             cur.append(r)
             cur_h += h
     if cur:
-        fragments.append(header + '\n' + '\n'.join(cur))
+        fragments.append(_wrap(header, cur))
     if len(fragments) <= 1:
         return [table_html]
     return [table_open + '\n' + colgroup + '\n' + p + '\n</table>' for p in fragments]
@@ -7005,6 +7028,83 @@ def _inject_image_heights(html: str, run_dir: str | None = None) -> str:
     return re.sub(r'<img\b[^>]*>', _sub, html)
 
 
+def _merge_continuation_tables(slides: list) -> list:
+    """Fold continuation table fragments back into their parent table.
+
+    A saved deck may hold one logical table split across consecutive slides whose
+    fragments carry a bare <tr><th> header (or none at all). Re-splitting those
+    fragments independently can neither restore a dropped header nor merge rows
+    back, producing orphaned header-less pages. Fold consecutive same-colgroup
+    tables into the first slide before the A4 re-split runs (idempotent).
+    """
+    import re as _re
+
+    def _table(html):
+        return _re.search(r'<table\b[^>]*>.*?</table>', html, _re.DOTALL)
+
+    def _colgroup(table_html):
+        m = _re.search(r'<colgroup>.*?</colgroup>', table_html, _re.DOTALL)
+        return m.group(0) if m else None
+
+    def _rows(table_html):
+        return _re.findall(r'<tr\b.*?</tr>', table_html, _re.DOTALL)
+
+    def _header_text(row_html):
+        cells = _re.findall(r'<th[^>]*>(.*?)</th>', row_html, _re.DOTALL)
+        return '|'.join(_re.sub(r'<[^>]+>', '', c).strip() for c in cells)
+
+    out = []
+    for s in slides:
+        html = s.get("html", "")
+        t = _table(html)
+        if not t or not out:
+            out.append(s)
+            continue
+
+        prev = out[-1]
+        pt = _table(prev.get("html", ""))
+        if not pt:
+            out.append(s)
+            continue
+
+        cur_cg = _colgroup(t.group(0))
+        prev_cg = _colgroup(pt.group(0))
+        if not cur_cg or not prev_cg or cur_cg != prev_cg:
+            out.append(s)
+            continue
+
+        prev_rows = _rows(pt.group(0))
+        # The parent must itself carry a header row to be a valid merge target.
+        if not prev_rows or '<th' not in prev_rows[0].lower():
+            out.append(s)
+            continue
+
+        cur_rows = _rows(t.group(0))
+        if not cur_rows:
+            out.append(s)
+            continue
+
+        # Continuation detection:
+        #   - header-less current table (no <th>) → fold all rows (data).
+        #   - repeated header (first row <th> whose text matches the parent's) →
+        #     drop the repeated header, fold the data rows.
+        data_rows = cur_rows
+        if '<th' in cur_rows[0].lower():
+            if _header_text(cur_rows[0]) != _header_text(prev_rows[0]):
+                out.append(s)  # a different table that happens to share the colgroup
+                continue
+            data_rows = cur_rows[1:]
+        if not data_rows:
+            out.append(s)
+            continue
+
+        merged_table = pt.group(0)[:-len('</table>')] + ''.join(data_rows) + '</table>'
+        new_prev_html = prev.get("html", "").replace(pt.group(0), merged_table, 1)
+        out[-1] = {**prev, "html": new_prev_html}
+        # current slide folded into the previous — drop it.
+    return out
+
+
 def _paginate_saved_deck(html: str, run_dir: str | None = None) -> str:
     """Re-run A4 overflow pagination on an edited deck (index.html).
 
@@ -7052,6 +7152,12 @@ def _paginate_saved_deck(html: str, run_dir: str | None = None) -> str:
 
     head = html[:positions[0].start()]
     tail = html[inner_end + len("</div>"):]
+
+    # 2.5 Fold continuation table fragments back into their parent table. A prior
+    # save may have split one logical table across several slides; re-splitting
+    # those fragments independently can neither restore a dropped header nor merge
+    # rows back, producing orphaned header-less pages. Merge first, then split.
+    slides = _merge_continuation_tables(slides)
 
     # 3. Re-run the existing A4 split (oversized tables → continuation pages).
     paginated = _preprocess_a4_slides(slides, canvas_w, canvas_h)

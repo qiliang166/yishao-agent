@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html, _paginate_saved_deck, _has_oversized_table, _inject_image_heights
+from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html, _paginate_saved_deck, _has_oversized_table, _inject_image_heights, _split_table_rows, _merge_continuation_tables
 
 
 class TestCleanJsonResponse:
@@ -276,3 +276,112 @@ class TestInjectImageHeights:
         self._make_png(tmp_path)
         tag = '<img src="../etc/passwd" style="width: 200px;">'
         assert _inject_image_heights(tag, str(tmp_path)) == tag
+
+
+class TestSplitTableRowsHeader:
+    def _mock_measure(self, monkeypatch, rows):
+        # Simulate a browser-normalized DOM with NO <thead>: the header row is a
+        # bare <tr><th> that the browser auto-wrapped into <tbody>, so it lands
+        # in body_rows[0] and header_html stays empty.
+        def fake(table_html):
+            return {
+                "header_html": "",
+                "header_h": 0.0,
+                "rows": [{"html": h, "h": hh} for h, hh in rows],
+            }
+
+        monkeypatch.setattr("services.ppt_service._measure_table_rows_real", fake)
+
+    def test_promotes_bare_th_header_and_wraps_thead_tbody(self, monkeypatch):
+        self._mock_measure(
+            monkeypatch,
+            [
+                ("<tr><th>序号</th><th>名称</th></tr>", 20.0),
+                ("<tr><td>1</td><td>a</td></tr>", 60.0),
+                ("<tr><td>2</td><td>b</td></tr>", 60.0),
+            ],
+        )
+        table = (
+            "<table><tr><th>序号</th><th>名称</th></tr>"
+            "<tr><td>1</td><td>a</td></tr><tr><td>2</td><td>b</td></tr></table>"
+        )
+        # header 20 + 2 rows × 60 = 140 > 100 → 2 fragments
+        frags = _split_table_rows(table, 100)
+        assert len(frags) == 2
+        for fr in frags:
+            assert "<thead><tr><th>序号</th><th>名称</th></tr></thead>" in fr
+            assert "<tbody>" in fr
+
+    def test_no_th_header_not_promoted(self, monkeypatch):
+        self._mock_measure(
+            monkeypatch,
+            [
+                ("<tr><td>1</td><td>a</td></tr>", 60.0),
+                ("<tr><td>2</td><td>b</td></tr>", 60.0),
+            ],
+        )
+        table = "<table><tr><td>1</td><td>a</td></tr><tr><td>2</td><td>b</td></tr></table>"
+        frags = _split_table_rows(table, 100)
+        assert len(frags) == 2
+        # no header anywhere — fragments carry only <tbody>
+        for fr in frags:
+            assert "<thead>" not in fr
+            assert "<tbody>" in fr
+
+    def test_single_fragment_returns_original(self, monkeypatch):
+        self._mock_measure(
+            monkeypatch,
+            [
+                ("<tr><th>序号</th></tr>", 20.0),
+                ("<tr><td>1</td></tr>", 30.0),
+            ],
+        )
+        table = "<table><tr><th>序号</th></tr><tr><td>1</td></tr></table>"
+        # header 20 + 1 row × 30 = 50 <= 100 → single fragment → unchanged
+        assert _split_table_rows(table, 100) == [table]
+
+
+class TestMergeContinuationTables:
+    CG = '<colgroup><col style="width:40px"><col style="width:90px"></colgroup>'
+    HDR = '<tr><th>序号</th><th>名称</th></tr>'
+
+    def _slide(self, html):
+        return {"seq": 1, "html": html}
+
+    def test_merges_headerless_continuation(self):
+        s1 = self._slide(f'<table>{self.CG}{self.HDR}<tr><td>1</td><td>a</td></tr></table>')
+        s2 = self._slide(f'<table>{self.CG}<tr><td>2</td><td>b</td></tr><tr><td>3</td><td>c</td></tr></table>')
+        merged = _merge_continuation_tables([s1, s2])
+        assert len(merged) == 1
+        assert merged[0]["html"].count("<tr") == 4  # header + 3 data
+        assert "3</td>" in merged[0]["html"]
+
+    def test_merges_repeated_header_continuation(self):
+        s1 = self._slide(f'<table>{self.CG}{self.HDR}<tr><td>1</td><td>a</td></tr></table>')
+        s2 = self._slide(f'<table>{self.CG}{self.HDR}<tr><td>2</td><td>b</td></tr></table>')
+        merged = _merge_continuation_tables([s1, s2])
+        assert len(merged) == 1
+        html = merged[0]["html"]
+        assert html.count("<tr") == 3  # one header (repeated dropped) + 2 data
+        assert "<th>" in html  # header preserved exactly once
+
+    def test_does_not_merge_different_header_text(self):
+        s1 = self._slide(f'<table>{self.CG}{self.HDR}<tr><td>1</td><td>a</td></tr></table>')
+        other = '<tr><th>步骤</th><th>操作</th></tr>'
+        s2 = self._slide(f'<table>{self.CG}{other}<tr><td>1</td><td>x</td></tr></table>')
+        merged = _merge_continuation_tables([s1, s2])
+        assert len(merged) == 2
+
+    def test_does_not_merge_different_colgroup(self):
+        cg2 = '<colgroup><col style="width:90px"></colgroup>'
+        s1 = self._slide(f'<table>{self.CG}{self.HDR}<tr><td>1</td><td>a</td></tr></table>')
+        s2 = self._slide(f'<table>{cg2}<tr><td>2</td><td>b</td></tr></table>')
+        merged = _merge_continuation_tables([s1, s2])
+        assert len(merged) == 2
+
+    def test_parent_without_header_not_merge_target(self):
+        # A table with no header can't be a continuation parent.
+        s1 = self._slide(f'<table>{self.CG}<tr><td>1</td><td>a</td></tr></table>')
+        s2 = self._slide(f'<table>{self.CG}<tr><td>2</td><td>b</td></tr></table>')
+        merged = _merge_continuation_tables([s1, s2])
+        assert len(merged) == 2
