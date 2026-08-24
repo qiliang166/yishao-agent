@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html, _paginate_saved_deck
+from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html, _paginate_saved_deck, _has_oversized_table
 
 
 class TestCleanJsonResponse:
@@ -197,3 +197,32 @@ class TestPaginateSavedDeck:
     def test_missing_wrapper_style_untouched(self):
         html = '<html><body><p>x</p></body></html>'
         assert _paginate_saved_deck(html) == html
+
+
+class TestHasOversizedTable:
+    def _img_table(self, n_rows, img_height_px):
+        rows = ''.join(
+            f'<tr><td>{i}</td><td><img src="images/a{i}.png" style="width:400px;'
+            + (f'height:{img_height_px}px;' if img_height_px else '')
+            + 'max-width:none"></td></tr>'
+            for i in range(1, n_rows + 1)
+        )
+        return '<table><thead><tr><th>序号</th><th>图示</th></tr></thead><tbody>' + rows + '</tbody></table>'
+
+    def test_image_rows_flagged_oversized(self):
+        # 6 行 × 300px 图 ≈ 1800px 实际高，但 100px/行 预判会漏；累加图片高度后必须触发
+        assert _has_oversized_table(self._img_table(6, 300), 1011) is True
+
+    def test_image_rows_without_height_not_flagged(self):
+        # 无 height 的图对分页引擎不可见（宽度无法反推高度）——由前端插入时补 height 保证
+        assert _has_oversized_table(self._img_table(6, 0), 1011) is False
+
+    def test_short_plain_table_not_flagged(self):
+        rows = ''.join(f'<tr><td>{i}</td><td>x</td></tr>' for i in range(1, 6))
+        html = '<table><thead><tr><th>序号</th><th>名称</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        assert _has_oversized_table(html, 1011) is False
+
+    def test_many_plain_rows_still_flagged(self):
+        rows = ''.join(f'<tr><td>{i}</td><td>x</td></tr>' for i in range(1, 20))
+        html = '<table><thead><tr><th>序号</th><th>名称</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        assert _has_oversized_table(html, 1011) is True

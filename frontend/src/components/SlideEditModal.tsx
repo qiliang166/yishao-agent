@@ -23,6 +23,17 @@ interface Props {
   onDownloadHtml?: () => void
 }
 
+// 读取图片原始宽高，用于按用户设定的宽度算出等比例高度。
+// 图片必须带显式 height，否则 A4 分页引擎（真实测量 + regex fallback）
+// 都测不到图片撑高的行高（相对 src 加载失败时 <img> 塌缩成 ~18px）。
+const readImageDims = (file: File): Promise<{ w: number; h: number }> => new Promise((resolve) => {
+  const url = URL.createObjectURL(file)
+  const img = new Image()
+  img.onload = () => { resolve({ w: img.naturalWidth, h: img.naturalHeight }); URL.revokeObjectURL(url) }
+  img.onerror = () => { resolve({ w: 0, h: 0 }); URL.revokeObjectURL(url) }
+  img.src = url
+})
+
 export default function SlideEditModal({ open, runId, previewUrl, slideCount, providerId, model, projectId, projectName, columnId, styleId, onClose, pptxDownloadUrl, pptxFilename, downloadFormat, onDownloadHtml: _onDownloadHtml }: Props) {
   const [contentEditable, setContentEditable] = useState(false)
   const [textColor, setTextColor] = useState('#ffffff')
@@ -181,14 +192,20 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
         modal.toast('插入失败，请把光标放到要插入的位置后重试', 'error')
         return
       }
-      // Set width on the just-inserted <img> (matched by src suffix)
+      // Set width + height on the just-inserted <img> (matched by src suffix).
+      // Explicit height lets the A4 pagination engine measure the image row
+      // (width alone is invisible once the relative src 404s in measurement).
       const width = parseInt(slideImageSize, 10)
       if (width > 0) {
+        const dims = await readImageDims(file)
         const imgs = doc.querySelectorAll('img')
         for (const img of Array.from(imgs).reverse()) {
           const src = img.getAttribute('src') || ''
           if (src === res.path || src.endsWith(res.path)) {
             img.style.width = width + 'px'
+            if (dims.w > 0 && dims.h > 0) {
+              img.style.height = Math.max(1, Math.round(width * dims.h / dims.w)) + 'px'
+            }
             img.style.maxWidth = 'none'
             break
           }

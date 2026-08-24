@@ -6708,10 +6708,20 @@ def _has_oversized_table(html: str, table_max_h: int) -> bool:
     pre-filter (~100px/row upper bound ≈ 5 wrapped lines) — it only decides
     whether real measurement in _split_a4_html_content is worth a browser
     launch, never the final split decision.
+
+    Inserted images carry an explicit height (width alone is invisible to
+    both real measurement and the regex fallback, because a broken relative
+    src collapses the <img> to ~18px). The 100px/row bound massively
+    under-estimates image rows (a 400px-wide photo is ~300px tall), so add
+    each image's explicit height on top of the per-row bound.
     """
     for m in re.finditer(r'<table\b[^>]*>.*?</table>', html, re.DOTALL):
-        rows = len(re.findall(r'<tr\b', m.group(0)))
-        if rows * 100 > table_max_h:
+        table = m.group(0)
+        rows = len(re.findall(r'<tr\b', table))
+        est = rows * 100
+        for hm in re.findall(r'<img\b[^>]*height:\s*(\d+)px', table):
+            est += int(hm)
+        if est > table_max_h:
             return True
     return False
 
