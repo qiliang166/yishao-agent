@@ -2,6 +2,11 @@
 
 ## 2026-08-24
 
+- fix: resolve real paths in image-height injection to block symlink traversal
+- chore: update build stamp after server-side image-height injection (ce80552)
+
+## 2026-08-24
+
 - fix: inject image heights server-side so edited A4 tables re-paginate
 
 ## 2026-08-24
