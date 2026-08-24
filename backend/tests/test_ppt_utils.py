@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_rows
+from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html
 
 
 class TestCleanJsonResponse:
@@ -76,54 +76,83 @@ class TestValidateColumnId:
         assert _validate_column_id("col 4") == ""
 
 
-class TestBuildTableRows:
-    def test_materials_table_8_cells_per_row(self):
+class TestBuildTableHtml:
+    def test_materials_table_columns_from_key_points(self):
+        # 用户新增「图示」列后 9 列：表头 + 数据都应为 9 列，含「图示」列名
+        kps = ["序号", "食材分类", "名称", "品牌产地", "加工说明", "加工要求", "重量", "单位", "图示"]
+        body = "1 | 干货 | 银鳕鱼 | 冰岛 | 干蒸 | 胶质不流失 | 100 | 克 | 图1"
+        out = _build_table_html({"key_points": kps, "body": body}, "materials_table")
+        assert out.count("<th style") == 9
+        assert out.count("<td") == 9
+        assert "图示" in out
+
+    def test_materials_table_default_8_cells(self):
+        kps = ["序号", "食材分类", "名称", "品牌产地", "加工说明", "加工要求", "重量", "单位"]
         body = (
-            "1 | 干货 | 银鳕鱼 | 冰岛 | 干蒸后50℃浸泡8h | 胶质不流失 | 100 | 克\n"
+            "1 | 干货 | 银鳕鱼 | 冰岛 | 干蒸 | 胶质不流失 | 100 | 克\n"
             "2 | 海鲜 | 鲍鱼 | 大连 | 涨发 | 保持弹性 | 50 | 克"
         )
-        out = _build_table_rows({"body": body}, "materials_table")
-        assert out.count("<tr") == 2
-        assert out.split("</tr>")[0].count("<td") == 8
+        out = _build_table_html({"key_points": kps, "body": body}, "materials_table")
+        assert out.count("<th style") == 8
+        assert out.count("<td") == 16
 
-    def test_materials_table_odd_even_background(self):
-        body = (
-            "1 | 干货 | 银鳕鱼 | — | — | — | 100 | 克\n"
-            "2 | 海鲜 | 鲍鱼 | — | — | — | 50 | 克"
-        )
-        out = _build_table_rows({"body": body}, "materials_table")
+    def test_odd_even_background(self):
+        kps = ["序号", "A", "B"]
+        body = "1 | x | y\n2 | p | q"
+        out = _build_table_html({"key_points": kps, "body": body}, "materials_table")
         assert "background:rgba(var(--text-rgb),0.02)" in out
         assert "background:transparent" in out
 
-    def test_steps_table_colspans(self):
+    def test_steps_table_no_colspan(self):
+        kps = ["序号", "关键词", "工具与器皿", "操作说明", "注意事项"]
         body = "1 | 涨发 | 蒸笼 | 干蒸后浸泡 | 胶质不流失"
-        out = _build_table_rows({"body": body}, "steps_table")
-        assert out.count("<tr") == 1
-        assert 'colspan="3"' in out
-        assert 'colspan="2"' in out
+        out = _build_table_html({"key_points": kps, "body": body}, "steps_table")
+        assert "colspan" not in out
+        assert out.count("<td") == 5
 
     def test_structured_rows_path(self):
+        kps = ["序号", "A", "B", "C"]
         slide = {
+            "key_points": kps,
             "rows": [
-                ["1", "干货", "银鳕鱼", "—", "—", "—", "100", "克"],
-                ["2", "海鲜", "鲍鱼", "—", "—", "—", "50", "克"],
-            ]
+                ["1", "x", "y", "z"],
+                ["2", "p", "q", "r"],
+            ],
         }
-        out = _build_table_rows(slide, "materials_table")
-        assert out.count("<tr") == 2
+        out = _build_table_html(slide, "materials_table")
+        assert out.count("<td") == 8
 
     def test_skips_header_line(self):
-        body = (
-            "序号 | 分类 | 名称 | 品牌 | 加工说明 | 加工要求 | 重量 | 单位\n"
-            "1 | 干货 | 银鳕鱼 | — | — | — | 100 | 克"
-        )
-        out = _build_table_rows({"body": body}, "materials_table")
-        assert out.count("<tr") == 1
+        kps = ["序号", "A", "B"]
+        body = "序号 | A | B\n1 | x | y"
+        out = _build_table_html({"key_points": kps, "body": body}, "materials_table")
+        assert out.count("<td") == 3
+
+    def test_short_row_right_padded(self):
+        # 漏填末列不丢行：右侧补空
+        kps = ["序号", "A", "B", "C"]
+        body = "1 | x | y"
+        out = _build_table_html({"key_points": kps, "body": body}, "materials_table")
+        assert out.count("<td") == 4
+
+    def test_long_row_overflow_merged(self):
+        # 多出列不丢行：超出部分合并进最后一列
+        kps = ["序号", "A", "B"]
+        body = "1 | x | y | z | w"
+        out = _build_table_html({"key_points": kps, "body": body}, "materials_table")
+        assert out.count("<td") == 3
+        assert "y z w" in out
+
+    def test_no_key_points_returns_empty(self):
+        assert _build_table_html({"body": "1 | a | b"}, "materials_table") == ""
 
     def test_unparseable_body_returns_empty(self):
-        assert _build_table_rows({"body": "free prose with no pipes"}, "materials_table") == ""
-        assert _build_table_rows({"body": ""}, "materials_table") == ""
+        kps = ["序号", "A", "B"]
+        assert _build_table_html({"key_points": kps, "body": ""}, "materials_table") == ""
+        # 只有表头行（首格「序号」被跳过）→ 无数据行 → 空串
+        assert _build_table_html({"key_points": kps, "body": "序号 | A | B"}, "materials_table") == ""
 
     def test_wrong_type_returns_empty(self):
-        assert _build_table_rows({"body": "1 | a | b | c"}, "cover") == ""
-        assert _build_table_rows({"body": "1 | a | b | c"}, "content") == ""
+        kps = ["序号", "A", "B"]
+        assert _build_table_html({"key_points": kps, "body": "1 | a | b"}, "cover") == ""
+        assert _build_table_html({"key_points": kps, "body": "1 | a | b"}, "content") == ""

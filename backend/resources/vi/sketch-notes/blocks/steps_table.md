@@ -20,24 +20,7 @@
     <div style="width:100%;height:3px;background:var(--accent);"></div>
 
     <div style="width:674px;margin:16px auto 0 auto;border:1px solid rgba(var(--text-rgb),0.2);">
-    <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:Kalam, 'PingFang SC', 'Microsoft YaHei', cursive;">
-      <colgroup>
-        <col style="width:48px"><col style="width:75px"><col style="width:112px"><col style="width:73px">
-        <col style="width:73px"><col style="width:74px"><col style="width:110px"><col style="width:109px">
-      </colgroup>
-      <thead>
-        <tr style="background:var(--chart-1);color:#ffffff;">
-          <th style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">序号</th>
-          <th style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">关键词</th>
-          <th style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">工具与器皿</th>
-          <th colspan="3" style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">操作说明</th>
-          <th colspan="2" style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">注意事项</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{TABLE_ROWS}}
-      </tbody>
-    </table>
+    {{TABLE}}
     </div>
 
   </div>
@@ -52,22 +35,6 @@
 </div>
 ```
 
-## 表格行模板（每行照此格式）
-
-```html
-<tr style="background:{{ROW_BG}};">
-  <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">{{SEQ}}</td>
-  <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">{{KEYWORD}}</td>
-  <td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">{{TOOLS}}</td>
-  <td colspan="3" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">{{STEPS_DESC}}</td>
-  <td colspan="2" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">{{CAUTIONS}}</td>
-</tr>
-```
-
-## 行背景规则
-
-- 奇数行（1,3,5...）：`{{ROW_BG}}` = `rgba(var(--text-rgb),0.02)`
-- 偶数行（2,4,6...）：`{{ROW_BG}}` = `transparent`
 
 ## 内容变量
 
@@ -79,17 +46,12 @@
 | `{{TOTAL_PAGES}}` | 总页数 |
 | `{{BRAND_COPYRIGHT}}` | 版权信息占位符，代码替换，严禁写死 |
 | `{{BRAND_SIGNATURE}}` | 品牌签名占位符，代码替换，严禁写死 |
-| `{{TABLE_ROWS}}` | 所有 `<tr>` 行拼接，含 colspan 属性 |
-| `{{SEQ}}` | 序号（从1开始） |
-| `{{KEYWORD}}` | 关键词（2-4字，如"涨发""煨制""油炸"） |
-| `{{TOOLS}}` | 工具与器皿（如"蒸笼、浸泡容器"） |
-| `{{STEPS_DESC}}` | 操作说明（colspan=3，完整操作描述） |
-| `{{CAUTIONS}}` | 注意事项（colspan=2，关键控制点） |
+| `{{TABLE}}` | 完整表格（colgroup+thead+tbody），由系统按 SKILL key_points 列名自动生成，LLM 不得手写 | 系统 |
 
 ## 禁止
+- 手写 `<table>`/`<thead>`/`<colgroup>`/`<tbody>`/`<tr>` 结构（表格由系统按 SKILL key_points 自动生成，模板内保留 `{{TABLE}}` 占位）
 
 - 修改页头/页尾的 height(45px)、font-size(10px)、flex 比例
 - 同一页内多个表格
-- 缺少 colspan 属性（操作说明必须 colspan=3，注意事项必须 colspan=2）
 - 省略任何步骤行（必须完整列出所有操作步骤）
 - `{{BRAND_COPYRIGHT}}` 和 `{{BRAND_SIGNATURE}}` 是系统占位符，**严禁替换为实际文字**

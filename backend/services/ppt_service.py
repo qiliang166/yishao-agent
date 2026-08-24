@@ -1371,6 +1371,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 **绝对硬约束（违反即错误）：**
 1. 页面数量、seq 顺序、page_type 必须与上方「文档结构模板」完全一致，不可增删改任何页面
 2. key_points 的数量和顺序必须与模板一致（不可增删改、合并、重排）。但模板中的标签文字是占位符，你需要将它们替换为从 SOP 提取的实际内容值。例如模板标签"编写日期"应替换为"2026年6月"，而不是保留"编写日期"原文
+2b. 对于 page_type 为 table / materials_table / steps_table / flowchart 的页面：key_points 是列名/步骤名，必须**原样保留**（禁止替换为内容值）；该页的数据填入 body 字段，按 body_rule 的格式（每行用 | 分隔），每行单元格数 = key_points 数量
 3. 封面页特殊规则：
    - title_format 中的 {项目名称} 替换为实际项目名称，其余文字原样保留
    - subtitle 从正文提炼一句话概述（≤30字），不可为空
@@ -1398,6 +1399,7 @@ def _stage1_content(provider_id, model, llm_generate, rules, sop_content,
 1. 输出格式必须与上方「幻灯片结构模板」完全一致：模板是 JSON 数组 [{...}]，你就输出 JSON 数组 [{...}]，禁止在外面包一层 { "page_outline": [...] } 或任何其他包装
 2. 页面数量、seq 顺序、page_type 必须与模板完全一致，不可增删改任何页面
 3. key_points 的数量和顺序必须与模板一致（不可增删改、合并、重排）。但模板中的标签文字是占位符，你需要将它们替换为从 SOP 提取的实际内容值。例如模板标签"编写日期"应替换为"2026年7月"，而不是保留"编写日期"原文
+3b. 对于 page_type 为 table / materials_table / steps_table / flowchart 的页面：key_points 是列名/步骤名，必须**原样保留**（禁止替换为内容值）；该页的数据填入 body 字段，按 body_rule 的格式（每行用 | 分隔），每行单元格数 = key_points 数量
 4. layout_hint 从以下选择: single_focus, two_column, two_column_asymmetric, three_column, hero_grid, mixed_grid, dashboard, timeline, horizontal_split, full_bleed
 5. visual_weight 从以下选择: low, medium, high
 6. 封面页特殊规则：
@@ -1590,7 +1592,7 @@ def _fix_stage1_table_keypoints(stage1, skill_template):
             seq = s.get("seq")
             if seq in tmpl_map:
                 entry = tmpl_map[seq]
-                if "key_points" in entry and not s.get("key_points"):
+                if "key_points" in entry:
                     s["key_points"] = entry["key_points"]
                 if "examples" in entry and entry["examples"]:
                     s["examples"] = entry["examples"]
@@ -1679,7 +1681,7 @@ def _dedup_table_pages(stage1, skill_template):
         if rows:
             base["rows"] = rows
             # Serialize rows into body text so Stage 2 (which reads body to build
-            # {{TABLE_ROWS}}) sees every row. Append to any existing body.
+            # the table) sees every row. Append to any existing body.
             row_text = "\n".join(" | ".join(r) for r in rows)
             existing_body = (base.get("body") or "").strip()
             base["body"] = (existing_body + "\n\n" + row_text).strip() if existing_body else row_text
@@ -4221,88 +4223,88 @@ def _build_toc_rows(skill_json: str, vi_section: str) -> str:
     return "\n".join(rows)
 
 
-def _build_table_rows(slide: dict, stype: str) -> str:
-    """Build deterministic <tr> rows for A4 data-table pages from the slide body.
-
-    materials_table (食材清单) and steps_table (操作步骤) carry every data row in
-    body — one line per row, cells separated by `|` (body_rule: "各单元格用 | 分隔,
-    每条记录独占一行"). The Stage 2 LLM drops rows when it renders {{TABLE_ROWS}},
-    so code regenerates them: every body row becomes exactly one <tr>, nothing can
-    be omitted.
-
-    materials_table → 8 cells/row (序号/分类/名称/品牌/加工说明/加工要求/重量/单位)
-    steps_table    → 5 cells/row (序号/关键词/工具与器皿/操作说明/注意事项)
-
-    Returns empty string when body cannot be parsed into the expected arity
-    (caller leaves the LLM-generated tbody untouched as a fallback).
-    """
-    if stype == "materials_table":
-        expected = 8
-    elif stype == "steps_table":
-        expected = 5
-    else:
-        return ""
-
-    rows: list[list[str]] = []
+def _parse_table_cells(slide: dict, n: int) -> list[list[str]]:
+    """Parse data rows from a slide (structured `rows` or `body` text) and align
+    every row to exactly n columns. Rows are never dropped: short rows are
+    right-padded, long rows merge overflow into the last column."""
+    raw: list[list[str]] = []
     structured = slide.get("rows")
     if isinstance(structured, list) and structured:
-        # Structured rows list set by _dedup_table_pages (list of cell lists).
         for r in structured:
             if isinstance(r, (list, tuple)):
-                cells = [str(x).strip() for x in r]
-                if len(cells) == expected and any(cells):
-                    rows.append(cells)
-        if not rows:
-            return ""
-
-    if not rows:
+                raw.append([str(x).strip() for x in r])
+    if not raw:
         body = (slide.get("body") or "").strip()
-        if not body:
-            return ""
-        # Parse body lines: each data row is `cell | cell | ...`.
-        for line in body.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            cells = [c.strip() for c in line.split("|")]
-            if len(cells) != expected:
-                continue
-            if not any(cells):
-                continue
-            # Skip a header line the LLM may have prepended (first cell "序号").
-            if cells[0] == "序号":
-                continue
-            rows.append(cells)
+        if body:
+            for line in body.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                raw.append([c.strip() for c in line.split("|")])
 
+    rows: list[list[str]] = []
+    for cells in raw:
+        if not cells or not any(cells):
+            continue
+        # Skip a header line the LLM may have prepended (first cell "序号").
+        if cells[0] == "序号":
+            continue
+        if len(cells) == n:
+            rows.append(cells)
+        elif len(cells) < n:
+            rows.append(cells + [""] * (n - len(cells)))
+        else:
+            overflow = " ".join(cells[n - 1:])
+            rows.append(cells[: n - 1] + [overflow])
+    return rows
+
+
+def _build_table_html(slide: dict, stype: str) -> str:
+    """Build a complete deterministic <table> (colgroup + thead + tbody) for A4
+    data-table pages, with column names/count derived from SKILL key_points.
+
+    The LLM must NOT hand-write table structure (anti-hallucination): code
+    generates <colgroup>/<thead>/<tbody> from the authoritative key_points
+    column names, and _parse_table_cells guarantees no data row is dropped.
+    Returns empty string when there are no columns or no parseable rows (caller
+    leaves the LLM-generated table untouched as a fallback).
+    """
+    if stype not in ("materials_table", "steps_table"):
+        return ""
+    cols = [str(c).strip() for c in (slide.get("key_points") or []) if str(c).strip()]
+    if not cols:
+        return ""
+    n = len(cols)
+    total = 674
+    first_w = 40 if n > 1 else total
+    rest_w = int((total - first_w) / (n - 1)) if n > 1 else 0
+    widths = [first_w] + [rest_w] * (n - 1)
+    head_bg = "var(--chart-0)" if stype == "materials_table" else "var(--chart-1)"
+    esc = _html_mod.escape
+    colgroup = "".join(f'<col style="width:{w}px">' for w in widths)
+    thead = "".join(
+        f'<th style="padding:9px 6px;border:1px solid rgba(var(--text-rgb),0.2);font-weight:600;">{esc(c)}</th>'
+        for c in cols)
+    rows = _parse_table_cells(slide, n)
     if not rows:
         return ""
-
-    esc = _html_mod.escape
-    out = []
+    body_rows = []
     for i, cells in enumerate(rows):
-        row_bg = "rgba(var(--text-rgb),0.02)" if i % 2 == 0 else "transparent"
-        if stype == "materials_table":
-            # 8 <td>; center 序号/分类/重量/单位 (indices 0,1,6,7).
-            tds = []
-            for j, cell in enumerate(cells):
-                align = "text-align:center;" if j in (0, 1, 6, 7) else ""
-                tds.append(
-                    f'<td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);{align}">{esc(cell)}</td>'
-                )
-            out.append(f'<tr style="background:{row_bg};">' + "".join(tds) + "</tr>")
-        else:  # steps_table: 5 <td>, 操作说明 colspan=3, 注意事项 colspan=2
-            c0, c1, c2, c3, c4 = cells
-            out.append(
-                f'<tr style="background:{row_bg};">'
-                f'<td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">{esc(c0)}</td>'
-                f'<td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);text-align:center;">{esc(c1)}</td>'
-                f'<td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">{esc(c2)}</td>'
-                f'<td colspan="3" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">{esc(c3)}</td>'
-                f'<td colspan="2" style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);">{esc(c4)}</td>'
-                f'</tr>'
+        bg = "rgba(var(--text-rgb),0.02)" if i % 2 == 0 else "transparent"
+        tds = []
+        for j, cell in enumerate(cells):
+            align = "text-align:center;" if j == 0 else ""
+            tds.append(
+                f'<td style="padding:8px 6px;border:1px solid rgba(var(--text-rgb),0.2);{align}">{esc(cell)}</td>'
             )
-
-    return "\n".join(out)
+        body_rows.append(f'<tr style="background:{bg};">' + "".join(tds) + "</tr>")
+    return (
+        f'<table style="width:100%;border-collapse:collapse;font-size:12px;'
+        f'font-family:Inter,\'PingFang SC\',\'Microsoft YaHei\',sans-serif;">'
+        f'<colgroup>{colgroup}</colgroup>'
+        f'<thead><tr style="background:{head_bg};color:#ffffff;">{thead}</tr></thead>'
+        f'<tbody>{"".join(body_rows)}</tbody></table>'
+    )
 
 
 def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
@@ -4866,22 +4868,26 @@ def _stage2_html_per_slide(provider_id, model, llm_generate, structure_slides,
                                 _logger.info(f"[TOC-DBG] Slide {seq}: regex sub changed={html_before != html}")
                     elif is_a4 and stype == "toc":
                         _logger.warning(f"[TOC-DBG] Slide {seq}: is_a4=True stype=toc but _toc_skill_json EMPTY (slide keys: {list(slide.keys())})")
-                    # Post-process: inject deterministic table rows (A4 data tables)
+                    # Post-process: inject deterministic full table (A4 data tables)
                     # materials_table/steps_table carry every data row in body; the
-                    # LLM drops rows when rendering {{TABLE_ROWS}}. Code rebuilds the
-                    # tbody from body so no ingredient/step row can be omitted.
+                    # LLM drops rows when rendering {{TABLE}}. Code rebuilds the whole
+                    # table (colgroup+thead+tbody) from key_points + body so no
+                    # ingredient/step row can be omitted.
                     if is_a4 and stype in ("materials_table", "steps_table"):
-                        _tbl_html = _build_table_rows(slide, stype)
+                        _tbl_html = _build_table_html(slide, stype)
                         if _tbl_html:
-                            if "{{TABLE_ROWS}}" in html:
+                            if "{{TABLE}}" in html:
+                                html = html.replace("{{TABLE}}", _tbl_html)
+                            elif "{{TABLE_ROWS}}" in html:
+                                # 兼容未更新模板：占位符仍是旧的行级 {{TABLE_ROWS}}
                                 html = html.replace("{{TABLE_ROWS}}", _tbl_html)
                             else:
                                 html = re.sub(
-                                    r'(<tbody[^>]*>)\s*.*?\s*(</tbody>)',
-                                    r'\1\n' + _tbl_html + r'\n\2',
+                                    r'<table[^>]*>.*?</table>',
+                                    _tbl_html,
                                     html, flags=re.DOTALL, count=1
                                 )
-                            _logger.info(f"[TABLE-DBG] Slide {seq}: injected {len(_tbl_html.split('<tr')) - 1} rows for {stype}")
+                            _logger.info(f"[TABLE-DBG] Slide {seq}: injected full table for {stype}")
                     # Post-process: restore BRAND placeholders in A4 footer
                     # LLM replaces {{BRAND_COPYRIGHT}}/{{BRAND_SIGNATURE}} with
                     # real company/author names despite explicit prohibition.
