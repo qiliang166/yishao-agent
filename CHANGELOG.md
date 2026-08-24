@@ -2,6 +2,11 @@
 
 ## 2026-08-24
 
+- fix: give inserted images explicit height so A4 pagination sees them
+- chore: update build stamp after build_version.txt packaging fix (fb8a6ad)
+
+## 2026-08-24
+
 - fix: ship backend/build_version.txt in server package
 - chore: update build stamp after A4 image/pagination fix (f4faa42)
 
