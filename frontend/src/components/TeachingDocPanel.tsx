@@ -561,7 +561,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
       </select>
       <button className="btn btn-primary btn-sm w-full"
         disabled={!getSourceText(dataSource) || !model || generating}
-        onClick={handleGenerate}>
+        onClick={() => handleGenerate()}>
         {generating ? <><SvgIcon name="clock" size={12} /> 生成中...</> : <><SvgIcon name="sparkles" size={12} /> AI 生成 {label}</>}
       </button>
       {generating && (
