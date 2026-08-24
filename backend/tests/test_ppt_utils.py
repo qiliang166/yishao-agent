@@ -3,7 +3,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html
+from services.ppt_service import _clean_json_response, _hex_to_rgb, _validate_column_id, _build_table_html, _paginate_saved_deck
 
 
 class TestCleanJsonResponse:
@@ -156,3 +156,44 @@ class TestBuildTableHtml:
         kps = ["序号", "A", "B"]
         assert _build_table_html({"key_points": kps, "body": "1 | a | b"}, "cover") == ""
         assert _build_table_html({"key_points": kps, "body": "1 | a | b"}, "content") == ""
+
+
+class TestPaginateSavedDeck:
+    def _deck(self, slide2_html):
+        return (
+            '<!DOCTYPE html><html><head><style>'
+            '.slide-wrapper{width:794px;height:1123px;overflow:hidden}'
+            '</style></head><body>\n'
+            '<div class="slide-wrapper" data-seq="1"><div>cover</div></div>\n'
+            f'<div class="slide-wrapper" data-seq="2">{slide2_html}</div>\n'
+            '<script>fit()</script></body></html>'
+        )
+
+    def _table(self, n_rows):
+        head = '<table><thead><tr><th>序号</th><th>名称</th></tr></thead><tbody>'
+        rows = ''.join(f'<tr><td>{i}</td><td><div style="height:60px">item{i}</div></td></tr>' for i in range(1, n_rows + 1))
+        return head + rows + '</tbody></table>'
+
+    def test_splits_oversized_table(self):
+        import re
+        slide2 = f'<div style="width:794px;height:1123px;position:relative;overflow:hidden;">{self._table(30)}</div>'
+        out = _paginate_saved_deck(self._deck(slide2))
+        seqs = re.findall(r'<div class="slide-wrapper" data-seq="(\d+)">', out)
+        assert len(seqs) > 2
+        assert seqs == ['1', '2', '3']
+
+    def test_landscape_untouched(self):
+        deck = (
+            '<html><head><style>.slide-wrapper{width:1280px;height:720px}</style></head><body>'
+            '<div class="slide-wrapper" data-seq="1"><div>a</div></div>'
+            '<div class="slide-wrapper" data-seq="2"><div>b</div></div></body></html>'
+        )
+        assert _paginate_saved_deck(deck) == deck
+
+    def test_no_table_untouched(self):
+        deck = self._deck('<div style="width:794px;height:1123px;">hello</div>')
+        assert _paginate_saved_deck(deck) == deck
+
+    def test_missing_wrapper_style_untouched(self):
+        html = '<html><body><p>x</p></body></html>'
+        assert _paginate_saved_deck(html) == html

@@ -189,7 +189,7 @@ export default function SlideEditModal({ open, runId, previewUrl, slideCount, pr
           const src = img.getAttribute('src') || ''
           if (src === res.path || src.endsWith(res.path)) {
             img.style.width = width + 'px'
-            img.style.maxWidth = '100%'
+            img.style.maxWidth = 'none'
             break
           }
         }

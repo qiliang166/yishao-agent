@@ -5717,6 +5717,8 @@ def api_slide_source(run_id: str, req: PPTSlideSourceRequest, user=require_perm(
         raise HTTPException(status_code=404, detail="Run not found")
 
     _ensure_backup(run_dir)
+    from services.ppt_service import _paginate_saved_deck
+    req.html = _paginate_saved_deck(req.html)
     index_path = os.path.join(run_dir, "index.html")
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(req.html)

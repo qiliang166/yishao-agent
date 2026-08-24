@@ -6915,6 +6915,82 @@ def _preprocess_a4_slides(slides: list, canvas_w: int, canvas_h: int) -> list:
     return result
 
 
+def _find_matching_div_close(html: str, open_pos: int) -> int:
+    """Index of the </div> that closes the <div...> starting at open_pos."""
+    depth = 0
+    n = len(html)
+    pos = open_pos
+    while pos < n:
+        no = html.find('<div', pos)
+        nc = html.find('</div>', pos)
+        if nc == -1:
+            return -1
+        if no != -1 and no < nc:
+            depth += 1
+            pos = no + 4
+        else:
+            depth -= 1
+            if depth == 0:
+                return nc
+            pos = nc + 6
+    return -1
+
+
+def _paginate_saved_deck(html: str) -> str:
+    """Re-run A4 overflow pagination on an edited deck (index.html).
+
+    The generation pipeline splits oversized tables via _preprocess_a4_slides,
+    but the editor save path (PUT /api/ppt/slide-source) writes raw HTML with no
+    pagination — so images inserted into table cells that grow the table past the
+    page get clipped by overflow:hidden. This parses the saved deck back into
+    slides, re-runs the split, and re-wraps, so edited decks paginate exactly like
+    generated ones.
+    """
+    import re as _re
+
+    # 1. Recover canvas dims from the .slide-wrapper rule (always present in
+    #    decks produced by _assemble_html_deck).
+    m = _re.search(r'\.slide-wrapper\s*\{([^}]*)\}', html)
+    if not m:
+        return html
+    block = m.group(1)
+    wm = _re.search(r'width:\s*(\d+)px', block)
+    hm = _re.search(r'height:\s*(\d+)px', block)
+    if not wm or not hm:
+        return html
+    canvas_w, canvas_h = int(wm.group(1)), int(hm.group(1))
+    if canvas_h <= canvas_w:
+        return html  # landscape — pagination is A4-only
+
+    # 2. Split the document into slide wrappers, preserving head/tail chrome.
+    wrapper_re = _re.compile(r'<div class="slide-wrapper" data-seq="(\d+)">')
+    positions = list(wrapper_re.finditer(html))
+    if len(positions) < 2:
+        return html
+
+    slides = []
+    inner_end = -1
+    for pm in positions:
+        end = _find_matching_div_close(html, pm.start())
+        if end < 0:
+            return html  # malformed deck — leave untouched
+        slides.append({"seq": int(pm.group(1)), "html": html[pm.end():end]})
+        inner_end = end
+
+    head = html[:positions[0].start()]
+    tail = html[inner_end + len("</div>"):]
+
+    # 3. Re-run the existing A4 split (oversized tables → continuation pages).
+    paginated = _preprocess_a4_slides(slides, canvas_w, canvas_h)
+
+    # 4. Re-wrap and reassemble.
+    wrapped = "\n".join(
+        f'<div class="slide-wrapper" data-seq="{s.get("seq", i + 1)}">{s.get("html", "")}</div>'
+        for i, s in enumerate(paginated)
+    )
+    return head + wrapped + tail
+
+
 def _extract_outermost_container(html: str) -> str:
     """Extract the outermost container (<div> or <section>) from LLM-generated HTML.
 
