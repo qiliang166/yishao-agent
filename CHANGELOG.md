@@ -1,5 +1,14 @@
 ﻿# 更新日志
 
+## 2026-08-24
+
+- fix: honor image width in A4 tables and paginate edited decks on save
+
+## 2026-08-24
+
+- fix: derive col3 table columns from SKILL key_points
+- chore: update build stamp after theme customization (571bc06)
+
 ## 2026-08-23
 
 - feat: add restore-default button to theme editor
