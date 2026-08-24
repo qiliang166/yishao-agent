@@ -299,7 +299,13 @@ def _load_speech_configs(db, workspace_id: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def _get_provider_model(db, workspace_id: str, step_name: str = "_model_s2_sop") -> tuple:
+def _get_provider_model(db, workspace_id: str, step_name: str = "_model_s2_sop", override: str = "") -> tuple:
+    if override:
+        if ":" in override:
+            provider_id, model = override.split(":", 1)
+        else:
+            provider_id, model = "", override
+        return provider_id, model
     provider_id = ""
     model = ""
     try:
@@ -355,6 +361,7 @@ def start_batch(batch_id: str, workspace_id: str, start_time: str, end_time: str
             "steps": it.get("steps", []),
             "step2_sources": it.get("step2_sources", {}),
             "template_ids": it.get("template_ids", {}),
+            "model_id": it.get("model_id", ""),
             "status": "pending",
             "logs": [],
         } for it in items]
@@ -552,6 +559,7 @@ def _execute_project(item: dict, job: BatchJob):
     project_id = item["project_id"]
     steps_list = item.get("steps", [])
     step2_sources: dict = item.get("step2_sources", {})
+    model_override = item.get("model_id", "") or ""
 
     db = get_db()
     try:
@@ -637,7 +645,7 @@ def _execute_project(item: dict, job: BatchJob):
                     continue
 
                 s1_model_key = f"_model_s1_{sub}"
-                provider_id, model = _get_provider_model(db, workspace_id, s1_model_key)
+                provider_id, model = _get_provider_model(db, workspace_id, s1_model_key, override=model_override)
                 if not provider_id or not model:
                     provider_id, model = _get_provider_model(db, workspace_id)
                 if not provider_id or not model:
@@ -800,7 +808,7 @@ def _execute_project(item: dict, job: BatchJob):
                         pipeline["step2_no_source"] = True
                     else:
                         model_key = f"_model_s2_{tab}"
-                        provider_id, model = _get_provider_model(db, workspace_id, model_key)
+                        provider_id, model = _get_provider_model(db, workspace_id, model_key, override=model_override)
                         if not provider_id or not model:
                             provider_id, model = _get_provider_model(db, workspace_id)
                         if not provider_id or not model:
@@ -828,7 +836,7 @@ def _execute_project(item: dict, job: BatchJob):
                     pipeline["step3_skip"] = True
                 else:
                     s3_info = _step3_map.get(s3_sub, {})
-                    provider_id, model = _get_provider_model(db, workspace_id, s3_info.get("model_key", ""))
+                    provider_id, model = _get_provider_model(db, workspace_id, s3_info.get("model_key", ""), override=model_override)
                     if not provider_id or not model:
                         provider_id, model = _get_provider_model(db, workspace_id)
                     if not provider_id or not model:
@@ -858,7 +866,7 @@ def _execute_project(item: dict, job: BatchJob):
                     speech_key = _step4_speech_keys.get(tab, "doc")
                     cfg = step4_configs.get(speech_key, {})
                     model_key = f"_model_s4_speech_{speech_key}"
-                    provider_id, model = _get_provider_model(db, workspace_id, model_key)
+                    provider_id, model = _get_provider_model(db, workspace_id, model_key, override=model_override)
                     if not provider_id or not model:
                         provider_id, model = _get_provider_model(db, workspace_id)
                     if not provider_id or not model:

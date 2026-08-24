@@ -125,6 +125,8 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
   const [sopTemplates, setSopTemplates] = useState<Array<{id: string, name: string, isDefault: boolean}>>([])
   const [daoTemplates, setDaoTemplates] = useState<Array<{id: string, name: string, isDefault: boolean}>>([])
   const [yanxiTemplates, setYanxiTemplates] = useState<Array<{id: string, name: string, isDefault: boolean}>>([])
+  const [batchModel, setBatchModel] = useState('')
+  const [providers, setProviders] = useState<Array<{ id: string; name: string; models: string[] }>>([])
 
   // Load projects
   useEffect(() => {
@@ -150,6 +152,13 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       setYanxiTemplates(items)
       const def = items.find((t: any) => t.isDefault) || items[0]
       if (def) setBatchTemplateYanxi(def.id)
+    }).catch(() => {})
+  }, [])
+
+  // Load LLM providers for batch-wide model selector
+  useEffect(() => {
+    api.listProviders().then((items: any[]) => {
+      setProviders(items.filter((p: any) => p.is_enabled).map((p: any) => ({ id: p.id, name: p.name, models: p.models || [] })))
     }).catch(() => {})
   }, [])
 
@@ -357,7 +366,7 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
       if (batchTemplateSop) templateIds['sop'] = batchTemplateSop
       if (batchTemplateDao) templateIds['dao'] = batchTemplateDao
       if (batchTemplateYanxi) templateIds['yanxi'] = batchTemplateYanxi
-      const resp = await api.batchExecute(payload, startTime, endTime, workspaceId, templateIds)
+      const resp = await api.batchExecute(payload, startTime, endTime, workspaceId, templateIds, batchModel)
       if (resp.conflicts && resp.conflicts.length > 0) {
         setConflictMsg('以下项目已在其他批次中执行：' + resp.conflicts.join('、'))
         if (!resp.batch_id) {
@@ -674,6 +683,27 @@ export const BatchExecuteTab: React.FC<Props> = ({ workspaceId, refreshKey }) =>
               </select>
             </div>
           )}
+
+          {/* Model Config (applied to all projects) */}
+          <div style={{
+            display: 'flex', gap: 12, alignItems: 'center', padding: '12px 16px',
+            background: 'var(--bg-hover)', borderRadius: 6, marginTop: 16,
+            border: '1px solid var(--border)', flexWrap: 'wrap',
+          }}>
+            <span style={{ fontSize: 10, fontWeight: 600 }}>大模型</span>
+            <select className="form-input" style={{ fontSize: 10, width: 240 }}
+              value={batchModel} onChange={e => setBatchModel(e.target.value)}>
+              <option value="">默认（跟随项目配置）</option>
+              {providers.map(p => (
+                <optgroup key={p.id} label={p.name}>
+                  {p.models.map(m => <option key={m} value={`${p.id}:${m}`}>{m}</option>)}
+                </optgroup>
+              ))}
+            </select>
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+              （选中后，所有步骤统一使用该模型）
+            </span>
+          </div>
 
           {/* Template Config (applied to all projects) */}
           <div style={{
