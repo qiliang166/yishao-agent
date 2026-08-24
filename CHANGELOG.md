@@ -2,6 +2,12 @@
 
 ## 2026-08-24
 
+- fix: wrap handleGenerate in arrow to satisfy onClick handler type
+- fix: stage 2 honors selected model and anthropic test_connection does real auth
+- chore: update build stamp after table-row data-loss fix (38a66bc)
+
+## 2026-08-24
+
 - fix: fold continuation rows into parent tbody to stop dropped rows on re-split
 - chore: update build stamp after table-header continuation fix (84f215d)
 
