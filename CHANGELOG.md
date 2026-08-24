@@ -1,5 +1,10 @@
 ﻿# 更新日志
 
+## 2026-08-25
+
+- fix: break stream on finish_reason to avoid hang on Qianfan Token Plan
+- chore: update build stamp after stage2 model + anthropic test fix (7427ca7)
+
 ## 2026-08-24
 
 - fix: wrap handleGenerate in arrow to satisfy onClick handler type
