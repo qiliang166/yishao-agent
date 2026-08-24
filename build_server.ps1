@@ -114,7 +114,7 @@ Get-ChildItem -Path "$root\backend" -Recurse -File -Filter "*.py" `
 }
 
 # 3) Critical runtime files at backend/ root
-@('backend\requirements.txt', 'backend\default_download_urls.json', 'backend\.env.example') | ForEach-Object {
+@('backend\requirements.txt', 'backend\default_download_urls.json', 'backend\.env.example', 'backend\build_version.txt') | ForEach-Object {
     $src = Join-Path $root $_
     if (Test-Path $src) {
         $dest = Join-Path $distDir $_

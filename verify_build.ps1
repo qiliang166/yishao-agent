@@ -28,6 +28,17 @@ foreach ($f in $backendPy) {
     }
 }
 
+# ── Critical backend root files (version stamp must ship or /api/version goes stale) ──
+Write-Host "  Checking backend root runtime files..."
+@('backend/build_version.txt') | ForEach-Object {
+    if (Test-Path (Join-Path $root $_)) {
+        $target = Join-Path $BuildDir $_
+        if (-not (Test-Path $target)) {
+            $missing += $_
+        }
+    }
+}
+
 # ── Static resource directories (whitelist) ──
 $whitelistDirs = @(
     'backend/resources',
@@ -99,7 +110,7 @@ if ($missing.Count -gt 0) {
     exit 1
 }
 
-$totalChecked = $backendPy.Count + $rootFiles.Count + $distFiles.Count
+$totalChecked = $backendPy.Count + 1 + $rootFiles.Count + $distFiles.Count
 Write-Host "  [OK] All $totalChecked source files accounted for" -ForegroundColor Green
 Write-Host "  [OK] Static resource dirs: $($whitelistDirs -join ', ')" -ForegroundColor Green
 Write-Host "  [OK] Frontend dist: $($distFiles.Count) files" -ForegroundColor Green
