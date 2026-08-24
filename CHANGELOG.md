@@ -2,6 +2,11 @@
 
 ## 2026-08-24
 
+- fix: fold continuation rows into parent tbody to stop dropped rows on re-split
+- chore: update build stamp after table-header continuation fix (84f215d)
+
+## 2026-08-24
+
 - fix: repeat table header on A4 continuation pages and re-merge fragments before re-pagination
 - chore: update build stamp after image-height symlink hardening (a7a4035)
 
