@@ -3396,7 +3396,8 @@ async def test_provider(provider_id: str, user=require_perm("config.global")):
         row = db.execute("SELECT * FROM llm_providers WHERE id = ?", (provider_id,)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Provider not found")
-        result = await test_connection(row["api_key"], row["base_url"])
+        provider_models = json.loads(row["models"]) if row["models"] else []
+        result = await test_connection(row["api_key"], row["base_url"], provider_models)
         return result
     finally:
         db.close()

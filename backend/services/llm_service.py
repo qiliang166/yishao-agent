@@ -40,14 +40,20 @@ async def get_provider(provider_id: str) -> dict | None:
         db.close()
 
 
-async def test_connection(api_key: str, base_url: str) -> dict:
+async def test_connection(api_key: str, base_url: str, models: list[str] | None = None) -> dict:
     # Auto-detect Anthropic by base_url pattern
     if "anthropic" in (base_url or "").lower():
         try:
             client = _mk_anthropic({"api_key": api_key, "base_url": base_url})
-            # Anthropic doesn't have a list-models endpoint; just verify auth with a minimal call
-            models = ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"]
-            return {"ok": True, "models": models}
+            # Anthropic has no list-models endpoint; verify auth with a minimal call
+            # using the user's first configured model (or a Claude default as fallback).
+            test_model = (models[0] if models else "claude-sonnet-4-6")
+            await client.messages.create(
+                model=test_model,
+                max_tokens=1,
+                messages=[{"role": "user", "content": "ping"}],
+            )
+            return {"ok": True, "models": models or ["claude-sonnet-4-6", "claude-opus-4-7", "claude-haiku-4-5"]}
         except Exception as e:
             return {"ok": False, "error": str(e)}
 

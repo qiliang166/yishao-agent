@@ -91,7 +91,7 @@ const PREVIEW_CSS = `
 .md-preview[contenteditable]:empty:before { content:attr(data-placeholder); color:#999; }
 `
 
-const TeachingDocPanel = forwardRef<{ triggerGenerate: () => Promise<void> }, TeachingDocPanelProps>(({
+const TeachingDocPanel = forwardRef<{ triggerGenerate: (model?: string) => Promise<void>; cancel: () => void }, TeachingDocPanelProps>(({
   docType, projectId, projectName, steps, savedSteps, prompt, skill, llmProviders, onRefresh,
   hideControls, dataSource: dataSourceProp, onDataSourceChange, temperature = 0.3,
   onGeneratingChange, onLogEntry, onProgressChange,
@@ -294,13 +294,14 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
   }, [renderedHtml, docType, inlineLogos])
 
   // ── Generate (streaming with progress) ──
-  const handleGenerate = useCallback(async () => {
+  const handleGenerate = useCallback(async (overrideModel?: string) => {
+    const effectiveModel = overrideModel || model
     const sourceText = getSourceText(dataSource)
     if (!sourceText) {
       modal.toast(`数据来源「${dataSource}」没有内容，请先在 Stage 1 导入素材`, 'error')
       return
     }
-    if (!model) {
+    if (!effectiveModel) {
       modal.toast('请先选择大模型', 'error')
       return
     }
@@ -312,7 +313,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
     const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false })
     const label = DOC_LABELS[docType]
     try {
-      const [pid, mdl] = model.split(':')
+      const [pid, mdl] = effectiveModel.split(':')
       const systemPrompt = prompt || DEFAULT_PROMPTS[docType]
       const userMessage = skill
         ? `请将以下内容按指定格式整理：\n\n${sourceText}\n\n输出格式要求：\n${skill}`
@@ -508,7 +509,7 @@ body { max-width:800px; margin:0 auto; padding:24px; font-family:-apple-system,B
 
   // ── Expose triggerGenerate + cancel for batch ──
   useImperativeHandle(ref, () => ({
-    triggerGenerate: handleGenerate,
+    triggerGenerate: (m?: string) => handleGenerate(m),
     cancel: () => { abortRef.current?.abort(); setGenerating(false); generatingRef.current = false },
   }), [handleGenerate])
 

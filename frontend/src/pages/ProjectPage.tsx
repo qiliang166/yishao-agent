@@ -143,7 +143,7 @@ function Stage2Controls({
   dataSource: string; onDataSourceChange: (v: string) => void
   generating: boolean
   prompt: string; skill: string; projectId: string
-  panelRef: React.RefObject<{ triggerGenerate: () => Promise<void>; cancel: () => void } | null>
+  panelRef: React.RefObject<{ triggerGenerate: (model?: string) => Promise<void>; cancel: () => void } | null>
   setGenerating: (v: boolean) => void
   onRefresh: () => Promise<void>
   logEntries?: { time: string; message: string }[]
@@ -217,7 +217,7 @@ function Stage2Controls({
     generatingRef.current = true
     setGenerating(true)
     try {
-      await panelRef.current?.triggerGenerate()
+      await panelRef.current?.triggerGenerate(model)
     } catch (e: any) {
       if (mountedRef.current) modal.toast(`生成失败: ${e.message}`, 'error')
     } finally {
@@ -780,9 +780,9 @@ export default function ProjectPage() {
   const [showModelPicker, setShowModelPicker] = useState(false)
   const overlayMouseDownRef = useRef(false)
   const [modelPickerValues, setModelPickerValues] = useState<Record<string, string>>({})
-  const sopRef = useRef<{ triggerGenerate: () => Promise<void>; cancel: () => void }>(null)
-  const daoRef = useRef<{ triggerGenerate: () => Promise<void>; cancel: () => void }>(null)
-  const yanxiRef = useRef<{ triggerGenerate: () => Promise<void>; cancel: () => void }>(null)
+  const sopRef = useRef<{ triggerGenerate: (model?: string) => Promise<void>; cancel: () => void }>(null)
+  const daoRef = useRef<{ triggerGenerate: (model?: string) => Promise<void>; cancel: () => void }>(null)
+  const yanxiRef = useRef<{ triggerGenerate: (model?: string) => Promise<void>; cancel: () => void }>(null)
 
   const handleS2DataSourceChange = (tab: string, val: string) => {
     setS2DataSources(prev => ({ ...prev, [tab]: val }))
